@@ -3,6 +3,7 @@ import type {
   AcademicPolicy,
   GradeBand,
 } from '../academic-state/academic-policy';
+import { calculateBoundedScore } from '../academic-state/academic-score';
 
 export interface GradeBlocker {
   code: string;
@@ -22,6 +23,8 @@ export interface CalculationCategory {
 export interface CalculationScore {
   studentId: string;
   score: string | null;
+  bonusPoints?: string | null;
+  bonusReason?: string | null;
   status?: string;
   reason?: string | null;
 }
@@ -135,13 +138,31 @@ export function calculateStudentRecord(
         );
         continue;
       }
-      totalRaw += score;
+      let normalizedScore;
+      try {
+        normalizedScore = calculateBoundedScore({
+          basePoints: score,
+          bonusPoints: Number(scoreRow.bonusPoints ?? 0),
+          bonusReason: scoreRow.bonusReason,
+          possiblePoints: hps,
+        });
+      } catch (error) {
+        add(
+          'invalid_score',
+          error instanceof Error
+            ? error.message
+            : 'Recorded score adjustment is invalid',
+          item.id,
+        );
+        continue;
+      }
+      totalRaw += normalizedScore.effectivePoints;
       if (isExam) {
         const componentWeight =
           policy.examComponents.find(
             (component) => component.key === item.examComponent,
           )?.weight ?? 0;
-        examPercentage += (score / hps) * 100 * componentWeight;
+        examPercentage += normalizedScore.scorePercent * componentWeight;
         availableExamWeight += componentWeight;
       }
     }

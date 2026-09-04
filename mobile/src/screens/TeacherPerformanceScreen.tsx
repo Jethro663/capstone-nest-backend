@@ -9,6 +9,7 @@ import {
 } from "../api/hooks";
 import type { RootStackParamList } from "../navigation/types";
 import { useAuth } from "../providers/AuthProvider";
+import { boundAcademicPercentage } from "../lib/academicScore";
 import {
   TeacherChip,
   TeacherEmpty,
@@ -22,7 +23,9 @@ import {
 type Props = NativeStackScreenProps<RootStackParamList, "TeacherPerformance">;
 
 function toPercent(value: number | null | undefined) {
-  return typeof value === "number" ? `${value.toFixed(1)}%` : "N/A";
+  return typeof value === "number"
+    ? `${boundAcademicPercentage(value).toFixed(1)}%`
+    : "N/A";
 }
 
 function toDelta(value: number | null | undefined) {
@@ -72,7 +75,9 @@ function formatFilterLabel(filter: {
   classRecordCategory?: string | null;
 }) {
   if (filter.id === "all") return filter.label;
-  const category = formatSourceLabel(filter.classRecordCategory ?? filter.assessmentType);
+  const category = formatSourceLabel(
+    filter.classRecordCategory ?? filter.assessmentType,
+  );
   return category ? `${filter.label} - ${category}` : filter.label;
 }
 
@@ -81,7 +86,8 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
   const teacherId = user?.userId || user?.id;
   const classesQuery = useTeacherClasses(teacherId);
   const [selectedClassId, setSelectedClassId] = useState<string>("");
-  const [selectedComparisonFilterId, setSelectedComparisonFilterId] = useState<string>("all");
+  const [selectedComparisonFilterId, setSelectedComparisonFilterId] =
+    useState<string>("all");
 
   useEffect(() => {
     if (!selectedClassId && classesQuery.data?.length) {
@@ -89,9 +95,13 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
     }
   }, [classesQuery.data, selectedClassId]);
 
-  const summaryQuery = useTeacherClassPerformanceSummary(selectedClassId || undefined);
+  const summaryQuery = useTeacherClassPerformanceSummary(
+    selectedClassId || undefined,
+  );
   const atRiskQuery = useTeacherClassAtRisk(selectedClassId || undefined);
-  const comparisonQuery = useTeacherInterventionQuizComparison(selectedClassId || undefined);
+  const comparisonQuery = useTeacherInterventionQuizComparison(
+    selectedClassId || undefined,
+  );
 
   const selectedClass = useMemo(
     () => classesQuery.data?.find((entry) => entry.id === selectedClassId),
@@ -115,16 +125,23 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
   const filteredComparisonRows = useMemo(
     () =>
       comparisonRows.filter(
-        (row) => (row.filterId ?? row.assessmentId) === selectedComparisonFilterId,
+        (row) =>
+          (row.filterId ?? row.assessmentId) === selectedComparisonFilterId,
       ),
     [comparisonRows, selectedComparisonFilterId],
   );
   const filteredComparisonCounts = useMemo(
     () => ({
-      improved: filteredComparisonRows.filter((row) => row.trend === "improved").length,
-      declined: filteredComparisonRows.filter((row) => row.trend === "declined").length,
-      unchanged: filteredComparisonRows.filter((row) => row.trend === "unchanged").length,
-      awaiting: filteredComparisonRows.filter((row) => row.trend === "awaiting_retry").length,
+      improved: filteredComparisonRows.filter((row) => row.trend === "improved")
+        .length,
+      declined: filteredComparisonRows.filter((row) => row.trend === "declined")
+        .length,
+      unchanged: filteredComparisonRows.filter(
+        (row) => row.trend === "unchanged",
+      ).length,
+      awaiting: filteredComparisonRows.filter(
+        (row) => row.trend === "awaiting_retry",
+      ).length,
     }),
     [filteredComparisonRows],
   );
@@ -132,7 +149,11 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
     const map = new Map<string, (typeof comparisonRows)[number]>();
 
     comparisonRows
-      .filter((row) => (row.comparisonScope ?? "class_average") === "class_average" || row.filterId === "all")
+      .filter(
+        (row) =>
+          (row.comparisonScope ?? "class_average") === "class_average" ||
+          row.filterId === "all",
+      )
       .forEach((row) => {
         const current = map.get(row.studentId);
         if (!current) {
@@ -187,17 +208,35 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
             label: "Avg score",
             value:
               typeof summaryQuery.data?.averageBlendedScore === "number"
-                ? summaryQuery.data.averageBlendedScore.toFixed(1)
+                ? boundAcademicPercentage(
+                    summaryQuery.data.averageBlendedScore,
+                  ).toFixed(1)
                 : "N/A",
             tone: "blue",
           },
           { label: "At-risk", value: atRiskStudents.length, tone: "amber" },
-          { label: "Improved", value: comparisonQuery.data?.improvedCount ?? 0, tone: "green" },
-          { label: "Students", value: summaryQuery.data?.totalStudents ?? "N/A", tone: "red" },
+          {
+            label: "Improved",
+            value: comparisonQuery.data?.improvedCount ?? 0,
+            tone: "green",
+          },
+          {
+            label: "Students",
+            value: summaryQuery.data?.totalStudents ?? "N/A",
+            tone: "red",
+          },
         ]}
       />
 
-      <View style={{ marginHorizontal: 16, marginTop: 10, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+      <View
+        style={{
+          marginHorizontal: 16,
+          marginTop: 10,
+          flexDirection: "row",
+          flexWrap: "wrap",
+          gap: 8,
+        }}
+      >
         {(classesQuery.data ?? []).map((classItem) => (
           <TeacherChip
             key={classItem.id}
@@ -210,36 +249,51 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
 
       <TeacherPanel
         title="Class summary"
-        subtitle={selectedClass ? `${selectedClass.subjectCode} - ${selectedClass.subjectName}` : "Select a class"}
+        subtitle={
+          selectedClass
+            ? `${selectedClass.subjectCode} - ${selectedClass.subjectName}`
+            : "Select a class"
+        }
       >
         <TeacherRow
           title="Threshold"
           subtitle={
             typeof summaryQuery.data?.thresholdApplied === "number"
-              ? `${summaryQuery.data.thresholdApplied}%`
+              ? toPercent(summaryQuery.data.thresholdApplied)
               : "Not available"
           }
         />
         <TeacherRow
-          title="Average blended score"
+          title="Average current standing"
           subtitle={
             typeof summaryQuery.data?.averageBlendedScore === "number"
-              ? `${summaryQuery.data.averageBlendedScore.toFixed(2)}`
+              ? toPercent(summaryQuery.data.averageBlendedScore)
               : "Not available"
           }
         />
       </TeacherPanel>
 
-      <TeacherPanel title="At-risk learners" subtitle="Students below threshold for the selected class.">
+      <TeacherPanel
+        title="At-risk learners"
+        subtitle="Students below threshold for the selected class."
+      >
         {atRiskStudents.length ? (
           atRiskStudents.map((entry, index) => {
-            const name = [entry.firstName, entry.lastName].filter(Boolean).join(" ").trim() || entry.studentId || "Student";
-            const comparison = entry.studentId ? latestComparisonByStudent.get(entry.studentId) : undefined;
+            const name =
+              [entry.firstName, entry.lastName]
+                .filter(Boolean)
+                .join(" ")
+                .trim() ||
+              entry.studentId ||
+              "Student";
+            const comparison = entry.studentId
+              ? latestComparisonByStudent.get(entry.studentId)
+              : undefined;
             return (
               <TeacherRow
                 key={`${entry.studentId || index}`}
                 title={name}
-                subtitle={`Blended: ${entry.blendedScore ?? "N/A"} | Threshold: ${entry.thresholdApplied ?? "N/A"} | Before avg: ${toPercent(comparison?.beforeScorePercent)} | After AI avg: ${toPercent(comparison?.afterScorePercent)} | Delta: ${toDelta(comparison?.deltaScorePercent)}`}
+                subtitle={`Current standing: ${toPercent(entry.blendedScore)} | Threshold: ${toPercent(entry.thresholdApplied)} | Before avg: ${toPercent(comparison?.beforeScorePercent)} | After AI avg: ${toPercent(comparison?.afterScorePercent)} | Delta: ${toDelta(comparison?.deltaScorePercent)}`}
                 right={
                   comparison ? (
                     <View
@@ -252,7 +306,13 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
                         paddingVertical: 4,
                       }}
                     >
-                      <Text style={{ fontSize: 10, fontWeight: "700", color: trendColor(comparison.trend) }}>
+                      <Text
+                        style={{
+                          fontSize: 10,
+                          fontWeight: "700",
+                          color: trendColor(comparison.trend),
+                        }}
+                      >
                         {trendLabel(comparison.trend)}
                       </Text>
                     </View>
@@ -262,7 +322,11 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
             );
           })
         ) : (
-          <TeacherEmpty title="No at-risk learners" subtitle="No students are currently flagged for the selected class." icon="check-circle-outline" />
+          <TeacherEmpty
+            title="No at-risk learners"
+            subtitle="No students are currently flagged for the selected class."
+            icon="check-circle-outline"
+          />
         )}
       </TeacherPanel>
 
@@ -272,7 +336,15 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
       >
         {comparisonRows.length ? (
           <>
-            <View style={{ paddingHorizontal: 14, paddingBottom: 10, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            <View
+              style={{
+                paddingHorizontal: 14,
+                paddingBottom: 10,
+                flexDirection: "row",
+                flexWrap: "wrap",
+                gap: 8,
+              }}
+            >
               {comparisonFilters.map((filter) => (
                 <TeacherChip
                   key={filter.id}
@@ -284,17 +356,35 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
             </View>
             <TeacherStats
               items={[
-                { label: "Improved", value: filteredComparisonCounts.improved, tone: "green" },
-                { label: "Declined", value: filteredComparisonCounts.declined, tone: "red" },
-                { label: "Unchanged", value: filteredComparisonCounts.unchanged, tone: "blue" },
-                { label: "Awaiting AI", value: filteredComparisonCounts.awaiting, tone: "amber" },
+                {
+                  label: "Improved",
+                  value: filteredComparisonCounts.improved,
+                  tone: "green",
+                },
+                {
+                  label: "Declined",
+                  value: filteredComparisonCounts.declined,
+                  tone: "red",
+                },
+                {
+                  label: "Unchanged",
+                  value: filteredComparisonCounts.unchanged,
+                  tone: "blue",
+                },
+                {
+                  label: "Awaiting AI",
+                  value: filteredComparisonCounts.awaiting,
+                  tone: "amber",
+                },
               ]}
             />
             {filteredComparisonRows.length ? (
               filteredComparisonRows.map((row) => {
                 const studentName =
-                  [row.student?.firstName, row.student?.lastName].filter(Boolean).join(" ").trim() ||
-                  row.studentId;
+                  [row.student?.firstName, row.student?.lastName]
+                    .filter(Boolean)
+                    .join(" ")
+                    .trim() || row.studentId;
                 return (
                   <TeacherRow
                     key={`${row.caseId}-${row.assignmentId}-${row.assessmentId}`}
@@ -311,7 +401,13 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
                           paddingVertical: 4,
                         }}
                       >
-                        <Text style={{ fontSize: 10, fontWeight: "700", color: trendColor(row.trend) }}>
+                        <Text
+                          style={{
+                            fontSize: 10,
+                            fontWeight: "700",
+                            color: trendColor(row.trend),
+                          }}
+                        >
                           {trendLabel(row.trend)}
                         </Text>
                       </View>
@@ -336,10 +432,27 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
         )}
       </TeacherPanel>
 
-      <TeacherPanel title="Performance actions" subtitle="Jump to adjacent teacher tabs without leaving this context.">
-        <View style={{ paddingHorizontal: 14, paddingBottom: 14, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          <TeacherChip label="Open Interventions" onPress={() => navigation.navigate("TeacherInterventions")} />
-          <TeacherChip label="Open Reports" onPress={() => navigation.navigate("TeacherReports")} />
+      <TeacherPanel
+        title="Performance actions"
+        subtitle="Jump to adjacent teacher tabs without leaving this context."
+      >
+        <View
+          style={{
+            paddingHorizontal: 14,
+            paddingBottom: 14,
+            flexDirection: "row",
+            flexWrap: "wrap",
+            gap: 8,
+          }}
+        >
+          <TeacherChip
+            label="Open Interventions"
+            onPress={() => navigation.navigate("TeacherInterventions")}
+          />
+          <TeacherChip
+            label="Open Reports"
+            onPress={() => navigation.navigate("TeacherReports")}
+          />
         </View>
       </TeacherPanel>
     </TeacherScreen>

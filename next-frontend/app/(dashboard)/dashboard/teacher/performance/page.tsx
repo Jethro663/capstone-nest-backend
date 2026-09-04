@@ -1,18 +1,24 @@
-'use client';
+"use client";
 
-import { useEffect, useMemo, useState, useCallback, type CSSProperties } from 'react';
-import { RefreshCw } from 'lucide-react';
-import { useAuth } from '@/providers/AuthProvider';
-import { classService } from '@/services/class-service';
-import { lessonService } from '@/services/lesson-service';
-import { moduleService } from '@/services/module-service';
-import { performanceService } from '@/services/performance-service';
-import { aiService } from '@/services/ai-service';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Textarea } from '@/components/ui/textarea';
+import {
+  useEffect,
+  useMemo,
+  useState,
+  useCallback,
+  type CSSProperties,
+} from "react";
+import { RefreshCw } from "lucide-react";
+import { useAuth } from "@/providers/AuthProvider";
+import { classService } from "@/services/class-service";
+import { lessonService } from "@/services/lesson-service";
+import { moduleService } from "@/services/module-service";
+import { performanceService } from "@/services/performance-service";
+import { aiService } from "@/services/ai-service";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
   TableBody,
@@ -20,23 +26,28 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
+} from "@/components/ui/table";
 import {
   TeacherEmptyState,
   TeacherHeaderMetric,
   TeacherPageShell,
   TeacherSectionCard,
-} from '@/components/teacher/TeacherPageShell';
-import { AiOutageNotice } from '@/components/student/AiOutageNotice';
-import { DashboardStatePanel } from '@/components/layout/DashboardStatePanel';
-import { useAiAvailability } from '@/hooks/use-ai-availability';
-import { richTextToPlainText } from '@/lib/rich-text';
-import { downloadLessonPlanPdf } from '@/utils/lesson-plan-pdf';
-import { toast } from 'sonner';
-import type { ClassItem } from '@/types/class';
-import type { LessonPlanAnchorType, LessonPlanStructuredOutput, AiGenerationJob } from '@/types/ai';
-import type { Lesson } from '@/types/lesson';
-import type { ClassModule } from '@/types/module';
+} from "@/components/teacher/TeacherPageShell";
+import { AiOutageNotice } from "@/components/student/AiOutageNotice";
+import { DashboardStatePanel } from "@/components/layout/DashboardStatePanel";
+import { useAiAvailability } from "@/hooks/use-ai-availability";
+import { richTextToPlainText } from "@/lib/rich-text";
+import { boundAcademicPercentage } from "@/lib/academic-score";
+import { downloadLessonPlanPdf } from "@/utils/lesson-plan-pdf";
+import { toast } from "sonner";
+import type { ClassItem } from "@/types/class";
+import type {
+  LessonPlanAnchorType,
+  LessonPlanStructuredOutput,
+  AiGenerationJob,
+} from "@/types/ai";
+import type { Lesson } from "@/types/lesson";
+import type { ClassModule } from "@/types/module";
 import type {
   ClassDiagnosticsResponse,
   ClassAtRiskResponse,
@@ -47,79 +58,81 @@ import type {
   PerformanceAnalysisJob,
   PerformanceAnalysisStructuredOutput,
   PerformanceStudentRow,
-} from '@/types/performance';
+} from "@/types/performance";
 
-type PerformanceWorkspaceView = 'performance' | 'heatmap' | 'lesson-plan' | 'data';
-type DiagnosticsStatus = 'idle' | 'loading' | 'ready' | 'error';
-type LessonPlanProcedureKey = keyof LessonPlanStructuredOutput['procedures'];
-type LessonPlanDifferentiationKey = keyof LessonPlanStructuredOutput['differentiation'];
-type LessonPlanEditorMode = 'preview' | 'edit';
-type LessonPlanFocusSection = 'overview' | 'flow' | 'assessment' | 'notes';
-const LESSON_PLAN_STORAGE_PREFIX = 'teacher-performance-lesson-plan-job';
+type PerformanceWorkspaceView =
+  "performance" | "heatmap" | "lesson-plan" | "data";
+type DiagnosticsStatus = "idle" | "loading" | "ready" | "error";
+type LessonPlanProcedureKey = keyof LessonPlanStructuredOutput["procedures"];
+type LessonPlanDifferentiationKey =
+  keyof LessonPlanStructuredOutput["differentiation"];
+type LessonPlanEditorMode = "preview" | "edit";
+type LessonPlanFocusSection = "overview" | "flow" | "assessment" | "notes";
+const LESSON_PLAN_STORAGE_PREFIX = "teacher-performance-lesson-plan-job";
 const LESSON_PLAN_PROCEDURE_FIELDS: Array<{
   key: LessonPlanProcedureKey;
   label: string;
 }> = [
-  { key: 'review', label: 'Review of previous lesson' },
-  { key: 'purpose', label: 'Establish purpose' },
-  { key: 'examples', label: 'Present examples' },
-  { key: 'guidedPractice', label: 'Guided practice' },
-  { key: 'mastery', label: 'Mastery work' },
-  { key: 'application', label: 'Application' },
-  { key: 'generalization', label: 'Generalization' },
-  { key: 'evaluation', label: 'Evaluation' },
-  { key: 'remediationOrEnrichment', label: 'Remediation or enrichment' },
+  { key: "review", label: "Review of previous lesson" },
+  { key: "purpose", label: "Establish purpose" },
+  { key: "examples", label: "Present examples" },
+  { key: "guidedPractice", label: "Guided practice" },
+  { key: "mastery", label: "Mastery work" },
+  { key: "application", label: "Application" },
+  { key: "generalization", label: "Generalization" },
+  { key: "evaluation", label: "Evaluation" },
+  { key: "remediationOrEnrichment", label: "Remediation or enrichment" },
 ];
 const LESSON_PLAN_DIFFERENTIATION_FIELDS: Array<{
   key: LessonPlanDifferentiationKey;
   label: string;
 }> = [
-  { key: 'support', label: 'Support' },
-  { key: 'core', label: 'Core' },
-  { key: 'enrichment', label: 'Enrichment' },
+  { key: "support", label: "Support" },
+  { key: "core", label: "Core" },
+  { key: "enrichment", label: "Enrichment" },
 ];
 const LESSON_PLAN_FOCUS_SECTIONS: Array<{
   key: LessonPlanFocusSection;
   label: string;
 }> = [
-  { key: 'overview', label: 'Overview' },
-  { key: 'flow', label: 'Lesson Flow' },
-  { key: 'assessment', label: 'Assessment' },
-  { key: 'notes', label: 'Notes' },
+  { key: "overview", label: "Overview" },
+  { key: "flow", label: "Lesson Flow" },
+  { key: "assessment", label: "Assessment" },
+  { key: "notes", label: "Notes" },
 ];
 
 function toPercent(value: number | null): string {
-  if (value === null) return '--';
-  return `${value.toFixed(1)}%`;
+  if (value === null) return "--";
+  return `${boundAcademicPercentage(value).toFixed(1)}%`;
 }
 
 function formatStudentName(student: PerformanceStudentRow): string {
-  const firstName = student.firstName?.trim() ?? '';
-  const lastName = student.lastName?.trim() ?? '';
+  const firstName = student.firstName?.trim() ?? "";
+  const lastName = student.lastName?.trim() ?? "";
 
   if (firstName && lastName) return `${lastName}, ${firstName}`;
   if (lastName) return lastName;
   if (firstName) return firstName;
-  return student.email ?? 'Unknown student';
+  return student.email ?? "Unknown student";
 }
 
 function formatDateTime(value: string | Date): string {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '--';
-  return date.toLocaleString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
+  if (Number.isNaN(date.getTime())) return "--";
+  return date.toLocaleString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 }
 
 function formatTriggerSource(triggerSource: string): string {
   return triggerSource
-    .split('_')
+    .split("_")
     .map((token) => token[0].toUpperCase() + token.slice(1))
-    .join(' ');
+    .join(" ");
 }
 
 function formatLogStudent(entry: {
@@ -130,8 +143,8 @@ function formatLogStudent(entry: {
   };
   studentId: string;
 }): string {
-  const first = entry.student?.firstName?.trim() ?? '';
-  const last = entry.student?.lastName?.trim() ?? '';
+  const first = entry.student?.firstName?.trim() ?? "";
+  const last = entry.student?.lastName?.trim() ?? "";
   if (first && last) return `${last}, ${first}`;
   if (last) return last;
   if (first) return first;
@@ -139,74 +152,80 @@ function formatLogStudent(entry: {
 }
 
 function formatSignedDelta(value: number | null): string {
-  if (value === null) return '--';
+  if (value === null) return "--";
   if (value > 0) return `+${value.toFixed(1)} pts`;
   if (value < 0) return `${value.toFixed(1)} pts`;
-  return '0.0 pts';
+  return "0.0 pts";
 }
 
-function trendBadgeClass(trend: InterventionQuizComparisonRow['trend']): string {
-  if (trend === 'improved') {
-    return 'bg-emerald-500/20 text-emerald-100 border border-emerald-300/45';
+function trendBadgeClass(
+  trend: InterventionQuizComparisonRow["trend"],
+): string {
+  if (trend === "improved") {
+    return "bg-emerald-500/20 text-emerald-100 border border-emerald-300/45";
   }
-  if (trend === 'declined') {
-    return 'bg-rose-500/18 text-rose-100 border border-rose-300/45';
+  if (trend === "declined") {
+    return "bg-rose-500/18 text-rose-100 border border-rose-300/45";
   }
-  if (trend === 'unchanged') {
-    return 'bg-slate-500/18 text-slate-100 border border-slate-300/45';
+  if (trend === "unchanged") {
+    return "bg-slate-500/18 text-slate-100 border border-slate-300/45";
   }
-  return 'bg-amber-500/18 text-amber-100 border border-amber-300/45';
+  return "bg-amber-500/18 text-amber-100 border border-amber-300/45";
 }
 
-function trendLabel(trend: InterventionQuizComparisonRow['trend']): string {
-  if (trend === 'improved') return 'Improved';
-  if (trend === 'declined') return 'Declined';
-  if (trend === 'unchanged') return 'Unchanged';
-  return 'Awaiting Retry';
+function trendLabel(trend: InterventionQuizComparisonRow["trend"]): string {
+  if (trend === "improved") return "Improved";
+  if (trend === "declined") return "Declined";
+  if (trend === "unchanged") return "Unchanged";
+  return "Awaiting Retry";
 }
 
 function formatComparisonFilterLabel(
-  filter: ClassInterventionQuizComparisonResponse['filterOptions'][number],
+  filter: ClassInterventionQuizComparisonResponse["filterOptions"][number],
 ): string {
-  if (filter.id === 'all') return filter.label;
+  if (filter.id === "all") return filter.label;
   const category = filter.classRecordCategory ?? filter.assessmentType;
-  const categoryLabel = category ? formatTriggerSource(category) : '';
+  const categoryLabel = category ? formatTriggerSource(category) : "";
   return categoryLabel ? `${filter.label} - ${categoryLabel}` : filter.label;
 }
 
 function formatConceptLabel(rawConcept: string): string {
   const cleaned = richTextToPlainText(rawConcept)
-    .replace(/[_-]+/g, ' ')
-    .replace(/\s+/g, ' ')
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
-  if (!cleaned) return 'Unlabeled concept';
+  if (!cleaned) return "Unlabeled concept";
 
-  const tokens = cleaned.split(' ').filter(Boolean);
+  const tokens = cleaned.split(" ").filter(Boolean);
   while (tokens[0] && /^p$/i.test(tokens[0])) tokens.shift();
-  while (tokens[tokens.length - 1] && /^p$/i.test(tokens[tokens.length - 1])) tokens.pop();
+  while (tokens[tokens.length - 1] && /^p$/i.test(tokens[tokens.length - 1]))
+    tokens.pop();
 
-  const normalized = tokens.join(' ').trim();
-  if (!normalized) return 'Unlabeled concept';
+  const normalized = tokens.join(" ").trim();
+  if (!normalized) return "Unlabeled concept";
 
   const lowSignal =
     normalized.length < 3 ||
     /^[a-z]$/i.test(normalized) ||
     /^(unknown concept|question|item)$/i.test(normalized);
-  if (lowSignal) return 'Unlabeled concept';
+  if (lowSignal) return "Unlabeled concept";
 
   return normalized
-    .split(' ')
+    .split(" ")
     .map((token) =>
       token.length <= 2
         ? token.toUpperCase()
         : token[0].toUpperCase() + token.slice(1),
     )
-    .join(' ');
+    .join(" ");
 }
 
-function formatTeacherFacingText(value: string | null | undefined, fallback: string): string {
-  const cleaned = richTextToPlainText(value ?? '')
-    .replace(/\s+/g, ' ')
+function formatTeacherFacingText(
+  value: string | null | undefined,
+  fallback: string,
+): string {
+  const cleaned = richTextToPlainText(value ?? "")
+    .replace(/\s+/g, " ")
     .trim();
   return cleaned || fallback;
 }
@@ -214,34 +233,37 @@ function formatTeacherFacingText(value: string | null | undefined, fallback: str
 function classifyMasteryBand(score: number) {
   if (score >= 85) {
     return {
-      label: 'High mastery',
-      tone: 'bg-emerald-500/18 border-emerald-300/45 text-emerald-50',
-      fill: 'linear-gradient(180deg, rgba(16,185,129,0.9), rgba(5,150,105,0.72))',
+      label: "High mastery",
+      tone: "bg-emerald-500/18 border-emerald-300/45 text-emerald-50",
+      fill: "linear-gradient(180deg, rgba(16,185,129,0.9), rgba(5,150,105,0.72))",
     };
   }
   if (score >= 70) {
     return {
-      label: 'Watch',
-      tone: 'bg-amber-500/18 border-amber-300/40 text-amber-50',
-      fill: 'linear-gradient(180deg, rgba(245,158,11,0.9), rgba(217,119,6,0.72))',
+      label: "Watch",
+      tone: "bg-amber-500/18 border-amber-300/40 text-amber-50",
+      fill: "linear-gradient(180deg, rgba(245,158,11,0.9), rgba(217,119,6,0.72))",
     };
   }
   if (score >= 55) {
     return {
-      label: 'Needs reteach',
-      tone: 'bg-orange-500/18 border-orange-300/40 text-orange-50',
-      fill: 'linear-gradient(180deg, rgba(249,115,22,0.9), rgba(234,88,12,0.72))',
+      label: "Needs reteach",
+      tone: "bg-orange-500/18 border-orange-300/40 text-orange-50",
+      fill: "linear-gradient(180deg, rgba(249,115,22,0.9), rgba(234,88,12,0.72))",
     };
   }
   return {
-    label: 'Critical',
-    tone: 'bg-rose-500/18 border-rose-300/40 text-rose-50',
-    fill: 'linear-gradient(180deg, rgba(244,63,94,0.95), rgba(190,24,93,0.78))',
+    label: "Critical",
+    tone: "bg-rose-500/18 border-rose-300/40 text-rose-50",
+    fill: "linear-gradient(180deg, rgba(244,63,94,0.95), rgba(190,24,93,0.78))",
   };
 }
 
 function buildHeatmapCellStyle(score: number): CSSProperties {
-  const clamped = Math.max(0, Math.min(100, Number.isFinite(score) ? score : 0));
+  const clamped = Math.max(
+    0,
+    Math.min(100, Number.isFinite(score) ? score : 0),
+  );
   const hue = Math.round((clamped / 100) * 120);
   const alpha = 0.28 + ((100 - clamped) / 100) * 0.36;
 
@@ -256,15 +278,17 @@ function formatAnalysisStatus(status: string): string {
 }
 
 function sanitizeFilenamePart(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 60) || 'lesson-plan';
+  return (
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 60) || "lesson-plan"
+  );
 }
 
 function toLineText(lines: string[]): string {
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 function fromLineText(value: string): string[] {
@@ -279,19 +303,20 @@ function buildLessonPlanFilename(
   plan: LessonPlanStructuredOutput,
 ): string {
   const classLabel = sanitizeFilenamePart(
-    classItem?.subjectCode || classItem?.subjectName || 'class',
+    classItem?.subjectCode || classItem?.subjectName || "class",
   );
   const lessonLabel = sanitizeFilenamePart(
-    plan.header.lessonTitle || plan.header.moduleTitle || 'lesson-plan',
+    plan.header.lessonTitle || plan.header.moduleTitle || "lesson-plan",
   );
   const dateLabel = sanitizeFilenamePart(
-    plan.header.date ||
-      new Date().toISOString().slice(0, 10),
+    plan.header.date || new Date().toISOString().slice(0, 10),
   );
   return `lesson-plan-${classLabel}-${lessonLabel}-${dateLabel}.pdf`;
 }
 
-function formatLessonPlanProfile(profile: LessonPlanStructuredOutput['classProfile']): string {
+function formatLessonPlanProfile(
+  profile: LessonPlanStructuredOutput["classProfile"],
+): string {
   return profile[0].toUpperCase() + profile.slice(1);
 }
 
@@ -301,63 +326,72 @@ export default function TeacherPerformancePage() {
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [modules, setModules] = useState<ClassModule[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
-  const [selectedClassId, setSelectedClassId] = useState('');
+  const [selectedClassId, setSelectedClassId] = useState("");
   const [summary, setSummary] = useState<ClassPerformanceSummary | null>(null);
   const [atRisk, setAtRisk] = useState<ClassAtRiskResponse | null>(null);
   const [interventionComparisons, setInterventionComparisons] =
     useState<ClassInterventionQuizComparisonResponse | null>(null);
-  const [selectedComparisonFilterId, setSelectedComparisonFilterId] = useState('all');
+  const [selectedComparisonFilterId, setSelectedComparisonFilterId] =
+    useState("all");
   const [logs, setLogs] = useState<ClassPerformanceLogsResponse | null>(null);
-  const [diagnostics, setDiagnostics] = useState<ClassDiagnosticsResponse | null>(null);
+  const [diagnostics, setDiagnostics] =
+    useState<ClassDiagnosticsResponse | null>(null);
   const [diagnosticsStatus, setDiagnosticsStatus] =
-    useState<DiagnosticsStatus>('idle');
-  const [analysisJob, setAnalysisJob] = useState<PerformanceAnalysisJob | null>(null);
-  const [analysisResult, setAnalysisResult] = useState<PerformanceAnalysisStructuredOutput | null>(null);
-  const [analysisTargetStudentId, setAnalysisTargetStudentId] = useState<string | null>(null);
+    useState<DiagnosticsStatus>("idle");
+  const [analysisJob, setAnalysisJob] = useState<PerformanceAnalysisJob | null>(
+    null,
+  );
+  const [analysisResult, setAnalysisResult] =
+    useState<PerformanceAnalysisStructuredOutput | null>(null);
+  const [analysisTargetStudentId, setAnalysisTargetStudentId] = useState<
+    string | null
+  >(null);
   const [loadingClasses, setLoadingClasses] = useState(true);
   const [loadingData, setLoadingData] = useState(false);
-  const [loadingLessonPlanSources, setLoadingLessonPlanSources] = useState(false);
+  const [loadingLessonPlanSources, setLoadingLessonPlanSources] =
+    useState(false);
   const [recomputing, setRecomputing] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [generatingLessonPlan, setGeneratingLessonPlan] = useState(false);
   const [savingLessonPlan, setSavingLessonPlan] = useState(false);
   const [exportingLessonPlan, setExportingLessonPlan] = useState(false);
-  const [workspaceView, setWorkspaceView] = useState<PerformanceWorkspaceView>('performance');
+  const [workspaceView, setWorkspaceView] =
+    useState<PerformanceWorkspaceView>("performance");
   const [lessonPlanAnchorType, setLessonPlanAnchorType] =
-    useState<LessonPlanAnchorType>('lesson');
-  const [lessonPlanAnchorId, setLessonPlanAnchorId] = useState('');
-  const [lessonPlanTeacherNote, setLessonPlanTeacherNote] = useState('');
-  const [lessonPlanJob, setLessonPlanJob] = useState<AiGenerationJob | null>(null);
+    useState<LessonPlanAnchorType>("lesson");
+  const [lessonPlanAnchorId, setLessonPlanAnchorId] = useState("");
+  const [lessonPlanTeacherNote, setLessonPlanTeacherNote] = useState("");
+  const [lessonPlanJob, setLessonPlanJob] = useState<AiGenerationJob | null>(
+    null,
+  );
   const [lessonPlanDraft, setLessonPlanDraft] =
     useState<LessonPlanStructuredOutput | null>(null);
   const [lessonPlanEditorMode, setLessonPlanEditorMode] =
-    useState<LessonPlanEditorMode>('preview');
+    useState<LessonPlanEditorMode>("preview");
   const [lessonPlanFocusSection, setLessonPlanFocusSection] =
-    useState<LessonPlanFocusSection>('overview');
+    useState<LessonPlanFocusSection>("overview");
 
   const selectedClass = useMemo(
     () => classes.find((item) => item.id === selectedClassId) ?? null,
     [classes, selectedClassId],
   );
   const selectedLessonPlanAnchor = useMemo(() => {
-    if (lessonPlanAnchorType === 'module') {
+    if (lessonPlanAnchorType === "module") {
       return modules.find((item) => item.id === lessonPlanAnchorId) ?? null;
     }
     return lessons.find((item) => item.id === lessonPlanAnchorId) ?? null;
   }, [lessonPlanAnchorId, lessonPlanAnchorType, lessons, modules]);
   const teacherDisplayName = useMemo(() => {
-    const firstName = user?.firstName?.trim() ?? '';
-    const lastName = user?.lastName?.trim() ?? '';
-    return [firstName, lastName].filter(Boolean).join(' ') || user?.email || '';
+    const firstName = user?.firstName?.trim() ?? "";
+    const lastName = user?.lastName?.trim() ?? "";
+    return [firstName, lastName].filter(Boolean).join(" ") || user?.email || "";
   }, [user?.email, user?.firstName, user?.lastName]);
   const lessonPlanStorageKey = useMemo(
     () =>
-      selectedClassId
-        ? `${LESSON_PLAN_STORAGE_PREFIX}:${selectedClassId}`
-        : '',
+      selectedClassId ? `${LESSON_PLAN_STORAGE_PREFIX}:${selectedClassId}` : "",
     [selectedClassId],
   );
-  const aiUnavailable = aiAvailability.status === 'degraded';
+  const aiUnavailable = aiAvailability.status === "degraded";
   const threshold = summary?.threshold ?? atRisk?.threshold ?? null;
   const conceptHeatmapRows = useMemo(
     () =>
@@ -381,8 +415,8 @@ export default function TeacherPerformancePage() {
         ? interventionComparisons.filterOptions
         : [
             {
-              id: 'all',
-              label: 'All assessments',
+              id: "all",
+              label: "All assessments",
               assessmentId: null,
               assessmentTitle: null,
               assessmentType: null,
@@ -394,23 +428,36 @@ export default function TeacherPerformancePage() {
   const filteredInterventionComparisons = useMemo(
     () =>
       (interventionComparisons?.comparisons ?? []).filter(
-        (row) => (row.filterId ?? row.assessmentId) === selectedComparisonFilterId,
+        (row) =>
+          (row.filterId ?? row.assessmentId) === selectedComparisonFilterId,
       ),
     [interventionComparisons?.comparisons, selectedComparisonFilterId],
   );
   const filteredComparisonCounts = useMemo(
     () => ({
-      improved: filteredInterventionComparisons.filter((entry) => entry.trend === 'improved').length,
-      declined: filteredInterventionComparisons.filter((entry) => entry.trend === 'declined').length,
-      unchanged: filteredInterventionComparisons.filter((entry) => entry.trend === 'unchanged').length,
-      awaiting: filteredInterventionComparisons.filter((entry) => entry.trend === 'awaiting_retry').length,
+      improved: filteredInterventionComparisons.filter(
+        (entry) => entry.trend === "improved",
+      ).length,
+      declined: filteredInterventionComparisons.filter(
+        (entry) => entry.trend === "declined",
+      ).length,
+      unchanged: filteredInterventionComparisons.filter(
+        (entry) => entry.trend === "unchanged",
+      ).length,
+      awaiting: filteredInterventionComparisons.filter(
+        (entry) => entry.trend === "awaiting_retry",
+      ).length,
     }),
     [filteredInterventionComparisons],
   );
   const latestComparisonByStudent = useMemo(() => {
     const map = new Map<string, InterventionQuizComparisonRow>();
-    const classAverageRows = (interventionComparisons?.comparisons ?? []).filter(
-      (row) => (row.comparisonScope ?? 'class_average') === 'class_average' || row.filterId === 'all',
+    const classAverageRows = (
+      interventionComparisons?.comparisons ?? []
+    ).filter(
+      (row) =>
+        (row.comparisonScope ?? "class_average") === "class_average" ||
+        row.filterId === "all",
     );
     for (const row of classAverageRows) {
       const current = map.get(row.studentId);
@@ -434,37 +481,42 @@ export default function TeacherPerformancePage() {
     if (!lessonPlanDraft) return [];
     return [
       {
-        label: 'School',
-        value: lessonPlanDraft.header.schoolName || 'Nexora LMS',
+        label: "School",
+        value: lessonPlanDraft.header.schoolName || "Nexora LMS",
       },
       {
-        label: 'Teacher',
-        value: lessonPlanDraft.header.teacherName || teacherDisplayName || '--',
+        label: "Teacher",
+        value: lessonPlanDraft.header.teacherName || teacherDisplayName || "--",
       },
       {
-        label: 'Learning area',
+        label: "Learning area",
         value:
-          lessonPlanDraft.header.learningArea || selectedClass?.subjectName || '--',
+          lessonPlanDraft.header.learningArea ||
+          selectedClass?.subjectName ||
+          "--",
       },
       {
-        label: 'Section / Grade',
+        label: "Section / Grade",
         value:
-          [lessonPlanDraft.header.sectionName, lessonPlanDraft.header.gradeLevel]
+          [
+            lessonPlanDraft.header.sectionName,
+            lessonPlanDraft.header.gradeLevel,
+          ]
             .filter(Boolean)
-            .join(' / ') ||
+            .join(" / ") ||
           selectedClass?.section?.name ||
-          '--',
+          "--",
       },
       {
-        label: 'Module',
-        value: lessonPlanDraft.header.moduleTitle || '--',
+        label: "Module",
+        value: lessonPlanDraft.header.moduleTitle || "--",
       },
       {
-        label: 'Lesson',
-        value: lessonPlanDraft.header.lessonTitle || '--',
+        label: "Lesson",
+        value: lessonPlanDraft.header.lessonTitle || "--",
       },
       {
-        label: 'Date / Time',
+        label: "Date / Time",
         value:
           [
             lessonPlanDraft.header.date,
@@ -472,17 +524,23 @@ export default function TeacherPerformancePage() {
             lessonPlanDraft.header.endTime,
           ]
             .filter(Boolean)
-            .join(' ') || '--',
+            .join(" ") || "--",
       },
       {
-        label: 'School year',
+        label: "School year",
         value:
           lessonPlanDraft.header.schoolYear ||
           selectedClass?.schoolYear ||
-          '--',
+          "--",
       },
     ];
-  }, [lessonPlanDraft, selectedClass?.schoolYear, selectedClass?.section?.name, selectedClass?.subjectName, teacherDisplayName]);
+  }, [
+    lessonPlanDraft,
+    selectedClass?.schoolYear,
+    selectedClass?.section?.name,
+    selectedClass?.subjectName,
+    teacherDisplayName,
+  ]);
 
   const fetchClassList = useCallback(async () => {
     if (!user?.id) return;
@@ -492,9 +550,9 @@ export default function TeacherPerformancePage() {
       const response = await classService.getByTeacher(user.id);
       const nextClasses = response.data ?? [];
       setClasses(nextClasses);
-      setSelectedClassId((current) => current || nextClasses[0]?.id || '');
+      setSelectedClassId((current) => current || nextClasses[0]?.id || "");
     } catch {
-      toast.error('Failed to load classes');
+      toast.error("Failed to load classes");
     } finally {
       setLoadingClasses(false);
     }
@@ -507,64 +565,64 @@ export default function TeacherPerformancePage() {
       setInterventionComparisons(null);
       setLogs(null);
       setDiagnostics(null);
-      setDiagnosticsStatus('idle');
+      setDiagnosticsStatus("idle");
       return;
     }
 
     try {
       setLoadingData(true);
-      setDiagnosticsStatus('loading');
+      setDiagnosticsStatus("loading");
       const [summaryRes, atRiskRes, comparisonRes, logsRes, diagnosticsRes] =
         await Promise.allSettled([
-        performanceService.getClassSummary(selectedClassId),
-        performanceService.getAtRiskStudents(selectedClassId),
-        performanceService.getInterventionQuizComparison(selectedClassId),
-        performanceService.getClassLogs(selectedClassId, { limit: 25 }),
-        performanceService.getClassDiagnostics(selectedClassId),
-      ]);
-      if (summaryRes.status === 'fulfilled') {
+          performanceService.getClassSummary(selectedClassId),
+          performanceService.getAtRiskStudents(selectedClassId),
+          performanceService.getInterventionQuizComparison(selectedClassId),
+          performanceService.getClassLogs(selectedClassId, { limit: 25 }),
+          performanceService.getClassDiagnostics(selectedClassId),
+        ]);
+      if (summaryRes.status === "fulfilled") {
         setSummary(summaryRes.value.data);
       } else {
         setSummary(null);
       }
-      if (atRiskRes.status === 'fulfilled') {
+      if (atRiskRes.status === "fulfilled") {
         setAtRisk(atRiskRes.value.data);
       } else {
         setAtRisk(null);
       }
-      if (comparisonRes.status === 'fulfilled') {
+      if (comparisonRes.status === "fulfilled") {
         setInterventionComparisons(comparisonRes.value.data);
       } else {
         setInterventionComparisons(null);
       }
-      if (logsRes.status === 'fulfilled') {
+      if (logsRes.status === "fulfilled") {
         setLogs(logsRes.value.data);
       } else {
         setLogs(null);
       }
-      if (diagnosticsRes.status === 'fulfilled') {
+      if (diagnosticsRes.status === "fulfilled") {
         setDiagnostics(diagnosticsRes.value.data);
-        setDiagnosticsStatus('ready');
+        setDiagnosticsStatus("ready");
       } else {
         setDiagnostics(null);
-        setDiagnosticsStatus('error');
+        setDiagnosticsStatus("error");
       }
       if (
-        summaryRes.status === 'rejected' &&
-        atRiskRes.status === 'rejected' &&
-        comparisonRes.status === 'rejected' &&
-        logsRes.status === 'rejected' &&
-        diagnosticsRes.status === 'rejected'
+        summaryRes.status === "rejected" &&
+        atRiskRes.status === "rejected" &&
+        comparisonRes.status === "rejected" &&
+        logsRes.status === "rejected" &&
+        diagnosticsRes.status === "rejected"
       ) {
-        toast.error('Failed to load performance summary');
+        toast.error("Failed to load performance summary");
       } else if (
-        summaryRes.status === 'rejected' ||
-        atRiskRes.status === 'rejected' ||
-        comparisonRes.status === 'rejected' ||
-        logsRes.status === 'rejected' ||
-        diagnosticsRes.status === 'rejected'
+        summaryRes.status === "rejected" ||
+        atRiskRes.status === "rejected" ||
+        comparisonRes.status === "rejected" ||
+        logsRes.status === "rejected" ||
+        diagnosticsRes.status === "rejected"
       ) {
-        toast.warning('Some performance panels are temporarily unavailable.');
+        toast.warning("Some performance panels are temporarily unavailable.");
       }
     } finally {
       setLoadingData(false);
@@ -574,19 +632,20 @@ export default function TeacherPerformancePage() {
   const retryDiagnostics = useCallback(async () => {
     if (!selectedClassId) {
       setDiagnostics(null);
-      setDiagnosticsStatus('idle');
+      setDiagnosticsStatus("idle");
       return;
     }
 
     try {
-      setDiagnosticsStatus('loading');
-      const response = await performanceService.getClassDiagnostics(selectedClassId);
+      setDiagnosticsStatus("loading");
+      const response =
+        await performanceService.getClassDiagnostics(selectedClassId);
       setDiagnostics(response.data);
-      setDiagnosticsStatus('ready');
+      setDiagnosticsStatus("ready");
     } catch {
       setDiagnostics(null);
-      setDiagnosticsStatus('error');
-      toast.warning('Diagnostics are still temporarily unavailable.');
+      setDiagnosticsStatus("error");
+      toast.warning("Diagnostics are still temporarily unavailable.");
     }
   }, [selectedClassId]);
 
@@ -594,7 +653,7 @@ export default function TeacherPerformancePage() {
     if (!selectedClassId) {
       setModules([]);
       setLessons([]);
-      setLessonPlanAnchorId('');
+      setLessonPlanAnchorId("");
       setLessonPlanJob(null);
       setLessonPlanDraft(null);
       return;
@@ -606,14 +665,14 @@ export default function TeacherPerformancePage() {
         moduleService.getByClass(selectedClassId),
         lessonService.getByClass(selectedClassId, {
           includeBlocks: true,
-          order: 'asc',
+          order: "asc",
         }),
       ]);
 
       const nextModules =
-        modulesRes.status === 'fulfilled' ? modulesRes.value?.data ?? [] : [];
+        modulesRes.status === "fulfilled" ? (modulesRes.value?.data ?? []) : [];
       const nextLessons =
-        lessonsRes.status === 'fulfilled' ? lessonsRes.value?.data ?? [] : [];
+        lessonsRes.status === "fulfilled" ? (lessonsRes.value?.data ?? []) : [];
 
       setModules(nextModules);
       setLessons(nextLessons);
@@ -623,19 +682,22 @@ export default function TeacherPerformancePage() {
         const lessonIds = new Set(nextLessons.map((item) => item.id));
         if (
           current &&
-          ((lessonPlanAnchorType === 'module' && moduleIds.has(current)) ||
-            (lessonPlanAnchorType === 'lesson' && lessonIds.has(current)))
+          ((lessonPlanAnchorType === "module" && moduleIds.has(current)) ||
+            (lessonPlanAnchorType === "lesson" && lessonIds.has(current)))
         ) {
           return current;
         }
-        if (lessonPlanAnchorType === 'lesson') {
-          return nextLessons[0]?.id ?? nextModules[0]?.id ?? '';
+        if (lessonPlanAnchorType === "lesson") {
+          return nextLessons[0]?.id ?? nextModules[0]?.id ?? "";
         }
-        return nextModules[0]?.id ?? nextLessons[0]?.id ?? '';
+        return nextModules[0]?.id ?? nextLessons[0]?.id ?? "";
       });
 
-      if (modulesRes.status === 'rejected' && lessonsRes.status === 'rejected') {
-        toast.error('Failed to load lesson plan sources.');
+      if (
+        modulesRes.status === "rejected" &&
+        lessonsRes.status === "rejected"
+      ) {
+        toast.error("Failed to load lesson plan sources.");
       }
     } finally {
       setLoadingLessonPlanSources(false);
@@ -643,7 +705,7 @@ export default function TeacherPerformancePage() {
   }, [lessonPlanAnchorType, selectedClassId]);
 
   const restoreStoredLessonPlan = useCallback(async () => {
-    if (!lessonPlanStorageKey || typeof window === 'undefined') {
+    if (!lessonPlanStorageKey || typeof window === "undefined") {
       return;
     }
     const storedJobId = window.localStorage.getItem(lessonPlanStorageKey);
@@ -656,11 +718,11 @@ export default function TeacherPerformancePage() {
     try {
       const statusRes = await aiService.getTeacherJobStatus(storedJobId);
       setLessonPlanJob(statusRes.data);
-      if (['completed', 'approved'].includes(statusRes.data.status)) {
+      if (["completed", "approved"].includes(statusRes.data.status)) {
         const resultRes = await aiService.getLessonPlanJobResult(storedJobId);
         setLessonPlanDraft(resultRes.data.result.structuredOutput);
-        setLessonPlanEditorMode('preview');
-        setLessonPlanFocusSection('overview');
+        setLessonPlanEditorMode("preview");
+        setLessonPlanFocusSection("overview");
       } else {
         setLessonPlanDraft(null);
       }
@@ -680,7 +742,7 @@ export default function TeacherPerformancePage() {
   }, [fetchPerformance]);
 
   useEffect(() => {
-    setSelectedComparisonFilterId('all');
+    setSelectedComparisonFilterId("all");
   }, [selectedClassId]);
 
   useEffect(() => {
@@ -692,11 +754,17 @@ export default function TeacherPerformancePage() {
   }, [restoreStoredLessonPlan]);
 
   useEffect(() => {
-    if (lessonPlanAnchorType === 'lesson' && !lessons.some((item) => item.id === lessonPlanAnchorId)) {
-      setLessonPlanAnchorId(lessons[0]?.id ?? modules[0]?.id ?? '');
+    if (
+      lessonPlanAnchorType === "lesson" &&
+      !lessons.some((item) => item.id === lessonPlanAnchorId)
+    ) {
+      setLessonPlanAnchorId(lessons[0]?.id ?? modules[0]?.id ?? "");
     }
-    if (lessonPlanAnchorType === 'module' && !modules.some((item) => item.id === lessonPlanAnchorId)) {
-      setLessonPlanAnchorId(modules[0]?.id ?? lessons[0]?.id ?? '');
+    if (
+      lessonPlanAnchorType === "module" &&
+      !modules.some((item) => item.id === lessonPlanAnchorId)
+    ) {
+      setLessonPlanAnchorId(modules[0]?.id ?? lessons[0]?.id ?? "");
     }
   }, [lessonPlanAnchorId, lessonPlanAnchorType, lessons, modules]);
 
@@ -709,35 +777,44 @@ export default function TeacherPerformancePage() {
       toast.success(`Recomputed ${result.data.recomputed} student snapshot(s)`);
       await fetchPerformance();
     } catch {
-      toast.error('Recompute failed');
+      toast.error("Recompute failed");
     } finally {
       setRecomputing(false);
     }
   };
 
   useEffect(() => {
-    if (!analysisJob || !['pending', 'processing'].includes(analysisJob.status)) {
+    if (
+      !analysisJob ||
+      !["pending", "processing"].includes(analysisJob.status)
+    ) {
       return;
     }
 
     const interval = window.setInterval(async () => {
       try {
-        const statusRes = await performanceService.getAnalysisJobStatus(analysisJob.jobId);
+        const statusRes = await performanceService.getAnalysisJobStatus(
+          analysisJob.jobId,
+        );
         setAnalysisJob(statusRes.data);
-        if (['completed', 'approved'].includes(statusRes.data.status)) {
-          const resultRes = await performanceService.getAnalysisJobResult(statusRes.data.jobId);
+        if (["completed", "approved"].includes(statusRes.data.status)) {
+          const resultRes = await performanceService.getAnalysisJobResult(
+            statusRes.data.jobId,
+          );
           setAnalysisResult(resultRes.data.result.structuredOutput);
           setAnalyzing(false);
           window.clearInterval(interval);
         }
-        if (statusRes.data.status === 'failed') {
+        if (statusRes.data.status === "failed") {
           setAnalyzing(false);
-          toast.error(statusRes.data.errorMessage || 'Performance analysis failed.');
+          toast.error(
+            statusRes.data.errorMessage || "Performance analysis failed.",
+          );
           window.clearInterval(interval);
         }
       } catch {
         setAnalyzing(false);
-        toast.error('Failed to refresh analysis job status.');
+        toast.error("Failed to refresh analysis job status.");
         window.clearInterval(interval);
       }
     }, 10_000);
@@ -746,30 +823,39 @@ export default function TeacherPerformancePage() {
   }, [analysisJob]);
 
   useEffect(() => {
-    if (!lessonPlanJob || !['pending', 'processing'].includes(lessonPlanJob.status)) {
+    if (
+      !lessonPlanJob ||
+      !["pending", "processing"].includes(lessonPlanJob.status)
+    ) {
       return;
     }
 
     const interval = window.setInterval(async () => {
       try {
-        const statusRes = await aiService.getTeacherJobStatus(lessonPlanJob.jobId);
+        const statusRes = await aiService.getTeacherJobStatus(
+          lessonPlanJob.jobId,
+        );
         setLessonPlanJob(statusRes.data);
-        if (['completed', 'approved'].includes(statusRes.data.status)) {
-          const resultRes = await aiService.getLessonPlanJobResult(statusRes.data.jobId);
+        if (["completed", "approved"].includes(statusRes.data.status)) {
+          const resultRes = await aiService.getLessonPlanJobResult(
+            statusRes.data.jobId,
+          );
           setLessonPlanDraft(resultRes.data.result.structuredOutput);
-          setLessonPlanEditorMode('preview');
-          setLessonPlanFocusSection('overview');
+          setLessonPlanEditorMode("preview");
+          setLessonPlanFocusSection("overview");
           setGeneratingLessonPlan(false);
           window.clearInterval(interval);
         }
-        if (statusRes.data.status === 'failed') {
+        if (statusRes.data.status === "failed") {
           setGeneratingLessonPlan(false);
-          toast.error(statusRes.data.errorMessage || 'Lesson plan generation failed.');
+          toast.error(
+            statusRes.data.errorMessage || "Lesson plan generation failed.",
+          );
           window.clearInterval(interval);
         }
       } catch {
         setGeneratingLessonPlan(false);
-        toast.error('Failed to refresh lesson plan job status.');
+        toast.error("Failed to refresh lesson plan job status.");
         window.clearInterval(interval);
       }
     }, 10_000);
@@ -783,18 +869,23 @@ export default function TeacherPerformancePage() {
       setAnalyzing(true);
       setAnalysisResult(null);
       setAnalysisTargetStudentId(studentId ?? null);
-      const jobRes = await performanceService.createAnalysisJob(selectedClassId, {
-        studentId,
-      });
+      const jobRes = await performanceService.createAnalysisJob(
+        selectedClassId,
+        {
+          studentId,
+        },
+      );
       setAnalysisJob(jobRes.data);
-      if (['completed', 'approved'].includes(jobRes.data.status)) {
-        const resultRes = await performanceService.getAnalysisJobResult(jobRes.data.jobId);
+      if (["completed", "approved"].includes(jobRes.data.status)) {
+        const resultRes = await performanceService.getAnalysisJobResult(
+          jobRes.data.jobId,
+        );
         setAnalysisResult(resultRes.data.result.structuredOutput);
         setAnalyzing(false);
       }
     } catch {
       setAnalyzing(false);
-      toast.error('Failed to start performance analysis.');
+      toast.error("Failed to start performance analysis.");
     }
   };
 
@@ -810,28 +901,30 @@ export default function TeacherPerformancePage() {
         anchorId: lessonPlanAnchorId,
         teacherNote: lessonPlanTeacherNote.trim() || undefined,
         header: {
-          instructionalFormat: 'Detailed Lesson Plan',
-          schoolName: 'Nexora LMS',
-          quarter: '',
+          instructionalFormat: "Detailed Lesson Plan",
+          schoolName: "Nexora LMS",
+          quarter: "",
           date: new Date().toISOString().slice(0, 10),
           startTime: selectedClass?.schedules?.[0]?.startTime,
           endTime: selectedClass?.schedules?.[0]?.endTime,
         },
       });
       setLessonPlanJob(jobRes.data);
-      if (typeof window !== 'undefined' && lessonPlanStorageKey) {
+      if (typeof window !== "undefined" && lessonPlanStorageKey) {
         window.localStorage.setItem(lessonPlanStorageKey, jobRes.data.jobId);
       }
-      if (['completed', 'approved'].includes(jobRes.data.status)) {
-        const resultRes = await aiService.getLessonPlanJobResult(jobRes.data.jobId);
+      if (["completed", "approved"].includes(jobRes.data.status)) {
+        const resultRes = await aiService.getLessonPlanJobResult(
+          jobRes.data.jobId,
+        );
         setLessonPlanDraft(resultRes.data.result.structuredOutput);
-        setLessonPlanEditorMode('preview');
-        setLessonPlanFocusSection('overview');
+        setLessonPlanEditorMode("preview");
+        setLessonPlanFocusSection("overview");
         setGeneratingLessonPlan(false);
       }
     } catch {
       setGeneratingLessonPlan(false);
-      toast.error('Failed to start lesson plan generation.');
+      toast.error("Failed to start lesson plan generation.");
     }
   };
 
@@ -839,13 +932,16 @@ export default function TeacherPerformancePage() {
     if (!lessonPlanJob || !lessonPlanDraft) return;
     try {
       setSavingLessonPlan(true);
-      const saveRes = await aiService.updateLessonPlanDraft(lessonPlanJob.jobId, {
-        structuredOutput: lessonPlanDraft,
-      });
+      const saveRes = await aiService.updateLessonPlanDraft(
+        lessonPlanJob.jobId,
+        {
+          structuredOutput: lessonPlanDraft,
+        },
+      );
       setLessonPlanJob(saveRes.data);
-      toast.success('Lesson plan draft saved.');
+      toast.success("Lesson plan draft saved.");
     } catch {
-      toast.error('Failed to save lesson plan draft.');
+      toast.error("Failed to save lesson plan draft.");
     } finally {
       setSavingLessonPlan(false);
     }
@@ -860,13 +956,16 @@ export default function TeacherPerformancePage() {
         buildLessonPlanFilename(selectedClass, lessonPlanDraft),
       );
     } catch {
-      toast.error('Failed to export lesson plan PDF.');
+      toast.error("Failed to export lesson plan PDF.");
     } finally {
       setExportingLessonPlan(false);
     }
   };
 
-  const updateLessonPlanHeader = (field: keyof LessonPlanStructuredOutput['header'], value: string) => {
+  const updateLessonPlanHeader = (
+    field: keyof LessonPlanStructuredOutput["header"],
+    value: string,
+  ) => {
     setLessonPlanDraft((current) =>
       current
         ? {
@@ -882,11 +981,11 @@ export default function TeacherPerformancePage() {
 
   const updateLessonPlanText = (
     field:
-      | 'evidenceSummary'
-      | 'contentOrSubjectMatter'
-      | 'remarks'
-      | 'reflection'
-      | 'assignmentOrHomeExtension',
+      | "evidenceSummary"
+      | "contentOrSubjectMatter"
+      | "remarks"
+      | "reflection"
+      | "assignmentOrHomeExtension",
     value: string,
   ) => {
     setLessonPlanDraft((current) =>
@@ -900,7 +999,7 @@ export default function TeacherPerformancePage() {
   };
 
   const updateLessonPlanList = (
-    field: 'objectives' | 'learningResources' | 'assessment' | 'safeguards',
+    field: "objectives" | "learningResources" | "assessment" | "safeguards",
     value: string,
   ) => {
     setLessonPlanDraft((current) =>
@@ -963,7 +1062,7 @@ export default function TeacherPerformancePage() {
       description={
         threshold !== null
           ? `Class teaching signals and support priorities (threshold ${threshold}%).`
-          : 'Class teaching signals and support priorities'
+          : "Class teaching signals and support priorities"
       }
       stats={
         <>
@@ -986,13 +1085,17 @@ export default function TeacherPerformancePage() {
           <TeacherHeaderMetric
             label="Needs Support Now"
             value={summary?.atRiskCount ?? 0}
-            caption={`${(summary?.atRiskRate ?? 0).toFixed(1)}% of selected class`}
+            caption={`${toPercent(summary?.atRiskRate ?? 0)} of selected class`}
             accent="rose"
           />
           <TeacherHeaderMetric
-            label="Class Average (Blended)"
+            label="Class Standing Average"
             value={toPercent(summary?.averages.blended ?? null)}
-            caption={selectedClass?.subjectCode ? `${selectedClass.subjectCode} blended average` : 'No class selected'}
+            caption={
+              selectedClass?.subjectCode
+                ? `${selectedClass.subjectCode} canonical standing`
+                : "No class selected"
+            }
             accent="amber"
           />
         </>
@@ -1017,7 +1120,9 @@ export default function TeacherPerformancePage() {
             disabled={!selectedClassId || recomputing}
             className="rounded-xl px-4"
           >
-            <RefreshCw className={`h-4 w-4 ${recomputing ? 'animate-spin' : ''}`} />
+            <RefreshCw
+              className={`h-4 w-4 ${recomputing ? "animate-spin" : ""}`}
+            />
             Refresh
           </Button>
         </div>
@@ -1059,51 +1164,51 @@ export default function TeacherPerformancePage() {
           >
             <button
               type="button"
-              className={`teacher-interventions-view-switcher__tab ${workspaceView === 'performance' ? 'is-active' : ''}`}
-              onClick={() => setWorkspaceView('performance')}
+              className={`teacher-interventions-view-switcher__tab ${workspaceView === "performance" ? "is-active" : ""}`}
+              onClick={() => setWorkspaceView("performance")}
             >
               Action
             </button>
             <button
               type="button"
-              className={`teacher-interventions-view-switcher__tab ${workspaceView === 'heatmap' ? 'is-active' : ''}`}
-              onClick={() => setWorkspaceView('heatmap')}
+              className={`teacher-interventions-view-switcher__tab ${workspaceView === "heatmap" ? "is-active" : ""}`}
+              onClick={() => setWorkspaceView("heatmap")}
             >
               Heatmap
             </button>
             <button
               type="button"
-              className={`teacher-interventions-view-switcher__tab ${workspaceView === 'lesson-plan' ? 'is-active' : ''}`}
-              onClick={() => setWorkspaceView('lesson-plan')}
+              className={`teacher-interventions-view-switcher__tab ${workspaceView === "lesson-plan" ? "is-active" : ""}`}
+              onClick={() => setWorkspaceView("lesson-plan")}
             >
               Lesson Plan
             </button>
             <button
               type="button"
-              className={`teacher-interventions-view-switcher__tab ${workspaceView === 'data' ? 'is-active' : ''}`}
-              onClick={() => setWorkspaceView('data')}
+              className={`teacher-interventions-view-switcher__tab ${workspaceView === "data" ? "is-active" : ""}`}
+              onClick={() => setWorkspaceView("data")}
             >
               Details
             </button>
           </div>
 
-          {diagnosticsStatus === 'error' ? (
+          {diagnosticsStatus === "error" ? (
             <DashboardStatePanel
               kind="unavailable"
               title="Diagnostics temporarily unavailable"
               description="Priority learners and class summaries remain available while diagnostics recover."
               primaryAction={{
-                label: 'Retry diagnostics',
+                label: "Retry diagnostics",
                 onClick: () => void retryDiagnostics(),
               }}
             />
           ) : null}
 
-          {workspaceView === 'performance' ? (
+          {workspaceView === "performance" ? (
             <>
               <TeacherSectionCard
                 title="Priority Learners"
-                description="Students currently needing support based on blended performance."
+                description="Students currently needing support based on their canonical class standing."
                 className="teacher-figma-stagger"
               >
                 {(atRisk?.students.length ?? 0) === 0 ? (
@@ -1129,11 +1234,13 @@ export default function TeacherPerformancePage() {
                       </TableHeader>
                       <TableBody className="[&_tr:last-child]:border-0">
                         {(atRisk?.students ?? []).map((student) => {
-                          const studentComparison = latestComparisonByStudent.get(
-                            student.studentId,
-                          );
+                          const studentComparison =
+                            latestComparisonByStudent.get(student.studentId);
                           return (
-                            <TableRow key={student.studentId} className="teacher-table-row border-white/10">
+                            <TableRow
+                              key={student.studentId}
+                              className="teacher-table-row border-white/10"
+                            >
                               <TableCell className="font-semibold text-[var(--teacher-text-strong)]">
                                 {formatStudentName(student)}
                               </TableCell>
@@ -1162,7 +1269,9 @@ export default function TeacherPerformancePage() {
                                 {toPercent(student.blendedScore)}
                               </TableCell>
                               <TableCell className="space-y-1">
-                                <Badge className="teacher-badge-danger border-0">Needs Support</Badge>
+                                <Badge className="teacher-badge-danger border-0">
+                                  Needs Support
+                                </Badge>
                                 {studentComparison ? (
                                   <span
                                     className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${trendBadgeClass(studentComparison.trend)}`}
@@ -1177,7 +1286,9 @@ export default function TeacherPerformancePage() {
                                   variant="teacherOutline"
                                   className="rounded-lg"
                                   disabled={aiUnavailable || analyzing}
-                                  onClick={() => handleAnalyze(student.studentId)}
+                                  onClick={() =>
+                                    handleAnalyze(student.studentId)
+                                  }
                                 >
                                   Analyze
                                 </Button>
@@ -1208,11 +1319,13 @@ export default function TeacherPerformancePage() {
                         <button
                           key={filter.id}
                           type="button"
-                          onClick={() => setSelectedComparisonFilterId(filter.id)}
+                          onClick={() =>
+                            setSelectedComparisonFilterId(filter.id)
+                          }
                           className={`rounded-full border px-3 py-1.5 text-xs font-black transition ${
                             selectedComparisonFilterId === filter.id
-                              ? 'border-cyan-200 bg-cyan-300/20 text-cyan-50 shadow-[0_0_18px_rgba(34,211,238,0.22)]'
-                              : 'border-white/15 bg-white/5 text-[var(--teacher-text-muted)] hover:border-cyan-200/50 hover:text-cyan-50'
+                              ? "border-cyan-200 bg-cyan-300/20 text-cyan-50 shadow-[0_0_18px_rgba(34,211,238,0.22)]"
+                              : "border-white/15 bg-white/5 text-[var(--teacher-text-muted)] hover:border-cyan-200/50 hover:text-cyan-50"
                           }`}
                         >
                           {formatComparisonFilterLabel(filter)}
@@ -1254,31 +1367,33 @@ export default function TeacherPerformancePage() {
                               >
                                 <TableCell className="font-semibold text-[var(--teacher-text-strong)]">
                                   {entry.student
-                                    ? `${entry.student.lastName ?? ''}, ${entry.student.firstName ?? ''}`
-                                        .replace(/^,\s*/, '')
-                                        .trim() || entry.student.email || entry.studentId
+                                    ? `${entry.student.lastName ?? ""}, ${entry.student.firstName ?? ""}`
+                                        .replace(/^,\s*/, "")
+                                        .trim() ||
+                                      entry.student.email ||
+                                      entry.studentId
                                     : entry.studentId}
                                 </TableCell>
                                 <TableCell className="text-[var(--teacher-text-strong)]">
                                   {entry.assessmentTitle}
                                   <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--teacher-text-muted)]">
-                                    {entry.comparisonScope === 'class_average'
-                                      ? 'Class average'
-                                      : 'Assessment filter'}
+                                    {entry.comparisonScope === "class_average"
+                                      ? "Class average"
+                                      : "Assessment filter"}
                                   </div>
                                 </TableCell>
                                 <TableCell className="text-[var(--teacher-text-strong)]">
                                   {toPercent(entry.beforeScorePercent)}
                                   <div className="text-[10px] text-[var(--teacher-text-muted)]">
                                     {entry.beforeSampleSize} assessment
-                                    {entry.beforeSampleSize === 1 ? '' : 's'}
+                                    {entry.beforeSampleSize === 1 ? "" : "s"}
                                   </div>
                                 </TableCell>
                                 <TableCell className="text-[var(--teacher-text-strong)]">
                                   {toPercent(entry.afterScorePercent)}
                                   <div className="text-[10px] text-[var(--teacher-text-muted)]">
                                     {entry.afterSampleSize} AI quiz
-                                    {entry.afterSampleSize === 1 ? '' : 'zes'}
+                                    {entry.afterSampleSize === 1 ? "" : "zes"}
                                   </div>
                                 </TableCell>
                                 <TableCell className="text-[var(--teacher-text-strong)]">
@@ -1299,7 +1414,8 @@ export default function TeacherPerformancePage() {
                                 colSpan={6}
                                 className="py-8 text-center text-sm text-[var(--teacher-text-muted)]"
                               >
-                                No comparison rows for this filter yet. Try All assessments or another quiz/performance task.
+                                No comparison rows for this filter yet. Try All
+                                assessments or another quiz/performance task.
                               </TableCell>
                             </TableRow>
                           )}
@@ -1322,7 +1438,7 @@ export default function TeacherPerformancePage() {
                     disabled={!selectedClassId || aiUnavailable || analyzing}
                     onClick={() => handleAnalyze()}
                   >
-                    {analyzing ? 'Analyzing...' : 'Analyze Whole Class'}
+                    {analyzing ? "Analyzing..." : "Analyze Whole Class"}
                   </Button>
                   {analysisTargetStudentId ? (
                     <Badge variant="secondary">Student view</Badge>
@@ -1331,7 +1447,8 @@ export default function TeacherPerformancePage() {
                   )}
                   {analysisJob ? (
                     <Badge variant="outline">
-                      {formatAnalysisStatus(analysisJob.status)} ({analysisJob.progressPercent}%)
+                      {formatAnalysisStatus(analysisJob.status)} (
+                      {analysisJob.progressPercent}%)
                     </Badge>
                   ) : null}
                 </div>
@@ -1348,14 +1465,15 @@ export default function TeacherPerformancePage() {
                         Recommended next step
                       </p>
                       <p className="mt-2 font-semibold text-[var(--teacher-text-strong)]">
-                        {analysisResult.recommendedIntervention.status === 'insufficient_evidence'
-                          ? 'Not enough recent evidence yet'
-                          : 'Action-ready teaching insight'}
+                        {analysisResult.recommendedIntervention.status ===
+                        "insufficient_evidence"
+                          ? "Not enough recent evidence yet"
+                          : "Action-ready teaching insight"}
                       </p>
                       <p className="mt-1 text-sm leading-6 text-[var(--teacher-text-muted)]">
                         {formatTeacherFacingText(
                           analysisResult.teacherActions[0],
-                          'No teacher action provided.',
+                          "No teacher action provided.",
                         )}
                       </p>
                     </div>
@@ -1365,36 +1483,37 @@ export default function TeacherPerformancePage() {
                         Concepts to review
                       </p>
                       <div className="mt-3 space-y-2">
-                      {analysisResult.learningGaps.slice(0, 6).map((gap) => (
-                        <div
-                          key={gap.concept}
-                          className="flex items-center justify-between gap-4 rounded-[12px] border border-slate-200 px-3 py-2 text-sm"
-                        >
-                          <span className="font-medium text-[var(--teacher-text-strong)]">
-                            {formatConceptLabel(gap.concept)}
-                          </span>
-                          <strong className="text-[var(--teacher-text-muted)]">
-                            {gap.masteryScore}% student confidence - {gap.wrongCount} incorrect responses
-                          </strong>
-                        </div>
-                      ))}
+                        {analysisResult.learningGaps.slice(0, 6).map((gap) => (
+                          <div
+                            key={gap.concept}
+                            className="flex items-center justify-between gap-4 rounded-[12px] border border-slate-200 px-3 py-2 text-sm"
+                          >
+                            <span className="font-medium text-[var(--teacher-text-strong)]">
+                              {formatConceptLabel(gap.concept)}
+                            </span>
+                            <strong className="text-[var(--teacher-text-muted)]">
+                              {gap.masteryScore}% student confidence -{" "}
+                              {gap.wrongCount} incorrect responses
+                            </strong>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
                 )}
               </TeacherSectionCard>
-
             </>
-          ) : workspaceView === 'heatmap' ? (
+          ) : workspaceView === "heatmap" ? (
             <>
               <TeacherSectionCard
                 title="Concept Mastery Heatmap"
                 description="Read the colors first, then use the table to decide what to reteach."
                 className="teacher-figma-stagger"
               >
-                {diagnosticsStatus === 'loading' ? (
+                {diagnosticsStatus === "loading" ? (
                   <Skeleton className="h-64 rounded-xl" />
-                ) : diagnosticsStatus === 'error' ? null : conceptHeatmapRows.length === 0 ? (
+                ) : diagnosticsStatus ===
+                  "error" ? null : conceptHeatmapRows.length === 0 ? (
                   <TeacherEmptyState
                     title="No concept focus areas yet"
                     description="Run assessments and recompute this class to surface concept-level mastery signals."
@@ -1408,10 +1527,26 @@ export default function TeacherPerformancePage() {
                         </p>
                         <div className="mt-3 grid gap-2 sm:grid-cols-2">
                           {[
-                            { label: 'High mastery', score: 92, note: 'Doing well. Keep light review only.' },
-                            { label: 'Watch', score: 76, note: 'Monitor and add short reinforcement.' },
-                            { label: 'Needs reteach', score: 61, note: 'Plan reteaching before the next graded task.' },
-                            { label: 'Critical', score: 32, note: 'Address this first with guided support.' },
+                            {
+                              label: "High mastery",
+                              score: 92,
+                              note: "Doing well. Keep light review only.",
+                            },
+                            {
+                              label: "Watch",
+                              score: 76,
+                              note: "Monitor and add short reinforcement.",
+                            },
+                            {
+                              label: "Needs reteach",
+                              score: 61,
+                              note: "Plan reteaching before the next graded task.",
+                            },
+                            {
+                              label: "Critical",
+                              score: 32,
+                              note: "Address this first with guided support.",
+                            },
                           ].map((item) => (
                             <div
                               key={item.label}
@@ -1422,8 +1557,12 @@ export default function TeacherPerformancePage() {
                                 style={buildHeatmapCellStyle(item.score)}
                               />
                               <div className="space-y-1">
-                                <p className="font-semibold text-[var(--teacher-text-strong)]">{item.label}</p>
-                                <p className="text-xs leading-5 text-[var(--teacher-text-muted)]">{item.note}</p>
+                                <p className="font-semibold text-[var(--teacher-text-strong)]">
+                                  {item.label}
+                                </p>
+                                <p className="text-xs leading-5 text-[var(--teacher-text-muted)]">
+                                  {item.note}
+                                </p>
                               </div>
                             </div>
                           ))}
@@ -1436,27 +1575,41 @@ export default function TeacherPerformancePage() {
                         </p>
                         <div className="mt-3 grid grid-cols-2 gap-3">
                           <div className="rounded-[12px] border border-slate-200 bg-white px-3 py-3">
-                            <p className="text-xs text-[var(--teacher-text-muted)]">Tracked concepts</p>
+                            <p className="text-xs text-[var(--teacher-text-muted)]">
+                              Tracked concepts
+                            </p>
                             <p className="mt-1 text-2xl font-semibold text-[var(--teacher-text-strong)]">
                               {conceptHeatmapRows.length}
                             </p>
                           </div>
                           <div className="rounded-[12px] border border-slate-200 bg-white px-3 py-3">
-                            <p className="text-xs text-[var(--teacher-text-muted)]">Support threshold</p>
+                            <p className="text-xs text-[var(--teacher-text-muted)]">
+                              Support threshold
+                            </p>
                             <p className="mt-1 text-2xl font-semibold text-[var(--teacher-text-strong)]">
-                              {threshold !== null ? `${threshold}%` : '--'}
+                              {threshold !== null ? `${threshold}%` : "--"}
                             </p>
                           </div>
                           <div className="rounded-[12px] border border-slate-200 bg-white px-3 py-3">
-                            <p className="text-xs text-[var(--teacher-text-muted)]">Lowest mastery</p>
+                            <p className="text-xs text-[var(--teacher-text-muted)]">
+                              Lowest mastery
+                            </p>
                             <p className="mt-1 text-lg font-semibold text-[var(--teacher-text-strong)]">
-                              {conceptHeatmapRows[0]?.masteryScore.toFixed(1) ?? '--'}%
+                              {toPercent(
+                                conceptHeatmapRows[0]?.masteryScore ?? null,
+                              )}
                             </p>
                           </div>
                           <div className="rounded-[12px] border border-slate-200 bg-white px-3 py-3">
-                            <p className="text-xs text-[var(--teacher-text-muted)]">Highest mastery</p>
+                            <p className="text-xs text-[var(--teacher-text-muted)]">
+                              Highest mastery
+                            </p>
                             <p className="mt-1 text-lg font-semibold text-[var(--teacher-text-strong)]">
-                              {conceptHeatmapRows[conceptHeatmapRows.length - 1]?.masteryScore.toFixed(1) ?? '--'}%
+                              {toPercent(
+                                conceptHeatmapRows[
+                                  conceptHeatmapRows.length - 1
+                                ]?.masteryScore ?? null,
+                              )}
                             </p>
                           </div>
                         </div>
@@ -1483,10 +1636,12 @@ export default function TeacherPerformancePage() {
                                   {concept.label}
                                 </p>
                                 <p className="mt-1 text-xs text-slate-800/80">
-                                  {concept.masteryScore.toFixed(1)}% mastery
+                                  {toPercent(concept.masteryScore)} mastery
                                 </p>
                               </div>
-                              <Badge className={`border bg-white/70 text-slate-900 ${concept.band.tone}`}>
+                              <Badge
+                                className={`border bg-white/70 text-slate-900 ${concept.band.tone}`}
+                              >
                                 {concept.band.label}
                               </Badge>
                             </div>
@@ -1495,13 +1650,17 @@ export default function TeacherPerformancePage() {
                                 <p className="text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-slate-800/80">
                                   Misses
                                 </p>
-                                <p className="text-lg font-semibold text-slate-950">{concept.wrongCount}</p>
+                                <p className="text-lg font-semibold text-slate-950">
+                                  {concept.wrongCount}
+                                </p>
                               </div>
                               <div className="text-right">
                                 <p className="text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-slate-800/80">
                                   Evidence
                                 </p>
-                                <p className="text-lg font-semibold text-slate-950">{concept.evidenceCount}</p>
+                                <p className="text-lg font-semibold text-slate-950">
+                                  {concept.evidenceCount}
+                                </p>
                               </div>
                             </div>
                           </div>
@@ -1510,72 +1669,79 @@ export default function TeacherPerformancePage() {
                     </div>
 
                     <div className="rounded-[16px] border border-[var(--teacher-border)] bg-white shadow-sm">
-                    <div className="teacher-table-shell">
-                      <Table>
-                        <TableHeader className="teacher-table-head [&_tr]:border-slate-200">
-                          <TableRow className="border-slate-200 hover:bg-transparent">
-                            <TableHead className="w-[96px]">Heat</TableHead>
-                            <TableHead>Concept</TableHead>
-                            <TableHead>Mastery</TableHead>
-                            <TableHead>Signal</TableHead>
-                            <TableHead>Misses</TableHead>
-                            <TableHead>Evidence</TableHead>
-                            <TableHead>Teacher Read</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody className="[&_tr:last-child]:border-0">
-                          {conceptHeatmapRows.map((concept) => (
-                            <TableRow key={`${concept.concept}-row`} className="teacher-table-row border-slate-200">
-                              <TableCell>
-                                <div
-                                  className="flex h-14 items-center justify-center rounded-[12px] border text-sm font-semibold text-slate-950"
-                                  style={concept.heatStyle}
-                                >
-                                  {concept.masteryScore.toFixed(0)}%
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-[var(--teacher-text-strong)]">
-                                <div className="space-y-1">
-                                  <p className="font-semibold">{concept.label}</p>
-                                  <p className="text-xs text-[var(--teacher-text-muted)]">
-                                    Focus area for reteaching review
-                                  </p>
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-[var(--teacher-text-strong)]">
-                                {concept.masteryScore.toFixed(1)}%
-                              </TableCell>
-                              <TableCell>
-                                <Badge className={`${concept.band.tone} border`}>
-                                  {concept.band.label}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-[var(--teacher-text-strong)]">
-                                {concept.wrongCount}
-                              </TableCell>
-                              <TableCell className="text-[var(--teacher-text-strong)]">
-                                {concept.evidenceCount}
-                              </TableCell>
-                              <TableCell className="text-[var(--teacher-text-muted)]">
-                                {concept.masteryScore < 55
-                                  ? 'Immediate reteach and guided practice'
-                                  : concept.masteryScore < 70
-                                    ? 'Plan reteach before the next graded task'
-                                    : concept.masteryScore < 85
-                                      ? 'Watch for drift and reinforce with checkpoints'
-                                      : 'Maintain with spiral review'}
-                              </TableCell>
+                      <div className="teacher-table-shell">
+                        <Table>
+                          <TableHeader className="teacher-table-head [&_tr]:border-slate-200">
+                            <TableRow className="border-slate-200 hover:bg-transparent">
+                              <TableHead className="w-[96px]">Heat</TableHead>
+                              <TableHead>Concept</TableHead>
+                              <TableHead>Mastery</TableHead>
+                              <TableHead>Signal</TableHead>
+                              <TableHead>Misses</TableHead>
+                              <TableHead>Evidence</TableHead>
+                              <TableHead>Teacher Read</TableHead>
                             </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
+                          </TableHeader>
+                          <TableBody className="[&_tr:last-child]:border-0">
+                            {conceptHeatmapRows.map((concept) => (
+                              <TableRow
+                                key={`${concept.concept}-row`}
+                                className="teacher-table-row border-slate-200"
+                              >
+                                <TableCell>
+                                  <div
+                                    className="flex h-14 items-center justify-center rounded-[12px] border text-sm font-semibold text-slate-950"
+                                    style={concept.heatStyle}
+                                  >
+                                    {toPercent(concept.masteryScore)}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-[var(--teacher-text-strong)]">
+                                  <div className="space-y-1">
+                                    <p className="font-semibold">
+                                      {concept.label}
+                                    </p>
+                                    <p className="text-xs text-[var(--teacher-text-muted)]">
+                                      Focus area for reteaching review
+                                    </p>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-[var(--teacher-text-strong)]">
+                                  {toPercent(concept.masteryScore)}
+                                </TableCell>
+                                <TableCell>
+                                  <Badge
+                                    className={`${concept.band.tone} border`}
+                                  >
+                                    {concept.band.label}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-[var(--teacher-text-strong)]">
+                                  {concept.wrongCount}
+                                </TableCell>
+                                <TableCell className="text-[var(--teacher-text-strong)]">
+                                  {concept.evidenceCount}
+                                </TableCell>
+                                <TableCell className="text-[var(--teacher-text-muted)]">
+                                  {concept.masteryScore < 55
+                                    ? "Immediate reteach and guided practice"
+                                    : concept.masteryScore < 70
+                                      ? "Plan reteach before the next graded task"
+                                      : concept.masteryScore < 85
+                                        ? "Watch for drift and reinforce with checkpoints"
+                                        : "Maintain with spiral review"}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
                     </div>
                   </div>
                 )}
               </TeacherSectionCard>
             </>
-          ) : workspaceView === 'lesson-plan' ? (
+          ) : workspaceView === "lesson-plan" ? (
             <>
               <TeacherSectionCard
                 title="Generate Lesson Plan"
@@ -1591,29 +1757,36 @@ export default function TeacherPerformancePage() {
                       >
                         <button
                           type="button"
-                          className={`teacher-interventions-view-switcher__tab ${lessonPlanAnchorType === 'lesson' ? 'is-active' : ''}`}
-                          onClick={() => setLessonPlanAnchorType('lesson')}
+                          className={`teacher-interventions-view-switcher__tab ${lessonPlanAnchorType === "lesson" ? "is-active" : ""}`}
+                          onClick={() => setLessonPlanAnchorType("lesson")}
                         >
                           Lesson
                         </button>
                         <button
                           type="button"
-                          className={`teacher-interventions-view-switcher__tab ${lessonPlanAnchorType === 'module' ? 'is-active' : ''}`}
-                          onClick={() => setLessonPlanAnchorType('module')}
+                          className={`teacher-interventions-view-switcher__tab ${lessonPlanAnchorType === "module" ? "is-active" : ""}`}
+                          onClick={() => setLessonPlanAnchorType("module")}
                         >
                           Module
                         </button>
                       </div>
                       <select
                         value={lessonPlanAnchorId}
-                        onChange={(event) => setLessonPlanAnchorId(event.target.value)}
+                        onChange={(event) =>
+                          setLessonPlanAnchorId(event.target.value)
+                        }
                         disabled={loadingLessonPlanSources}
                         className="teacher-select min-w-[260px] flex-1 text-sm"
                       >
                         <option value="">
-                          {loadingLessonPlanSources ? 'Loading options...' : 'Select source...'}
+                          {loadingLessonPlanSources
+                            ? "Loading options..."
+                            : "Select source..."}
                         </option>
-                        {(lessonPlanAnchorType === 'lesson' ? lessons : modules).map((item) => (
+                        {(lessonPlanAnchorType === "lesson"
+                          ? lessons
+                          : modules
+                        ).map((item) => (
                           <option key={item.id} value={item.id}>
                             {item.title}
                           </option>
@@ -1631,7 +1804,9 @@ export default function TeacherPerformancePage() {
                         }
                         onClick={handleGenerateLessonPlan}
                       >
-                        {generatingLessonPlan ? 'Generating...' : 'Generate Lesson Plan'}
+                        {generatingLessonPlan
+                          ? "Generating..."
+                          : "Generate Lesson Plan"}
                       </Button>
                     </div>
 
@@ -1641,7 +1816,9 @@ export default function TeacherPerformancePage() {
                       </span>
                       <Textarea
                         value={lessonPlanTeacherNote}
-                        onChange={(event) => setLessonPlanTeacherNote(event.target.value)}
+                        onChange={(event) =>
+                          setLessonPlanTeacherNote(event.target.value)
+                        }
                         placeholder="Optional pacing note, class constraint, or concept to emphasize."
                         className="min-h-[90px] resize-y"
                       />
@@ -1655,27 +1832,32 @@ export default function TeacherPerformancePage() {
                     <div className="mt-3 space-y-2">
                       <div className="teacher-figma-kv">
                         <span>Selected anchor</span>
-                        <strong>{selectedLessonPlanAnchor?.title ?? '--'}</strong>
+                        <strong>
+                          {selectedLessonPlanAnchor?.title ?? "--"}
+                        </strong>
                       </div>
                       <div className="teacher-figma-kv">
                         <span>Last job</span>
                         <strong>
                           {lessonPlanJob
                             ? `${formatAnalysisStatus(lessonPlanJob.status)} (${lessonPlanJob.progressPercent}%)`
-                            : 'Not started'}
+                            : "Not started"}
                         </strong>
                       </div>
                       <div className="teacher-figma-kv">
                         <span>Class profile</span>
                         <strong>
                           {lessonPlanDraft
-                            ? formatLessonPlanProfile(lessonPlanDraft.classProfile)
-                            : '--'}
+                            ? formatLessonPlanProfile(
+                                lessonPlanDraft.classProfile,
+                              )
+                            : "--"}
                         </strong>
                       </div>
                     </div>
                     <p className="mt-4 text-[var(--teacher-text-muted)]">
-                      The draft opens in a reading view first, then you can switch into section-by-section editing only where needed.
+                      The draft opens in a reading view first, then you can
+                      switch into section-by-section editing only where needed.
                     </p>
                   </div>
                 </div>
@@ -1698,15 +1880,15 @@ export default function TeacherPerformancePage() {
                         <div className="teacher-interventions-view-switcher w-fit">
                           <button
                             type="button"
-                            className={`teacher-interventions-view-switcher__tab ${lessonPlanEditorMode === 'preview' ? 'is-active' : ''}`}
-                            onClick={() => setLessonPlanEditorMode('preview')}
+                            className={`teacher-interventions-view-switcher__tab ${lessonPlanEditorMode === "preview" ? "is-active" : ""}`}
+                            onClick={() => setLessonPlanEditorMode("preview")}
                           >
                             Preview
                           </button>
                           <button
                             type="button"
-                            className={`teacher-interventions-view-switcher__tab ${lessonPlanEditorMode === 'edit' ? 'is-active' : ''}`}
-                            onClick={() => setLessonPlanEditorMode('edit')}
+                            className={`teacher-interventions-view-switcher__tab ${lessonPlanEditorMode === "edit" ? "is-active" : ""}`}
+                            onClick={() => setLessonPlanEditorMode("edit")}
                           >
                             Edit
                           </button>
@@ -1716,8 +1898,10 @@ export default function TeacherPerformancePage() {
                             <button
                               key={section.key}
                               type="button"
-                              className={`teacher-interventions-view-switcher__tab ${lessonPlanFocusSection === section.key ? 'is-active' : ''}`}
-                              onClick={() => setLessonPlanFocusSection(section.key)}
+                              className={`teacher-interventions-view-switcher__tab ${lessonPlanFocusSection === section.key ? "is-active" : ""}`}
+                              onClick={() =>
+                                setLessonPlanFocusSection(section.key)
+                              }
                             >
                               {section.label}
                             </button>
@@ -1732,7 +1916,7 @@ export default function TeacherPerformancePage() {
                           disabled={savingLessonPlan}
                           onClick={handleSaveLessonPlanDraft}
                         >
-                          {savingLessonPlan ? 'Saving...' : 'Save Draft'}
+                          {savingLessonPlan ? "Saving..." : "Save Draft"}
                         </Button>
                         <Button
                           variant="teacherOutline"
@@ -1740,12 +1924,12 @@ export default function TeacherPerformancePage() {
                           disabled={exportingLessonPlan}
                           onClick={handleExportLessonPlan}
                         >
-                          {exportingLessonPlan ? 'Exporting...' : 'Export PDF'}
+                          {exportingLessonPlan ? "Exporting..." : "Export PDF"}
                         </Button>
                       </div>
                     </div>
 
-                    {lessonPlanEditorMode === 'preview' ? (
+                    {lessonPlanEditorMode === "preview" ? (
                       <article className="rounded-[14px] border border-slate-200 bg-white px-5 py-5 text-sm text-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
                         <div className="border-b border-slate-200 pb-4">
                           <div className="flex items-start gap-3">
@@ -1757,7 +1941,8 @@ export default function TeacherPerformancePage() {
                                 Nexora Lesson Plan
                               </p>
                               <p className="mt-1 text-sm text-slate-500">
-                                {lessonPlanDraft.header.instructionalFormat || 'Detailed Lesson Plan'}
+                                {lessonPlanDraft.header.instructionalFormat ||
+                                  "Detailed Lesson Plan"}
                               </p>
                             </div>
                           </div>
@@ -1767,20 +1952,29 @@ export default function TeacherPerformancePage() {
                                 <p className="text-[0.72rem] uppercase tracking-[0.16em] text-slate-400">
                                   {item.label}
                                 </p>
-                                <p className="font-medium text-slate-800">{item.value}</p>
+                                <p className="font-medium text-slate-800">
+                                  {item.value}
+                                </p>
                               </div>
                             ))}
                           </div>
                         </div>
 
                         <div className="mt-5 space-y-5">
-                          {lessonPlanFocusSection === 'overview' ? (
+                          {lessonPlanFocusSection === "overview" ? (
                             <>
                               <section className="space-y-3">
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <Badge variant="outline">{formatLessonPlanProfile(lessonPlanDraft.classProfile)} profile</Badge>
+                                  <Badge variant="outline">
+                                    {formatLessonPlanProfile(
+                                      lessonPlanDraft.classProfile,
+                                    )}{" "}
+                                    profile
+                                  </Badge>
                                   <Badge variant="secondary">
-                                    {selectedLessonPlanAnchor?.title ?? lessonPlanDraft.header.lessonTitle ?? 'Selected anchor'}
+                                    {selectedLessonPlanAnchor?.title ??
+                                      lessonPlanDraft.header.lessonTitle ??
+                                      "Selected anchor"}
                                   </Badge>
                                 </div>
                                 <div className="rounded-[12px] border border-slate-200 bg-slate-50 px-4 py-3">
@@ -1799,11 +1993,16 @@ export default function TeacherPerformancePage() {
                                     Objectives
                                   </p>
                                   <ul className="space-y-2 pl-4 text-slate-700">
-                                    {lessonPlanDraft.objectives.map((item, index) => (
-                                      <li key={`${item}-${index}`} className="list-disc leading-7">
-                                        {item}
-                                      </li>
-                                    ))}
+                                    {lessonPlanDraft.objectives.map(
+                                      (item, index) => (
+                                        <li
+                                          key={`${item}-${index}`}
+                                          className="list-disc leading-7"
+                                        >
+                                          {item}
+                                        </li>
+                                      ),
+                                    )}
                                   </ul>
                                 </div>
                                 <div className="space-y-3">
@@ -1811,11 +2010,16 @@ export default function TeacherPerformancePage() {
                                     Learning resources
                                   </p>
                                   <ul className="space-y-2 pl-4 text-slate-700">
-                                    {lessonPlanDraft.learningResources.map((item, index) => (
-                                      <li key={`${item}-${index}`} className="list-disc leading-7">
-                                        {item}
-                                      </li>
-                                    ))}
+                                    {lessonPlanDraft.learningResources.map(
+                                      (item, index) => (
+                                        <li
+                                          key={`${item}-${index}`}
+                                          className="list-disc leading-7"
+                                        >
+                                          {item}
+                                        </li>
+                                      ),
+                                    )}
                                   </ul>
                                 </div>
                               </section>
@@ -1831,69 +2035,94 @@ export default function TeacherPerformancePage() {
                             </>
                           ) : null}
 
-                          {lessonPlanFocusSection === 'flow' ? (
+                          {lessonPlanFocusSection === "flow" ? (
                             <section className="space-y-4">
-                              {LESSON_PLAN_PROCEDURE_FIELDS.map((field, index) => (
-                                <div key={field.key} className="border-t border-slate-200 pt-4 first:border-t-0 first:pt-0">
-                                  <div className="flex items-start gap-3">
-                                    <div className="mt-0.5 flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
-                                      {index + 1}
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                      <p className="text-[0.82rem] font-semibold uppercase tracking-[0.12em] text-rose-700">
-                                        {field.label}
-                                      </p>
-                                      <ul className="mt-2 space-y-2 pl-4 text-slate-700">
-                                        {lessonPlanDraft.procedures[field.key].map((item, itemIndex) => (
-                                          <li key={`${field.key}-${itemIndex}`} className="list-disc leading-7">
-                                            {item}
-                                          </li>
-                                        ))}
-                                      </ul>
+                              {LESSON_PLAN_PROCEDURE_FIELDS.map(
+                                (field, index) => (
+                                  <div
+                                    key={field.key}
+                                    className="border-t border-slate-200 pt-4 first:border-t-0 first:pt-0"
+                                  >
+                                    <div className="flex items-start gap-3">
+                                      <div className="mt-0.5 flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
+                                        {index + 1}
+                                      </div>
+                                      <div className="min-w-0 flex-1">
+                                        <p className="text-[0.82rem] font-semibold uppercase tracking-[0.12em] text-rose-700">
+                                          {field.label}
+                                        </p>
+                                        <ul className="mt-2 space-y-2 pl-4 text-slate-700">
+                                          {lessonPlanDraft.procedures[
+                                            field.key
+                                          ].map((item, itemIndex) => (
+                                            <li
+                                              key={`${field.key}-${itemIndex}`}
+                                              className="list-disc leading-7"
+                                            >
+                                              {item}
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      </div>
                                     </div>
                                   </div>
-                                </div>
-                              ))}
+                                ),
+                              )}
                             </section>
                           ) : null}
 
-                          {lessonPlanFocusSection === 'assessment' ? (
+                          {lessonPlanFocusSection === "assessment" ? (
                             <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
                               <div className="space-y-3">
                                 <p className="text-[0.82rem] font-semibold uppercase tracking-[0.12em] text-rose-700">
                                   Assessment
                                 </p>
                                 <ul className="space-y-2 pl-4 text-slate-700">
-                                  {lessonPlanDraft.assessment.map((item, index) => (
-                                    <li key={`${item}-${index}`} className="list-disc leading-7">
-                                      {item}
-                                    </li>
-                                  ))}
+                                  {lessonPlanDraft.assessment.map(
+                                    (item, index) => (
+                                      <li
+                                        key={`${item}-${index}`}
+                                        className="list-disc leading-7"
+                                      >
+                                        {item}
+                                      </li>
+                                    ),
+                                  )}
                                 </ul>
                               </div>
                               <div className="space-y-4">
                                 <p className="text-[0.82rem] font-semibold uppercase tracking-[0.12em] text-rose-700">
                                   Differentiation
                                 </p>
-                                {LESSON_PLAN_DIFFERENTIATION_FIELDS.map((field) => (
-                                  <div key={field.key} className="rounded-[12px] border border-slate-200 px-4 py-3">
-                                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                                      {field.label}
-                                    </p>
-                                    <ul className="mt-2 space-y-2 pl-4 text-slate-700">
-                                      {lessonPlanDraft.differentiation[field.key].map((item, index) => (
-                                        <li key={`${field.key}-${index}`} className="list-disc leading-7">
-                                          {item}
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                ))}
+                                {LESSON_PLAN_DIFFERENTIATION_FIELDS.map(
+                                  (field) => (
+                                    <div
+                                      key={field.key}
+                                      className="rounded-[12px] border border-slate-200 px-4 py-3"
+                                    >
+                                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                                        {field.label}
+                                      </p>
+                                      <ul className="mt-2 space-y-2 pl-4 text-slate-700">
+                                        {lessonPlanDraft.differentiation[
+                                          field.key
+                                        ].map((item, index) => (
+                                          <li
+                                            key={`${field.key}-${index}`}
+                                            className="list-disc leading-7"
+                                          >
+                                            {item}
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  ),
+                                )}
                               </div>
                             </section>
                           ) : null}
 
-                          {lessonPlanFocusSection === 'notes' ? (
+                          {lessonPlanFocusSection === "notes" ? (
                             <section className="space-y-5">
                               <div className="grid gap-5 lg:grid-cols-2">
                                 <div className="space-y-3">
@@ -1901,7 +2130,7 @@ export default function TeacherPerformancePage() {
                                     Remarks
                                   </p>
                                   <p className="leading-7 text-slate-700">
-                                    {lessonPlanDraft.remarks || 'None'}
+                                    {lessonPlanDraft.remarks || "None"}
                                   </p>
                                 </div>
                                 <div className="space-y-3">
@@ -1926,11 +2155,16 @@ export default function TeacherPerformancePage() {
                                   Safeguards
                                 </p>
                                 <ul className="space-y-2 pl-4 text-slate-700">
-                                  {lessonPlanDraft.safeguards.map((item, index) => (
-                                    <li key={`${item}-${index}`} className="list-disc leading-7">
-                                      {item}
-                                    </li>
-                                  ))}
+                                  {lessonPlanDraft.safeguards.map(
+                                    (item, index) => (
+                                      <li
+                                        key={`${item}-${index}`}
+                                        className="list-disc leading-7"
+                                      >
+                                        {item}
+                                      </li>
+                                    ),
+                                  )}
                                 </ul>
                               </div>
                             </section>
@@ -1939,108 +2173,220 @@ export default function TeacherPerformancePage() {
                       </article>
                     ) : (
                       <div className="space-y-4">
-                        {lessonPlanFocusSection === 'overview' ? (
+                        {lessonPlanFocusSection === "overview" ? (
                           <>
                             <div className="grid gap-3 md:grid-cols-2">
                               <label className="space-y-2 text-sm">
-                                <span className="font-medium text-[var(--teacher-text-strong)]">School</span>
+                                <span className="font-medium text-[var(--teacher-text-strong)]">
+                                  School
+                                </span>
                                 <Input
-                                  value={lessonPlanDraft.header.schoolName ?? ''}
-                                  onChange={(event) => updateLessonPlanHeader('schoolName', event.target.value)}
+                                  value={
+                                    lessonPlanDraft.header.schoolName ?? ""
+                                  }
+                                  onChange={(event) =>
+                                    updateLessonPlanHeader(
+                                      "schoolName",
+                                      event.target.value,
+                                    )
+                                  }
                                 />
                               </label>
                               <label className="space-y-2 text-sm">
-                                <span className="font-medium text-[var(--teacher-text-strong)]">Teacher</span>
+                                <span className="font-medium text-[var(--teacher-text-strong)]">
+                                  Teacher
+                                </span>
                                 <Input
-                                  value={lessonPlanDraft.header.teacherName ?? teacherDisplayName}
-                                  onChange={(event) => updateLessonPlanHeader('teacherName', event.target.value)}
+                                  value={
+                                    lessonPlanDraft.header.teacherName ??
+                                    teacherDisplayName
+                                  }
+                                  onChange={(event) =>
+                                    updateLessonPlanHeader(
+                                      "teacherName",
+                                      event.target.value,
+                                    )
+                                  }
                                 />
                               </label>
                               <label className="space-y-2 text-sm">
-                                <span className="font-medium text-[var(--teacher-text-strong)]">Learning area</span>
+                                <span className="font-medium text-[var(--teacher-text-strong)]">
+                                  Learning area
+                                </span>
                                 <Input
-                                  value={lessonPlanDraft.header.learningArea ?? selectedClass?.subjectName ?? ''}
-                                  onChange={(event) => updateLessonPlanHeader('learningArea', event.target.value)}
+                                  value={
+                                    lessonPlanDraft.header.learningArea ??
+                                    selectedClass?.subjectName ??
+                                    ""
+                                  }
+                                  onChange={(event) =>
+                                    updateLessonPlanHeader(
+                                      "learningArea",
+                                      event.target.value,
+                                    )
+                                  }
                                 />
                               </label>
                               <label className="space-y-2 text-sm">
-                                <span className="font-medium text-[var(--teacher-text-strong)]">Quarter</span>
+                                <span className="font-medium text-[var(--teacher-text-strong)]">
+                                  Quarter
+                                </span>
                                 <Input
-                                  value={lessonPlanDraft.header.quarter ?? ''}
-                                  onChange={(event) => updateLessonPlanHeader('quarter', event.target.value)}
+                                  value={lessonPlanDraft.header.quarter ?? ""}
+                                  onChange={(event) =>
+                                    updateLessonPlanHeader(
+                                      "quarter",
+                                      event.target.value,
+                                    )
+                                  }
                                 />
                               </label>
                               <label className="space-y-2 text-sm">
-                                <span className="font-medium text-[var(--teacher-text-strong)]">Date</span>
+                                <span className="font-medium text-[var(--teacher-text-strong)]">
+                                  Date
+                                </span>
                                 <Input
-                                  value={lessonPlanDraft.header.date ?? ''}
-                                  onChange={(event) => updateLessonPlanHeader('date', event.target.value)}
+                                  value={lessonPlanDraft.header.date ?? ""}
+                                  onChange={(event) =>
+                                    updateLessonPlanHeader(
+                                      "date",
+                                      event.target.value,
+                                    )
+                                  }
                                 />
                               </label>
                               <label className="space-y-2 text-sm">
-                                <span className="font-medium text-[var(--teacher-text-strong)]">School year</span>
+                                <span className="font-medium text-[var(--teacher-text-strong)]">
+                                  School year
+                                </span>
                                 <Input
-                                  value={lessonPlanDraft.header.schoolYear ?? selectedClass?.schoolYear ?? ''}
-                                  onChange={(event) => updateLessonPlanHeader('schoolYear', event.target.value)}
+                                  value={
+                                    lessonPlanDraft.header.schoolYear ??
+                                    selectedClass?.schoolYear ??
+                                    ""
+                                  }
+                                  onChange={(event) =>
+                                    updateLessonPlanHeader(
+                                      "schoolYear",
+                                      event.target.value,
+                                    )
+                                  }
                                 />
                               </label>
                               <label className="space-y-2 text-sm">
-                                <span className="font-medium text-[var(--teacher-text-strong)]">Grade level</span>
+                                <span className="font-medium text-[var(--teacher-text-strong)]">
+                                  Grade level
+                                </span>
                                 <Input
                                   value={
                                     lessonPlanDraft.header.gradeLevel ??
                                     selectedClass?.section?.gradeLevel ??
                                     selectedClass?.subjectGradeLevel ??
-                                    ''
+                                    ""
                                   }
-                                  onChange={(event) => updateLessonPlanHeader('gradeLevel', event.target.value)}
+                                  onChange={(event) =>
+                                    updateLessonPlanHeader(
+                                      "gradeLevel",
+                                      event.target.value,
+                                    )
+                                  }
                                 />
                               </label>
                               <label className="space-y-2 text-sm">
-                                <span className="font-medium text-[var(--teacher-text-strong)]">Section</span>
+                                <span className="font-medium text-[var(--teacher-text-strong)]">
+                                  Section
+                                </span>
                                 <Input
-                                  value={lessonPlanDraft.header.sectionName ?? selectedClass?.section?.name ?? ''}
-                                  onChange={(event) => updateLessonPlanHeader('sectionName', event.target.value)}
+                                  value={
+                                    lessonPlanDraft.header.sectionName ??
+                                    selectedClass?.section?.name ??
+                                    ""
+                                  }
+                                  onChange={(event) =>
+                                    updateLessonPlanHeader(
+                                      "sectionName",
+                                      event.target.value,
+                                    )
+                                  }
                                 />
                               </label>
                               <label className="space-y-2 text-sm">
-                                <span className="font-medium text-[var(--teacher-text-strong)]">Module</span>
+                                <span className="font-medium text-[var(--teacher-text-strong)]">
+                                  Module
+                                </span>
                                 <Input
-                                  value={lessonPlanDraft.header.moduleTitle ?? ''}
-                                  onChange={(event) => updateLessonPlanHeader('moduleTitle', event.target.value)}
+                                  value={
+                                    lessonPlanDraft.header.moduleTitle ?? ""
+                                  }
+                                  onChange={(event) =>
+                                    updateLessonPlanHeader(
+                                      "moduleTitle",
+                                      event.target.value,
+                                    )
+                                  }
                                 />
                               </label>
                               <label className="space-y-2 text-sm">
-                                <span className="font-medium text-[var(--teacher-text-strong)]">Lesson title</span>
+                                <span className="font-medium text-[var(--teacher-text-strong)]">
+                                  Lesson title
+                                </span>
                                 <Input
-                                  value={lessonPlanDraft.header.lessonTitle ?? ''}
-                                  onChange={(event) => updateLessonPlanHeader('lessonTitle', event.target.value)}
+                                  value={
+                                    lessonPlanDraft.header.lessonTitle ?? ""
+                                  }
+                                  onChange={(event) =>
+                                    updateLessonPlanHeader(
+                                      "lessonTitle",
+                                      event.target.value,
+                                    )
+                                  }
                                 />
                               </label>
                             </div>
                             <label className="space-y-2 text-sm">
-                              <span className="font-medium text-[var(--teacher-text-strong)]">Evidence summary</span>
+                              <span className="font-medium text-[var(--teacher-text-strong)]">
+                                Evidence summary
+                              </span>
                               <Textarea
                                 value={lessonPlanDraft.evidenceSummary}
-                                onChange={(event) => updateLessonPlanText('evidenceSummary', event.target.value)}
+                                onChange={(event) =>
+                                  updateLessonPlanText(
+                                    "evidenceSummary",
+                                    event.target.value,
+                                  )
+                                }
                                 className="min-h-[110px] resize-y"
                               />
                             </label>
                             <div className="grid gap-3 md:grid-cols-2">
                               <label className="space-y-2 text-sm">
-                                <span className="font-medium text-[var(--teacher-text-strong)]">Objectives</span>
+                                <span className="font-medium text-[var(--teacher-text-strong)]">
+                                  Objectives
+                                </span>
                                 <Textarea
                                   value={toLineText(lessonPlanDraft.objectives)}
-                                  onChange={(event) => updateLessonPlanList('objectives', event.target.value)}
+                                  onChange={(event) =>
+                                    updateLessonPlanList(
+                                      "objectives",
+                                      event.target.value,
+                                    )
+                                  }
                                   className="min-h-[130px] resize-y"
                                 />
                               </label>
                               <label className="space-y-2 text-sm">
-                                <span className="font-medium text-[var(--teacher-text-strong)]">Learning resources</span>
+                                <span className="font-medium text-[var(--teacher-text-strong)]">
+                                  Learning resources
+                                </span>
                                 <Textarea
-                                  value={toLineText(lessonPlanDraft.learningResources)}
+                                  value={toLineText(
+                                    lessonPlanDraft.learningResources,
+                                  )}
                                   onChange={(event) =>
-                                    updateLessonPlanList('learningResources', event.target.value)
+                                    updateLessonPlanList(
+                                      "learningResources",
+                                      event.target.value,
+                                    )
                                   }
                                   className="min-h-[130px] resize-y"
                                 />
@@ -2053,7 +2399,10 @@ export default function TeacherPerformancePage() {
                               <Textarea
                                 value={lessonPlanDraft.contentOrSubjectMatter}
                                 onChange={(event) =>
-                                  updateLessonPlanText('contentOrSubjectMatter', event.target.value)
+                                  updateLessonPlanText(
+                                    "contentOrSubjectMatter",
+                                    event.target.value,
+                                  )
                                 }
                                 className="min-h-[100px] resize-y"
                               />
@@ -2061,17 +2410,25 @@ export default function TeacherPerformancePage() {
                           </>
                         ) : null}
 
-                        {lessonPlanFocusSection === 'flow' ? (
+                        {lessonPlanFocusSection === "flow" ? (
                           <div className="grid gap-3 lg:grid-cols-2">
                             {LESSON_PLAN_PROCEDURE_FIELDS.map((field) => (
-                              <label key={field.key} className="space-y-2 text-sm">
+                              <label
+                                key={field.key}
+                                className="space-y-2 text-sm"
+                              >
                                 <span className="font-medium text-[var(--teacher-text-strong)]">
                                   {field.label}
                                 </span>
                                 <Textarea
-                                  value={toLineText(lessonPlanDraft.procedures[field.key])}
+                                  value={toLineText(
+                                    lessonPlanDraft.procedures[field.key],
+                                  )}
                                   onChange={(event) =>
-                                    updateLessonPlanProcedure(field.key, event.target.value)
+                                    updateLessonPlanProcedure(
+                                      field.key,
+                                      event.target.value,
+                                    )
                                   }
                                   className="min-h-[112px] resize-y"
                                 />
@@ -2080,61 +2437,101 @@ export default function TeacherPerformancePage() {
                           </div>
                         ) : null}
 
-                        {lessonPlanFocusSection === 'assessment' ? (
+                        {lessonPlanFocusSection === "assessment" ? (
                           <>
                             <div className="grid gap-3 md:grid-cols-2">
                               <label className="space-y-2 text-sm">
-                                <span className="font-medium text-[var(--teacher-text-strong)]">Assessment</span>
+                                <span className="font-medium text-[var(--teacher-text-strong)]">
+                                  Assessment
+                                </span>
                                 <Textarea
                                   value={toLineText(lessonPlanDraft.assessment)}
-                                  onChange={(event) => updateLessonPlanList('assessment', event.target.value)}
+                                  onChange={(event) =>
+                                    updateLessonPlanList(
+                                      "assessment",
+                                      event.target.value,
+                                    )
+                                  }
                                   className="min-h-[120px] resize-y"
                                 />
                               </label>
                               <label className="space-y-2 text-sm">
-                                <span className="font-medium text-[var(--teacher-text-strong)]">Safeguards</span>
+                                <span className="font-medium text-[var(--teacher-text-strong)]">
+                                  Safeguards
+                                </span>
                                 <Textarea
                                   value={toLineText(lessonPlanDraft.safeguards)}
-                                  onChange={(event) => updateLessonPlanList('safeguards', event.target.value)}
+                                  onChange={(event) =>
+                                    updateLessonPlanList(
+                                      "safeguards",
+                                      event.target.value,
+                                    )
+                                  }
                                   className="min-h-[120px] resize-y"
                                 />
                               </label>
                             </div>
                             <div className="grid gap-3 lg:grid-cols-3">
-                              {LESSON_PLAN_DIFFERENTIATION_FIELDS.map((field) => (
-                                <label key={field.key} className="space-y-2 text-sm">
-                                  <span className="font-medium text-[var(--teacher-text-strong)]">
-                                    {field.label}
-                                  </span>
-                                  <Textarea
-                                    value={toLineText(lessonPlanDraft.differentiation[field.key])}
-                                    onChange={(event) =>
-                                      updateLessonPlanDifferentiation(field.key, event.target.value)
-                                    }
-                                    className="min-h-[120px] resize-y"
-                                  />
-                                </label>
-                              ))}
+                              {LESSON_PLAN_DIFFERENTIATION_FIELDS.map(
+                                (field) => (
+                                  <label
+                                    key={field.key}
+                                    className="space-y-2 text-sm"
+                                  >
+                                    <span className="font-medium text-[var(--teacher-text-strong)]">
+                                      {field.label}
+                                    </span>
+                                    <Textarea
+                                      value={toLineText(
+                                        lessonPlanDraft.differentiation[
+                                          field.key
+                                        ],
+                                      )}
+                                      onChange={(event) =>
+                                        updateLessonPlanDifferentiation(
+                                          field.key,
+                                          event.target.value,
+                                        )
+                                      }
+                                      className="min-h-[120px] resize-y"
+                                    />
+                                  </label>
+                                ),
+                              )}
                             </div>
                           </>
                         ) : null}
 
-                        {lessonPlanFocusSection === 'notes' ? (
+                        {lessonPlanFocusSection === "notes" ? (
                           <>
                             <div className="grid gap-3 md:grid-cols-2">
                               <label className="space-y-2 text-sm">
-                                <span className="font-medium text-[var(--teacher-text-strong)]">Remarks</span>
+                                <span className="font-medium text-[var(--teacher-text-strong)]">
+                                  Remarks
+                                </span>
                                 <Textarea
                                   value={lessonPlanDraft.remarks}
-                                  onChange={(event) => updateLessonPlanText('remarks', event.target.value)}
+                                  onChange={(event) =>
+                                    updateLessonPlanText(
+                                      "remarks",
+                                      event.target.value,
+                                    )
+                                  }
                                   className="min-h-[100px] resize-y"
                                 />
                               </label>
                               <label className="space-y-2 text-sm">
-                                <span className="font-medium text-[var(--teacher-text-strong)]">Reflection</span>
+                                <span className="font-medium text-[var(--teacher-text-strong)]">
+                                  Reflection
+                                </span>
                                 <Textarea
                                   value={lessonPlanDraft.reflection}
-                                  onChange={(event) => updateLessonPlanText('reflection', event.target.value)}
+                                  onChange={(event) =>
+                                    updateLessonPlanText(
+                                      "reflection",
+                                      event.target.value,
+                                    )
+                                  }
                                   className="min-h-[100px] resize-y"
                                 />
                               </label>
@@ -2144,9 +2541,14 @@ export default function TeacherPerformancePage() {
                                 Assignment / Home Extension
                               </span>
                               <Textarea
-                                value={lessonPlanDraft.assignmentOrHomeExtension}
+                                value={
+                                  lessonPlanDraft.assignmentOrHomeExtension
+                                }
                                 onChange={(event) =>
-                                  updateLessonPlanText('assignmentOrHomeExtension', event.target.value)
+                                  updateLessonPlanText(
+                                    "assignmentOrHomeExtension",
+                                    event.target.value,
+                                  )
                                 }
                                 className="min-h-[100px] resize-y"
                               />
@@ -2166,7 +2568,9 @@ export default function TeacherPerformancePage() {
                   <div className="space-y-3 text-sm">
                     <div className="teacher-figma-kv">
                       <span>Support Threshold</span>
-                      <strong>{threshold !== null ? `${threshold}%` : '--'}</strong>
+                      <strong>
+                        {threshold !== null ? `${threshold}%` : "--"}
+                      </strong>
                     </div>
                     <div className="teacher-figma-kv">
                       <span>Students With Data</span>
@@ -2174,11 +2578,15 @@ export default function TeacherPerformancePage() {
                     </div>
                     <div className="teacher-figma-kv">
                       <span>Assessment Average</span>
-                      <strong>{toPercent(summary?.averages.assessment ?? null)}</strong>
+                      <strong>
+                        {toPercent(summary?.averages.assessment ?? null)}
+                      </strong>
                     </div>
                     <div className="teacher-figma-kv">
                       <span>Class Record Average</span>
-                      <strong>{toPercent(summary?.averages.classRecord ?? null)}</strong>
+                      <strong>
+                        {toPercent(summary?.averages.classRecord ?? null)}
+                      </strong>
                     </div>
                   </div>
                 </TeacherSectionCard>
@@ -2190,7 +2598,8 @@ export default function TeacherPerformancePage() {
                         Priority support list ready
                       </p>
                       <p className="mt-1 text-[var(--teacher-text-muted)]">
-                        This class has learners who need immediate support planning.
+                        This class has learners who need immediate support
+                        planning.
                       </p>
                     </div>
                   ) : (
@@ -2207,44 +2616,63 @@ export default function TeacherPerformancePage() {
                 >
                   <div className="space-y-3 text-sm">
                     <div>
-                      <p className="font-semibold text-[var(--teacher-text-strong)]">Lowest-Scoring Assessments</p>
-                      {diagnosticsStatus === 'ready' &&
+                      <p className="font-semibold text-[var(--teacher-text-strong)]">
+                        Lowest-Scoring Assessments
+                      </p>
+                      {diagnosticsStatus === "ready" &&
                       (diagnostics?.lowestAssessments.length ?? 0) === 0 ? (
-                        <p className="text-[var(--teacher-text-muted)]">No assessment signals yet.</p>
+                        <p className="text-[var(--teacher-text-muted)]">
+                          No assessment signals yet.
+                        </p>
                       ) : (
                         <div className="mt-2 space-y-2">
-                          {diagnostics?.lowestAssessments.slice(0, 3).map((assessment) => (
-                            <div key={assessment.assessmentId} className="teacher-figma-kv">
-                              <span>{assessment.title}</span>
-                              <strong>
-                                {assessment.averageScore !== null
-                                  ? `${assessment.averageScore.toFixed(1)}%`
-                                  : '--'}
-                              </strong>
-                            </div>
-                          ))}
+                          {diagnostics?.lowestAssessments
+                            .slice(0, 3)
+                            .map((assessment) => (
+                              <div
+                                key={assessment.assessmentId}
+                                className="teacher-figma-kv"
+                              >
+                                <span>{assessment.title}</span>
+                                <strong>
+                                  {assessment.averageScore !== null
+                                    ? toPercent(assessment.averageScore)
+                                    : "--"}
+                                </strong>
+                              </div>
+                            ))}
                         </div>
                       )}
                     </div>
                     <div className="rounded-[16px] border border-white/10 bg-white/6 p-4">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
-                          <p className="font-semibold text-[var(--teacher-text-strong)]">Concept Trends Snapshot</p>
+                          <p className="font-semibold text-[var(--teacher-text-strong)]">
+                            Concept Trends Snapshot
+                          </p>
                           <p className="mt-1 text-xs text-[var(--teacher-text-muted)]">
-                            Open the Heatmap tab for the full mastery table and color map.
+                            Open the Heatmap tab for the full mastery table and
+                            color map.
                           </p>
                         </div>
                         <Badge className="border border-white/12 bg-white/8 text-[var(--teacher-text-strong)]">
-                          {conceptHeatmapRows.length} concept{conceptHeatmapRows.length === 1 ? '' : 's'}
+                          {conceptHeatmapRows.length} concept
+                          {conceptHeatmapRows.length === 1 ? "" : "s"}
                         </Badge>
                       </div>
-                      {diagnosticsStatus === 'ready' && conceptHeatmapRows.length === 0 ? (
-                        <p className="mt-3 text-[var(--teacher-text-muted)]">No concept focus areas yet.</p>
+                      {diagnosticsStatus === "ready" &&
+                      conceptHeatmapRows.length === 0 ? (
+                        <p className="mt-3 text-[var(--teacher-text-muted)]">
+                          No concept focus areas yet.
+                        </p>
                       ) : (
                         <div className="mt-3 flex flex-wrap gap-2">
                           {conceptHeatmapRows.slice(0, 4).map((concept) => (
-                            <Badge key={concept.concept} className={`${concept.band.tone} border`}>
-                              {concept.label}: {concept.masteryScore.toFixed(1)}%
+                            <Badge
+                              key={concept.concept}
+                              className={`${concept.band.tone} border`}
+                            >
+                              {concept.label}: {toPercent(concept.masteryScore)}
                             </Badge>
                           ))}
                         </div>
@@ -2272,13 +2700,16 @@ export default function TeacherPerformancePage() {
                           <TableHead>When</TableHead>
                           <TableHead>Student</TableHead>
                           <TableHead>Transition</TableHead>
-                          <TableHead>Blended</TableHead>
+                          <TableHead>Current Standing</TableHead>
                           <TableHead>Trigger</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody className="[&_tr:last-child]:border-0">
                         {(logs?.logs ?? []).map((entry) => (
-                          <TableRow key={entry.id} className="teacher-table-row border-white/10">
+                          <TableRow
+                            key={entry.id}
+                            className="teacher-table-row border-white/10"
+                          >
                             <TableCell className="text-[var(--teacher-text-strong)]">
                               {formatDateTime(entry.createdAt)}
                             </TableCell>
@@ -2287,17 +2718,39 @@ export default function TeacherPerformancePage() {
                             </TableCell>
                             <TableCell>
                               <div className="flex flex-wrap items-center gap-2">
-                                <Badge className={entry.previousIsAtRisk ? 'teacher-badge-danger border-0' : 'teacher-badge-success border-0'}>
-                                  {entry.previousIsAtRisk ? 'Needs Support' : 'Stable'}
+                                <Badge
+                                  className={
+                                    entry.previousIsAtRisk
+                                      ? "teacher-badge-danger border-0"
+                                      : "teacher-badge-success border-0"
+                                  }
+                                >
+                                  {entry.previousIsAtRisk
+                                    ? "Needs Support"
+                                    : "Stable"}
                                 </Badge>
-                                <span className="text-xs uppercase tracking-[0.12em] text-[var(--teacher-text-muted)]">to</span>
-                                <Badge className={entry.currentIsAtRisk ? 'teacher-badge-danger border-0' : 'teacher-badge-success border-0'}>
-                                  {entry.currentIsAtRisk ? 'Needs Support' : 'Stable'}
+                                <span className="text-xs uppercase tracking-[0.12em] text-[var(--teacher-text-muted)]">
+                                  to
+                                </span>
+                                <Badge
+                                  className={
+                                    entry.currentIsAtRisk
+                                      ? "teacher-badge-danger border-0"
+                                      : "teacher-badge-success border-0"
+                                  }
+                                >
+                                  {entry.currentIsAtRisk
+                                    ? "Needs Support"
+                                    : "Stable"}
                                 </Badge>
                               </div>
                             </TableCell>
-                            <TableCell className="text-[var(--teacher-text-strong)]">{toPercent(entry.blendedScore)}</TableCell>
-                            <TableCell className="text-[var(--teacher-text-strong)]">{formatTriggerSource(entry.triggerSource)}</TableCell>
+                            <TableCell className="text-[var(--teacher-text-strong)]">
+                              {toPercent(entry.blendedScore)}
+                            </TableCell>
+                            <TableCell className="text-[var(--teacher-text-strong)]">
+                              {formatTriggerSource(entry.triggerSource)}
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>

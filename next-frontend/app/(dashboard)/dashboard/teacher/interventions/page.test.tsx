@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import TeacherInterventionsPage from "./page";
 import { classService } from "@/services/class-service";
 import { healthService } from "@/services/health-service";
@@ -395,15 +401,27 @@ describe("TeacherInterventionsPage", () => {
     });
 
     expect(
-      screen.getByText(/targeted intervention queue for learners below the support threshold/i),
+      screen.getByText(
+        /targeted intervention queue for learners below the support threshold/i,
+      ),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/grounded on class-approved materials and teacher review/i),
+      screen.getByText(
+        /grounded on class-approved materials and teacher review/i,
+      ),
     ).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: "Trigger" })).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: "Blended Score" })).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: "XP" })).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: "Checkpoints" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("columnheader", { name: "Trigger" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("columnheader", { name: "Current Standing" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("columnheader", { name: "XP" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("columnheader", { name: "Checkpoints" }),
+    ).toBeInTheDocument();
     expect(screen.queryByText("XP Leaderboard")).not.toBeInTheDocument();
     expect(screen.queryByText("Intervention Outcomes")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "History" })).toBeInTheDocument();
@@ -421,7 +439,9 @@ describe("TeacherInterventionsPage", () => {
     expect(within(summary).getByText("Completed")).toBeInTheDocument();
     expect(within(summary).getByText("Average Delta")).toBeInTheDocument();
     expect(within(summary).getByText("Top XP")).toBeInTheDocument();
-    expect(container.querySelector(".teacher-figma-stat")).not.toBeInTheDocument();
+    expect(
+      container.querySelector(".teacher-figma-stat"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("Queue Snapshot")).not.toBeInTheDocument();
     expect(screen.queryByText("Insight of the Week")).not.toBeInTheDocument();
   });
@@ -433,11 +453,15 @@ describe("TeacherInterventionsPage", () => {
       expect(screen.getByText("Navarro, Liam")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Leaderboard & Outcomes" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Leaderboard & Outcomes" }),
+    );
 
     expect(screen.getByText("XP Leaderboard")).toBeInTheDocument();
     expect(screen.getByText("Intervention Outcomes")).toBeInTheDocument();
-    expect(screen.queryByRole("columnheader", { name: "Trigger" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("columnheader", { name: "Trigger" }),
+    ).not.toBeInTheDocument();
   });
 
   it("renders intervention history and opens learners path detail with scores", async () => {
@@ -449,13 +473,21 @@ describe("TeacherInterventionsPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "History" }));
 
-    expect(screen.getByRole("columnheader", { name: "Path Score" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("columnheader", { name: "Path Score" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("58.0%")).toBeInTheDocument();
     expect(screen.getByText("60.0%")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Regenerate Path" })).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "View Learners Path" })).toHaveLength(2);
+    expect(
+      screen.getByRole("button", { name: "Regenerate Path" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("button", { name: "View Learners Path" }),
+    ).toHaveLength(2);
 
-    fireEvent.click(screen.getAllByRole("button", { name: "View Learners Path" })[0]);
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "View Learners Path" })[0],
+    );
 
     expect(await screen.findByText("Learners Path Detail")).toBeInTheDocument();
     expect(screen.getByText("Fractions Basics")).toBeInTheDocument();
@@ -471,12 +503,16 @@ describe("TeacherInterventionsPage", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "History" }));
-    expect(screen.getAllByRole("button", { name: "Regenerate Path" })).toHaveLength(1);
+    expect(
+      screen.getAllByRole("button", { name: "Regenerate Path" }),
+    ).toHaveLength(1);
 
     fireEvent.click(screen.getByRole("button", { name: "Regenerate Path" }));
 
     await waitFor(() => {
-      expect(mockedLxpService.regenerateInterventionPath).toHaveBeenCalledWith("case-history-low");
+      expect(mockedLxpService.regenerateInterventionPath).toHaveBeenCalledWith(
+        "case-history-low",
+      );
     });
     expect(mockRouterPush).toHaveBeenCalledWith(
       "/dashboard/teacher/interventions/case-regenerated?classId=class-1",
@@ -508,7 +544,9 @@ describe("TeacherInterventionsPage", () => {
       expect(mockedLxpService.getTeacherQueue).toHaveBeenCalledWith("class-2");
     });
     expect(mockedLxpService.getClassReport).toHaveBeenCalledWith("class-2");
-    expect(mockedLxpService.getTeacherInterventionHistory).toHaveBeenCalledWith("class-2");
+    expect(mockedLxpService.getTeacherInterventionHistory).toHaveBeenCalledWith(
+      "class-2",
+    );
   });
 
   it("opens student detail side panel from queue action", async () => {
@@ -518,13 +556,17 @@ describe("TeacherInterventionsPage", () => {
       expect(screen.getByText("Navarro, Liam")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Open Case Workspace" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open Case Workspace" }),
+    );
 
     expect(
       await screen.findByText("Intervention Student Detail"),
     ).toBeInTheDocument();
     expect(screen.getByText("Review: Fractions")).toBeInTheDocument();
-    expect(mockedLxpService.getTeacherCaseDetail).toHaveBeenCalledWith("case-1");
+    expect(mockedLxpService.getTeacherCaseDetail).toHaveBeenCalledWith(
+      "case-1",
+    );
   });
 
   it("uses the safer remedial-plan and workspace labels in queue actions", async () => {
@@ -535,7 +577,9 @@ describe("TeacherInterventionsPage", () => {
     });
 
     expect(
-      screen.queryByRole("button", { name: "Generate AI-Assisted Remedial Plan" }),
+      screen.queryByRole("button", {
+        name: "Generate AI-Assisted Remedial Plan",
+      }),
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Open Case Workspace" }),
@@ -551,30 +595,40 @@ describe("TeacherInterventionsPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /module help/i }));
 
-    expect(await screen.findByText("Teacher guide: Interventions Dashboard")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Teacher guide: Interventions Dashboard"),
+    ).toBeInTheDocument();
     expect(screen.getByText("Page 1 of 4")).toBeInTheDocument();
     expect(screen.getByText("Start with the class filter")).toBeInTheDocument();
     expect(screen.getByText("Class filter")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Next page" }));
     expect(screen.getByText("Page 2 of 4")).toBeInTheDocument();
-    expect(screen.getByText("Work through the intervention queue")).toBeInTheDocument();
+    expect(
+      screen.getByText("Work through the intervention queue"),
+    ).toBeInTheDocument();
     expect(screen.getByText("AI Plan button")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Next page" }));
     expect(screen.getByText("Page 3 of 4")).toBeInTheDocument();
-    expect(screen.getByText("Use leaderboard and outcomes carefully")).toBeInTheDocument();
+    expect(
+      screen.getByText("Use leaderboard and outcomes carefully"),
+    ).toBeInTheDocument();
     expect(screen.getByText("Leaderboard switch")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Next page" }));
     expect(screen.getByText("Page 4 of 4")).toBeInTheDocument();
-    expect(screen.getByText("Open detail before making a final decision")).toBeInTheDocument();
+    expect(
+      screen.getByText("Open detail before making a final decision"),
+    ).toBeInTheDocument();
     expect(screen.getByText("Performance link")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Close guide" }));
 
     await waitFor(() => {
-      expect(screen.queryByText("Teacher guide: Interventions Dashboard")).not.toBeInTheDocument();
+      expect(
+        screen.queryByText("Teacher guide: Interventions Dashboard"),
+      ).not.toBeInTheDocument();
     });
   });
 
@@ -632,9 +686,13 @@ describe("TeacherInterventionsPage", () => {
     expect(await screen.findByText(/AI tools are paused/i)).toBeInTheDocument();
     expect(screen.getByText(/connect ECONNREFUSED/i)).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Generate AI-Assisted Remedial Plan" }),
+      screen.getByRole("button", {
+        name: "Generate AI-Assisted Remedial Plan",
+      }),
     ).toBeDisabled();
     expect(screen.getByRole("button", { name: "Activate" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Open Case Workspace" })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: "Open Case Workspace" }),
+    ).toBeEnabled();
   });
 });

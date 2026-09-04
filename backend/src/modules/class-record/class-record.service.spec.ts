@@ -436,6 +436,77 @@ describe('ClassRecordService', () => {
     ).rejects.toThrow(BadRequestException);
   });
 
+  it('stores a reasoned bonus separately while capping its contribution', async () => {
+    db.query.classRecordItems.findFirst.mockResolvedValue({
+      id: 'item-1',
+      maxScore: '10',
+      assessmentId: null,
+      classRecord: {
+        id: 'record-1',
+        classId: 'class-1',
+        teacherId: 'teacher-1',
+        status: 'draft',
+      },
+    });
+    const returning = jest.fn().mockResolvedValue([
+      {
+        classRecordItemId: 'item-1',
+        studentId: 'student-1',
+        score: '5',
+        bonusPoints: '15',
+        bonusReason: 'Teacher-approved correction',
+      },
+    ]);
+    const onConflictDoUpdate = jest.fn().mockReturnValue({ returning });
+    const values = jest.fn().mockReturnValue({ onConflictDoUpdate });
+    db.insert.mockReturnValue({ values });
+
+    const result = await service.recordScore(
+      'item-1',
+      {
+        studentId: 'student-1',
+        score: 5,
+        bonusPoints: 15,
+        bonusReason: 'Teacher-approved correction',
+      },
+      'teacher-1',
+      ['teacher'],
+    );
+
+    expect(values).toHaveBeenCalledWith([
+      expect.objectContaining({
+        score: '5',
+        bonusPoints: '15',
+        bonusReason: 'Teacher-approved correction',
+      }),
+    ]);
+    expect(result.bonusPoints).toBe('15');
+  });
+
+  it('rejects bonus points without a reason before writing', async () => {
+    db.query.classRecordItems.findFirst.mockResolvedValue({
+      id: 'item-1',
+      maxScore: '10',
+      assessmentId: null,
+      classRecord: {
+        id: 'record-1',
+        classId: 'class-1',
+        teacherId: 'teacher-1',
+        status: 'draft',
+      },
+    });
+
+    await expect(
+      service.recordScore(
+        'item-1',
+        { studentId: 'student-1', score: 5, bonusPoints: 1 },
+        'teacher-1',
+        ['teacher'],
+      ),
+    ).rejects.toThrow('Bonus points require a reason');
+    expect(db.insert).not.toHaveBeenCalled();
+  });
+
   it('returns slot overview with manual and linked statuses', async () => {
     db.query.classRecords.findFirst.mockResolvedValue({
       id: 'record-1',

@@ -120,6 +120,13 @@
       "when": 1788194889119,
       "tag": "0016_assessment_editor",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1788545728507,
+      "tag": "0017_grade_score_invariants",
+      "breakpoints": true
     }
   ]
 }

@@ -161,6 +161,7 @@ describe('ClassesService', () => {
   const mockClassRecordService = {
     generateClassRecord: jest.fn(),
     captureClassEnrollment: jest.fn(),
+    getCanonicalStudentStanding: jest.fn(),
   };
   const mockAcademicStateService = { getCurrentState: jest.fn() };
 
@@ -1835,6 +1836,14 @@ describe('ClassesService', () => {
         { classRecordItemId: 'item-qa', score: '88' },
       ]);
       mockDb.query.classRecordFinalGrades.findFirst.mockResolvedValue(null);
+      mockClassRecordService.getCanonicalStudentStanding.mockResolvedValue({
+        overallGradePercent: 96,
+        categoryBreakdown: [
+          { categoryName: 'Written Works', percentageScore: 85 },
+          { categoryName: 'Performance Tasks', percentageScore: 93 },
+          { categoryName: 'Quarterly Assessment', percentageScore: 88 },
+        ],
+      });
       mockDb.query.assessments.findMany.mockResolvedValue([
         {
           id: 'a-finished',
@@ -1893,7 +1902,7 @@ describe('ClassesService', () => {
       expect(result.classInfo.sectionLabel).toBe('Grade 10 - Rizal');
       expect(result.standing).toEqual({
         gradingPeriod: 'q1',
-        overallGradePercent: 89.6,
+        overallGradePercent: 96,
         components: {
           writtenWorkPercent: 85,
           performanceTaskPercent: 93,
@@ -1994,6 +2003,17 @@ describe('ClassesService', () => {
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([{ classRecordItemId: 'item-ww', score: '92' }]);
       mockDb.query.classRecordFinalGrades.findFirst.mockResolvedValue(null);
+      mockClassRecordService.getCanonicalStudentStanding
+        .mockResolvedValueOnce({
+          overallGradePercent: null,
+          categoryBreakdown: [],
+        })
+        .mockResolvedValueOnce({
+          overallGradePercent: 92,
+          categoryBreakdown: [
+            { categoryName: 'Written Works', percentageScore: 92 },
+          ],
+        });
       mockDb.query.assessments.findMany.mockResolvedValue([]);
 
       const result = await service.getStudentOverviewForClass(

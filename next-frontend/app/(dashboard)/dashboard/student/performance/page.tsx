@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import {
   AlertCircle,
   AlertTriangle,
@@ -10,14 +10,15 @@ import {
   Clock3,
   Inbox,
   LineChart,
-} from 'lucide-react';
-import { performanceService } from '@/services/performance-service';
-import { Skeleton } from '@/components/ui/skeleton';
-import { DashboardStatePanel } from '@/components/layout/DashboardStatePanel';
-import type { StudentOwnPerformanceSummary } from '@/types/performance';
-import './student-performance.css';
+} from "lucide-react";
+import { performanceService } from "@/services/performance-service";
+import { Skeleton } from "@/components/ui/skeleton";
+import { DashboardStatePanel } from "@/components/layout/DashboardStatePanel";
+import { boundAcademicPercentage } from "@/lib/academic-score";
+import type { StudentOwnPerformanceSummary } from "@/types/performance";
+import "./student-performance.css";
 
-type StudentPageStatus = 'loading' | 'ready' | 'error' | 'partial';
+type StudentPageStatus = "loading" | "ready" | "error" | "partial";
 
 type TrendSubject = {
   key: string;
@@ -36,16 +37,20 @@ type SubjectRow = {
   delta: number | null;
 };
 
-const SUBJECT_PRIORITY = ['math', 'science', 'english'];
-const TREND_COLORS = ['var(--sp-trend-1)', 'var(--sp-trend-2)', 'var(--sp-trend-3)'];
+const SUBJECT_PRIORITY = ["math", "science", "english"];
+const TREND_COLORS = [
+  "var(--sp-trend-1)",
+  "var(--sp-trend-2)",
+  "var(--sp-trend-3)",
+];
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
 function toPercent(value: number | null, decimals = 0): string {
-  if (value === null) return '--';
-  return `${value.toFixed(decimals)}%`;
+  if (value === null) return "--";
+  return `${boundAcademicPercentage(value).toFixed(decimals)}%`;
 }
 
 function parseDate(value: string | Date): Date | null {
@@ -56,20 +61,20 @@ function parseDate(value: string | Date): Date | null {
 
 function formatDateTime(value: string | Date): string {
   const date = parseDate(value);
-  if (!date) return '--';
-  return date.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
+  if (!date) return "--";
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 }
 
 function formatDateShort(value: Date): string {
-  return value.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
+  return value.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
   });
 }
 
@@ -81,7 +86,9 @@ function isSameLocalDate(left: Date, right: Date): boolean {
   );
 }
 
-function getSubjectLabel(entry: StudentOwnPerformanceSummary['classes'][number]): string {
+function getSubjectLabel(
+  entry: StudentOwnPerformanceSummary["classes"][number],
+): string {
   return entry.class?.subjectName || entry.class?.subjectCode || entry.classId;
 }
 
@@ -93,14 +100,17 @@ function subjectRank(name: string): number {
   const key = getSubjectKey(name);
   const direct = SUBJECT_PRIORITY.indexOf(key);
   if (direct >= 0) return direct;
-  const partial = SUBJECT_PRIORITY.findIndex((priority) => key.includes(priority));
+  const partial = SUBJECT_PRIORITY.findIndex((priority) =>
+    key.includes(priority),
+  );
   if (partial >= 0) return partial;
   return SUBJECT_PRIORITY.length + 10;
 }
 
-function orderEntries(entries: StudentOwnPerformanceSummary['classes']) {
+function orderEntries(entries: StudentOwnPerformanceSummary["classes"]) {
   return [...entries].sort((left, right) => {
-    const rankDiff = subjectRank(getSubjectLabel(left)) - subjectRank(getSubjectLabel(right));
+    const rankDiff =
+      subjectRank(getSubjectLabel(left)) - subjectRank(getSubjectLabel(right));
     if (rankDiff !== 0) return rankDiff;
     return getSubjectLabel(left).localeCompare(getSubjectLabel(right));
   });
@@ -114,31 +124,31 @@ function deriveQuarterSeries(score: number) {
 }
 
 function getTier(score: number | null, isAtRisk: boolean) {
-  if (score === null) return 'neutral';
-  if (isAtRisk || score < 75) return 'danger';
-  if (score < 85) return 'warning';
-  return 'success';
+  if (score === null) return "neutral";
+  if (isAtRisk || score < 75) return "danger";
+  if (score < 85) return "warning";
+  return "success";
 }
 
 function tierFillClass(tier: string): string {
-  if (tier === 'danger') return 'sp-tier-fill-danger';
-  if (tier === 'warning') return 'sp-tier-fill-warning';
-  if (tier === 'success') return 'sp-tier-fill-success';
-  return 'sp-tier-fill-neutral';
+  if (tier === "danger") return "sp-tier-fill-danger";
+  if (tier === "warning") return "sp-tier-fill-warning";
+  if (tier === "success") return "sp-tier-fill-success";
+  return "sp-tier-fill-neutral";
 }
 
 function deltaClass(delta: number | null): string {
-  if (delta === null) return 'sp-delta-neutral';
-  if (delta > 0) return 'sp-delta-positive';
-  if (delta < 0) return 'sp-delta-negative';
-  return 'sp-delta-neutral';
+  if (delta === null) return "sp-delta-neutral";
+  if (delta > 0) return "sp-delta-positive";
+  if (delta < 0) return "sp-delta-negative";
+  return "sp-delta-neutral";
 }
 
 function scoreClass(tier: string): string {
-  if (tier === 'danger') return 'sp-score-danger';
-  if (tier === 'warning') return 'sp-score-warning';
-  if (tier === 'success') return 'sp-score-success';
-  return 'sp-score-neutral';
+  if (tier === "danger") return "sp-score-danger";
+  if (tier === "warning") return "sp-score-warning";
+  if (tier === "success") return "sp-score-success";
+  return "sp-score-neutral";
 }
 
 function MotionCard({
@@ -160,7 +170,7 @@ function MotionCard({
       transition={
         reducedMotion
           ? undefined
-          : { duration: 0.16, delay: index * 0.025, ease: 'easeOut' }
+          : { duration: 0.16, delay: index * 0.025, ease: "easeOut" }
       }
     >
       {children}
@@ -168,7 +178,13 @@ function MotionCard({
   );
 }
 
-function LocalEmptyState({ title, description }: { title: string; description: string }) {
+function LocalEmptyState({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
   return (
     <div className="sp-empty-state">
       <div className="sp-empty-state__icon">
@@ -191,7 +207,7 @@ function SubjectOverviewRadar({
     return (
       <LocalEmptyState
         title="No subject scores yet"
-        description="Your subject overview will appear once your blended scores are available."
+        description="Your subject overview will appear once your current standings are available."
       />
     );
   }
@@ -225,7 +241,7 @@ function SubjectOverviewRadar({
         initial={reducedMotion ? false : { opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={
-          reducedMotion ? undefined : { duration: 0.24, ease: 'easeOut' }
+          reducedMotion ? undefined : { duration: 0.24, ease: "easeOut" }
         }
       >
         {Array.from({ length: levels }).map((_, levelIndex) => {
@@ -239,7 +255,7 @@ function SubjectOverviewRadar({
           return (
             <polygon
               key={`ring-${levelIndex}`}
-              points={ringPoints.join(' ')}
+              points={ringPoints.join(" ")}
               fill="none"
               stroke="var(--sp-grid-line)"
               strokeWidth={1}
@@ -265,7 +281,7 @@ function SubjectOverviewRadar({
         })}
 
         <polygon
-          points={dataPoints.join(' ')}
+          points={dataPoints.join(" ")}
           fill="var(--sp-radar-fill)"
           stroke="var(--sp-radar-stroke)"
           strokeWidth={2}
@@ -278,10 +294,10 @@ function SubjectOverviewRadar({
             y={label.y}
             textAnchor={
               Math.cos(label.angle) > 0.35
-                ? 'start'
+                ? "start"
                 : Math.cos(label.angle) < -0.35
-                  ? 'end'
-                  : 'middle'
+                  ? "end"
+                  : "middle"
             }
             dominantBaseline="middle"
             className="sp-radar-label"
@@ -305,19 +321,20 @@ function QuarterlyTrendChart({
     return (
       <LocalEmptyState
         title="Quarterly trend unavailable"
-        description="Quarterly trend is shown when at least one subject has a computed blended score."
+        description="Quarterly trend is shown when at least one subject has a computed standing."
       />
     );
   }
 
   const quarters = [
-    { label: 'Q1', key: 'q1' as const },
-    { label: 'Q2', key: 'q2' as const },
-    { label: 'Q3', key: 'q3' as const },
+    { label: "Q1", key: "q1" as const },
+    { label: "Q2", key: "q2" as const },
+    { label: "Q3", key: "q3" as const },
   ];
 
   const yTicks = [100, 90, 80, 70, 60];
-  const toHeight = (value: number) => `${((clamp(value, 60, 100) - 60) / 40) * 100}%`;
+  const toHeight = (value: number) =>
+    `${((clamp(value, 60, 100) - 60) / 40) * 100}%`;
 
   return (
     <div className="sp-trend">
@@ -347,18 +364,26 @@ function QuarterlyTrendChart({
                     key={`${quarter.label}-${subject.key}`}
                     className="sp-trend__bar"
                     style={{
-                      backgroundColor: TREND_COLORS[subjectIndex] || 'var(--student-text-muted)',
+                      backgroundColor:
+                        TREND_COLORS[subjectIndex] ||
+                        "var(--student-text-muted)",
                       height: toHeight(subject[quarter.key]),
                     }}
-                    initial={reducedMotion ? false : { opacity: 0, height: '0%' }}
-                    animate={{ opacity: 1, height: toHeight(subject[quarter.key]) }}
+                    initial={
+                      reducedMotion ? false : { opacity: 0, height: "0%" }
+                    }
+                    animate={{
+                      opacity: 1,
+                      height: toHeight(subject[quarter.key]),
+                    }}
                     transition={
                       reducedMotion
                         ? undefined
                         : {
                             duration: 0.24,
-                            ease: 'easeOut',
-                            delay: 0.06 + quarterIndex * 0.045 + subjectIndex * 0.03,
+                            ease: "easeOut",
+                            delay:
+                              0.06 + quarterIndex * 0.045 + subjectIndex * 0.03,
                           }
                     }
                   />
@@ -375,7 +400,10 @@ function QuarterlyTrendChart({
           <div key={subject.key} className="sp-trend__legend-item">
             <span
               className="sp-trend__legend-dot"
-              style={{ backgroundColor: TREND_COLORS[index] || 'var(--student-text-muted)' }}
+              style={{
+                backgroundColor:
+                  TREND_COLORS[index] || "var(--student-text-muted)",
+              }}
             />
             {subject.label}
           </div>
@@ -387,19 +415,21 @@ function QuarterlyTrendChart({
 
 export default function StudentPerformancePage() {
   const reduceMotion = useReducedMotion();
-  const [summary, setSummary] = useState<StudentOwnPerformanceSummary | null>(null);
-  const [status, setStatus] = useState<StudentPageStatus>('loading');
+  const [summary, setSummary] = useState<StudentOwnPerformanceSummary | null>(
+    null,
+  );
+  const [status, setStatus] = useState<StudentPageStatus>("loading");
 
   const fetchSummary = useCallback(() => {
     const request = performanceService.getStudentOwnSummary();
-    void Promise.resolve().then(() => setStatus('loading'));
+    void Promise.resolve().then(() => setStatus("loading"));
 
     void request
       .then((response) => {
         setSummary(response.data);
-        setStatus('ready');
+        setStatus("ready");
       })
-      .catch(() => setStatus('error'));
+      .catch(() => setStatus("error"));
   }, []);
 
   useEffect(() => {
@@ -425,8 +455,8 @@ export default function StudentPerformancePage() {
   }, [classes]);
 
   const lastSyncedLabel = useMemo(() => {
-    if (!latestSyncDate) return '--';
-    if (isSameLocalDate(latestSyncDate, new Date())) return 'Today';
+    if (!latestSyncDate) return "--";
+    if (isSameLocalDate(latestSyncDate, new Date())) return "Today";
     return formatDateShort(latestSyncDate);
   }, [latestSyncDate]);
 
@@ -449,7 +479,8 @@ export default function StudentPerformancePage() {
   const trendSubjects = useMemo<TrendSubject[]>(() => {
     const sorted = [...scoredClasses].sort((left, right) => {
       const rankDiff =
-        subjectRank(getSubjectLabel(left)) - subjectRank(getSubjectLabel(right));
+        subjectRank(getSubjectLabel(left)) -
+        subjectRank(getSubjectLabel(right));
       if (rankDiff !== 0) return rankDiff;
       return (right.blendedScore ?? 0) - (left.blendedScore ?? 0);
     });
@@ -486,7 +517,7 @@ export default function StudentPerformancePage() {
     [orderedClasses],
   );
 
-  if (status === 'loading' && !summary) {
+  if (status === "loading" && !summary) {
     return (
       <div className="student-performance-page student-performance-loading">
         <Skeleton className="h-24 rounded-lg" />
@@ -505,13 +536,16 @@ export default function StudentPerformancePage() {
     );
   }
 
-  if (status === 'error' && !summary) {
+  if (status === "error" && !summary) {
     return (
       <DashboardStatePanel
         kind="error"
         title="Performance couldn't be loaded"
         description="Your performance summary is temporarily unavailable. Try loading it again."
-        primaryAction={{ label: 'Try again', onClick: () => void fetchSummary() }}
+        primaryAction={{
+          label: "Try again",
+          onClick: () => void fetchSummary(),
+        }}
       />
     );
   }
@@ -521,7 +555,9 @@ export default function StudentPerformancePage() {
       className="student-performance-page"
       initial={reduceMotion ? false : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={reduceMotion ? undefined : { duration: 0.16, ease: 'easeOut' }}
+      transition={
+        reduceMotion ? undefined : { duration: 0.16, ease: "easeOut" }
+      }
     >
       <MotionCard
         index={0}
@@ -534,19 +570,20 @@ export default function StudentPerformancePage() {
           </div>
           <div>
             <h1 className="sp-hero__title">Performance</h1>
-            <p className="sp-hero__subtitle">
-              Track your academic standing
-            </p>
+            <p className="sp-hero__subtitle">Track your academic standing</p>
           </div>
         </div>
       </MotionCard>
 
-      {status === 'error' ? (
+      {status === "error" ? (
         <DashboardStatePanel
           kind="unavailable"
           title="Performance refresh failed"
           description="Your last complete performance summary remains visible while you retry."
-          primaryAction={{ label: 'Retry performance', onClick: () => void fetchSummary() }}
+          primaryAction={{
+            label: "Retry performance",
+            onClick: () => void fetchSummary(),
+          }}
         />
       ) : null}
 
@@ -555,7 +592,7 @@ export default function StudentPerformancePage() {
           <div className="sp-kpi-card">
             <div className="sp-kpi-card__head">
               <div>
-                <p className="sp-kpi-card__label">Blended Average</p>
+                <p className="sp-kpi-card__label">Current Standing Average</p>
                 <p className="sp-kpi-card__value sp-kpi-card__value--info">
                   {toPercent(averageBlendedScore)}
                 </p>
@@ -574,15 +611,19 @@ export default function StudentPerformancePage() {
                 <p className="sp-kpi-card__label">Status</p>
                 <p
                   className={`sp-kpi-card__value ${
-                    statusSafe ? 'sp-kpi-card__value--success' : 'sp-kpi-card__value--danger'
+                    statusSafe
+                      ? "sp-kpi-card__value--success"
+                      : "sp-kpi-card__value--danger"
                   }`}
                 >
-                  {statusSafe ? 'Safe' : 'Needs Attention'}
+                  {statusSafe ? "Safe" : "Needs Attention"}
                 </p>
               </div>
               <div
                 className={`sp-kpi-card__icon ${
-                  statusSafe ? 'sp-kpi-card__icon--success' : 'sp-kpi-card__icon--danger'
+                  statusSafe
+                    ? "sp-kpi-card__icon--success"
+                    : "sp-kpi-card__icon--danger"
                 }`}
               >
                 {statusSafe ? (
@@ -638,8 +679,9 @@ export default function StudentPerformancePage() {
                   You have {atRiskCount} subject(s) that need attention
                 </p>
                 <p className="sp-alert__body">
-                  {firstAtRisk ? `${getSubjectLabel(firstAtRisk)} - ` : ''}
-                  Consider reviewing your lessons or reaching out to your teacher.
+                  {firstAtRisk ? `${getSubjectLabel(firstAtRisk)} - ` : ""}
+                  Consider reviewing your lessons or reaching out to your
+                  teacher.
                 </p>
               </div>
             </div>
@@ -651,14 +693,20 @@ export default function StudentPerformancePage() {
         <MotionCard index={6} reducedMotion={Boolean(reduceMotion)}>
           <section className="sp-section">
             <h2 className="sp-section__title">Subject Overview</h2>
-            <SubjectOverviewRadar subjects={radarSubjects} reducedMotion={Boolean(reduceMotion)} />
+            <SubjectOverviewRadar
+              subjects={radarSubjects}
+              reducedMotion={Boolean(reduceMotion)}
+            />
           </section>
         </MotionCard>
 
         <MotionCard index={7} reducedMotion={Boolean(reduceMotion)}>
           <section className="sp-section">
             <h2 className="sp-section__title">Quarterly Trend</h2>
-            <QuarterlyTrendChart subjects={trendSubjects} reducedMotion={Boolean(reduceMotion)} />
+            <QuarterlyTrendChart
+              subjects={trendSubjects}
+              reducedMotion={Boolean(reduceMotion)}
+            />
           </section>
         </MotionCard>
       </div>
@@ -678,11 +726,15 @@ export default function StudentPerformancePage() {
             <div className="sp-breakdown-list">
               {subjectRows.map((row, index) => {
                 const tier = getTier(row.score, row.isAtRisk);
-                const scoreValue = row.score === null ? '--' : `${Math.round(row.score)}%`;
-                const progressWidth = row.score === null ? '0%' : `${clamp(row.score, 0, 100)}%`;
+                const scoreValue =
+                  row.score === null ? "--" : `${Math.round(row.score)}%`;
+                const progressWidth =
+                  row.score === null ? "0%" : `${clamp(row.score, 0, 100)}%`;
                 const showFailing = row.score !== null && row.score < 70;
                 const deltaText =
-                  row.delta === null ? '--' : `${row.delta >= 0 ? '+' : ''}${row.delta.toFixed(1)}%`;
+                  row.delta === null
+                    ? "--"
+                    : `${row.delta >= 0 ? "+" : ""}${row.delta.toFixed(1)}%`;
 
                 return (
                   <motion.article
@@ -696,7 +748,7 @@ export default function StudentPerformancePage() {
                         : {
                             duration: 0.16,
                             delay: 0.04 + index * 0.02,
-                            ease: 'easeOut',
+                            ease: "easeOut",
                           }
                     }
                   >
@@ -715,8 +767,16 @@ export default function StudentPerformancePage() {
                         ) : null}
                       </div>
                       <div className="sp-breakdown-row__values">
-                        <p className={`sp-breakdown-row__delta ${deltaClass(row.delta)}`}>{deltaText}</p>
-                        <p className={`sp-breakdown-row__score ${scoreClass(tier)}`}>{scoreValue}</p>
+                        <p
+                          className={`sp-breakdown-row__delta ${deltaClass(row.delta)}`}
+                        >
+                          {deltaText}
+                        </p>
+                        <p
+                          className={`sp-breakdown-row__score ${scoreClass(tier)}`}
+                        >
+                          {scoreValue}
+                        </p>
                       </div>
                     </div>
 
@@ -730,7 +790,7 @@ export default function StudentPerformancePage() {
                             ? undefined
                             : {
                                 duration: 0.24,
-                                ease: 'easeOut',
+                                ease: "easeOut",
                                 delay: 0.06 + index * 0.02,
                               }
                         }
@@ -745,7 +805,9 @@ export default function StudentPerformancePage() {
       </MotionCard>
 
       {latestSyncDate ? (
-        <p className="sp-meta-text">Last sync detail: {formatDateTime(latestSyncDate)}</p>
+        <p className="sp-meta-text">
+          Last sync detail: {formatDateTime(latestSyncDate)}
+        </p>
       ) : null}
 
       <p className="sp-meta-text">Threshold target: {threshold}%</p>

@@ -160,6 +160,10 @@ export const classRecordScores = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     score: numeric('score', { precision: 8, scale: 2 }),
+    bonusPoints: numeric('bonus_points', { precision: 8, scale: 2 })
+      .notNull()
+      .default('0'),
+    bonusReason: text('bonus_reason'),
     status: text('status')
       .$type<'recorded' | 'excused'>()
       .notNull()
@@ -172,7 +176,7 @@ export const classRecordScores = pgTable(
   (table) => ({
     scoreStatusCheck: check(
       'class_record_score_status_valid',
-      sql`(${table.status} = 'recorded' AND ${table.score} IS NOT NULL AND ${table.score} >= 0) OR (${table.status} = 'excused' AND ${table.score} IS NULL AND length(trim(${table.reason})) > 0 AND ${table.reason} IS NOT NULL)`,
+      sql`(${table.status} = 'recorded' AND ${table.score} IS NOT NULL AND ${table.score} >= 0 AND ${table.bonusPoints} >= 0 AND (${table.bonusPoints} = 0 OR (${table.bonusReason} IS NOT NULL AND length(trim(${table.bonusReason})) > 0))) OR (${table.status} = 'excused' AND ${table.score} IS NULL AND ${table.bonusPoints} = 0 AND length(trim(${table.reason})) > 0 AND ${table.reason} IS NOT NULL)`,
     ),
     itemStudentUnique: unique('class_record_scores_item_student_unique').on(
       table.classRecordItemId,
@@ -208,6 +212,10 @@ export const classRecordFinalGrades = pgTable(
     computedAt: timestamp('computed_at').notNull().defaultNow(),
   },
   (table) => ({
+    finalPercentageRangeCheck: check(
+      'class_record_final_grades_percentage_range_valid',
+      sql`${table.finalPercentage} >= 0 AND ${table.finalPercentage} <= 100`,
+    ),
     classRecordStudentUnique: unique(
       'class_record_final_grades_record_student_unique',
     ).on(table.classRecordId, table.studentId),

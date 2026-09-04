@@ -7,6 +7,7 @@ import { rootNavigationRef } from "../navigation/navigation-ref";
 import { resolveMobileRole } from "../navigation/role-resolver";
 import { colors } from "../theme/tokens";
 import type { StudentInterventionAlert } from "../types/lxp";
+import { boundAcademicPercentage } from "../lib/academicScore";
 import { useAuth } from "./AuthProvider";
 
 function getSubjectLabel(alert: StudentInterventionAlert) {
@@ -15,12 +16,15 @@ function getSubjectLabel(alert: StudentInterventionAlert) {
 
 function getScoreLabel(alert: StudentInterventionAlert) {
   if (typeof alert.triggerScore !== "number") return null;
-  return `${alert.triggerScore.toFixed(1)}%`;
+  return `${boundAcademicPercentage(alert.triggerScore).toFixed(1)}%`;
 }
 
-export function StudentInterventionAlertProvider({ children }: PropsWithChildren) {
+export function StudentInterventionAlertProvider({
+  children,
+}: PropsWithChildren) {
   const { isAuthenticated, user } = useAuth();
-  const isStudent = isAuthenticated && resolveMobileRole(user?.roles) === "student";
+  const isStudent =
+    isAuthenticated && resolveMobileRole(user?.roles) === "student";
   const userKey = user?.userId || user?.id || null;
   const alertsQuery = useStudentInterventionAlerts(isStudent);
   const [visible, setVisible] = useState(false);
@@ -28,7 +32,10 @@ export function StudentInterventionAlertProvider({ children }: PropsWithChildren
 
   const alerts = alertsQuery.data?.alerts ?? [];
   const actionableAlert = useMemo(
-    () => alerts.find((alert) => alert.status === "active" && alert.hasAssignedPath) ?? null,
+    () =>
+      alerts.find(
+        (alert) => alert.status === "active" && alert.hasAssignedPath,
+      ) ?? null,
     [alerts],
   );
 
@@ -51,13 +58,21 @@ export function StudentInterventionAlertProvider({ children }: PropsWithChildren
     if (!actionableAlert) return;
     close();
     if (!rootNavigationRef.isReady()) return;
-    rootNavigationRef.navigate("LXP", { classId: actionableAlert.classId, tab: "case" });
+    rootNavigationRef.navigate("LXP", {
+      classId: actionableAlert.classId,
+      tab: "case",
+    });
   };
 
   return (
     <>
       {children}
-      <Modal animationType="fade" transparent visible={visible && alerts.length > 0} onRequestClose={close}>
+      <Modal
+        animationType="fade"
+        transparent
+        visible={visible && alerts.length > 0}
+        onRequestClose={close}
+      >
         <View
           style={{
             flex: 1,
@@ -78,7 +93,9 @@ export function StudentInterventionAlertProvider({ children }: PropsWithChildren
               elevation: 10,
             }}
           >
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 12 }}
+            >
               <View
                 style={{
                   width: 46,
@@ -89,10 +106,22 @@ export function StudentInterventionAlertProvider({ children }: PropsWithChildren
                   backgroundColor: "#FFE4E6",
                 }}
               >
-                <MaterialCommunityIcons name="account-alert-outline" size={24} color="#BE123C" />
+                <MaterialCommunityIcons
+                  name="account-alert-outline"
+                  size={24}
+                  color="#BE123C"
+                />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ color: colors.text, fontSize: 18, fontWeight: "900" }}>Intervention Alerts</Text>
+                <Text
+                  style={{
+                    color: colors.text,
+                    fontSize: 18,
+                    fontWeight: "900",
+                  }}
+                >
+                  Intervention Alerts
+                </Text>
               </View>
             </View>
 
@@ -111,16 +140,38 @@ export function StudentInterventionAlertProvider({ children }: PropsWithChildren
                       paddingVertical: 10,
                     }}
                   >
-                    <Text style={{ color: colors.text, fontSize: 15, fontWeight: "900" }}>
+                    <Text
+                      style={{
+                        color: colors.text,
+                        fontSize: 15,
+                        fontWeight: "900",
+                      }}
+                    >
                       {getSubjectLabel(alert)}
                     </Text>
                     {alert.subjectName ? (
-                      <Text style={{ marginTop: 3, color: colors.textSecondary, fontSize: 12, fontWeight: "700" }}>
+                      <Text
+                        style={{
+                          marginTop: 3,
+                          color: colors.textSecondary,
+                          fontSize: 12,
+                          fontWeight: "700",
+                        }}
+                      >
                         {alert.subjectName}
                       </Text>
                     ) : null}
-                    <Text style={{ marginTop: 6, color: colors.muted, fontSize: 12, lineHeight: 17 }}>
-                      {alert.status === "pending" ? "Pending teacher review" : "Support path active"}
+                    <Text
+                      style={{
+                        marginTop: 6,
+                        color: colors.muted,
+                        fontSize: 12,
+                        lineHeight: 17,
+                      }}
+                    >
+                      {alert.status === "pending"
+                        ? "Pending teacher review"
+                        : "Support path active"}
                       {scoreLabel ? ` · Score ${scoreLabel}` : ""}
                     </Text>
                   </View>
@@ -128,7 +179,14 @@ export function StudentInterventionAlertProvider({ children }: PropsWithChildren
               })}
             </View>
 
-            <View style={{ marginTop: 18, flexDirection: "row", justifyContent: "flex-end", gap: 10 }}>
+            <View
+              style={{
+                marginTop: 18,
+                flexDirection: "row",
+                justifyContent: "flex-end",
+                gap: 10,
+              }}
+            >
               <Pressable
                 onPress={close}
                 style={{
@@ -138,7 +196,15 @@ export function StudentInterventionAlertProvider({ children }: PropsWithChildren
                   backgroundColor: "#F1F5F9",
                 }}
               >
-                <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: "800" }}>Dismiss</Text>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: 13,
+                    fontWeight: "800",
+                  }}
+                >
+                  Dismiss
+                </Text>
               </Pressable>
               {actionableAlert ? (
                 <Pressable
@@ -150,7 +216,15 @@ export function StudentInterventionAlertProvider({ children }: PropsWithChildren
                     backgroundColor: "#BE123C",
                   }}
                 >
-                  <Text style={{ color: colors.white, fontSize: 13, fontWeight: "900" }}>Open LXP</Text>
+                  <Text
+                    style={{
+                      color: colors.white,
+                      fontSize: 13,
+                      fontWeight: "900",
+                    }}
+                  >
+                    Open LXP
+                  </Text>
                 </Pressable>
               ) : null}
             </View>

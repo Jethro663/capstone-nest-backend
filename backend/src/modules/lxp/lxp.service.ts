@@ -70,6 +70,7 @@ import {
 } from './dto/lxp.dto';
 import { AuditService } from '../audit/audit.service';
 import { SystemEvaluationService } from './system-evaluation.service';
+import { boundPercentage } from '../academic-state/academic-score';
 
 const INTERVENTION_THRESHOLD = 74;
 const PATH_REGENERATION_SCORE_THRESHOLD = 60;
@@ -641,6 +642,13 @@ export class LxpService {
     return Number.isFinite(parsed) ? parsed : null;
   }
 
+  private toPercentage(
+    value: string | number | null | undefined,
+  ): number | null {
+    const number = this.toNumber(value);
+    return number === null ? null : boundPercentage(number);
+  }
+
   private async resolveGuidedPassingScore(
     sourceAssessmentId: string | null | undefined,
   ) {
@@ -693,7 +701,7 @@ export class LxpService {
     const bestScorePercent =
       bestAttempt?.score === null || bestAttempt?.score === undefined
         ? null
-        : bestAttempt.score;
+        : boundPercentage(bestAttempt.score);
     const passed =
       typeof bestScorePercent === 'number' && bestScorePercent >= passingScore;
 
@@ -712,13 +720,14 @@ export class LxpService {
       passed,
       bestAttemptId: bestAttempt?.id ?? null,
       bestScorePercent,
-      latestScorePercent:
-        submittedAttempts[submittedAttempts.length - 1]?.score ?? null,
+      latestScorePercent: this.toPercentage(
+        submittedAttempts[submittedAttempts.length - 1]?.score,
+      ),
       attempts: orderedAttempts.map((attempt) => ({
         id: attempt.id,
         attemptNumber: attempt.attemptNumber ?? 1,
         status: attempt.status,
-        scorePercent: attempt.score ?? null,
+        scorePercent: this.toPercentage(attempt.score),
         correctCount: attempt.correctCount ?? null,
         totalQuestions: attempt.totalQuestions ?? null,
         submittedAt: attempt.submittedAt ?? null,
@@ -1095,7 +1104,7 @@ export class LxpService {
     const assignmentScores = new Map<string, TeacherPathScore>();
 
     for (const attempt of guidedAttempts) {
-      const scorePercent = this.toNumber(attempt.score);
+      const scorePercent = this.toPercentage(attempt.score);
       if (
         scorePercent === null ||
         !guidedAssignmentIds.has(attempt.assignmentId)
@@ -1124,7 +1133,7 @@ export class LxpService {
     }
 
     for (const attempt of retryAttempts) {
-      const scorePercent = this.toNumber(attempt.score);
+      const scorePercent = this.toPercentage(attempt.score);
       if (scorePercent === null) continue;
 
       const retryAssignments =
@@ -2075,9 +2084,10 @@ export class LxpService {
           interventionCaseId: entry.id,
           status: entry.status,
           isAtRisk: snapshot?.isAtRisk ?? true,
-          blendedScore: this.toNumber(snapshot?.blendedScore),
+          blendedScore: this.toPercentage(snapshot?.blendedScore),
           thresholdApplied:
-            this.toNumber(snapshot?.thresholdApplied) ?? INTERVENTION_THRESHOLD,
+            this.toPercentage(snapshot?.thresholdApplied) ??
+            INTERVENTION_THRESHOLD,
           openedAt: entry.openedAt ?? null,
           closedAt: entry.closedAt ?? null,
           counts: {
@@ -2205,9 +2215,9 @@ export class LxpService {
           subjectName: classRecord.subjectName,
           subjectCode: classRecord.subjectCode,
           section: classRecord.section ?? null,
-          triggerScore: this.toNumber(entry.triggerScore),
+          triggerScore: this.toPercentage(entry.triggerScore),
           thresholdApplied:
-            this.toNumber(entry.thresholdApplied) ?? INTERVENTION_THRESHOLD,
+            this.toPercentage(entry.thresholdApplied) ?? INTERVENTION_THRESHOLD,
           openedAt: entry.openedAt,
           hasAssignedPath: assignedCaseIds.has(entry.id),
         };
@@ -2321,9 +2331,9 @@ export class LxpService {
         openedAt: interventionCase.openedAt,
         closedAt: interventionCase.closedAt ?? null,
         thresholdApplied:
-          this.toNumber(interventionCase.thresholdApplied) ??
+          this.toPercentage(interventionCase.thresholdApplied) ??
           INTERVENTION_THRESHOLD,
-        triggerScore: this.toNumber(interventionCase.triggerScore),
+        triggerScore: this.toPercentage(interventionCase.triggerScore),
       },
       progress: {
         xpTotal: progress.xpTotal,
@@ -2518,9 +2528,10 @@ export class LxpService {
         if (!entry.classId || !entry.class) return null;
 
         const snapshot = snapshotByClass.get(entry.classId);
-        const masteryPercent = this.toNumber(snapshot?.blendedScore);
+        const masteryPercent = this.toPercentage(snapshot?.blendedScore);
         const thresholdApplied =
-          this.toNumber(snapshot?.thresholdApplied) ?? INTERVENTION_THRESHOLD;
+          this.toPercentage(snapshot?.thresholdApplied) ??
+          INTERVENTION_THRESHOLD;
         const status = snapshot?.isAtRisk
           ? 'needs_attention'
           : masteryPercent !== null && masteryPercent >= thresholdApplied
@@ -2710,7 +2721,7 @@ export class LxpService {
           id: `class-${row.classId}`,
           source: 'performance',
           title: `Boost ${row.subjectName}`,
-          subtitle: `Current blended score: ${row.masteryPercent}%`,
+          subtitle: `Current standing: ${row.masteryPercent}%`,
           masteryPercent: row.masteryPercent,
           href: `/dashboard/student/ja`,
         })),
@@ -2781,9 +2792,9 @@ export class LxpService {
         subjectName: selectedEnrollment?.class?.subjectName ?? 'Selected class',
         subjectCode: selectedEnrollment?.class?.subjectCode ?? 'Learners Path',
         section: selectedEnrollment?.class?.section ?? null,
-        blendedScore: this.toNumber(selectedSnapshot?.blendedScore),
+        blendedScore: this.toPercentage(selectedSnapshot?.blendedScore),
         thresholdApplied:
-          this.toNumber(selectedSnapshot?.thresholdApplied) ??
+          this.toPercentage(selectedSnapshot?.thresholdApplied) ??
           INTERVENTION_THRESHOLD,
         lastComputedAt: selectedSnapshot?.lastComputedAt ?? null,
       },
@@ -2792,9 +2803,9 @@ export class LxpService {
         status: interventionCase.status,
         openedAt: interventionCase.openedAt,
         closedAt: interventionCase.closedAt ?? null,
-        triggerScore: this.toNumber(interventionCase.triggerScore),
+        triggerScore: this.toPercentage(interventionCase.triggerScore),
         thresholdApplied:
-          this.toNumber(interventionCase.thresholdApplied) ??
+          this.toPercentage(interventionCase.thresholdApplied) ??
           INTERVENTION_THRESHOLD,
         ...statusSummary,
       },
@@ -3354,7 +3365,7 @@ export class LxpService {
         currentQuestionIndex: attempt.currentQuestionIndex ?? 0,
         responses: attempt.responses ?? [],
         hintedQuestionIds: attempt.hintUsage ?? [],
-        scorePercent: attempt.score ?? null,
+        scorePercent: this.toPercentage(attempt.score),
         attemptNumber: attempt.attemptNumber ?? 1,
         submittedAt: attempt.submittedAt ?? null,
       },
@@ -3503,9 +3514,10 @@ export class LxpService {
     }
 
     const baselineScorePercent =
-      this.toNumber(baselineAttempt?.score) ??
-      this.toNumber(params.triggerScore);
-    const currentScorePercent = this.toNumber(params.currentScorePercent) ?? 0;
+      this.toPercentage(baselineAttempt?.score) ??
+      this.toPercentage(params.triggerScore);
+    const currentScorePercent =
+      this.toPercentage(params.currentScorePercent) ?? 0;
     const deltaScorePercent =
       baselineScorePercent === null
         ? null
@@ -3752,7 +3764,7 @@ export class LxpService {
       );
     }
 
-    const scorePercent = attempt.score ?? 0;
+    const scorePercent = this.toPercentage(attempt.score) ?? 0;
     const passingScore = await this.resolveGuidedPassingScore(
       assignment.generatedGuidedAssessment?.sourceAssessmentId,
     );
@@ -3879,10 +3891,10 @@ export class LxpService {
       const isCurrentlyAtRisk = Boolean(snapshot?.isAtRisk);
       const isPathScoreRegeneration =
         row.triggerSource === 'path_score_below_threshold';
-      const latestBlendedScore = this.toNumber(snapshot?.blendedScore);
+      const latestBlendedScore = this.toPercentage(snapshot?.blendedScore);
       const latestThreshold =
-        this.toNumber(snapshot?.thresholdApplied) ??
-        this.toNumber(row.thresholdApplied) ??
+        this.toPercentage(snapshot?.thresholdApplied) ??
+        this.toPercentage(row.thresholdApplied) ??
         INTERVENTION_THRESHOLD;
 
       const totalCheckpoints = assignments.length;
@@ -3895,9 +3907,9 @@ export class LxpService {
         openedAt: row.openedAt,
         status: row.status,
         classId: row.classId,
-        triggerScore: this.toNumber(row.triggerScore),
+        triggerScore: this.toPercentage(row.triggerScore),
         thresholdApplied:
-          this.toNumber(row.thresholdApplied) ?? INTERVENTION_THRESHOLD,
+          this.toPercentage(row.thresholdApplied) ?? INTERVENTION_THRESHOLD,
         isCurrentlyAtRisk,
         latestBlendedScore,
         latestThreshold,
@@ -4053,9 +4065,9 @@ export class LxpService {
         openedAt: row.openedAt,
         closedAt: row.closedAt,
         triggerSource: row.triggerSource,
-        triggerScore: this.toNumber(row.triggerScore),
+        triggerScore: this.toPercentage(row.triggerScore),
         thresholdApplied:
-          this.toNumber(row.thresholdApplied) ?? INTERVENTION_THRESHOLD,
+          this.toPercentage(row.thresholdApplied) ?? INTERVENTION_THRESHOLD,
         note: row.note,
         completion: {
           totalCheckpoints: assignments.length,
@@ -4667,9 +4679,9 @@ export class LxpService {
       student: interventionCase.student,
       status: interventionCase.status,
       openedAt: interventionCase.openedAt,
-      triggerScore: this.toNumber(interventionCase.triggerScore),
+      triggerScore: this.toPercentage(interventionCase.triggerScore),
       thresholdApplied:
-        this.toNumber(interventionCase.thresholdApplied) ??
+        this.toPercentage(interventionCase.thresholdApplied) ??
         INTERVENTION_THRESHOLD,
       totalCheckpoints,
       completedCheckpoints,
@@ -4878,9 +4890,9 @@ export class LxpService {
       status: interventionCase.status,
       openedAt: interventionCase.openedAt,
       closedAt: interventionCase.closedAt,
-      triggerScore: this.toNumber(interventionCase.triggerScore),
+      triggerScore: this.toPercentage(interventionCase.triggerScore),
       thresholdApplied:
-        this.toNumber(interventionCase.thresholdApplied) ??
+        this.toPercentage(interventionCase.thresholdApplied) ??
         INTERVENTION_THRESHOLD,
       note: interventionCase.note,
       pathScore: this.serializeTeacherPathScore(pathScore),
@@ -4922,11 +4934,11 @@ export class LxpService {
       },
       latestSnapshot: snapshot
         ? {
-            assessmentAverage: this.toNumber(snapshot.assessmentAverage),
-            classRecordAverage: this.toNumber(snapshot.classRecordAverage),
-            blendedScore: this.toNumber(snapshot.blendedScore),
+            assessmentAverage: this.toPercentage(snapshot.assessmentAverage),
+            classRecordAverage: this.toPercentage(snapshot.classRecordAverage),
+            blendedScore: this.toPercentage(snapshot.blendedScore),
             thresholdApplied:
-              this.toNumber(snapshot.thresholdApplied) ??
+              this.toPercentage(snapshot.thresholdApplied) ??
               INTERVENTION_THRESHOLD,
             isAtRisk: snapshot.isAtRisk,
             lastComputedAt: snapshot.lastComputedAt,
@@ -4943,8 +4955,8 @@ export class LxpService {
         id: row.id,
         previousIsAtRisk: row.previousIsAtRisk,
         currentIsAtRisk: row.currentIsAtRisk,
-        blendedScore: this.toNumber(row.blendedScore),
-        thresholdApplied: this.toNumber(row.thresholdApplied),
+        blendedScore: this.toPercentage(row.blendedScore),
+        thresholdApplied: this.toPercentage(row.thresholdApplied),
         triggerSource: row.triggerSource,
         createdAt: row.createdAt,
       })),
@@ -4980,7 +4992,10 @@ export class LxpService {
       columns: { studentId: true, blendedScore: true },
     });
     const snapshotMap = new Map(
-      snapshots.map((row) => [row.studentId, this.toNumber(row.blendedScore)]),
+      snapshots.map((row) => [
+        row.studentId,
+        this.toPercentage(row.blendedScore),
+      ]),
     );
     const progressRows = await this.db.query.lxpProgress.findMany({
       where: eq(lxpProgress.classId, classId),
@@ -5005,7 +5020,7 @@ export class LxpService {
     });
 
     const withDelta = cases.map((entry) => {
-      const baseline = this.toNumber(entry.triggerScore);
+      const baseline = this.toPercentage(entry.triggerScore);
       const current = snapshotMap.get(entry.studentId) ?? null;
       const delta =
         baseline !== null && current !== null

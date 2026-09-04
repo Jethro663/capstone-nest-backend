@@ -45,6 +45,7 @@ import {
   SendJaAskMessageDto,
   SubmitJaPracticeResponseDto,
 } from './dto/ja-practice.dto';
+import { boundPercentage } from '../academic-state/academic-score';
 
 type UserContext = {
   id: string;
@@ -207,7 +208,8 @@ export class JaService {
     right: JaActivityHistoryItem,
   ): number {
     const timestampDifference =
-      new Date(right.activityAt).getTime() - new Date(left.activityAt).getTime();
+      new Date(right.activityAt).getTime() -
+      new Date(left.activityAt).getTime();
     if (timestampDifference !== 0) return timestampDifference;
     const modeDifference = left.mode.localeCompare(right.mode);
     if (modeDifference !== 0) return modeDifference;
@@ -948,9 +950,7 @@ export class JaService {
       this.sortActivityItems(left, right),
     );
     const items =
-      mode === 'all'
-        ? sortedItems.slice(offset, offset + limit)
-        : sortedItems;
+      mode === 'all' ? sortedItems.slice(offset, offset + limit) : sortedItems;
     const totalPages =
       requestedTotal > 0 ? Math.ceil(requestedTotal / limit) : 0;
 
@@ -1111,6 +1111,7 @@ export class JaService {
 
       return {
         ...attempt,
+        score: attempt.score === null ? null : boundPercentage(attempt.score),
         reviewSessionCount,
         maxReviewSessions: JA_REVIEW_MAX_ATTEMPTS,
         remainingReviewSessions: Math.max(
@@ -1333,10 +1334,7 @@ export class JaService {
           blocked: true,
           createdAt: true,
         },
-        orderBy: [
-          desc(jaThreadMessages.createdAt),
-          desc(jaThreadMessages.id),
-        ],
+        orderBy: [desc(jaThreadMessages.createdAt), desc(jaThreadMessages.id)],
         limit: limit + 1,
       }),
       this.db.query.jaThreadMessages.findFirst({
@@ -1729,7 +1727,7 @@ export class JaService {
         assessmentId: row.assessmentId,
         assessmentTitle: row.assessmentTitle,
         submittedAt: row.submittedAt,
-        score: row.score,
+        score: row.score === null ? null : boundPercentage(row.score),
         passed: row.passed,
         isSubmitted: row.isSubmitted,
         isReplayCompleted,

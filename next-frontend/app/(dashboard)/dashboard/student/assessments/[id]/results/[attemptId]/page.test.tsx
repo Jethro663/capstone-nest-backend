@@ -242,6 +242,49 @@ describe('StudentAssessmentResultsPage', () => {
     expect(screen.queryByText('Question Review')).not.toBeInTheDocument();
   });
 
+  it('explains capped full credit without displaying an overflowing percentage', async () => {
+    mockedAssessmentService.getAttemptResults.mockResolvedValueOnce({
+      success: true,
+      message: 'Fixture response',
+      data: {
+        score: 331,
+        scorePercent: 100,
+        scoreBreakdown: {
+          basePoints: 5,
+          bonusPoints: 15,
+          awardedPoints: 20,
+          possiblePoints: 10,
+          effectivePoints: 10,
+          scorePercent: 100,
+          wasCapped: true,
+          bonusReason: 'Teacher correction after review',
+        },
+        passed: true,
+        isReturned: true,
+        attemptNumber: 1,
+        assessment: {
+          id: 'assessment-1',
+          title: 'Ten-point cap check',
+          type: 'quiz',
+          totalPoints: 10,
+        },
+        responses: [],
+      },
+    } as Awaited<ReturnType<typeof assessmentService.getAttemptResults>>);
+
+    render(<StudentAssessmentResultsPage />);
+
+    expect(await screen.findByText('100%')).toBeInTheDocument();
+    expect(screen.getByText('10/10 pts')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        '+15 bonus (capped at full credit) — Teacher correction after review',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('331%')).not.toBeInTheDocument();
+    expect(screen.queryByText('200%')).not.toBeInTheDocument();
+  });
+
   it('shows rubric and submitted file sections for file upload results', async () => {
     mockedAssessmentService.getAttemptResults.mockResolvedValueOnce({
       success: true,

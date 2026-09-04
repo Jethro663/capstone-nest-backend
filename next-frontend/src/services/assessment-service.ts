@@ -1,5 +1,8 @@
-import type { SaveAssessmentEditorInput, AssessmentEditorResult } from '@/types/assessment';
-import { api } from '@/lib/api-client';
+import type {
+  SaveAssessmentEditorInput,
+  AssessmentEditorResult,
+} from "@/types/assessment";
+import { api } from "@/lib/api-client";
 import type {
   Assessment,
   AssessmentsByClassResponse,
@@ -20,9 +23,12 @@ import type {
   ManualResponseScore,
   RubricCriterion,
   RubricScore,
-} from '@/types/assessment';
+} from "@/types/assessment";
 
-function getDownloadFilename(contentDisposition: string | undefined, fallback: string) {
+function getDownloadFilename(
+  contentDisposition: string | undefined,
+  fallback: string,
+) {
   if (!contentDisposition) return fallback;
   const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
   if (utf8Match?.[1]) {
@@ -34,10 +40,10 @@ function getDownloadFilename(contentDisposition: string | undefined, fallback: s
 
 function triggerBrowserDownload(blob: Blob, filename: string) {
   const objectUrl = window.URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
+  const anchor = document.createElement("a");
   anchor.href = objectUrl;
   anchor.download = filename;
-  anchor.rel = 'noopener';
+  anchor.rel = "noopener";
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
@@ -46,11 +52,11 @@ function triggerBrowserDownload(blob: Blob, filename: string) {
 
 function openBlobInNewTab(blob: Blob) {
   const objectUrl = window.URL.createObjectURL(blob);
-  const popup = window.open(objectUrl, '_blank', 'noopener,noreferrer');
+  const popup = window.open(objectUrl, "_blank", "noopener,noreferrer");
 
   if (!popup) {
     window.URL.revokeObjectURL(objectUrl);
-    throw new Error('Unable to open file preview');
+    throw new Error("Unable to open file preview");
   }
 
   window.setTimeout(() => {
@@ -59,25 +65,42 @@ function openBlobInNewTab(blob: Blob) {
 }
 
 export const assessmentService = {
-  async saveEditor(id: string | undefined, input: SaveAssessmentEditorInput): Promise<{ success: boolean; data: AssessmentEditorResult }> {
-    const response = id ? await api.put(`/assessments/${id}/editor`, input) : await api.post('/assessments/editor', input);
+  async saveEditor(
+    id: string | undefined,
+    input: SaveAssessmentEditorInput,
+  ): Promise<{ success: boolean; data: AssessmentEditorResult }> {
+    const response = id
+      ? await api.put(`/assessments/${id}/editor`, input)
+      : await api.post("/assessments/editor", input);
     return response.data;
   },
-  async createDraft(input: Pick<CreateAssessmentDto, 'classId' | 'quarter'>): Promise<{ success: boolean; message: string; data: Assessment }> {
+  async createDraft(
+    input: Pick<CreateAssessmentDto, "classId" | "quarter">,
+  ): Promise<{ success: boolean; message: string; data: Assessment }> {
     const key = `assessment-create-pending:${input.classId}`;
     const cached = window.localStorage.getItem(key);
-    const request: SaveAssessmentEditorInput = cached ? JSON.parse(cached) as SaveAssessmentEditorInput : {
-      mutationId: crypto.randomUUID(), classId: input.classId, action: 'save',
-      settings: { title: '', quarter: input.quarter }, questions: [],
-    };
+    const request: SaveAssessmentEditorInput = cached
+      ? (JSON.parse(cached) as SaveAssessmentEditorInput)
+      : {
+          mutationId: crypto.randomUUID(),
+          classId: input.classId,
+          action: "save",
+          settings: { title: "", quarter: input.quarter },
+          questions: [],
+        };
     // Reopening creation retries its original request, including after a reload.
     window.localStorage.setItem(key, JSON.stringify(request));
     try {
       const response = await assessmentService.saveEditor(undefined, request);
       window.localStorage.removeItem(key);
-      return { success: response.success, message: 'Assessment draft saved', data: response.data.assessment };
+      return {
+        success: response.success,
+        message: "Assessment draft saved",
+        data: response.data.assessment,
+      };
     } catch (error) {
-      const status = (error as { response?: { status?: number } }).response?.status;
+      const status = (error as { response?: { status?: number } }).response
+        ?.status;
       if (status && status < 500) window.localStorage.removeItem(key);
       throw error;
     }
@@ -88,7 +111,7 @@ export const assessmentService = {
     query?: {
       page?: number;
       limit?: number;
-      status?: 'all' | 'upcoming' | 'past_due' | 'completed';
+      status?: "all" | "upcoming" | "past_due" | "completed";
     },
   ): Promise<AssessmentsByClassResponse> {
     const { data } = await api.get(`/assessments/class/${classId}`, {
@@ -98,19 +121,26 @@ export const assessmentService = {
   },
 
   /** GET /assessments/:id — All roles */
-  async getById(id: string): Promise<{ success: boolean; message: string; data: Assessment }> {
+  async getById(
+    id: string,
+  ): Promise<{ success: boolean; message: string; data: Assessment }> {
     const { data } = await api.get(`/assessments/${id}`);
     return data;
   },
 
   /** POST /assessments — Admin, Teacher */
-  async create(dto: CreateAssessmentDto): Promise<{ success: boolean; message: string; data: Assessment }> {
-    const { data } = await api.post('/assessments', dto);
+  async create(
+    dto: CreateAssessmentDto,
+  ): Promise<{ success: boolean; message: string; data: Assessment }> {
+    const { data } = await api.post("/assessments", dto);
     return data;
   },
 
   /** PUT /assessments/:id — Admin, Teacher */
-  async update(id: string, dto: UpdateAssessmentDto): Promise<{ success: boolean; message: string; data: Assessment }> {
+  async update(
+    id: string,
+    dto: UpdateAssessmentDto,
+  ): Promise<{ success: boolean; message: string; data: Assessment }> {
     const { data } = await api.put(`/assessments/${id}`, dto);
     return data;
   },
@@ -132,40 +162,69 @@ export const assessmentService = {
   // --- Questions ---
 
   /** POST /assessments/questions — Admin, Teacher */
-  async createQuestion(dto: CreateQuestionDto): Promise<{ success: boolean; message: string; data: AssessmentQuestion }> {
-    const { data } = await api.post('/assessments/questions', dto);
+  async createQuestion(
+    dto: CreateQuestionDto,
+  ): Promise<{ success: boolean; message: string; data: AssessmentQuestion }> {
+    const { data } = await api.post("/assessments/questions", dto);
     return data;
   },
 
   /** PUT /assessments/questions/:id — Admin, Teacher */
-  async updateQuestion(id: string, dto: UpdateQuestionDto): Promise<{ success: boolean; message: string; data: AssessmentQuestion }> {
+  async updateQuestion(
+    id: string,
+    dto: UpdateQuestionDto,
+  ): Promise<{ success: boolean; message: string; data: AssessmentQuestion }> {
     const { data } = await api.put(`/assessments/questions/${id}`, dto);
     return data;
   },
 
   /** DELETE /assessments/questions/:id — Admin, Teacher */
-  async deleteQuestion(id: string): Promise<{ success: boolean; message: string }> {
+  async deleteQuestion(
+    id: string,
+  ): Promise<{ success: boolean; message: string }> {
     const { data } = await api.delete(`/assessments/questions/${id}`);
     return data;
   },
 
   /** POST /assessments/questions/:id/image — Upload question image */
-  async uploadQuestionImage(questionId: string, file: File): Promise<{ success: boolean; message: string; data: { imageUrl: string } }> {
+  async uploadQuestionImage(
+    questionId: string,
+    file: File,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    data: { imageUrl: string };
+  }> {
     const formData = new FormData();
-    formData.append('image', file);
-    const { data } = await api.post(`/assessments/questions/${questionId}/image`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    formData.append("image", file);
+    const { data } = await api.post(
+      `/assessments/questions/${questionId}/image`,
+      formData,
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+      },
+    );
     return data;
   },
 
   /** POST /assessments/options/:id/image — Upload question option image */
-  async uploadOptionImage(optionId: string, file: File): Promise<{ success: boolean; message: string; data: { imageUrl: string } }> {
+  async uploadOptionImage(
+    optionId: string,
+    file: File,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    data: { imageUrl: string };
+  }> {
     const formData = new FormData();
-    formData.append('image', file);
-    const { data } = await api.post(`/assessments/options/${optionId}/image`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    formData.append("image", file);
+    const { data } = await api.post(
+      `/assessments/options/${optionId}/image`,
+      formData,
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+      },
+    );
     return data;
   },
 
@@ -185,12 +244,12 @@ export const assessmentService = {
     };
   }> {
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append("file", file);
     const { data } = await api.post(
       `/assessments/${assessmentId}/teacher-attachment`,
       formData,
       {
-        headers: { 'Content-Type': 'multipart/form-data' },
+        headers: { "Content-Type": "multipart/form-data" },
       },
     );
     return data;
@@ -222,12 +281,12 @@ export const assessmentService = {
     };
   }> {
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append("file", file);
     const { data } = await api.post(
       `/assessments/${assessmentId}/submission-file`,
       formData,
       {
-        headers: { 'Content-Type': 'multipart/form-data' },
+        headers: { "Content-Type": "multipart/form-data" },
       },
     );
     return data;
@@ -256,92 +315,147 @@ export const assessmentService = {
     return data;
   },
 
-  async downloadTeacherAttachment(assessmentId: string, fallbackName = 'teacher-attachment') {
-    const response = await api.get(`/assessments/${assessmentId}/teacher-attachment/download`, {
-      responseType: 'blob',
-    });
-    const filename = getDownloadFilename(response.headers['content-disposition'], fallbackName);
+  async downloadTeacherAttachment(
+    assessmentId: string,
+    fallbackName = "teacher-attachment",
+  ) {
+    const response = await api.get(
+      `/assessments/${assessmentId}/teacher-attachment/download`,
+      {
+        responseType: "blob",
+      },
+    );
+    const filename = getDownloadFilename(
+      response.headers["content-disposition"],
+      fallbackName,
+    );
     triggerBrowserDownload(response.data, filename);
   },
 
-  async downloadAttemptSubmissionFile(attemptId: string, fallbackName = 'submission-file') {
-    const response = await api.get(`/assessments/attempts/${attemptId}/submission-file/download`, {
-      responseType: 'blob',
-    });
-    const filename = getDownloadFilename(response.headers['content-disposition'], fallbackName);
+  async downloadAttemptSubmissionFile(
+    attemptId: string,
+    fallbackName = "submission-file",
+  ) {
+    const response = await api.get(
+      `/assessments/attempts/${attemptId}/submission-file/download`,
+      {
+        responseType: "blob",
+      },
+    );
+    const filename = getDownloadFilename(
+      response.headers["content-disposition"],
+      fallbackName,
+    );
     triggerBrowserDownload(response.data, filename);
   },
 
   async downloadAttemptSubmissionAttachmentFile(
     attemptId: string,
     fileId: string,
-    fallbackName = 'submission-file',
+    fallbackName = "submission-file",
   ) {
     const response = await api.get(
       `/assessments/attempts/${attemptId}/submission-files/${fileId}/download`,
       {
-        responseType: 'blob',
+        responseType: "blob",
       },
     );
-    const filename = getDownloadFilename(response.headers['content-disposition'], fallbackName);
+    const filename = getDownloadFilename(
+      response.headers["content-disposition"],
+      fallbackName,
+    );
     triggerBrowserDownload(response.data, filename);
   },
 
   async getAttemptSubmissionFileBlob(
     attemptId: string,
-    fallbackName = 'submission-file',
+    fallbackName = "submission-file",
     fileId?: string,
   ) {
     const endpoint = fileId
       ? `/assessments/attempts/${attemptId}/submission-files/${fileId}/download`
       : `/assessments/attempts/${attemptId}/submission-file/download`;
     const response = await api.get(endpoint, {
-      responseType: 'blob',
+      responseType: "blob",
     });
     return {
       blob: response.data as Blob,
-      filename: getDownloadFilename(response.headers['content-disposition'], fallbackName),
+      filename: getDownloadFilename(
+        response.headers["content-disposition"],
+        fallbackName,
+      ),
     };
   },
 
   async openAttemptSubmissionFile(
     attemptId: string,
-    fallbackName = 'submission-file',
+    fallbackName = "submission-file",
     fileId?: string,
   ) {
-    const { blob } = await this.getAttemptSubmissionFileBlob(attemptId, fallbackName, fileId);
+    const { blob } = await this.getAttemptSubmissionFileBlob(
+      attemptId,
+      fallbackName,
+      fileId,
+    );
     openBlobInNewTab(blob);
   },
 
   // --- Attempts ---
 
   /** POST /assessments/:assessmentId/start — Admin, Student */
-  async startAttempt(assessmentId: string): Promise<{ success: boolean; message: string; data: OngoingAttemptResult }> {
+  async startAttempt(
+    assessmentId: string,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    data: OngoingAttemptResult;
+  }> {
     const { data } = await api.post(`/assessments/${assessmentId}/start`);
     return data;
   },
 
   /** GET /assessments/:assessmentId/ongoing-attempt — Admin, Student */
-  async getOngoingAttempt(assessmentId: string): Promise<{ success: boolean; message: string; data: OngoingAttemptResult | null }> {
-    const { data } = await api.get(`/assessments/${assessmentId}/ongoing-attempt`);
+  async getOngoingAttempt(
+    assessmentId: string,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    data: OngoingAttemptResult | null;
+  }> {
+    const { data } = await api.get(
+      `/assessments/${assessmentId}/ongoing-attempt`,
+    );
     return data;
   },
 
   /** GET /assessments/attempts/ongoing — Admin, Student */
-  async getOngoingAttempts(): Promise<{ success: boolean; message: string; data: OngoingAttemptSummary[]; count: number }> {
-    const { data } = await api.get('/assessments/attempts/ongoing');
+  async getOngoingAttempts(): Promise<{
+    success: boolean;
+    message: string;
+    data: OngoingAttemptSummary[];
+    count: number;
+  }> {
+    const { data } = await api.get("/assessments/attempts/ongoing");
     return data;
   },
 
   /** PATCH /assessments/attempts/:attemptId/progress — Admin, Student */
-  async updateAttemptProgress(attemptId: string, dto: UpdateAttemptProgressDto): Promise<{ success: boolean; message: string; data: AssessmentAttempt }> {
-    const { data } = await api.patch(`/assessments/attempts/${attemptId}/progress`, dto);
+  async updateAttemptProgress(
+    attemptId: string,
+    dto: UpdateAttemptProgressDto,
+  ): Promise<{ success: boolean; message: string; data: AssessmentAttempt }> {
+    const { data } = await api.patch(
+      `/assessments/attempts/${attemptId}/progress`,
+      dto,
+    );
     return data;
   },
 
   /** POST /assessments/submit — Admin, Student */
-  async submit(dto: SubmitAssessmentDto): Promise<{ success: boolean; message: string; data: unknown }> {
-    const { data } = await api.post('/assessments/submit', dto);
+  async submit(
+    dto: SubmitAssessmentDto,
+  ): Promise<{ success: boolean; message: string; data: unknown }> {
+    const { data } = await api.post("/assessments/submit", dto);
     return data;
   },
 
@@ -366,12 +480,12 @@ export const assessmentService = {
     };
   }> {
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append("file", file);
     const { data } = await api.post(
       `/assessments/${assessmentId}/rubric-source`,
       formData,
       {
-        headers: { 'Content-Type': 'multipart/form-data' },
+        headers: { "Content-Type": "multipart/form-data" },
       },
     );
     return data;
@@ -381,37 +495,66 @@ export const assessmentService = {
     assessmentId: string,
     rubricCriteria: RubricCriterion[],
   ): Promise<{ success: boolean; message: string; data: Assessment }> {
-    const { data } = await api.put(`/assessments/${assessmentId}/rubric-review`, {
-      rubricCriteria,
-    });
+    const { data } = await api.put(
+      `/assessments/${assessmentId}/rubric-review`,
+      {
+        rubricCriteria,
+      },
+    );
     return data;
   },
 
-  async unsubmitFileUpload(assessmentId: string): Promise<{ success: boolean; message: string; data: AssessmentAttempt }> {
-    const { data } = await api.post(`/assessments/${assessmentId}/unsubmit-file-upload`);
+  async unsubmitFileUpload(
+    assessmentId: string,
+  ): Promise<{ success: boolean; message: string; data: AssessmentAttempt }> {
+    const { data } = await api.post(
+      `/assessments/${assessmentId}/unsubmit-file-upload`,
+    );
     return data;
   },
 
   /** GET /assessments/attempts/:attemptId/results — All roles */
-  async getAttemptResults(attemptId: string): Promise<{ success: boolean; message: string; data: AttemptResult }> {
-    const { data } = await api.get(`/assessments/attempts/${attemptId}/results`);
+  async getAttemptResults(
+    attemptId: string,
+  ): Promise<{ success: boolean; message: string; data: AttemptResult }> {
+    const { data } = await api.get(
+      `/assessments/attempts/${attemptId}/results`,
+    );
     return data;
   },
 
   /** GET /assessments/:assessmentId/student-attempts — All roles */
-  async getStudentAttempts(assessmentId: string): Promise<{ success: boolean; message: string; data: AssessmentAttempt[]; count: number }> {
-    const { data } = await api.get(`/assessments/${assessmentId}/student-attempts`);
+  async getStudentAttempts(
+    assessmentId: string,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    data: AssessmentAttempt[];
+    count: number;
+  }> {
+    const { data } = await api.get(
+      `/assessments/${assessmentId}/student-attempts`,
+    );
     return data;
   },
 
   /** GET /assessments/:assessmentId/all-attempts — Admin, Teacher */
-  async getAllAttempts(assessmentId: string): Promise<{ success: boolean; message: string; data: AssessmentAttempt[]; count: number }> {
+  async getAllAttempts(
+    assessmentId: string,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    data: AssessmentAttempt[];
+    count: number;
+  }> {
     const { data } = await api.get(`/assessments/${assessmentId}/all-attempts`);
     return data;
   },
 
   /** GET /assessments/:assessmentId/stats — Admin, Teacher */
-  async getStats(assessmentId: string): Promise<{ success: boolean; message: string; data: AssessmentStats }> {
+  async getStats(
+    assessmentId: string,
+  ): Promise<{ success: boolean; message: string; data: AssessmentStats }> {
     const { data } = await api.get(`/assessments/${assessmentId}/stats`);
     return data;
   },
@@ -419,7 +562,9 @@ export const assessmentService = {
   // --- Submissions & Grade Return (MS Teams-like) ---
 
   /** GET /assessments/:assessmentId/submissions — Teacher, Admin */
-  async getSubmissions(assessmentId: string): Promise<{ success: boolean; message: string; data: SubmissionsResponse }> {
+  async getSubmissions(
+    assessmentId: string,
+  ): Promise<{ success: boolean; message: string; data: SubmissionsResponse }> {
     const { data } = await api.get(`/assessments/${assessmentId}/submissions`);
     return data;
   },
@@ -432,19 +577,29 @@ export const assessmentService = {
       directScore?: number;
       rubricScores?: RubricScore[];
       manualResponseScores?: ManualResponseScore[];
+      bonusPoints?: number;
+      bonusReason?: string;
     } = {},
   ): Promise<{ success: boolean; message: string }> {
-    const { data } = await api.post(`/assessments/attempts/${attemptId}/return`, {
-      teacherFeedback: payload.teacherFeedback || undefined,
-      directScore: payload.directScore,
-      rubricScores: payload.rubricScores,
-      manualResponseScores: payload.manualResponseScores,
-    });
+    const { data } = await api.post(
+      `/assessments/attempts/${attemptId}/return`,
+      {
+        teacherFeedback: payload.teacherFeedback || undefined,
+        directScore: payload.directScore,
+        rubricScores: payload.rubricScores,
+        manualResponseScores: payload.manualResponseScores,
+        bonusPoints: payload.bonusPoints,
+        bonusReason: payload.bonusReason,
+      },
+    );
     return data;
   },
 
   /** POST /assessments/:assessmentId/return-all — Teacher, Admin */
-  async returnAllGrades(assessmentId: string, feedback?: string): Promise<{ success: boolean; message: string }> {
+  async returnAllGrades(
+    assessmentId: string,
+    feedback?: string,
+  ): Promise<{ success: boolean; message: string }> {
     const { data } = await api.post(`/assessments/${assessmentId}/return-all`, {
       teacherFeedback: feedback || undefined,
     });
@@ -455,16 +610,16 @@ export const assessmentService = {
   async unreturnGrade(
     attemptId: string,
   ): Promise<{ success: boolean; message: string }> {
-    const { data } = await api.post(`/assessments/attempts/${attemptId}/unreturn`);
+    const { data } = await api.post(
+      `/assessments/attempts/${attemptId}/unreturn`,
+    );
     return data;
   },
 
-  async bulkReturnGrades(
-    payload: {
-      attemptIds: string[];
-      teacherFeedback?: string;
-    },
-  ): Promise<{
+  async bulkReturnGrades(payload: {
+    attemptIds: string[];
+    teacherFeedback?: string;
+  }): Promise<{
     success: boolean;
     message: string;
     data: {
@@ -479,8 +634,16 @@ export const assessmentService = {
     return data;
   },
 
-  async getQuestionAnalytics(assessmentId: string): Promise<{ success: boolean; message: string; data: QuestionAnalyticsResponse }> {
-    const { data } = await api.get(`/assessments/${assessmentId}/question-analytics`);
+  async getQuestionAnalytics(
+    assessmentId: string,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    data: QuestionAnalyticsResponse;
+  }> {
+    const { data } = await api.get(
+      `/assessments/${assessmentId}/question-analytics`,
+    );
     return data;
   },
 };

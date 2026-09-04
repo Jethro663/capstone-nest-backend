@@ -161,7 +161,8 @@ function buildMockDb() {
 
 function mockInsert(db: any, rows: any[]) {
   const returning = jest.fn().mockResolvedValue(rows);
-  const values = jest.fn().mockReturnValue({ returning });
+  const onConflictDoUpdate = jest.fn().mockReturnValue({ returning });
+  const values = jest.fn().mockReturnValue({ returning, onConflictDoUpdate });
   db.insert.mockReturnValueOnce({ values });
 }
 
@@ -1453,6 +1454,101 @@ describe('AssessmentsService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
+    it('should return the same bounded result when an identical submission is retried', async () => {
+      const submittedResponses = [
+        { questionId: QUESTION_ID, selectedOptionId: OPTION_ID_A },
+      ];
+      const submittedAttempt = {
+        ...MOCK_ATTEMPT,
+        isSubmitted: true,
+        submittedAt: new Date(),
+        draftResponses: submittedResponses,
+        score: 100,
+        passed: true,
+        basePointsEarned: '5',
+        possiblePointsSnapshot: '5',
+        bonusPoints: '0',
+        bonusReason: null,
+      };
+      db.query.assessments.findFirst.mockResolvedValue(
+        MOCK_PUBLISHED_ASSESSMENT,
+      );
+      db.query.assessmentAttempts.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(submittedAttempt);
+      db.query.assessmentResponses.findMany.mockResolvedValue([
+        {
+          id: 'resp-1',
+          attemptId: ATTEMPT_ID,
+          questionId: QUESTION_ID,
+          pointsEarned: 5,
+        },
+      ]);
+
+      const result = await service.submitAssessment(STUDENT_ID, {
+        assessmentId: ASSESSMENT_ID,
+        responses: submittedResponses,
+        timeSpentSeconds: 30,
+      });
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          score: 100,
+          scorePercent: 100,
+          scoreBreakdown: expect.objectContaining({
+            effectivePoints: 5,
+            possiblePoints: 5,
+          }),
+        }),
+      );
+      expect(db.update).not.toHaveBeenCalled();
+      expect(db.insert).not.toHaveBeenCalled();
+    });
+
+    it('should reject duplicate responses before mutating the attempt', async () => {
+      db.query.assessments.findFirst.mockResolvedValue(
+        MOCK_PUBLISHED_ASSESSMENT,
+      );
+      db.query.assessmentAttempts.findFirst.mockResolvedValue(MOCK_ATTEMPT);
+
+      await expect(
+        service.submitAssessment(STUDENT_ID, {
+          assessmentId: ASSESSMENT_ID,
+          responses: [
+            { questionId: QUESTION_ID, selectedOptionId: OPTION_ID_A },
+            { questionId: QUESTION_ID, selectedOptionId: OPTION_ID_A },
+          ],
+          timeSpentSeconds: 30,
+        }),
+      ).rejects.toThrow('Provide at most one response per question');
+
+      expect(db.update).not.toHaveBeenCalled();
+      expect(db.insert).not.toHaveBeenCalled();
+    });
+
+    it('should reject a denominator that differs from question evidence', async () => {
+      db.query.assessments.findFirst.mockResolvedValue({
+        ...MOCK_PUBLISHED_ASSESSMENT,
+        totalPoints: 0,
+      });
+      db.query.assessmentAttempts.findFirst.mockResolvedValue(MOCK_ATTEMPT);
+
+      await expect(
+        service.submitAssessment(STUDENT_ID, {
+          assessmentId: ASSESSMENT_ID,
+          responses: [
+            { questionId: QUESTION_ID, selectedOptionId: OPTION_ID_A },
+          ],
+          timeSpentSeconds: 30,
+        }),
+      ).rejects.toThrow(
+        'Assessment total points do not match the current question evidence',
+      );
+
+      expect(db.update).not.toHaveBeenCalled();
+      expect(db.insert).not.toHaveBeenCalled();
+    });
+
     it('should auto-grade multiple_choice correctly', async () => {
       db.query.assessments.findFirst.mockResolvedValue(
         MOCK_PUBLISHED_ASSESSMENT,
@@ -2604,6 +2700,78 @@ describe('AssessmentsService', () => {
       );
     });
 
+    it('should cap an explicit reasoned bonus and persist its point evidence', async () => {
+      db.query.assessmentAttempts.findFirst.mockResolvedValue({
+        ...MOCK_ATTEMPT,
+        isSubmitted: true,
+        isReturned: false,
+        score: 0,
+        passed: false,
+        assessment: {
+          ...MOCK_PUBLISHED_ASSESSMENT,
+          totalPoints: 5,
+          class: { teacherId: 'teacher-1' },
+          questions: [{ id: QUESTION_ID, points: 5 }],
+        },
+        responses: [
+          {
+            id: 'response-1',
+            questionId: QUESTION_ID,
+            pointsEarned: 0,
+          },
+        ],
+      });
+
+      const responseWhere = jest.fn().mockResolvedValue(undefined);
+      const responseSet = jest.fn().mockReturnValue({ where: responseWhere });
+      const attemptReturning = jest.fn().mockResolvedValue([
+        {
+          ...MOCK_ATTEMPT,
+          id: ATTEMPT_ID,
+          isSubmitted: true,
+          isReturned: true,
+          score: 100,
+          passed: true,
+          basePointsEarned: '4',
+          possiblePointsSnapshot: '5',
+          bonusPoints: '10',
+          bonusReason: 'Teacher-approved correction',
+        },
+      ]);
+      const attemptWhere = jest.fn().mockReturnValue({
+        returning: attemptReturning,
+      });
+      const attemptSet = jest.fn().mockReturnValue({ where: attemptWhere });
+      db.update
+        .mockReturnValueOnce({ set: responseSet })
+        .mockReturnValueOnce({ set: attemptSet });
+
+      await service.returnGrade(
+        ATTEMPT_ID,
+        {
+          manualResponseScores: [
+            {
+              questionId: QUESTION_ID,
+              pointsEarned: 4,
+            },
+          ],
+          bonusPoints: 10,
+          bonusReason: 'Teacher-approved correction',
+        } as any,
+        { userId: 'teacher-1', roles: ['teacher'] },
+      );
+
+      expect(attemptSet).toHaveBeenCalledWith(
+        expect.objectContaining({
+          score: 100,
+          basePointsEarned: '4',
+          possiblePointsSnapshot: '5',
+          bonusPoints: '10',
+          bonusReason: 'Teacher-approved correction',
+        }),
+      );
+    });
+
     it('should allow owner teachers to undo a posted grade', async () => {
       db.query.assessmentAttempts.findFirst.mockResolvedValue({
         ...MOCK_ATTEMPT,
@@ -3178,6 +3346,57 @@ describe('AssessmentsService', () => {
             type: 'multiple_choice',
             order: 1,
           }),
+        }),
+      );
+    });
+  });
+
+  describe('getAssessmentStats', () => {
+    it('bounds percentages and excludes ungraded submissions from grade averages', async () => {
+      jest.spyOn(service, 'getAssessmentById').mockResolvedValue({
+        ...MOCK_PUBLISHED_ASSESSMENT,
+        class: { teacherId: 'teacher-1' },
+      } as any);
+      jest.spyOn(service, 'getAssessmentAttempts').mockResolvedValue([
+        {
+          ...MOCK_ATTEMPT,
+          id: 'graded-high',
+          isSubmitted: true,
+          score: 331,
+          passed: true,
+          timeSpentSeconds: 60,
+        },
+        {
+          ...MOCK_ATTEMPT,
+          id: 'graded-low',
+          isSubmitted: true,
+          score: 80,
+          passed: false,
+          timeSpentSeconds: 120,
+        },
+        {
+          ...MOCK_ATTEMPT,
+          id: 'ungraded',
+          isSubmitted: true,
+          score: null,
+          passed: null,
+          timeSpentSeconds: null,
+        },
+      ] as any);
+      mockSelect(db, [{ studentId: STUDENT_ID }]);
+
+      const result = await service.getAssessmentStats(ASSESSMENT_ID, {
+        userId: 'teacher-1',
+        roles: ['teacher'],
+      });
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          submittedAttempts: 3,
+          averageScore: 90,
+          highestScore: 100,
+          lowestScore: 80,
+          passRate: 50,
         }),
       );
     });

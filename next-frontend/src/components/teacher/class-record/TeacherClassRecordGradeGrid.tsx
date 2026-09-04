@@ -25,6 +25,8 @@ type GradeCell = {
   score: number | null;
   status: string;
   reason: string;
+  bonusPoints: number;
+  bonusReason: string;
 };
 
 type TeacherClassRecordGradeGridProps = {
@@ -38,7 +40,9 @@ type TeacherClassRecordGradeGridProps = {
 const number = (value: number | null | undefined, digits = 2) =>
   value == null ? "Incomplete" : Number(value).toFixed(digits);
 
-const eligibilityLabel = (eligibility: SpreadsheetStudentRow["eligibility"]) => {
+const eligibilityLabel = (
+  eligibility: SpreadsheetStudentRow["eligibility"],
+) => {
   if (eligibility === "eligible") return "Eligible";
   if (eligibility === "not_enrolled") return "Not enrolled in period";
   if (eligibility === "transferred") return "Transferred";
@@ -55,8 +59,7 @@ export function TeacherClassRecordGradeGrid({
 }: TeacherClassRecordGradeGridProps) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ClassRecordFilter>("all");
-  const [density, setDensity] =
-    useState<ClassRecordDensity>("comfortable");
+  const [density, setDensity] = useState<ClassRecordDensity>("comfortable");
   const [activeCell, setActiveCell] = useState<{
     studentId: string;
     itemId: string;
@@ -171,7 +174,10 @@ export function TeacherClassRecordGradeGrid({
         <span data-status="verified">Verified</span>
       </div>
 
-      <div className={styles.tableScroll} data-testid="class-record-grid-scroll">
+      <div
+        className={styles.tableScroll}
+        data-testid="class-record-grid-scroll"
+      >
         <table className={styles.gradeTable}>
           <thead>
             <tr>
@@ -328,16 +334,14 @@ export function TeacherClassRecordGradeGrid({
                     className={styles.learnerCell}
                     data-surname-band={band}
                   >
-                    <span
-                      className={styles.learnerCard}
-                      data-learner-card
-                    >
+                    <span className={styles.learnerCard} data-learner-card>
                       <span className={styles.surnameBadge} aria-hidden="true">
                         {getSurnameInitial(student.lastName)}
                       </span>
                       <span className={styles.learnerIdentity}>
                         <span>
-                          <strong>{student.lastName}</strong>, {student.firstName}
+                          <strong>{student.lastName}</strong>,{" "}
+                          {student.firstName}
                         </span>
                         <small>
                           {eligibility}
@@ -356,6 +360,11 @@ export function TeacherClassRecordGradeGrid({
                       <Fragment key={category.id}>
                         {category.items.map((item, index) => {
                           const score = values?.scores[index] ?? null;
+                          const bonusPoints = values?.bonusPoints?.[index] ?? 0;
+                          const bonusReason =
+                            values?.bonusReasons?.[index] ?? "";
+                          const effectiveScore =
+                            values?.effectiveScores?.[index] ?? score;
                           const status =
                             values?.scoreStatuses?.[index] ??
                             (score == null ? "missing" : "recorded");
@@ -365,7 +374,9 @@ export function TeacherClassRecordGradeGrid({
                             ? "Unavailable"
                             : status === "excused"
                               ? "Excused"
-                              : (score ?? "Missing");
+                              : bonusPoints > 0
+                                ? `${effectiveScore ?? score} (+${bonusPoints})`
+                                : (score ?? "Missing");
                           const visualStatus = unavailable
                             ? "unavailable"
                             : status;
@@ -407,8 +418,9 @@ export function TeacherClassRecordGradeGrid({
                                     student,
                                     score,
                                     status,
-                                    reason:
-                                      values?.scoreReasons?.[index] ?? "",
+                                    reason: values?.scoreReasons?.[index] ?? "",
+                                    bonusPoints,
+                                    bonusReason,
                                   })
                                 }
                               >
@@ -450,7 +462,7 @@ export function TeacherClassRecordGradeGrid({
                           : sheet.classRecord.status === "finalized" &&
                               Boolean(sheet.classRecord.revision)
                             ? "Finalized · "
-                          : ""}
+                            : ""}
                       {student.remarks}
                     </small>
                   </td>

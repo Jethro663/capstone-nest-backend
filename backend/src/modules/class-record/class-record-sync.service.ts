@@ -23,6 +23,7 @@ import {
 } from '../../common/events';
 import { AuditService } from '../audit/audit.service';
 import { AcademicPolicyService } from '../academic-state/academic-policy.service';
+import { buildAcademicScoreContract } from '../academic-state/academic-score';
 
 @Injectable()
 export class ClassRecordSyncService {
@@ -153,20 +154,35 @@ export class ClassRecordSyncService {
         throw new BadRequestException(
           'Assessment result is outside its valid percentage range',
         );
-      const score = String(
-        Math.round((attempt.score / 100) * Number(item.maxScore) * 100) / 100,
-      );
+      const contract = buildAcademicScoreContract(attempt);
+      const itemMaximum = Number(item.maxScore);
+      const scale = contract.scoreBreakdown
+        ? itemMaximum / contract.scoreBreakdown.possiblePoints
+        : 1;
+      const baseScore = contract.scoreBreakdown
+        ? contract.scoreBreakdown.basePoints * scale
+        : ((contract.scorePercent ?? 0) / 100) * itemMaximum;
+      const bonusPoints = contract.scoreBreakdown
+        ? contract.scoreBreakdown.bonusPoints * scale
+        : 0;
+      const score = String(Math.round(baseScore * 100) / 100);
+      const bonus = String(Math.round(bonusPoints * 100) / 100);
       const previous = scores.find((s) => s.studentId === attempt.studentId);
       if (
         previous?.sourceAttemptId === attempt.id &&
         previous.score !== null &&
-        Number(previous.score) === Number(score)
+        Number(previous.score) === Number(score) &&
+        Number(previous.bonusPoints ?? 0) === Number(bonus) &&
+        (previous.bonusReason ?? null) ===
+          (contract.scoreBreakdown?.bonusReason ?? null)
       )
         continue;
       const values = {
         classRecordItemId: item.id,
         studentId: attempt.studentId,
         score,
+        bonusPoints: bonus,
+        bonusReason: contract.scoreBreakdown?.bonusReason ?? null,
         status: 'recorded' as const,
         reason: null,
         sourceAttemptId: attempt.id,

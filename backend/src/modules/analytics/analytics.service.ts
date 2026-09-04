@@ -15,6 +15,7 @@ import {
   userRoles,
   users,
 } from '../../drizzle/schema';
+import { boundPercentage } from '../academic-state/academic-score';
 
 @Injectable()
 export class AnalyticsService {
@@ -79,8 +80,15 @@ export class AnalyticsService {
 
     const students = cases.map((entry) => {
       const current = snapshotMap.get(entry.studentId);
-      const before = entry.triggerScore ? Number(entry.triggerScore) : null;
-      const after = current?.blendedScore ? Number(current.blendedScore) : null;
+      const before =
+        entry.triggerScore === null
+          ? null
+          : boundPercentage(Number(entry.triggerScore));
+      const after =
+        current?.blendedScore === null ||
+        typeof current?.blendedScore === 'undefined'
+          ? null
+          : boundPercentage(Number(current.blendedScore));
       const completedAssignments = entry.assignments.filter(
         (item) => item.isCompleted,
       ).length;
@@ -145,7 +153,7 @@ export class AnalyticsService {
 
     const trends = records.map((record) => {
       const grades = record.finalGrades.map((item) =>
-        Number(item.finalPercentage),
+        boundPercentage(Number(item.finalPercentage)),
       );
       const average =
         grades.length > 0

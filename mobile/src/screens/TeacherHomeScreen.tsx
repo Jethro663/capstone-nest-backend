@@ -11,6 +11,7 @@ import { assessmentsApi } from "../api/services/assessments";
 import { performanceApi } from "../api/services/performance";
 import type { MainTabParamList, RootStackParamList } from "../navigation/types";
 import { useAuth } from "../providers/AuthProvider";
+import { boundAcademicPercentage } from "../lib/academicScore";
 import { useLiveNotifications } from "../providers/LiveNotificationContext";
 import {
   TeacherActionButton,
@@ -72,7 +73,11 @@ export function TeacherHomeScreen({ navigation }: Props) {
         if (!classItem || !query.data) return [];
         return query.data.map((assessment) => ({
           ...assessment,
-          subjectName: classItem.subjectName || classItem.className || classItem.name || "Class",
+          subjectName:
+            classItem.subjectName ||
+            classItem.className ||
+            classItem.name ||
+            "Class",
         }));
       }),
     [assessmentQueries, classesQuery.data],
@@ -86,10 +91,18 @@ export function TeacherHomeScreen({ navigation }: Props) {
           if (!classItem || !query.data) return [];
           return query.data.map((announcement) => ({
             ...announcement,
-            subjectName: classItem.subjectName || classItem.className || classItem.name || "Class",
+            subjectName:
+              classItem.subjectName ||
+              classItem.className ||
+              classItem.name ||
+              "Class",
           }));
         })
-        .sort((left, right) => new Date(right.createdAt || 0).getTime() - new Date(left.createdAt || 0).getTime())
+        .sort(
+          (left, right) =>
+            new Date(right.createdAt || 0).getTime() -
+            new Date(left.createdAt || 0).getTime(),
+        )
         .slice(0, 3),
     [announcementQueries, classesQuery.data],
   );
@@ -98,7 +111,11 @@ export function TeacherHomeScreen({ navigation }: Props) {
     () =>
       flattenedAssessments
         .filter((assessment) => Boolean(assessment.isPublished))
-        .sort((left, right) => new Date(left.dueDate || 0).getTime() - new Date(right.dueDate || 0).getTime())
+        .sort(
+          (left, right) =>
+            new Date(left.dueDate || 0).getTime() -
+            new Date(right.dueDate || 0).getTime(),
+        )
         .slice(0, 4),
     [flattenedAssessments],
   );
@@ -109,22 +126,31 @@ export function TeacherHomeScreen({ navigation }: Props) {
         .map((classItem, index) => {
           const students = atRiskQueries[index]?.data?.students ?? [];
           const scores = students
-            .map((student) => (typeof student.blendedScore === "number" ? student.blendedScore : null))
+            .map((student) =>
+              typeof student.blendedScore === "number"
+                ? boundAcademicPercentage(student.blendedScore)
+                : null,
+            )
             .filter((score): score is number => score !== null);
-          const threshold = students.find((student) => typeof student.thresholdApplied === "number")?.thresholdApplied;
+          const threshold = students.find(
+            (student) => typeof student.thresholdApplied === "number",
+          )?.thresholdApplied;
 
           return {
             classItem,
             count: students.length,
             lowestScore: scores.length ? Math.round(Math.min(...scores)) : null,
-            threshold: typeof threshold === "number" ? Math.round(threshold) : null,
+            threshold:
+              typeof threshold === "number" ? Math.round(threshold) : null,
           };
         })
         .filter((entry) => entry.count > 0),
     [atRiskQueries, classesQuery.data],
   );
 
-  const draftCount = flattenedAssessments.filter((assessment) => !assessment.isPublished).length;
+  const draftCount = flattenedAssessments.filter(
+    (assessment) => !assessment.isPublished,
+  ).length;
   const publishedCount = flattenedAssessments.length - draftCount;
   const attentionCount = upcomingAssessments.length + draftCount;
   const firstClassId = classesQuery.data?.[0]?.id;
@@ -154,7 +180,11 @@ export function TeacherHomeScreen({ navigation }: Props) {
             justifyContent: "center",
           }}
         >
-          <MaterialCommunityIcons name="bell-outline" size={18} color={theme.text} />
+          <MaterialCommunityIcons
+            name="bell-outline"
+            size={18}
+            color={theme.text}
+          />
           {unreadCount > 0 ? (
             <View
               style={{
@@ -172,7 +202,9 @@ export function TeacherHomeScreen({ navigation }: Props) {
                 paddingHorizontal: 4,
               }}
             >
-              <Text style={{ color: "#FFFFFF", fontSize: 9, fontWeight: "900" }}>
+              <Text
+                style={{ color: "#FFFFFF", fontSize: 9, fontWeight: "900" }}
+              >
                 {unreadCount > 9 ? "9+" : unreadCount}
               </Text>
             </View>
@@ -191,7 +223,11 @@ export function TeacherHomeScreen({ navigation }: Props) {
     >
       <TeacherStats
         items={[
-          { label: "Active Classes", value: classesQuery.data?.length ?? 0, tone: "red" },
+          {
+            label: "Active Classes",
+            value: classesQuery.data?.length ?? 0,
+            tone: "red",
+          },
           { label: "Needs Review", value: attentionCount, tone: "amber" },
           { label: "Published", value: publishedCount, tone: "green" },
           { label: "Updates", value: recentAnnouncements.length, tone: "blue" },
@@ -199,7 +235,11 @@ export function TeacherHomeScreen({ navigation }: Props) {
       />
 
       <View style={{ marginTop: 14 }}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 8 }}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 20, gap: 8 }}
+        >
           <TeacherActionButton
             label="Updates"
             icon="bullhorn-outline"
@@ -207,104 +247,214 @@ export function TeacherHomeScreen({ navigation }: Props) {
             disabled={!firstClassId}
             onPress={() => {
               if (!firstClassId) return;
-              navigation.navigate("TeacherClassDetail", { classId: firstClassId, initialTab: "announcements" });
+              navigation.navigate("TeacherClassDetail", {
+                classId: firstClassId,
+                initialTab: "announcements",
+              });
             }}
           />
-          <TeacherActionButton label="Calendar" icon="calendar-month-outline" onPress={() => navigation.navigate("TeacherCalendar")} />
-          <TeacherActionButton label="Classes" icon="book-open-variant-outline" tone="blue" onPress={() => navigation.navigate("Classes")} />
-          <TeacherActionButton label="Assessments" icon="clipboard-text-outline" tone="green" onPress={() => navigation.navigate("Assessments")} />
-          <TeacherActionButton label="Profile" icon="account-circle-outline" tone="red" onPress={() => navigation.navigate("Profile")} />
-          <TeacherActionButton label="More" icon="dots-horizontal-circle-outline" tone="blue" onPress={() => navigation.navigate("TeacherMore")} />
+          <TeacherActionButton
+            label="Calendar"
+            icon="calendar-month-outline"
+            onPress={() => navigation.navigate("TeacherCalendar")}
+          />
+          <TeacherActionButton
+            label="Classes"
+            icon="book-open-variant-outline"
+            tone="blue"
+            onPress={() => navigation.navigate("Classes")}
+          />
+          <TeacherActionButton
+            label="Assessments"
+            icon="clipboard-text-outline"
+            tone="green"
+            onPress={() => navigation.navigate("Assessments")}
+          />
+          <TeacherActionButton
+            label="Profile"
+            icon="account-circle-outline"
+            tone="red"
+            onPress={() => navigation.navigate("Profile")}
+          />
+          <TeacherActionButton
+            label="More"
+            icon="dots-horizontal-circle-outline"
+            tone="blue"
+            onPress={() => navigation.navigate("TeacherMore")}
+          />
         </ScrollView>
       </View>
 
-      <TeacherPanel title="Today needs attention" subtitle="Start with due work, drafts, and grading-sensitive items.">
+      <TeacherPanel
+        title="Today needs attention"
+        subtitle="Start with due work, drafts, and grading-sensitive items."
+      >
         <TeacherRow
           title={`${upcomingAssessments.length} upcoming assessment${upcomingAssessments.length === 1 ? "" : "s"}`}
           subtitle="Published work students can reach soon."
           onPress={() => navigation.navigate("Assessments")}
-          right={<Text style={{ fontSize: 18, fontWeight: "900", color: theme.amber }}>{upcomingAssessments.length}</Text>}
+          right={
+            <Text
+              style={{ fontSize: 18, fontWeight: "900", color: theme.amber }}
+            >
+              {upcomingAssessments.length}
+            </Text>
+          }
         />
         <TeacherRow
           title={`${draftCount} draft assessment${draftCount === 1 ? "" : "s"}`}
           subtitle="Finish drafts before class deadlines."
           onPress={() => navigation.navigate("Assessments")}
-          right={<Text style={{ fontSize: 18, fontWeight: "900", color: theme.red }}>{draftCount}</Text>}
+          right={
+            <Text style={{ fontSize: 18, fontWeight: "900", color: theme.red }}>
+              {draftCount}
+            </Text>
+          }
         />
       </TeacherPanel>
 
-      <TeacherPanel title="Upcoming classes" subtitle="Open the class space you are most likely to need next.">
+      <TeacherPanel
+        title="Upcoming classes"
+        subtitle="Open the class space you are most likely to need next."
+      >
         {classesQuery.data?.length ? (
           classesQuery.data.slice(0, 3).map((classItem) => (
             <TeacherRow
               key={classItem.id}
               title={`${classItem.subjectCode} · ${classItem.subjectName}`}
               subtitle={`${classItem.section?.name || "Section pending"} · ${classItem.schoolYear}`}
-              onPress={() => navigation.navigate("TeacherClassDetail", { classId: classItem.id })}
-              right={
-                <View style={{ alignItems: "flex-end" }}>
-                  <Text style={{ fontSize: 12, fontWeight: "800", color: theme.blue }}>
-                    {classItem.enrollmentCount ?? classItem.enrollments?.length ?? 0}
-                  </Text>
-                  <Text style={{ fontSize: 10, color: theme.muted }}>students</Text>
-                </View>
+              onPress={() =>
+                navigation.navigate("TeacherClassDetail", {
+                  classId: classItem.id,
+                })
               }
-            />
-          ))
-        ) : (
-          <TeacherEmpty title="No teacher classes" subtitle="Classes assigned to this teacher account will appear here." />
-        )}
-      </TeacherPanel>
-
-      <TeacherPanel title="Intervention focus" subtitle="Classes with learners currently flagged for extra support.">
-        {interventionClasses.length ? (
-          interventionClasses.slice(0, 4).map(({ classItem, count, lowestScore, threshold }) => (
-            <TeacherRow
-              key={classItem.id}
-              title={`${classItem.subjectCode} · ${classItem.subjectName}`}
-              subtitle={`${classItem.section?.name || "Section pending"} · ${count} learner${count === 1 ? "" : "s"} need intervention${lowestScore !== null ? ` · lowest ${lowestScore}%` : ""}${threshold !== null ? ` · threshold ${threshold}%` : ""}`}
-              onPress={() => navigation.navigate("TeacherInterventions", { classId: classItem.id })}
               right={
                 <View style={{ alignItems: "flex-end" }}>
-                  <Text style={{ fontSize: 20, fontWeight: "900", color: theme.red }}>{count}</Text>
-                  <Text style={{ fontSize: 10, color: theme.muted }}>flagged</Text>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: "800",
+                      color: theme.blue,
+                    }}
+                  >
+                    {classItem.enrollmentCount ??
+                      classItem.enrollments?.length ??
+                      0}
+                  </Text>
+                  <Text style={{ fontSize: 10, color: theme.muted }}>
+                    students
+                  </Text>
                 </View>
               }
             />
           ))
         ) : (
           <TeacherEmpty
-            title={classesQuery.data?.length ? "No urgent intervention flags" : "No classes available"}
-            subtitle={classesQuery.data?.length ? "Classes with intervention needs will appear here once performance data crosses the threshold." : "Assigned classes are required before intervention data can appear."}
+            title="No teacher classes"
+            subtitle="Classes assigned to this teacher account will appear here."
+          />
+        )}
+      </TeacherPanel>
+
+      <TeacherPanel
+        title="Intervention focus"
+        subtitle="Classes with learners currently flagged for extra support."
+      >
+        {interventionClasses.length ? (
+          interventionClasses
+            .slice(0, 4)
+            .map(({ classItem, count, lowestScore, threshold }) => (
+              <TeacherRow
+                key={classItem.id}
+                title={`${classItem.subjectCode} · ${classItem.subjectName}`}
+                subtitle={`${classItem.section?.name || "Section pending"} · ${count} learner${count === 1 ? "" : "s"} need intervention${lowestScore !== null ? ` · lowest ${lowestScore}%` : ""}${threshold !== null ? ` · threshold ${threshold}%` : ""}`}
+                onPress={() =>
+                  navigation.navigate("TeacherInterventions", {
+                    classId: classItem.id,
+                  })
+                }
+                right={
+                  <View style={{ alignItems: "flex-end" }}>
+                    <Text
+                      style={{
+                        fontSize: 20,
+                        fontWeight: "900",
+                        color: theme.red,
+                      }}
+                    >
+                      {count}
+                    </Text>
+                    <Text style={{ fontSize: 10, color: theme.muted }}>
+                      flagged
+                    </Text>
+                  </View>
+                }
+              />
+            ))
+        ) : (
+          <TeacherEmpty
+            title={
+              classesQuery.data?.length
+                ? "No urgent intervention flags"
+                : "No classes available"
+            }
+            subtitle={
+              classesQuery.data?.length
+                ? "Classes with intervention needs will appear here once performance data crosses the threshold."
+                : "Assigned classes are required before intervention data can appear."
+            }
             icon="account-heart-outline"
           />
         )}
       </TeacherPanel>
 
-      <TeacherPanel title="Active classes" subtitle="Your current class load and section count.">
+      <TeacherPanel
+        title="Active classes"
+        subtitle="Your current class load and section count."
+      >
         {classesQuery.data?.length ? (
           classesQuery.data.slice(0, 4).map((classItem) => (
             <TeacherRow
               key={classItem.id}
               title={`${classItem.subjectCode} · ${classItem.subjectName}`}
               subtitle={`${classItem.section?.name || "Section pending"} · ${classItem.schoolYear}`}
-              onPress={() => navigation.navigate("TeacherClassDetail", { classId: classItem.id })}
+              onPress={() =>
+                navigation.navigate("TeacherClassDetail", {
+                  classId: classItem.id,
+                })
+              }
               right={
                 <View style={{ alignItems: "flex-end" }}>
-                  <Text style={{ fontSize: 12, fontWeight: "700", color: theme.red }}>
-                    {classItem.enrollmentCount ?? classItem.enrollments?.length ?? 0}
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: "700",
+                      color: theme.red,
+                    }}
+                  >
+                    {classItem.enrollmentCount ??
+                      classItem.enrollments?.length ??
+                      0}
                   </Text>
-                  <Text style={{ fontSize: 10, color: theme.muted }}>students</Text>
+                  <Text style={{ fontSize: 10, color: theme.muted }}>
+                    students
+                  </Text>
                 </View>
               }
             />
           ))
         ) : (
-          <TeacherEmpty title="No teacher classes" subtitle="Classes assigned to this teacher account will appear here." />
+          <TeacherEmpty
+            title="No teacher classes"
+            subtitle="Classes assigned to this teacher account will appear here."
+          />
         )}
       </TeacherPanel>
 
-      <TeacherPanel title="Upcoming assessments" subtitle="Published items that students can reach soon.">
+      <TeacherPanel
+        title="Upcoming assessments"
+        subtitle="Published items that students can reach soon."
+      >
         {upcomingAssessments.length ? (
           upcomingAssessments.map((assessment) => (
             <TeacherRow
@@ -321,7 +471,9 @@ export function TeacherHomeScreen({ navigation }: Props) {
                 <View
                   style={{
                     borderRadius: 999,
-                    backgroundColor: assessment.isPublished ? theme.greenSoft : theme.amberSoft,
+                    backgroundColor: assessment.isPublished
+                      ? theme.greenSoft
+                      : theme.amberSoft,
                     paddingHorizontal: 8,
                     paddingVertical: 4,
                   }}
@@ -348,7 +500,10 @@ export function TeacherHomeScreen({ navigation }: Props) {
         )}
       </TeacherPanel>
 
-      <TeacherPanel title="Recent announcements" subtitle="Latest class updates across your teaching load.">
+      <TeacherPanel
+        title="Recent announcements"
+        subtitle="Latest class updates across your teaching load."
+      >
         {recentAnnouncements.length ? (
           recentAnnouncements.map((announcement) => (
             <TeacherRow
@@ -392,9 +547,21 @@ export function TeacherHomeScreen({ navigation }: Props) {
             }}
           >
             <View style={{ flex: 1, paddingRight: 12 }}>
-              <Text style={{ fontSize: 14, fontWeight: "800", color: theme.text }}>Open Calendar</Text>
-              <Text style={{ marginTop: 4, fontSize: 12, lineHeight: 18, color: theme.subtext }}>
-                Review schedules, announcements, school events, and due assessments in one feed.
+              <Text
+                style={{ fontSize: 14, fontWeight: "800", color: theme.text }}
+              >
+                Open Calendar
+              </Text>
+              <Text
+                style={{
+                  marginTop: 4,
+                  fontSize: 12,
+                  lineHeight: 18,
+                  color: theme.subtext,
+                }}
+              >
+                Review schedules, announcements, school events, and due
+                assessments in one feed.
               </Text>
             </View>
             <Text style={{ fontSize: 22, color: theme.red }}>›</Text>

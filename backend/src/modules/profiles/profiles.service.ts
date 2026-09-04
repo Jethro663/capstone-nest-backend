@@ -17,6 +17,7 @@ import {
   studentProfiles,
 } from '../../drizzle/schema';
 import { UpdateProfileDto } from './DTO/update-profile.dto';
+import { buildAcademicScoreContract } from '../academic-state/academic-score';
 
 @Injectable()
 export class ProfilesService {
@@ -299,7 +300,7 @@ export class ProfilesService {
         id: row.id,
         assessmentId: row.assessmentId,
         attemptNumber: row.attemptNumber,
-        score: row.score,
+        ...buildAcademicScoreContract(row),
         isSubmitted: row.isSubmitted,
         submittedAt: row.submittedAt,
         expiresAt: row.expiresAt,
@@ -454,6 +455,10 @@ export class ProfilesService {
           assessmentId: assessmentAttempts.assessmentId,
           attemptNumber: assessmentAttempts.attemptNumber,
           score: assessmentAttempts.score,
+          basePointsEarned: assessmentAttempts.basePointsEarned,
+          possiblePointsSnapshot: assessmentAttempts.possiblePointsSnapshot,
+          bonusPoints: assessmentAttempts.bonusPoints,
+          bonusReason: assessmentAttempts.bonusReason,
           isSubmitted: assessmentAttempts.isSubmitted,
           submittedAt: assessmentAttempts.submittedAt,
           startedAt: assessmentAttempts.startedAt,
@@ -506,8 +511,14 @@ export class ProfilesService {
     const mappedRows = rows.map((row) => {
       const { classRefId, classSubjectName, classSubjectCode, ...assessment } =
         row.assessment;
+      const scoreContract = buildAcademicScoreContract(row);
       return {
         ...row,
+        ...scoreContract,
+        basePointsEarned: undefined,
+        possiblePointsSnapshot: undefined,
+        bonusPoints: undefined,
+        bonusReason: undefined,
         assessment: {
           ...assessment,
           class: classRefId

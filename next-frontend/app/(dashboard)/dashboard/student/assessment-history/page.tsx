@@ -1,32 +1,33 @@
-'use client';
+"use client";
 
-import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
-import { ArrowLeft, History, Search } from 'lucide-react';
-import { profileService } from '@/services/profile-service';
-import type { AcademicAssessmentAttempt } from '@/types/profile';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { ArrowLeft, History, Search } from "lucide-react";
+import { profileService } from "@/services/profile-service";
+import type { AcademicAssessmentAttempt } from "@/types/profile";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { presentAcademicScore } from "@/lib/academic-score";
 
 const PAGE_SIZE = 15;
 
 function formatDate(value?: string | null) {
-  if (!value) return '--';
-  return new Date(value).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
+  if (!value) return "--";
+  return new Date(value).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
   });
 }
 
 export default function StudentAssessmentHistoryPage() {
   const [rows, setRows] = useState<AcademicAssessmentAttempt[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchInput, setSearchInput] = useState('');
-  const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
@@ -48,7 +49,7 @@ export default function StudentAssessmentHistoryPage() {
           page,
           limit: PAGE_SIZE,
           search: search || undefined,
-          submission: 'all',
+          submission: "all",
         });
         if (!mounted) return;
         setRows(response.data || []);
@@ -74,12 +75,21 @@ export default function StudentAssessmentHistoryPage() {
     <div className="mx-auto w-full max-w-6xl space-y-4 pb-10">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-[var(--student-text-muted)]">Student Records</p>
-          <h1 className="text-2xl font-black text-[var(--student-text-strong)]">Assessment History</h1>
-          <p className="text-sm text-[var(--student-text-muted)]">Review your latest attempts across classes and terms.</p>
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-[var(--student-text-muted)]">
+            Student Records
+          </p>
+          <h1 className="text-2xl font-black text-[var(--student-text-strong)]">
+            Assessment History
+          </h1>
+          <p className="text-sm text-[var(--student-text-muted)]">
+            Review your latest attempts across classes and terms.
+          </p>
         </div>
         <Link href="/dashboard/student/profile">
-          <Button variant="outline" className="student-button-outline rounded-xl font-black">
+          <Button
+            variant="outline"
+            className="student-button-outline rounded-xl font-black"
+          >
             <ArrowLeft className="h-4 w-4" />
             Back to Profile
           </Button>
@@ -97,8 +107,12 @@ export default function StudentAssessmentHistoryPage() {
               className="student-profile-input pl-10"
             />
           </div>
-          <Badge className="h-10 rounded-full bg-[var(--student-surface-soft)] px-4 py-0 text-[var(--student-navy-soft)]">Submitted: {statusSummary.submitted}</Badge>
-          <Badge className="h-10 rounded-full bg-[var(--student-warning-bg)] px-4 py-0 text-[var(--student-warning-text)]">In Progress: {statusSummary.inProgress}</Badge>
+          <Badge className="h-10 rounded-full bg-[var(--student-surface-soft)] px-4 py-0 text-[var(--student-navy-soft)]">
+            Submitted: {statusSummary.submitted}
+          </Badge>
+          <Badge className="h-10 rounded-full bg-[var(--student-warning-bg)] px-4 py-0 text-[var(--student-warning-text)]">
+            In Progress: {statusSummary.inProgress}
+          </Badge>
         </CardContent>
       </Card>
 
@@ -121,33 +135,49 @@ export default function StudentAssessmentHistoryPage() {
               No assessment attempts found.
             </p>
           ) : (
-            rows.map((row) => (
-              <article key={row.id} className="rounded-xl border border-[var(--student-outline)] bg-white px-4 py-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="font-bold text-[var(--student-text-strong)]">
-                      {row.assessment?.title || 'Assessment'}
-                    </p>
-                    <p className="text-sm text-[var(--student-text-muted)]">
-                      {row.assessment?.class?.subjectName || 'Class'} ({row.assessment?.class?.subjectCode || '--'}) • Attempt #{row.attemptNumber}
-                    </p>
+            rows.map((row) => {
+              const score = presentAcademicScore(row);
+              return (
+                <article
+                  key={row.id}
+                  className="rounded-xl border border-[var(--student-outline)] bg-white px-4 py-3"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="font-bold text-[var(--student-text-strong)]">
+                        {row.assessment?.title || "Assessment"}
+                      </p>
+                      <p className="text-sm text-[var(--student-text-muted)]">
+                        {row.assessment?.class?.subjectName || "Class"} (
+                        {row.assessment?.class?.subjectCode || "--"}) • Attempt
+                        #{row.attemptNumber}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        className={`rounded-full px-3 py-1 text-xs font-bold ${row.isSubmitted ? "bg-[var(--student-success-bg)] text-[var(--student-success-text)]" : "bg-[var(--student-warning-bg)] text-[var(--student-warning-text)]"}`}
+                      >
+                        {row.isSubmitted ? "Submitted" : "In Progress"}
+                      </Badge>
+                      <Badge
+                        variant="outline"
+                        className="rounded-full px-3 py-1 text-xs font-bold"
+                      >
+                        Score: {score.compactLabel}
+                      </Badge>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge className={`rounded-full px-3 py-1 text-xs font-bold ${row.isSubmitted ? 'bg-[var(--student-success-bg)] text-[var(--student-success-text)]' : 'bg-[var(--student-warning-bg)] text-[var(--student-warning-text)]'}`}>
-                      {row.isSubmitted ? 'Submitted' : 'In Progress'}
-                    </Badge>
-                    <Badge variant="outline" className="rounded-full px-3 py-1 text-xs font-bold">
-                      Score: {row.score ?? '--'}
-                    </Badge>
+                  <div className="mt-2 flex flex-wrap gap-4 text-xs text-[var(--student-text-muted)]">
+                    <span>
+                      Started:{" "}
+                      {formatDate((row as { startedAt?: string }).startedAt)}
+                    </span>
+                    <span>Submitted: {formatDate(row.submittedAt)}</span>
+                    <span>Due: {formatDate(row.assessment?.dueDate)}</span>
                   </div>
-                </div>
-                <div className="mt-2 flex flex-wrap gap-4 text-xs text-[var(--student-text-muted)]">
-                  <span>Started: {formatDate((row as { startedAt?: string }).startedAt)}</span>
-                  <span>Submitted: {formatDate(row.submittedAt)}</span>
-                  <span>Due: {formatDate(row.assessment?.dueDate)}</span>
-                </div>
-              </article>
-            ))
+                </article>
+              );
+            })
           )}
         </CardContent>
       </Card>
@@ -157,10 +187,22 @@ export default function StudentAssessmentHistoryPage() {
           Showing page {page} of {totalPages} • {total} total attempts
         </p>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page <= 1}
+            onClick={() => setPage((current) => Math.max(1, current - 1))}
+          >
             Previous
           </Button>
-          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))}>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page >= totalPages}
+            onClick={() =>
+              setPage((current) => Math.min(totalPages, current + 1))
+            }
+          >
             Next
           </Button>
         </div>

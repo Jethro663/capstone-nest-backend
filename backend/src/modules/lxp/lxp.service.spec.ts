@@ -1028,6 +1028,10 @@ describe('LxpService', () => {
     });
     expect(result.weakFocusItems.length).toBeGreaterThan(0);
     expect(
+      result.weakFocusItems.find((entry) => entry.id === 'class-class-1')
+        ?.subtitle,
+    ).toBe('Current standing: 68%');
+    expect(
       result.weakFocusItems.find(
         (entry) => entry.id === 'checkpoint-assignment-lesson',
       )?.subtitle,

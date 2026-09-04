@@ -45,6 +45,8 @@ export interface ClassRecordScore {
   itemId: string;
   studentId: string;
   score: number | null;
+  bonusPoints?: number;
+  bonusReason?: string | null;
   status?: "recorded" | "excused";
   reason?: string | null;
 }
@@ -65,6 +67,8 @@ export interface CreateClassRecordDto {
 export interface RecordScoreDto {
   studentId: string;
   score?: number | null;
+  bonusPoints?: number;
+  bonusReason?: string;
   status?: "recorded" | "excused";
   reason?: string;
 }
@@ -108,6 +112,10 @@ export interface SpreadsheetStudentRow {
   categories: {
     categoryId: string;
     scores: (number | null)[];
+    bonusPoints?: number[];
+    bonusReasons?: Array<string | null>;
+    effectiveScores?: Array<number | null>;
+    scorePercents?: Array<number | null>;
     total: number | null;
     ps: number | null;
     ws: number | null;

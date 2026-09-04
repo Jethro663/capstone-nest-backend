@@ -15,7 +15,6 @@ import {
   assessmentAttempts,
   assessmentResponses,
   classRecords,
-  classRecordScores,
   generatedGuidedAssessmentAttempts,
   classes,
   enrollments,
@@ -30,6 +29,8 @@ import { QueryPerformanceLogsDto } from './DTO/query-performance-logs.dto';
 import { AuditService } from '../audit/audit.service';
 import { CreatePerformanceAnalysisJobDto } from './DTO/create-performance-analysis-job.dto';
 import { PerformanceSnapshotReadService } from './performance-snapshot-read.service';
+import { ClassRecordService } from '../class-record/class-record.service';
+import { boundPercentage } from '../academic-state/academic-score';
 
 const PERFORMANCE_RISK_THRESHOLD = 74;
 
@@ -127,6 +128,7 @@ export class PerformanceService {
     private readonly eventEmitter: EventEmitter2,
     private readonly auditService: AuditService,
     private readonly snapshotReadService: PerformanceSnapshotReadService,
+    private readonly classRecordService: ClassRecordService,
   ) {}
 
   private get db() {
@@ -154,6 +156,13 @@ export class PerformanceService {
     return Number.isFinite(parsed) ? parsed : null;
   }
 
+  private toPercentage(
+    value: string | number | null | undefined,
+  ): number | null {
+    const number = this.toNumber(value);
+    return number === null ? null : boundPercentage(number);
+  }
+
   private toInterventionQuizTrend(
     beforeScore: number | null,
     afterScore: number | null,
@@ -168,8 +177,10 @@ export class PerformanceService {
 
   private averageScoreValues(values: number[]): number | null {
     if (values.length === 0) return null;
+    const boundedValues = values.map((value) => boundPercentage(value));
     return this.round(
-      values.reduce((sum, score) => sum + score, 0) / values.length,
+      boundedValues.reduce((sum, score) => sum + score, 0) /
+        boundedValues.length,
     );
   }
 
@@ -235,7 +246,11 @@ export class PerformanceService {
     for (const attempt of attempts) {
       if (attempt.assessment?.classId !== classId) continue;
       if (latestPerAssessment.has(attempt.assessmentId)) continue;
-      latestPerAssessment.set(attempt.assessmentId, attempt.score ?? 0);
+      if (attempt.score === null) continue;
+      latestPerAssessment.set(
+        attempt.assessmentId,
+        boundPercentage(attempt.score),
+      );
     }
 
     if (latestPerAssessment.size === 0) {
@@ -251,143 +266,49 @@ export class PerformanceService {
   private async getClassRecordComponent(classId: string, studentId: string) {
     const records = await this.db.query.classRecords.findMany({
       where: eq(classRecords.classId, classId),
-      with: {
-        items: {
-          with: {
-            scores: true,
-          },
-        },
-      },
+      columns: { id: true },
+      orderBy: (record, { desc: orderDesc }) => [
+        orderDesc(record.updatedAt),
+        orderDesc(record.createdAt),
+      ],
     });
 
-    let sampleSize = 0;
-    let normalizedSum = 0;
-
     for (const record of records) {
-      for (const item of record.items) {
-        const maxScore = this.toNumber(item.maxScore);
-        if (!maxScore || maxScore <= 0) continue;
-        sampleSize++;
-
-        const scoreRow = item.scores.find(
-          (score) => score.studentId === studentId,
+      const standing =
+        await this.classRecordService.getCanonicalStudentStanding(
+          record.id,
+          studentId,
         );
-        const rawScore = this.toNumber(scoreRow?.score) ?? 0;
-        normalizedSum += (rawScore / maxScore) * 100;
+      if (standing.overallGradePercent !== null) {
+        return {
+          average: this.round(boundPercentage(standing.overallGradePercent)),
+          sampleSize: 1,
+        };
       }
     }
-
-    if (sampleSize === 0) {
-      return { average: null as number | null, sampleSize: 0 };
-    }
-
-    return {
-      average: this.round(normalizedSum / sampleSize),
-      sampleSize,
-    };
+    return { average: null as number | null, sampleSize: 0 };
   }
 
   private async loadPerformanceComponentsForStudents(
     classId: string,
     studentIds: string[],
   ) {
-    const [attempts, records] = await Promise.all([
-      this.db.query.assessmentAttempts.findMany({
-        where: and(
-          inArray(assessmentAttempts.studentId, studentIds),
-          eq(assessmentAttempts.isSubmitted, true),
-        ),
-        columns: {
-          studentId: true,
-          assessmentId: true,
-          score: true,
-          submittedAt: true,
-          attemptNumber: true,
-        },
-        with: {
-          assessment: { columns: { classId: true } },
-        },
-        orderBy: (attempt, { desc: orderDesc }) => [
-          orderDesc(attempt.submittedAt),
-          orderDesc(attempt.attemptNumber),
-        ],
-      }),
-      this.db.query.classRecords.findMany({
-        where: eq(classRecords.classId, classId),
-        with: {
-          items: {
-            columns: { id: true, maxScore: true },
-            with: {
-              scores: {
-                columns: { studentId: true, score: true },
-                where: inArray(classRecordScores.studentId, studentIds),
-              },
-            },
-          },
-        },
-      }),
-    ]);
-
-    const assessmentScores = new Map<string, number[]>();
-    const seenAttempts = new Set<string>();
-    for (const attempt of attempts) {
-      if (attempt.assessment?.classId !== classId) continue;
-      const key = `${attempt.studentId}:${attempt.assessmentId}`;
-      if (seenAttempts.has(key)) continue;
-      seenAttempts.add(key);
-      const scores = assessmentScores.get(attempt.studentId) ?? [];
-      scores.push(attempt.score ?? 0);
-      assessmentScores.set(attempt.studentId, scores);
-    }
-
-    const classRecordTotals = new Map<
-      string,
-      { sampleSize: number; normalizedSum: number }
-    >();
-    for (const studentId of studentIds) {
-      classRecordTotals.set(studentId, { sampleSize: 0, normalizedSum: 0 });
-    }
-    for (const record of records) {
-      for (const item of record.items) {
-        const maxScore = this.toNumber(item.maxScore);
-        if (!maxScore || maxScore <= 0) continue;
-        const scoreByStudent = new Map(
-          item.scores.map((score) => [score.studentId, score.score]),
-        );
-        for (const studentId of studentIds) {
-          const total = classRecordTotals.get(studentId)!;
-          total.sampleSize++;
-          total.normalizedSum +=
-            ((this.toNumber(scoreByStudent.get(studentId)) ?? 0) / maxScore) *
-            100;
-        }
-      }
-    }
-
-    return new Map(
-      studentIds.map((studentId) => {
-        const scores = assessmentScores.get(studentId) ?? [];
-        const recordTotal = classRecordTotals.get(studentId)!;
+    const entries = await Promise.all(
+      studentIds.map(async (studentId) => {
+        const [assessment, classRecord] = await Promise.all([
+          this.getAssessmentComponent(classId, studentId),
+          this.getClassRecordComponent(classId, studentId),
+        ]);
         return [
           studentId,
           {
-            assessment: {
-              average: this.averageScoreValues(scores),
-              sampleSize: scores.length,
-            },
-            classRecord: {
-              average:
-                recordTotal.sampleSize > 0
-                  ? this.round(
-                      recordTotal.normalizedSum / recordTotal.sampleSize,
-                    )
-                  : null,
-              sampleSize: recordTotal.sampleSize,
-            },
+            assessment,
+            classRecord,
           },
-        ];
+        ] as const;
       }),
     );
+    return new Map(entries);
   }
 
   private buildSnapshotData(
@@ -398,13 +319,10 @@ export class PerformanceService {
   ): SnapshotData {
     let blendedScore: number | null = null;
 
-    if (assessmentAverage !== null && classRecordAverage !== null) {
-      blendedScore = this.round((assessmentAverage + classRecordAverage) / 2);
-    } else if (assessmentAverage !== null) {
-      blendedScore = assessmentAverage;
-    } else if (classRecordAverage !== null) {
-      blendedScore = classRecordAverage;
-    }
+    if (classRecordAverage !== null)
+      blendedScore = boundPercentage(classRecordAverage);
+    else if (assessmentAverage !== null)
+      blendedScore = boundPercentage(assessmentAverage);
 
     const hasData = blendedScore !== null;
     const isAtRisk =
@@ -412,8 +330,12 @@ export class PerformanceService {
     const now = new Date();
 
     return {
-      assessmentAverage,
-      classRecordAverage,
+      assessmentAverage:
+        assessmentAverage === null ? null : boundPercentage(assessmentAverage),
+      classRecordAverage:
+        classRecordAverage === null
+          ? null
+          : boundPercentage(classRecordAverage),
       blendedScore,
       assessmentSampleSize,
       classRecordSampleSize,
@@ -591,15 +513,16 @@ export class PerformanceService {
       id: stored?.id,
       studentId,
       classId,
-      assessmentAverage: this.toNumber(stored?.assessmentAverage) ?? null,
-      classRecordAverage: this.toNumber(stored?.classRecordAverage) ?? null,
-      blendedScore: this.toNumber(stored?.blendedScore) ?? null,
+      assessmentAverage: this.toPercentage(stored?.assessmentAverage),
+      classRecordAverage: this.toPercentage(stored?.classRecordAverage),
+      blendedScore: this.toPercentage(stored?.blendedScore),
       assessmentSampleSize: stored?.assessmentSampleSize ?? 0,
       classRecordSampleSize: stored?.classRecordSampleSize ?? 0,
       hasData: stored?.hasData ?? false,
       isAtRisk: stored?.isAtRisk ?? false,
       thresholdApplied:
-        this.toNumber(stored?.thresholdApplied) ?? PERFORMANCE_RISK_THRESHOLD,
+        this.toPercentage(stored?.thresholdApplied) ??
+        PERFORMANCE_RISK_THRESHOLD,
       lastComputedAt: stored?.lastComputedAt ?? data.lastComputedAt,
     };
   }
@@ -744,15 +667,15 @@ export class PerformanceService {
         firstName: entry.student?.firstName ?? null,
         lastName: entry.student?.lastName ?? null,
         email: entry.student?.email ?? null,
-        assessmentAverage: this.toNumber(snapshot?.assessmentAverage) ?? null,
-        classRecordAverage: this.toNumber(snapshot?.classRecordAverage) ?? null,
-        blendedScore: this.toNumber(snapshot?.blendedScore) ?? null,
+        assessmentAverage: this.toPercentage(snapshot?.assessmentAverage),
+        classRecordAverage: this.toPercentage(snapshot?.classRecordAverage),
+        blendedScore: this.toPercentage(snapshot?.blendedScore),
         assessmentSampleSize: snapshot?.assessmentSampleSize ?? 0,
         classRecordSampleSize: snapshot?.classRecordSampleSize ?? 0,
         hasData: snapshot?.hasData ?? false,
         isAtRisk: snapshot?.isAtRisk ?? false,
         thresholdApplied:
-          this.toNumber(snapshot?.thresholdApplied) ??
+          this.toPercentage(snapshot?.thresholdApplied) ??
           PERFORMANCE_RISK_THRESHOLD,
         lastComputedAt: snapshot?.lastComputedAt ?? new Date(0),
       };
@@ -1032,8 +955,8 @@ export class PerformanceService {
         if (new Date(attempt.submittedAt).getTime() >= openedAtMs) continue;
 
         const current = bestPerAssessment.get(attempt.assessmentId);
-        const attemptScore = this.toNumber(attempt.score) ?? -1;
-        const currentScore = this.toNumber(current?.score) ?? -1;
+        const attemptScore = this.toPercentage(attempt.score) ?? -1;
+        const currentScore = this.toPercentage(current?.score) ?? -1;
         if (!current || attemptScore > currentScore) {
           bestPerAssessment.set(attempt.assessmentId, attempt);
         }
@@ -1041,7 +964,7 @@ export class PerformanceService {
 
       const attempts = [...bestPerAssessment.values()];
       const scores = attempts
-        .map((attempt) => this.toNumber(attempt.score))
+        .map((attempt) => this.toPercentage(attempt.score))
         .filter((score): score is number => score !== null);
 
       return {
@@ -1074,15 +997,15 @@ export class PerformanceService {
         const key =
           attempt.assignmentId ?? attempt.guidedAssessmentId ?? attempt.id;
         const current = bestPerAssignment.get(key);
-        const attemptScore = this.toNumber(attempt.score) ?? -1;
-        const currentScore = this.toNumber(current?.score) ?? -1;
+        const attemptScore = this.toPercentage(attempt.score) ?? -1;
+        const currentScore = this.toPercentage(current?.score) ?? -1;
         if (!current || attemptScore > currentScore) {
           bestPerAssignment.set(key, attempt);
         }
       }
       const attempts = [...bestPerAssignment.values()];
       const scores = attempts
-        .map((attempt) => this.toNumber(attempt.score))
+        .map((attempt) => this.toPercentage(attempt.score))
         .filter((score): score is number => score !== null);
 
       return {
@@ -1242,10 +1165,10 @@ export class PerformanceService {
         student: log.student,
         previousIsAtRisk: log.previousIsAtRisk,
         currentIsAtRisk: log.currentIsAtRisk,
-        assessmentAverage: this.toNumber(log.assessmentAverage),
-        classRecordAverage: this.toNumber(log.classRecordAverage),
-        blendedScore: this.toNumber(log.blendedScore),
-        thresholdApplied: this.toNumber(log.thresholdApplied),
+        assessmentAverage: this.toPercentage(log.assessmentAverage),
+        classRecordAverage: this.toPercentage(log.classRecordAverage),
+        blendedScore: this.toPercentage(log.blendedScore),
+        thresholdApplied: this.toPercentage(log.thresholdApplied),
         triggerSource: log.triggerSource,
         createdAt: log.createdAt,
       })),
@@ -1432,7 +1355,7 @@ export class PerformanceService {
         type: assessment.type,
       };
       if (typeof attempt.score === 'number') {
-        scoreBucket.scores.push(attempt.score);
+        scoreBucket.scores.push(boundPercentage(attempt.score));
       }
       scoreBreakdownMap.set(assessment.id, scoreBucket);
 
@@ -2019,9 +1942,9 @@ export class PerformanceService {
                 section: enrollment.class.section,
               }
             : null,
-          assessmentAverage: snapshot.assessmentAverage,
-          classRecordAverage: snapshot.classRecordAverage,
-          blendedScore: snapshot.blendedScore,
+          assessmentAverage: this.toPercentage(snapshot.assessmentAverage),
+          classRecordAverage: this.toPercentage(snapshot.classRecordAverage),
+          blendedScore: this.toPercentage(snapshot.blendedScore),
           assessmentSampleSize: snapshot.assessmentSampleSize,
           classRecordSampleSize: snapshot.classRecordSampleSize,
           hasData: snapshot.hasData,

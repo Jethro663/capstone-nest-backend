@@ -50,6 +50,8 @@ export function AcademicWorkbook({
   const [studentId, setStudentId] = useState("");
   const [itemId, setItemId] = useState("");
   const [score, setScore] = useState("");
+  const [bonusPoints, setBonusPoints] = useState("0");
+  const [bonusReason, setBonusReason] = useState("");
   const [hps, setHps] = useState("");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -113,6 +115,8 @@ export function AcademicWorkbook({
     setItemId("");
     setReason("");
     setScore("");
+    setBonusPoints("0");
+    setBonusReason("");
     setHps("");
   }, [selected?.id]);
   const write = async (action: () => Promise<unknown>, message: string) => {
@@ -145,6 +149,16 @@ export function AcademicWorkbook({
   const itemIndex = category?.items.findIndex((i) => i.id === itemId) ?? -1;
   const scoreStatus = values?.scoreStatuses?.[itemIndex] ?? "missing";
   const policy = context.data?.policy;
+  useEffect(() => {
+    if (!studentId || !itemId || itemIndex < 0) return;
+    setScore(
+      values?.scores?.[itemIndex] == null
+        ? ""
+        : String(values.scores[itemIndex]),
+    );
+    setBonusPoints(String(values?.bonusPoints?.[itemIndex] ?? 0));
+    setBonusReason(values?.bonusReasons?.[itemIndex] ?? "");
+  }, [itemId, itemIndex, studentId, values]);
   return (
     <View style={{ gap: 12 }}>
       <Panel
@@ -252,6 +266,8 @@ export function AcademicWorkbook({
                     onPress={() => {
                       setStudentId(p.studentId);
                       setScore("");
+                      setBonusPoints("0");
+                      setBonusReason("");
                       setReason("");
                     }}
                   />
@@ -267,6 +283,8 @@ export function AcademicWorkbook({
                       onPress={() => {
                         setItemId(i.id);
                         setScore("");
+                        setBonusPoints("0");
+                        setBonusReason("");
                         setHps(String(i.hps ?? ""));
                         setReason("");
                       }}
@@ -278,7 +296,7 @@ export function AcademicWorkbook({
                 <>
                   <Text style={textStyle}>
                     {person
-                      ? `${person.eligibility ?? "Unconfirmed"} · ${scoreStatus} · ${values?.scores[itemIndex] ?? "No numeric score"}`
+                      ? `${person.eligibility ?? "Unconfirmed"} · ${scoreStatus} · ${values?.effectiveScores?.[itemIndex] ?? values?.scores[itemIndex] ?? "No numeric score"}${(values?.bonusPoints?.[itemIndex] ?? 0) > 0 ? ` (+${values?.bonusPoints?.[itemIndex]} bonus)` : ""}`
                       : "Choose a learner to enter scores."}
                   </Text>
                   {!item.assessmentId && (
@@ -311,6 +329,23 @@ export function AcademicWorkbook({
                         value={score}
                         onChangeText={setScore}
                       />
+                      <Field
+                        label="Bonus points (optional)"
+                        value={bonusPoints}
+                        onChangeText={setBonusPoints}
+                      />
+                      {Number(bonusPoints || 0) > 0 ? (
+                        <Field
+                          label="Bonus reason (required)"
+                          value={bonusReason}
+                          onChangeText={setBonusReason}
+                          multiline
+                        />
+                      ) : null}
+                      <Text style={textStyle}>
+                        A bonus is stored separately and never raises this item
+                        above full credit.
+                      </Text>
                       <Action
                         label="Save explicit score"
                         disabled={
@@ -318,7 +353,11 @@ export function AcademicWorkbook({
                           person?.eligibility !== "eligible" ||
                           !score.trim() ||
                           !Number.isFinite(Number(score)) ||
-                          Number(score) < 0
+                          Number(score) < 0 ||
+                          Number(score) > Number(hps || item.hps || 0) ||
+                          !Number.isFinite(Number(bonusPoints || 0)) ||
+                          Number(bonusPoints || 0) < 0 ||
+                          (Number(bonusPoints || 0) > 0 && !bonusReason.trim())
                         }
                         onPress={() =>
                           void write(
@@ -327,6 +366,11 @@ export function AcademicWorkbook({
                                 studentId,
                                 status: "recorded",
                                 score: Number(score),
+                                bonusPoints: Number(bonusPoints || 0),
+                                bonusReason:
+                                  Number(bonusPoints || 0) > 0
+                                    ? bonusReason.trim()
+                                    : undefined,
                               }),
                             "Score saved.",
                           )

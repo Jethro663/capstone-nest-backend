@@ -533,9 +533,11 @@ async function seedDatabase() {
            specialization,
            employee_id,
            date_of_birth,
+           gender,
+           address,
            contact_number
          )
-         VALUES ($1, $2, $3, $4, $5, $6)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          ON CONFLICT (user_id) DO UPDATE
          SET department = EXCLUDED.department,
              specialization = EXCLUDED.specialization,

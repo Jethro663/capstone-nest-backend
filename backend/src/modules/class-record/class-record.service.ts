@@ -45,6 +45,7 @@ import { UpdateClassRecordItemDto } from './DTO/update-class-record-item.dto';
 import { AuditService } from '../audit/audit.service';
 import { AcademicPolicyService } from '../academic-state/academic-policy.service';
 import { calculateStudentRecord } from './class-record-calculation';
+import { calculateBoundedScore } from '../academic-state/academic-score';
 
 /** DepEd default category configuration and fallback profile */
 const DEFAULT_DEPED_PROFILE = {
@@ -709,6 +710,26 @@ export class ClassRecordService {
             scores: scoreRows.map((row) =>
               row?.score == null ? null : Number(row.score),
             ),
+            bonusPoints: scoreRows.map((row) => Number(row?.bonusPoints ?? 0)),
+            bonusReasons: scoreRows.map((row) => row?.bonusReason ?? null),
+            effectiveScores: scoreRows.map((row, index) => {
+              if (row?.score == null || row.status === 'excused') return null;
+              return calculateBoundedScore({
+                basePoints: Number(row.score),
+                bonusPoints: Number(row.bonusPoints ?? 0),
+                bonusReason: row.bonusReason,
+                possiblePoints: Number(category.items[index].maxScore),
+              }).effectivePoints;
+            }),
+            scorePercents: scoreRows.map((row, index) => {
+              if (row?.score == null || row.status === 'excused') return null;
+              return calculateBoundedScore({
+                basePoints: Number(row.score),
+                bonusPoints: Number(row.bonusPoints ?? 0),
+                bonusReason: row.bonusReason,
+                possiblePoints: Number(category.items[index].maxScore),
+              }).scorePercent;
+            }),
             scoreStatuses: scoreRows.map((row) => row?.status ?? 'missing'),
             scoreReasons: scoreRows.map((row) => row?.reason ?? null),
             total: breakdown.totalRaw,
@@ -931,9 +952,13 @@ export class ClassRecordService {
     const values = dto.scores.map((entry) => {
       const status = entry.status ?? 'recorded';
       if (status === 'excused') {
-        if (entry.score != null || !entry.reason?.trim())
+        if (
+          entry.score != null ||
+          (entry.bonusPoints ?? 0) !== 0 ||
+          !entry.reason?.trim()
+        )
           throw new BadRequestException(
-            'Excused items require a reason and no numeric score',
+            'Excused items require a reason and no score or bonus points',
           );
       } else if (
         status !== 'recorded' ||
@@ -950,10 +975,30 @@ export class ClassRecordService {
         throw new BadRequestException(
           'Grade linked assessments in assessment grading, then synchronize the result',
         );
+      if (status === 'recorded') {
+        try {
+          calculateBoundedScore({
+            basePoints: entry.score!,
+            bonusPoints: entry.bonusPoints,
+            bonusReason: entry.bonusReason,
+            possiblePoints: maxScore,
+          });
+        } catch (error) {
+          throw new BadRequestException(
+            error instanceof Error
+              ? error.message
+              : 'Score adjustment is invalid',
+          );
+        }
+      }
       return {
         classRecordItemId: itemId,
         studentId: entry.studentId,
         score: status === 'excused' ? null : String(entry.score),
+        bonusPoints:
+          status === 'excused' ? '0' : String(entry.bonusPoints ?? 0),
+        bonusReason:
+          status === 'excused' ? null : entry.bonusReason?.trim() || null,
         status,
         reason: entry.reason?.trim() || null,
         sourceAttemptId: null,
@@ -970,6 +1015,8 @@ export class ClassRecordService {
         ],
         set: {
           score: sql`excluded.score`,
+          bonusPoints: sql`excluded.bonus_points`,
+          bonusReason: sql`excluded.bonus_reason`,
           status: sql`excluded.status`,
           reason: sql`excluded.reason`,
           sourceAttemptId: null,
@@ -1130,6 +1177,50 @@ export class ClassRecordService {
   async getReadiness(classRecordId: string, userId: string, roles: string[]) {
     await this.assertClassRecord(classRecordId, userId, roles);
     return this.readinessService.getReadiness(classRecordId);
+  }
+
+  /** Internal canonical grade projection shared by standing and performance. */
+  async getCanonicalStudentStanding(classRecordId: string, studentId: string) {
+    const record = await this.db.query.classRecords.findFirst({
+      where: eq(classRecords.id, classRecordId),
+    });
+    if (!record) throw new NotFoundException('Class record not found');
+
+    const [categories, finalGrade, { policy }] = await Promise.all([
+      this.db.query.classRecordCategories.findMany({
+        where: eq(classRecordCategories.classRecordId, classRecordId),
+        with: { items: { with: { scores: true } } },
+      }),
+      this.db.query.classRecordFinalGrades.findFirst({
+        where: and(
+          eq(classRecordFinalGrades.classRecordId, classRecordId),
+          eq(classRecordFinalGrades.studentId, studentId),
+        ),
+      }),
+      this.academicPolicyService.forClass(record.classId),
+    ]);
+    const calculation = calculateStudentRecord(
+      studentId,
+      policy,
+      categories,
+      categories.flatMap((category) => category.items),
+    );
+    const official = record.status !== 'draft' && finalGrade;
+
+    return {
+      classRecordId,
+      classId: record.classId,
+      gradingPeriod: record.gradingPeriod,
+      status: record.status,
+      complete: calculation.blockers.length === 0,
+      official: Boolean(official),
+      overallGradePercent: official
+        ? Number(finalGrade.finalPercentage)
+        : calculation.quarterlyGrade,
+      initialGradePercent: calculation.initialGrade,
+      categoryBreakdown: calculation.categoryBreakdown,
+      blockers: calculation.blockers,
+    };
   }
 
   @AcademicMutation()

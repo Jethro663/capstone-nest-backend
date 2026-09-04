@@ -13,8 +13,10 @@ import {
   primaryKey,
   json,
   jsonb,
+  numeric,
+  check,
 } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 
 // ==========================================
 // ENUMS
@@ -214,6 +216,30 @@ export const auditLogs = pgTable(
     actorIdIdx: index('audit_logs_actor_id_idx').on(table.actorId),
     actionIdx: index('audit_logs_action_idx').on(table.action),
     createdAtIdx: index('audit_logs_created_at_idx').on(table.createdAt),
+  }),
+);
+
+/** Append-only provenance captured when legacy grade rows are repaired. */
+export const gradeScoreRepairEvidence = pgTable(
+  'grade_score_repair_evidence',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    migrationKey: text('migration_key').notNull(),
+    entityType: text('entity_type').notNull(),
+    entityId: uuid('entity_id').notNull(),
+    reason: text('reason').notNull(),
+    originalData: json('original_data').notNull(),
+    repairedData: json('repaired_data'),
+    repairedAt: timestamp('repaired_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    migrationKeyUnique: unique('grade_score_repair_evidence_key_unique').on(
+      table.migrationKey,
+    ),
+    entityIdx: index('grade_score_repair_evidence_entity_idx').on(
+      table.entityType,
+      table.entityId,
+    ),
   }),
 );
 
@@ -660,6 +686,18 @@ export const assessmentAttempts = pgTable(
     draftResponses: json('draft_responses'),
     submittedAt: timestamp('submitted_at'),
     score: integer('score'),
+    basePointsEarned: numeric('base_points_earned', {
+      precision: 10,
+      scale: 2,
+    }),
+    possiblePointsSnapshot: numeric('possible_points_snapshot', {
+      precision: 10,
+      scale: 2,
+    }),
+    bonusPoints: numeric('bonus_points', { precision: 10, scale: 2 })
+      .notNull()
+      .default('0'),
+    bonusReason: text('bonus_reason'),
     passed: boolean('passed'),
     isSubmitted: boolean('is_submitted').default(false),
     timeSpentSeconds: integer('time_spent_seconds').default(0),
@@ -696,6 +734,18 @@ export const assessmentAttempts = pgTable(
     uniqueAttemptNumber: unique(
       'assessment_attempts_student_assessment_attempt_unique',
     ).on(table.studentId, table.assessmentId, table.attemptNumber),
+    scoreRangeCheck: check(
+      'assessment_attempts_score_range_valid',
+      sql`${table.score} IS NULL OR (${table.score} >= 0 AND ${table.score} <= 100)`,
+    ),
+    directScoreRangeCheck: check(
+      'assessment_attempts_direct_score_range_valid',
+      sql`${table.directScore} IS NULL OR (${table.directScore} >= 0 AND ${table.directScore} <= 100)`,
+    ),
+    pointEvidenceCheck: check(
+      'assessment_attempts_point_evidence_valid',
+      sql`(${table.basePointsEarned} IS NULL OR ${table.basePointsEarned} >= 0) AND (${table.possiblePointsSnapshot} IS NULL OR ${table.possiblePointsSnapshot} > 0) AND (${table.basePointsEarned} IS NULL OR ${table.possiblePointsSnapshot} IS NULL OR ${table.basePointsEarned} <= ${table.possiblePointsSnapshot}) AND ${table.bonusPoints} >= 0 AND (${table.bonusPoints} = 0 OR (${table.bonusReason} IS NOT NULL AND length(trim(${table.bonusReason})) > 0))`,
+    ),
   }),
 );
 
@@ -726,6 +776,9 @@ export const assessmentResponses = pgTable(
     questionIdIdx: index('assessment_responses_question_id_idx').on(
       table.questionId,
     ),
+    attemptQuestionUnique: unique(
+      'assessment_responses_attempt_question_unique',
+    ).on(table.attemptId, table.questionId),
   }),
 );
 

@@ -38,6 +38,7 @@ import {
 import { toast } from 'sonner';
 import type { AttemptResult, RubricCriterion } from '@/types/assessment';
 import type { MentorExplainResponse } from '@/types/ai';
+import { presentAcademicScore } from '@/lib/academic-score';
 import './results-page.css';
 
 function buildHintSteps(response: MentorExplainResponse | null): string[] {
@@ -297,7 +298,6 @@ export default function StudentAssessmentResultsPage() {
 
   const {
     responses,
-    score,
     passed,
     isReturned,
     attemptNumber,
@@ -306,7 +306,7 @@ export default function StudentAssessmentResultsPage() {
     rubricScores,
   } = result;
   const assessmentTitle = result.assessment?.title || 'Assessment Results';
-  const pct = score ?? 0;
+  const presentedScore = presentAcademicScore(result);
   const isFileUpload = result.assessment?.type === 'file_upload';
   const reviewableResponses = responses.filter((response) => typeof response.isCorrect === 'boolean');
   const correctCount = reviewableResponses.filter((response) => response.isCorrect === true).length;
@@ -443,7 +443,19 @@ export default function StudentAssessmentResultsPage() {
             <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-2xl border border-[var(--student-outline)] bg-[var(--student-white)] px-4 py-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--student-text-muted)]">Score</p>
-                <p className="mt-2 text-4xl font-black leading-none text-[var(--student-text-strong)]">{pct}%</p>
+                <p className="mt-2 text-4xl font-black leading-none text-[var(--student-text-strong)]">
+                  {presentedScore.percentageLabel}
+                </p>
+                {presentedScore.pointsLabel ? (
+                  <p className="mt-2 text-sm font-semibold text-[var(--student-text-strong)]">
+                    {presentedScore.pointsLabel} pts
+                  </p>
+                ) : null}
+                {presentedScore.bonusLabel ? (
+                  <p className="mt-1 text-xs leading-5 text-[var(--student-warning-text)]">
+                    {presentedScore.bonusLabel}
+                  </p>
+                ) : null}
               </div>
               <div className="rounded-2xl border border-[var(--student-outline)] bg-[var(--student-white)] px-4 py-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--student-text-muted)]">

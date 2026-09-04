@@ -15,6 +15,7 @@ import {
 } from "react";
 import type { Area, Point } from "react-easy-crop";
 import Link from "next/link";
+import { boundAcademicPercentage } from "@/lib/academic-score";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
@@ -157,12 +158,7 @@ type WorkspaceTab =
   | "students"
   | "calendar";
 type AssignmentFilter =
-  | "all"
-  | "written"
-  | "performance"
-  | "quarterly"
-  | "discussion"
-  | "drafts";
+  "all" | "written" | "performance" | "quarterly" | "discussion" | "drafts";
 type CalendarKind = "assessment" | "event" | "holiday";
 type CalendarViewMode = "calendar" | "upcoming";
 type ModuleViewMode = "wide" | "compact";
@@ -4404,7 +4400,7 @@ export default function TeacherClassDetailPage() {
                             </div>
                             <span>
                               {student.gradePercent != null
-                                ? `${Number(student.gradePercent).toFixed(1)}%`
+                                ? `${boundAcademicPercentage(Number(student.gradePercent)).toFixed(1)}%`
                                 : "--"}
                             </span>
                           </div>

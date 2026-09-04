@@ -43,10 +43,6 @@ import {
   studentCourseViewPreferences,
   classVisibilityPreferences,
   classes,
-  classRecordCategories,
-  classRecordFinalGrades,
-  classRecordItems,
-  classRecordScores,
   classRecords,
   sections,
   moduleItems,
@@ -89,6 +85,10 @@ import {
 import { AuditService } from '../audit/audit.service';
 import { ClassRecordService } from '../class-record/class-record.service';
 import { AcademicStateService } from '../academic-state/academic-state.service';
+import {
+  boundPercentage,
+  buildAcademicScoreContract,
+} from '../academic-state/academic-score';
 
 type StandingComponentKey =
   | 'writtenWorkPercent'
@@ -2376,132 +2376,31 @@ export class ClassesService {
     });
 
     for (const record of records) {
-      const [categories, items, finalGrade] = await Promise.all([
-        this.db.query.classRecordCategories.findMany({
-          where: eq(classRecordCategories.classRecordId, record.id),
-          columns: {
-            id: true,
-            name: true,
-            weightPercentage: true,
-          },
-        }),
-        this.db.query.classRecordItems.findMany({
-          where: eq(classRecordItems.classRecordId, record.id),
-          columns: {
-            id: true,
-            categoryId: true,
-            maxScore: true,
-          },
-        }),
-        this.db.query.classRecordFinalGrades.findFirst({
-          where: and(
-            eq(classRecordFinalGrades.classRecordId, record.id),
-            eq(classRecordFinalGrades.studentId, studentId),
-          ),
-          columns: {
-            finalPercentage: true,
-          },
-        }),
-      ]);
-
-      if (categories.length === 0) continue;
-
-      const itemIds = items.map((item) => item.id);
-      const scores =
-        itemIds.length > 0
-          ? await this.db.query.classRecordScores.findMany({
-              where: and(
-                eq(classRecordScores.studentId, studentId),
-                inArray(classRecordScores.classRecordItemId, itemIds),
-              ),
-              columns: {
-                classRecordItemId: true,
-                score: true,
-              },
-            })
-          : [];
-
-      const scoreByItemId = new Map(
-        scores.map((score) => [score.classRecordItemId, Number(score.score)]),
-      );
-
-      const componentTotals: Record<
-        StandingComponentKey,
-        { raw: number; hps: number }
-      > = {
-        writtenWorkPercent: { raw: 0, hps: 0 },
-        performanceTaskPercent: { raw: 0, hps: 0 },
-        quarterlyExamPercent: { raw: 0, hps: 0 },
-      };
-
-      let weightedInitialGrade = 0;
-      let hasComputableCategory = false;
-
-      for (const category of categories) {
-        const key = this.normalizeStandingCategory(category.name);
-        if (!key) continue;
-
-        const categoryItems = items.filter(
-          (item) => item.categoryId === category.id,
-        );
-
-        let totalRaw = 0;
-        let totalHps = 0;
-
-        for (const item of categoryItems) {
-          const maxScore = Number(item.maxScore);
-          if (Number.isNaN(maxScore) || maxScore <= 0) continue;
-          totalHps += maxScore;
-          totalRaw += scoreByItemId.get(item.id) ?? 0;
-        }
-
-        if (totalHps > 0) {
-          hasComputableCategory = true;
-          const percentage = (totalRaw / totalHps) * 100;
-          const weight = Number(category.weightPercentage);
-          weightedInitialGrade += percentage * (weight / 100);
-          componentTotals[key] = { raw: totalRaw, hps: totalHps };
-        }
-      }
-
       const components: Record<StandingComponentKey, number | null> = {
-        writtenWorkPercent:
-          componentTotals.writtenWorkPercent.hps > 0
-            ? this.roundToOne(
-                (componentTotals.writtenWorkPercent.raw /
-                  componentTotals.writtenWorkPercent.hps) *
-                  100,
-              )
-            : null,
-        performanceTaskPercent:
-          componentTotals.performanceTaskPercent.hps > 0
-            ? this.roundToOne(
-                (componentTotals.performanceTaskPercent.raw /
-                  componentTotals.performanceTaskPercent.hps) *
-                  100,
-              )
-            : null,
-        quarterlyExamPercent:
-          componentTotals.quarterlyExamPercent.hps > 0
-            ? this.roundToOne(
-                (componentTotals.quarterlyExamPercent.raw /
-                  componentTotals.quarterlyExamPercent.hps) *
-                  100,
-              )
-            : null,
+        writtenWorkPercent: null,
+        performanceTaskPercent: null,
+        quarterlyExamPercent: null,
       };
-
-      if (!hasComputableCategory && !finalGrade) {
-        continue;
+      const standing =
+        await this.classRecordService.getCanonicalStudentStanding(
+          record.id,
+          studentId,
+        );
+      for (const category of standing.categoryBreakdown) {
+        const key = this.normalizeStandingCategory(category.categoryName);
+        if (key && category.percentageScore !== null) {
+          components[key] = this.roundToOne(
+            boundPercentage(category.percentageScore),
+          );
+        }
       }
-
-      const overallGradePercent = finalGrade
-        ? this.roundToOne(Number(finalGrade.finalPercentage))
-        : this.roundToOne(weightedInitialGrade);
+      if (standing.overallGradePercent === null) continue;
 
       return {
         gradingPeriod: record.gradingPeriod,
-        overallGradePercent,
+        overallGradePercent: this.roundToOne(
+          boundPercentage(standing.overallGradePercent),
+        ),
         components,
       };
     }
@@ -2548,6 +2447,10 @@ export class ClassesService {
         returnedAt: true,
         score: true,
         directScore: true,
+        basePointsEarned: true,
+        possiblePointsSnapshot: true,
+        bonusPoints: true,
+        bonusReason: true,
         passed: true,
       },
       orderBy: [
@@ -2621,6 +2524,7 @@ export class ClassesService {
           ? Math.ceil((submittedAt.getTime() - dueDate.getTime()) / 60000)
           : 0;
 
+      const scoreContract = buildAcademicScoreContract(latestSubmitted);
       const item = {
         assessmentId: assessment.id,
         title: assessment.title,
@@ -2636,7 +2540,7 @@ export class ClassesService {
         returnedAt: latestSubmitted.returnedAt,
         isLate,
         lateByMinutes,
-        score: latestSubmitted.score,
+        ...scoreContract,
         directScore: latestSubmitted.directScore,
         totalPoints: assessment.totalPoints,
         passed: latestSubmitted.passed,

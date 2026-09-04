@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import dynamic from 'next/dynamic';
-import Image from 'next/image';
-import Link from 'next/link';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
+import Image from "next/image";
+import Link from "next/link";
+import { useParams, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   BookOpen,
@@ -30,18 +30,18 @@ import {
   ThumbsUp,
   Trash2,
   Users,
-} from 'lucide-react';
-import { motion } from 'framer-motion';
-import { useAuth } from '@/providers/AuthProvider';
-import { useDiscussionRealtimeRefresh } from '@/hooks/use-discussion-realtime-refresh';
-import { classService } from '@/services/class-service';
-import { moduleService } from '@/services/module-service';
-import { assessmentService } from '@/services/assessment-service';
-import { announcementService } from '@/services/announcement-service';
-import { schoolEventService } from '@/services/school-event-service';
-import { discussionBoardService } from '@/services/discussion-board-service';
-import { ClassWorkspaceShell } from '@/components/class/workspace/ClassWorkspaceShell';
-import { Button } from '@/components/ui/button';
+} from "lucide-react";
+import { motion } from "framer-motion";
+import { useAuth } from "@/providers/AuthProvider";
+import { useDiscussionRealtimeRefresh } from "@/hooks/use-discussion-realtime-refresh";
+import { classService } from "@/services/class-service";
+import { moduleService } from "@/services/module-service";
+import { assessmentService } from "@/services/assessment-service";
+import { announcementService } from "@/services/announcement-service";
+import { schoolEventService } from "@/services/school-event-service";
+import { discussionBoardService } from "@/services/discussion-board-service";
+import { ClassWorkspaceShell } from "@/components/class/workspace/ClassWorkspaceShell";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -49,63 +49,54 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Skeleton } from '@/components/ui/skeleton';
-import { DashboardStatePanel } from '@/components/layout/DashboardStatePanel';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import './student-class-detail.css';
-import type { Assessment, AssessmentAttempt } from '@/types/assessment';
-import type { Announcement } from '@/types/announcement';
-import type { ClassItem, Enrollment } from '@/types/class';
-import type { ClassModule } from '@/types/module';
-import type { SchoolEvent } from '@/types/school-event';
+} from "@/components/ui/dialog";
+import { Skeleton } from "@/components/ui/skeleton";
+import { DashboardStatePanel } from "@/components/layout/DashboardStatePanel";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import "./student-class-detail.css";
+import type { Assessment, AssessmentAttempt } from "@/types/assessment";
+import type { Announcement } from "@/types/announcement";
+import type { ClassItem, Enrollment } from "@/types/class";
+import type { ClassModule } from "@/types/module";
+import type { SchoolEvent } from "@/types/school-event";
 import type {
   DiscussionAttachmentResource,
   DiscussionAuthor,
   DiscussionCommentReactions,
   DiscussionThreadDetail,
   DiscussionThreadSummary,
-} from '@/types/discussion';
-import { getTeacherName } from '@/utils/helpers';
-import { normalizeRichText, plainTextToRichHtml } from '@/lib/rich-text';
+} from "@/types/discussion";
+import { getTeacherName } from "@/utils/helpers";
+import { normalizeRichText, plainTextToRichHtml } from "@/lib/rich-text";
+import { presentAcademicScore } from "@/lib/academic-score";
 
 type StudentClassTab =
-  | 'modules'
-  | 'assignments'
-  | 'announcements'
-  | 'discussion'
-  | 'classmates'
-  | 'grades'
-  | 'calendar';
-type AssignmentCategory =
-  | 'upcoming'
-  | 'past_due'
-  | 'completed';
+  | "modules"
+  | "assignments"
+  | "announcements"
+  | "discussion"
+  | "classmates"
+  | "grades"
+  | "calendar";
+type AssignmentCategory = "upcoming" | "past_due" | "completed";
 type GradeCategory =
-  | 'written_work'
-  | 'performance_task'
-  | 'quarterly_assessment'
-  | 'discussion';
-type CalendarKind = 'assessment' | 'event' | 'holiday';
-type ModuleCardView = 'card' | 'wide';
+  "written_work" | "performance_task" | "quarterly_assessment" | "discussion";
+type CalendarKind = "assessment" | "event" | "holiday";
+type ModuleCardView = "card" | "wide";
 type ClassRegion =
-  | 'modules'
-  | 'assessments'
-  | 'announcements'
-  | 'calendar'
-  | 'attempts';
-type ClassPageStatus = 'loading' | 'ready' | 'error' | 'forbidden';
-type ClassOwnerErrorKind = 'not-found' | 'general';
+  "modules" | "assessments" | "announcements" | "calendar" | "attempts";
+type ClassPageStatus = "loading" | "ready" | "error" | "forbidden";
+type ClassOwnerErrorKind = "not-found" | "general";
 type StudentClassGuideScreen =
-  | 'overview'
-  | 'modules'
-  | 'assignments'
-  | 'updates'
-  | 'classmates'
-  | 'grades'
-  | 'calendar';
+  | "overview"
+  | "modules"
+  | "assignments"
+  | "updates"
+  | "classmates"
+  | "grades"
+  | "calendar";
 
 interface AssignmentRow {
   assessment: Assessment;
@@ -133,8 +124,8 @@ interface GradeRow {
   percentValue: number | null;
   sortTime: number;
   statusLabel: string;
-  statusTone: 'graded' | 'submitted' | 'pending';
-  gradeTone: 'excellent' | 'good' | 'warning' | 'muted';
+  statusTone: "graded" | "submitted" | "pending";
+  gradeTone: "excellent" | "good" | "warning" | "muted";
   actionHref: string;
 }
 
@@ -146,37 +137,64 @@ interface CalendarRow {
   subtitle: string;
 }
 
-const TABS: Array<{ key: StudentClassTab; label: string; icon: typeof FolderOpen }> = [
-  { key: 'modules', label: 'Modules', icon: FolderOpen },
-  { key: 'assignments', label: 'Assignments', icon: ClipboardList },
-  { key: 'announcements', label: 'Announcements', icon: Megaphone },
-  { key: 'discussion', label: 'Discussion Board', icon: MessageSquare },
-  { key: 'classmates', label: 'Classmates', icon: Users },
-  { key: 'grades', label: 'Grades', icon: FileSpreadsheet },
-  { key: 'calendar', label: 'Calendar', icon: CalendarDays },
+const TABS: Array<{
+  key: StudentClassTab;
+  label: string;
+  icon: typeof FolderOpen;
+}> = [
+  { key: "modules", label: "Modules", icon: FolderOpen },
+  { key: "assignments", label: "Assignments", icon: ClipboardList },
+  { key: "announcements", label: "Announcements", icon: Megaphone },
+  { key: "discussion", label: "Discussion Board", icon: MessageSquare },
+  { key: "classmates", label: "Classmates", icon: Users },
+  { key: "grades", label: "Grades", icon: FileSpreadsheet },
+  { key: "calendar", label: "Calendar", icon: CalendarDays },
 ];
 
 const ASSIGNMENT_FILTERS: Array<{ key: AssignmentCategory; label: string }> = [
-  { key: 'upcoming', label: 'Upcoming' },
-  { key: 'past_due', label: 'Past Due' },
-  { key: 'completed', label: 'Completed' },
+  { key: "upcoming", label: "Upcoming" },
+  { key: "past_due", label: "Past Due" },
+  { key: "completed", label: "Completed" },
 ];
-const MODULE_CARD_VIEW_STORAGE_KEY_PREFIX = 'nexora.student.class.modules.view';
+const MODULE_CARD_VIEW_STORAGE_KEY_PREFIX = "nexora.student.class.modules.view";
 
-const moduleToneByIndex = ['blue', 'green', 'violet'] as const;
-const DEFAULT_MODULE_GRADIENT = 'oceanic-blue';
+const moduleToneByIndex = ["blue", "green", "violet"] as const;
+const DEFAULT_MODULE_GRADIENT = "oceanic-blue";
 const MODULE_STOCK_IMAGES = [
-  '/images/modules/module-stock-board.svg',
-  '/images/modules/module-stock-library.svg',
-  '/images/modules/module-stock-science.svg',
+  "/images/modules/module-stock-board.svg",
+  "/images/modules/module-stock-library.svg",
+  "/images/modules/module-stock-science.svg",
 ] as const;
 const MODULE_GRADIENT_OPTIONS = [
-  { id: 'oceanic-blue', label: 'Navy', background: 'var(--student-navy)' },
-  { id: 'emerald-wave', label: 'Campus Red', background: 'var(--student-red-hover)' },
-  { id: 'violet-burst', label: 'Deep Navy', background: 'var(--student-navy-soft)' },
-  { id: 'sunset-orange', label: 'Navy to Red', background: 'linear-gradient(135deg, var(--student-navy) 0%, var(--student-red-hover) 100%)' },
-  { id: 'rose-dusk', label: 'Red to Navy', background: 'linear-gradient(135deg, var(--student-red-hover) 0%, var(--student-navy) 100%)' },
-  { id: 'slate-night', label: 'Navy Stripe', background: 'linear-gradient(135deg, var(--student-navy) 0%, var(--student-navy) 72%, var(--student-red) 72%, var(--student-red) 80%, var(--student-navy-soft) 80%, var(--student-navy-soft) 100%)' },
+  { id: "oceanic-blue", label: "Navy", background: "var(--student-navy)" },
+  {
+    id: "emerald-wave",
+    label: "Campus Red",
+    background: "var(--student-red-hover)",
+  },
+  {
+    id: "violet-burst",
+    label: "Deep Navy",
+    background: "var(--student-navy-soft)",
+  },
+  {
+    id: "sunset-orange",
+    label: "Navy to Red",
+    background:
+      "linear-gradient(135deg, var(--student-navy) 0%, var(--student-red-hover) 100%)",
+  },
+  {
+    id: "rose-dusk",
+    label: "Red to Navy",
+    background:
+      "linear-gradient(135deg, var(--student-red-hover) 0%, var(--student-navy) 100%)",
+  },
+  {
+    id: "slate-night",
+    label: "Navy Stripe",
+    background:
+      "linear-gradient(135deg, var(--student-navy) 0%, var(--student-navy) 72%, var(--student-red) 72%, var(--student-red) 80%, var(--student-navy-soft) 80%, var(--student-navy-soft) 100%)",
+  },
 ] as const;
 const studentClassGuidePages: Array<{
   title: string;
@@ -186,174 +204,181 @@ const studentClassGuidePages: Array<{
   steps: Array<{
     action: string;
     body: string;
-    tone?: 'caution';
+    tone?: "caution";
   }>;
 }> = [
   {
-    title: 'Start here on the class page',
+    title: "Start here on the class page",
     description:
-      'This page is the home for one subject. The top area shows your class details, and the tabs below open each part of the class.',
-    screen: 'overview',
-    reminder: 'Simple rule: pick the tab that matches what you need before scrolling too far down.',
+      "This page is the home for one subject. The top area shows your class details, and the tabs below open each part of the class.",
+    screen: "overview",
+    reminder:
+      "Simple rule: pick the tab that matches what you need before scrolling too far down.",
     steps: [
       {
-        action: 'Read',
-        body: 'Check the subject title, teacher line, schedule, room, and module count first.',
+        action: "Read",
+        body: "Check the subject title, teacher line, schedule, room, and module count first.",
       },
       {
-        action: 'Move tabs',
-        body: 'Use the tab row to switch between modules, assignments, announcements, discussion, classmates, grades, and calendar.',
+        action: "Move tabs",
+        body: "Use the tab row to switch between modules, assignments, announcements, discussion, classmates, grades, and calendar.",
       },
       {
-        action: 'Go back',
-        body: 'Use Back to Courses when you want to return to your full class list.',
+        action: "Go back",
+        body: "Use Back to Courses when you want to return to your full class list.",
       },
       {
-        action: 'Open help',
-        body: 'Tap the question mark button if you want this guide again at any time.',
+        action: "Open help",
+        body: "Tap the question mark button if you want this guide again at any time.",
       },
     ],
   },
   {
-    title: 'Open modules to study step by step',
+    title: "Open modules to study step by step",
     description:
-      'The Modules tab is where you open the main learning content for this class. Each card shows what is inside before you open it.',
-    screen: 'modules',
-    reminder: 'If you are not sure where to continue, start with the first available module.',
+      "The Modules tab is where you open the main learning content for this class. Each card shows what is inside before you open it.",
+    screen: "modules",
+    reminder:
+      "If you are not sure where to continue, start with the first available module.",
     steps: [
       {
-        action: 'Check',
-        body: 'Read the module title, short description, lesson count, assessment count, and progress first.',
+        action: "Check",
+        body: "Read the module title, short description, lesson count, assessment count, and progress first.",
       },
       {
-        action: 'Switch view',
-        body: 'Use Grid View or Wide Card View to choose the layout that is easier for you to read.',
+        action: "Switch view",
+        body: "Use Grid View or Wide Card View to choose the layout that is easier for you to read.",
       },
       {
-        action: 'Watch status',
-        body: 'Available means you can open it now. Locked means it is not ready for you yet.',
+        action: "Watch status",
+        body: "Available means you can open it now. Locked means it is not ready for you yet.",
       },
       {
-        action: 'Open',
-        body: 'Use the Open link or the module card itself to enter that module.',
+        action: "Open",
+        body: "Use the Open link or the module card itself to enter that module.",
       },
     ],
   },
   {
-    title: 'Use assignments to find class work fast',
+    title: "Use assignments to find class work fast",
     description:
-      'The Assignments tab groups your class work by timing and completion, so you can quickly spot what is coming next, what is overdue, and what you already finished.',
-    screen: 'assignments',
-    reminder: 'Best habit: check the due status first, then open the assignment row itself.',
+      "The Assignments tab groups your class work by timing and completion, so you can quickly spot what is coming next, what is overdue, and what you already finished.",
+    screen: "assignments",
+    reminder:
+      "Best habit: check the due status first, then open the assignment row itself.",
     steps: [
       {
-        action: 'Switch tabs',
-        body: 'Use Upcoming, Past Due, or Completed to focus on the right set of assignments first.',
+        action: "Switch tabs",
+        body: "Use Upcoming, Past Due, or Completed to focus on the right set of assignments first.",
       },
       {
-        action: 'Read',
-        body: 'Each row shows the task title, due date, points, and small status tags like Graded or Out of Attempts.',
+        action: "Read",
+        body: "Each row shows the task title, due date, points, and small status tags like Graded or Out of Attempts.",
       },
       {
-        action: 'Open row',
-        body: 'Tap the assignment body itself when you are ready to open that assessment.',
+        action: "Open row",
+        body: "Tap the assignment body itself when you are ready to open that assessment.",
       },
       {
-        action: 'Watch out',
-        body: 'If the due date is close, finish that task first so you do not miss it.',
-        tone: 'caution',
+        action: "Watch out",
+        body: "If the due date is close, finish that task first so you do not miss it.",
+        tone: "caution",
       },
     ],
   },
   {
-    title: 'Check updates and join class discussions',
+    title: "Check updates and join class discussions",
     description:
-      'Announcements and Discussion help you stay updated and talk inside the class. One is for notices, and the other is for active threads.',
-    screen: 'updates',
-    reminder: 'Read pinned updates first because they are usually the most important.',
+      "Announcements and Discussion help you stay updated and talk inside the class. One is for notices, and the other is for active threads.",
+    screen: "updates",
+    reminder:
+      "Read pinned updates first because they are usually the most important.",
     steps: [
       {
-        action: 'Read announcements',
-        body: 'Open the Announcements tab for teacher notices, reminders, and class news.',
+        action: "Read announcements",
+        body: "Open the Announcements tab for teacher notices, reminders, and class news.",
       },
       {
-        action: 'Open threads',
-        body: 'Use the Discussion Board tab when you want to read or join a conversation.',
+        action: "Open threads",
+        body: "Use the Discussion Board tab when you want to read or join a conversation.",
       },
       {
-        action: 'Post carefully',
-        body: 'If comments are open, write clearly and upload only class-related images or replies.',
+        action: "Post carefully",
+        body: "If comments are open, write clearly and upload only class-related images or replies.",
       },
       {
-        action: 'React',
-        body: 'Use the thread reactions only when they match what you really want to say.',
+        action: "React",
+        body: "Use the thread reactions only when they match what you really want to say.",
       },
     ],
   },
   {
-    title: 'Use classmates when you need names and section info',
+    title: "Use classmates when you need names and section info",
     description:
-      'The Classmates tab is a simple class list. It helps you check who is in the class and which section the class belongs to.',
-    screen: 'classmates',
-    reminder: 'This tab is for viewing classmate details, not for editing them.',
+      "The Classmates tab is a simple class list. It helps you check who is in the class and which section the class belongs to.",
+    screen: "classmates",
+    reminder:
+      "This tab is for viewing classmate details, not for editing them.",
     steps: [
       {
-        action: 'Look',
-        body: 'Read the student name first, then the email and section columns.',
+        action: "Look",
+        body: "Read the student name first, then the email and section columns.",
       },
       {
-        action: 'Match',
-        body: 'Use the initials bubble to quickly match the row to the student name.',
+        action: "Match",
+        body: "Use the initials bubble to quickly match the row to the student name.",
       },
       {
-        action: 'Confirm',
-        body: 'If you need to make sure someone is in the class, this is the best tab to check.',
+        action: "Confirm",
+        body: "If you need to make sure someone is in the class, this is the best tab to check.",
       },
     ],
   },
   {
-    title: 'Read grades as your class record snapshot',
+    title: "Read assessment grades without double counting",
     description:
-      'The Grades tab turns your class record into a simpler view, so you can track overall standing, category averages, and each scored item.',
-    screen: 'grades',
-    reminder: 'If a score is still pending, wait for teacher checking before expecting a final number.',
+      "The Grades tab lists each scored assessment and an assessment-only reference average. Your official standing follows the class record shown on Performance.",
+    screen: "grades",
+    reminder:
+      "If a score is still pending, wait for teacher checking before expecting a final number.",
     steps: [
       {
-        action: 'Start',
-        body: 'Look at the big class record summary first to see your overall standing in the class.',
+        action: "Start",
+        body: "Use the assessment average only as a reference. It is not added again to your official class-record standing.",
       },
       {
-        action: 'Compare',
-        body: 'Read the category cards to see which grading area is strongest and which one needs work.',
+        action: "Compare",
+        body: "Open Performance when you need the official class standing calculated from the class record.",
       },
       {
-        action: 'Check rows',
-        body: 'Use the assessment ledger to read every score and the date it belongs to.',
+        action: "Check rows",
+        body: "Use the assessment ledger to read every score and the date it belongs to.",
       },
       {
-        action: 'Be patient',
-        body: 'Pending rows mean the task is not fully graded yet.',
+        action: "Be patient",
+        body: "Pending rows mean the task is not fully graded yet.",
       },
     ],
   },
   {
-    title: 'Use the class calendar for due dates and events',
+    title: "Use the class calendar for due dates and events",
     description:
-      'The Calendar tab mixes assessments and school events into one list so you can see what is coming up for this class.',
-    screen: 'calendar',
-    reminder: 'Check this tab often before a busy week so you do not miss class deadlines.',
+      "The Calendar tab mixes assessments and school events into one list so you can see what is coming up for this class.",
+    screen: "calendar",
+    reminder:
+      "Check this tab often before a busy week so you do not miss class deadlines.",
     steps: [
       {
-        action: 'Read date',
-        body: 'The day badge on the left tells you exactly when the event or assessment happens.',
+        action: "Read date",
+        body: "The day badge on the left tells you exactly when the event or assessment happens.",
       },
       {
-        action: 'Read kind',
-        body: 'The tag on the right shows whether the row is an Assessment, Event, or Holiday.',
+        action: "Read kind",
+        body: "The tag on the right shows whether the row is an Assessment, Event, or Holiday.",
       },
       {
-        action: 'Match details',
-        body: 'Use the title and small subtitle to know what the row is about.',
+        action: "Match details",
+        body: "Use the title and small subtitle to know what the row is about.",
       },
     ],
   },
@@ -394,7 +419,13 @@ function StudentClassGuideBuddy({
   return (
     <div className="student-class-guide-shell__ja-tip">
       <div className="student-class-guide-shell__ja-image">
-        <Image src={src} alt={alt} fill sizes="72px" className="object-contain" />
+        <Image
+          src={src}
+          alt={alt}
+          fill
+          sizes="72px"
+          className="object-contain"
+        />
       </div>
       <div className="student-class-guide-shell__ja-copy">
         <small>{label}</small>
@@ -404,8 +435,12 @@ function StudentClassGuideBuddy({
   );
 }
 
-function StudentClassGuideScreenshot({ screen }: { screen: StudentClassGuideScreen }) {
-  if (screen === 'overview') {
+function StudentClassGuideScreenshot({
+  screen,
+}: {
+  screen: StudentClassGuideScreen;
+}) {
+  if (screen === "overview") {
     return (
       <div className="teacher-intervention-workspace__manual-shot student-class-guide-shot">
         <div className="student-class-guide-shell">
@@ -455,7 +490,7 @@ function StudentClassGuideScreenshot({ screen }: { screen: StudentClassGuideScre
     );
   }
 
-  if (screen === 'modules') {
+  if (screen === "modules") {
     return (
       <div className="teacher-intervention-workspace__manual-shot student-class-guide-shot">
         <div className="student-class-guide-shell">
@@ -509,7 +544,7 @@ function StudentClassGuideScreenshot({ screen }: { screen: StudentClassGuideScre
     );
   }
 
-  if (screen === 'assignments') {
+  if (screen === "assignments") {
     return (
       <div className="teacher-intervention-workspace__manual-shot student-class-guide-shot">
         <div className="student-class-guide-shell">
@@ -554,7 +589,7 @@ function StudentClassGuideScreenshot({ screen }: { screen: StudentClassGuideScre
     );
   }
 
-  if (screen === 'updates') {
+  if (screen === "updates") {
     return (
       <div className="teacher-intervention-workspace__manual-shot student-class-guide-shot">
         <div className="student-class-guide-shell">
@@ -597,7 +632,7 @@ function StudentClassGuideScreenshot({ screen }: { screen: StudentClassGuideScre
     );
   }
 
-  if (screen === 'classmates') {
+  if (screen === "classmates") {
     return (
       <div className="teacher-intervention-workspace__manual-shot student-class-guide-shot">
         <div className="student-class-guide-shell">
@@ -636,7 +671,7 @@ function StudentClassGuideScreenshot({ screen }: { screen: StudentClassGuideScre
     );
   }
 
-  if (screen === 'grades') {
+  if (screen === "grades") {
     return (
       <div className="teacher-intervention-workspace__manual-shot student-class-guide-shot">
         <div className="student-class-guide-shell">
@@ -739,19 +774,19 @@ function StudentClassGuideScreenshot({ screen }: { screen: StudentClassGuideScre
 
 function isStudentClassTab(value: string | null): value is StudentClassTab {
   return (
-    value === 'modules' ||
-    value === 'assignments' ||
-    value === 'announcements' ||
-    value === 'discussion' ||
-    value === 'classmates' ||
-    value === 'grades' ||
-    value === 'calendar'
+    value === "modules" ||
+    value === "assignments" ||
+    value === "announcements" ||
+    value === "discussion" ||
+    value === "classmates" ||
+    value === "grades" ||
+    value === "calendar"
   );
 }
 
 const RichTextRenderer = dynamic(
   () =>
-    import('@/components/shared/rich-text/RichTextRenderer').then(
+    import("@/components/shared/rich-text/RichTextRenderer").then(
       (mod) => mod.RichTextRenderer,
     ),
   {
@@ -760,31 +795,32 @@ const RichTextRenderer = dynamic(
 );
 
 function getClassId(raw: string | string[] | undefined) {
-  if (!raw) return '';
+  if (!raw) return "";
   return Array.isArray(raw) ? raw[0] : raw;
 }
 
 function formatScheduleLabel(classItem: ClassItem | null) {
   const schedule = classItem?.schedules?.[0];
-  if (!schedule) return 'Schedule TBA';
+  if (!schedule) return "Schedule TBA";
   const start = formatTime(schedule.startTime);
   const end = formatTime(schedule.endTime);
-  return `${schedule.days.join('/')} ${start}-${end}`;
+  return `${schedule.days.join("/")} ${start}-${end}`;
 }
 
 function formatTime(value: string) {
-  const [rawHours = '0', rawMinutes = '0'] = value.split(':');
+  const [rawHours = "0", rawMinutes = "0"] = value.split(":");
   const hours = Number.parseInt(rawHours, 10);
   const minutes = Number.parseInt(rawMinutes, 10);
   if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return value;
-  const meridiem = hours >= 12 ? 'PM' : 'AM';
+  const meridiem = hours >= 12 ? "PM" : "AM";
   const normalizedHours = hours % 12 || 12;
-  return `${normalizedHours}:${String(minutes).padStart(2, '0')} ${meridiem}`;
+  return `${normalizedHours}:${String(minutes).padStart(2, "0")} ${meridiem}`;
 }
 
 function formatClassLine(classItem: ClassItem | null) {
-  const gradeLevel = classItem?.section?.gradeLevel || classItem?.subjectGradeLevel || '--';
-  const sectionName = classItem?.section?.name || 'Section';
+  const gradeLevel =
+    classItem?.section?.gradeLevel || classItem?.subjectGradeLevel || "--";
+  const sectionName = classItem?.section?.name || "Section";
   const teacherName = getTeacherName(classItem?.teacher);
   return `Grade ${gradeLevel} - ${sectionName} - ${teacherName}`;
 }
@@ -793,8 +829,8 @@ function summarizeModule(moduleEntry: ClassModule) {
   return moduleEntry.sections.reduce(
     (acc, section) => {
       for (const item of section.items) {
-        if (item.itemType === 'lesson') acc.lessons += 1;
-        if (item.itemType === 'assessment') acc.assessments += 1;
+        if (item.itemType === "lesson") acc.lessons += 1;
+        if (item.itemType === "assessment") acc.assessments += 1;
       }
       return acc;
     },
@@ -804,8 +840,11 @@ function summarizeModule(moduleEntry: ClassModule) {
 
 function getModuleGradient(gradientId?: string) {
   return (
-    MODULE_GRADIENT_OPTIONS.find((option) => option.id === gradientId)?.background ||
-    MODULE_GRADIENT_OPTIONS.find((option) => option.id === DEFAULT_MODULE_GRADIENT)?.background ||
+    MODULE_GRADIENT_OPTIONS.find((option) => option.id === gradientId)
+      ?.background ||
+    MODULE_GRADIENT_OPTIONS.find(
+      (option) => option.id === DEFAULT_MODULE_GRADIENT,
+    )?.background ||
     MODULE_GRADIENT_OPTIONS[0].background
   );
 }
@@ -813,24 +852,32 @@ function getModuleGradient(gradientId?: string) {
 function resolveAssignmentCategory(assessment: Assessment): GradeCategory {
   const type = assessment.type.toLowerCase();
   const title = assessment.title.toLowerCase();
-  const description = (assessment.description || '').toLowerCase();
+  const description = (assessment.description || "").toLowerCase();
   const text = `${title} ${description}`;
-  if (text.includes('discussion')) return 'discussion';
-  if (text.includes('project') || text.includes('performance')) return 'performance_task';
-  if (text.includes('quarter') || text.includes('exam') || type.includes('quarter')) {
-    return 'quarterly_assessment';
+  if (text.includes("discussion")) return "discussion";
+  if (text.includes("project") || text.includes("performance"))
+    return "performance_task";
+  if (
+    text.includes("quarter") ||
+    text.includes("exam") ||
+    type.includes("quarter")
+  ) {
+    return "quarterly_assessment";
   }
-  if (type.includes('discussion')) return 'discussion';
-  if (type.includes('performance')) return 'performance_task';
-  if (type.includes('quarter')) return 'quarterly_assessment';
-  return 'written_work';
+  if (type.includes("discussion")) return "discussion";
+  if (type.includes("performance")) return "performance_task";
+  if (type.includes("quarter")) return "quarterly_assessment";
+  return "written_work";
 }
 
-function assignmentCategoryLabel(category: 'written_work' | 'performance_task' | 'quarterly_assessment' | 'discussion') {
-  if (category === 'written_work') return 'Written Work';
-  if (category === 'performance_task') return 'Performance Task';
-  if (category === 'quarterly_assessment') return 'Quarterly Assessment';
-  return 'Discussion';
+function assignmentCategoryLabel(
+  category:
+    "written_work" | "performance_task" | "quarterly_assessment" | "discussion",
+) {
+  if (category === "written_work") return "Written Work";
+  if (category === "performance_task") return "Performance Task";
+  if (category === "quarterly_assessment") return "Quarterly Assessment";
+  return "Discussion";
 }
 
 function parseDate(dateString?: string | null) {
@@ -852,82 +899,82 @@ function sortByDateAsc<T>(items: T[], resolver: (item: T) => Date | null) {
 }
 
 function formatDateLong(value: Date | null) {
-  if (!value) return '--';
-  return value.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  if (!value) return "--";
+  return value.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 function formatDateTime(value: Date | null) {
-  if (!value) return '--';
-  return value.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
+  if (!value) return "--";
+  return value.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
   });
 }
 
 function formatRelativeTime(value?: string | null) {
   const date = parseDate(value);
-  if (!date) return 'Just now';
+  if (!date) return "Just now";
 
   const diffMinutes = Math.round((date.getTime() - Date.now()) / 60000);
   const absMinutes = Math.abs(diffMinutes);
-  const formatter = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+  const formatter = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
 
   if (absMinutes < 60) {
-    return formatter.format(diffMinutes, 'minute');
+    return formatter.format(diffMinutes, "minute");
   }
 
   const diffHours = Math.round(diffMinutes / 60);
   if (Math.abs(diffHours) < 24) {
-    return formatter.format(diffHours, 'hour');
+    return formatter.format(diffHours, "hour");
   }
 
   const diffDays = Math.round(diffHours / 24);
   if (Math.abs(diffDays) < 7) {
-    return formatter.format(diffDays, 'day');
+    return formatter.format(diffDays, "day");
   }
 
   return formatDateLong(date);
 }
 
-function formatScoreNumber(value: number | null) {
-  if (value === null) return '--';
-  return Number.isInteger(value) ? String(value) : value.toFixed(2);
-}
-
-function formatStudentName(student?: Enrollment['student']) {
+function formatStudentName(student?: Enrollment["student"]) {
   const parts = [student?.firstName, student?.lastName].filter(Boolean);
-  return parts.length > 0 ? parts.join(' ') : 'Unnamed student';
+  return parts.length > 0 ? parts.join(" ") : "Unnamed student";
 }
 
 function formatCalendarDay(value: Date) {
   return {
     day: String(value.getDate()),
-    month: value.toLocaleDateString('en-US', { month: 'short' }).toUpperCase(),
+    month: value.toLocaleDateString("en-US", { month: "short" }).toUpperCase(),
   };
 }
 
 function getEnrollmentRows(classItem: ClassItem | null) {
   const rows = classItem?.enrollments || [];
-  const gradeLevel = classItem?.section?.gradeLevel || classItem?.subjectGradeLevel || '--';
-  const sectionName = classItem?.section?.name || 'Section';
+  const gradeLevel =
+    classItem?.section?.gradeLevel || classItem?.subjectGradeLevel || "--";
+  const sectionName = classItem?.section?.name || "Section";
   const sectionLabel = `Grade ${gradeLevel} - ${sectionName}`;
   return rows.map((enrollment) => {
-    const firstName = enrollment.student?.firstName?.trim() || '';
-    const lastName = enrollment.student?.lastName?.trim() || '';
+    const firstName = enrollment.student?.firstName?.trim() || "";
+    const lastName = enrollment.student?.lastName?.trim() || "";
     const fullName = formatStudentName(enrollment.student);
     const initials = [firstName.charAt(0), lastName.charAt(0)]
       .filter(Boolean)
-      .join('')
+      .join("")
       .toUpperCase();
     return {
       id: enrollment.id,
       fullName,
-      email: enrollment.student?.email?.trim() || '--',
+      email: enrollment.student?.email?.trim() || "--",
       profilePicture: enrollment.student?.profile?.profilePicture ?? null,
       section: sectionLabel,
-      initials: initials || 'NA',
+      initials: initials || "NA",
     };
   });
 }
@@ -936,8 +983,12 @@ function getLatestSubmittedAttempt(attempts: AssessmentAttempt[]) {
   const submitted = attempts.filter((attempt) => attempt.isSubmitted);
   if (submitted.length === 0) return null;
   return [...submitted].sort((left, right) => {
-    const leftTs = new Date(left.submittedAt || left.updatedAt || left.createdAt || 0).getTime();
-    const rightTs = new Date(right.submittedAt || right.updatedAt || right.createdAt || 0).getTime();
+    const leftTs = new Date(
+      left.submittedAt || left.updatedAt || left.createdAt || 0,
+    ).getTime();
+    const rightTs = new Date(
+      right.submittedAt || right.updatedAt || right.createdAt || 0,
+    ).getTime();
     return rightTs - leftTs;
   })[0];
 }
@@ -951,16 +1002,16 @@ function isAssessmentGraded(attempt: AssessmentAttempt | null) {
   return Boolean(
     attempt.isReturned ||
     attempt.returnedAt ||
-    typeof attempt.score === 'number' ||
-    typeof attempt.directScore === 'number',
+    typeof attempt.score === "number" ||
+    typeof attempt.directScore === "number",
   );
 }
 
 function getScoreTone(percent: number) {
-  if (percent >= 90) return 'outstanding';
-  if (percent >= 80) return 'good';
-  if (percent >= 70) return 'fair';
-  return 'at-risk';
+  if (percent >= 90) return "outstanding";
+  if (percent >= 80) return "good";
+  if (percent >= 70) return "fair";
+  return "at-risk";
 }
 
 function getOpenModuleHref(moduleEntry: ClassModule, classId: string) {
@@ -971,41 +1022,54 @@ function sortDiscussionThreads(threads: DiscussionThreadSummary[]) {
   return [...threads].sort((left, right) => {
     if (left.isPinned !== right.isPinned) return left.isPinned ? -1 : 1;
     const leftTs = new Date(left.publishedAt || left.createdAt || 0).getTime();
-    const rightTs = new Date(right.publishedAt || right.createdAt || 0).getTime();
+    const rightTs = new Date(
+      right.publishedAt || right.createdAt || 0,
+    ).getTime();
     return rightTs - leftTs;
   });
 }
 
 function getDiscussionAuthorName(author?: DiscussionAuthor) {
-  const parts = [author?.firstName?.trim(), author?.lastName?.trim()].filter(Boolean);
-  return parts.length > 0 ? parts.join(' ') : 'Class member';
+  const parts = [author?.firstName?.trim(), author?.lastName?.trim()].filter(
+    Boolean,
+  );
+  return parts.length > 0 ? parts.join(" ") : "Class member";
 }
 
 function getDiscussionAuthorInitials(author?: DiscussionAuthor) {
-  const initials = [author?.firstName?.trim().charAt(0), author?.lastName?.trim().charAt(0)]
+  const initials = [
+    author?.firstName?.trim().charAt(0),
+    author?.lastName?.trim().charAt(0),
+  ]
     .filter(Boolean)
-    .join('')
+    .join("")
     .toUpperCase();
-  return initials || 'NX';
+  return initials || "NX";
 }
 
 function getDiscussionAttachmentHref(attachment: DiscussionAttachmentResource) {
-  return attachment.inlineUrl || attachment.downloadUrl || attachment.linkUrl || '#';
+  return (
+    attachment.inlineUrl || attachment.downloadUrl || attachment.linkUrl || "#"
+  );
 }
 
 function isDiscussionImageAttachment(attachment: DiscussionAttachmentResource) {
-  return attachment.type === 'image' || Boolean(attachment.mimeType?.startsWith('image/'));
+  return (
+    attachment.type === "image" ||
+    Boolean(attachment.mimeType?.startsWith("image/"))
+  );
 }
 
 function formatAttachmentMeta(attachment: DiscussionAttachmentResource) {
-  if (attachment.type === 'link') return 'Shared link';
+  if (attachment.type === "link") return "Shared link";
   if (attachment.sizeBytes && attachment.sizeBytes > 0) {
     const sizeKb = attachment.sizeBytes / 1024;
     if (sizeKb < 1024) return `${Math.max(1, Math.round(sizeKb))} KB`;
     return `${(sizeKb / 1024).toFixed(1)} MB`;
   }
-  if (attachment.mimeType) return attachment.mimeType.replace(/^image\//, '').toUpperCase();
-  return 'Attachment';
+  if (attachment.mimeType)
+    return attachment.mimeType.replace(/^image\//, "").toUpperCase();
+  return "Attachment";
 }
 
 function resolveDiscussionAuthorAvatar(
@@ -1064,13 +1128,15 @@ function DiscussionAttachmentList({
   if (attachments.length === 0) return null;
 
   return (
-    <div className={`student-discussion-attachments${compact ? ' is-compact' : ''}`}>
+    <div
+      className={`student-discussion-attachments${compact ? " is-compact" : ""}`}
+    >
       {attachments.map((attachment) => {
         const href = getDiscussionAttachmentHref(attachment);
         const label =
-          attachment.type === 'link'
-            ? attachment.linkLabel || attachment.linkUrl || 'Shared link'
-            : attachment.originalName || 'Attachment';
+          attachment.type === "link"
+            ? attachment.linkLabel || attachment.linkUrl || "Shared link"
+            : attachment.originalName || "Attachment";
 
         return (
           <a
@@ -1079,22 +1145,24 @@ function DiscussionAttachmentList({
             target="_blank"
             rel="noreferrer"
             className={`student-discussion-attachment${
-              isDiscussionImageAttachment(attachment) ? ' student-discussion-attachment--image' : ''
+              isDiscussionImageAttachment(attachment)
+                ? " student-discussion-attachment--image"
+                : ""
             }`}
           >
-            {isDiscussionImageAttachment(attachment) && href !== '#' ? (
+            {isDiscussionImageAttachment(attachment) && href !== "#" ? (
               <div className="student-discussion-attachment__preview">
                 <Image
                   src={href}
                   alt={label}
                   fill
                   unoptimized
-                  sizes={compact ? '96px' : '(max-width: 768px) 100vw, 220px'}
+                  sizes={compact ? "96px" : "(max-width: 768px) 100vw, 220px"}
                 />
               </div>
             ) : (
               <span className="student-discussion-attachment__icon">
-                {attachment.type === 'link' ? (
+                {attachment.type === "link" ? (
                   <ExternalLink className="h-4 w-4" />
                 ) : (
                   <Paperclip className="h-4 w-4" />
@@ -1114,7 +1182,7 @@ function DiscussionAttachmentList({
 
 function getReactionHoverState(
   reactions: DiscussionCommentReactions,
-  reactionType: 'like' | 'heart' | 'wow',
+  reactionType: "like" | "heart" | "wow",
 ) {
   const matching = reactions.reactors.filter(
     (entry) => entry.reactionType === reactionType && entry.user,
@@ -1130,11 +1198,18 @@ function getDiscussionLimitState(
   userId: string | undefined,
   role: string | null,
 ) {
-  if (!thread || role !== 'student' || !userId || !thread.commentLimitPerStudent) {
+  if (
+    !thread ||
+    role !== "student" ||
+    !userId ||
+    !thread.commentLimitPerStudent
+  ) {
     return null;
   }
 
-  const used = thread.comments.filter((comment) => comment.authorId === userId).length;
+  const used = thread.comments.filter(
+    (comment) => comment.authorId === userId,
+  ).length;
   const limit = thread.commentLimitPerStudent;
 
   return {
@@ -1170,7 +1245,13 @@ function LocalImagePreviewStrip({ files }: { files: File[] }) {
       {previewItems.map((item) => (
         <div key={item.key} className="student-discussion-local-preview">
           <div className="student-discussion-local-preview__image">
-            <Image src={item.url} alt={item.name} fill unoptimized sizes="112px" />
+            <Image
+              src={item.url}
+              alt={item.name}
+              fill
+              unoptimized
+              sizes="112px"
+            />
           </div>
           <span>{item.name}</span>
         </div>
@@ -1185,46 +1266,60 @@ export default function StudentClassDetailPage() {
   const { user, role } = useAuth();
 
   const classId = getClassId(params.id as string | string[] | undefined);
-  const announcementId = searchParams.get('announcement');
-  const discussionId = searchParams.get('discussion');
-  const assessmentId = searchParams.get('assessment');
+  const announcementId = searchParams.get("announcement");
+  const discussionId = searchParams.get("discussion");
+  const assessmentId = searchParams.get("assessment");
 
   // Determine tab from query params - notification deep links use announcement/discussion/assessment params
-  const currentTab = isStudentClassTab(searchParams.get('view'))
-    ? (searchParams.get('view') as StudentClassTab)
+  const currentTab = isStudentClassTab(searchParams.get("view"))
+    ? (searchParams.get("view") as StudentClassTab)
     : announcementId
-      ? 'announcements'
+      ? "announcements"
       : discussionId
-        ? 'discussion'
+        ? "discussion"
         : assessmentId
-          ? 'assignments'
-          : 'modules';
+          ? "assignments"
+          : "modules";
 
-  const [pageStatus, setPageStatus] = useState<ClassPageStatus>('loading');
+  const [pageStatus, setPageStatus] = useState<ClassPageStatus>("loading");
   const [ownerErrorKind, setOwnerErrorKind] =
-    useState<ClassOwnerErrorKind>('general');
+    useState<ClassOwnerErrorKind>("general");
   const [failedRegions, setFailedRegions] = useState<ClassRegion[]>([]);
   const [classItem, setClassItem] = useState<ClassItem | null>(null);
   const [modules, setModules] = useState<ClassModule[]>([]);
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [discussionThreads, setDiscussionThreads] = useState<DiscussionThreadSummary[]>([]);
-  const [selectedDiscussionThreadId, setSelectedDiscussionThreadId] = useState<string | null>(null);
-  const [selectedDiscussionThread, setSelectedDiscussionThread] = useState<DiscussionThreadDetail | null>(null);
-  const [discussionCommentBody, setDiscussionCommentBody] = useState('');
-  const [discussionCommentImages, setDiscussionCommentImages] = useState<File[]>([]);
+  const [discussionThreads, setDiscussionThreads] = useState<
+    DiscussionThreadSummary[]
+  >([]);
+  const [selectedDiscussionThreadId, setSelectedDiscussionThreadId] = useState<
+    string | null
+  >(null);
+  const [selectedDiscussionThread, setSelectedDiscussionThread] =
+    useState<DiscussionThreadDetail | null>(null);
+  const [discussionCommentBody, setDiscussionCommentBody] = useState("");
+  const [discussionCommentImages, setDiscussionCommentImages] = useState<
+    File[]
+  >([]);
   const [discussionSubmitting, setDiscussionSubmitting] = useState(false);
   const [schoolEvents, setSchoolEvents] = useState<SchoolEvent[]>([]);
-  const [attemptsByAssessment, setAttemptsByAssessment] = useState<Record<string, AssessmentAttempt[]>>({});
-  const [assignmentFilter, setAssignmentFilter] = useState<AssignmentCategory>('upcoming');
-  const [moduleCardView, setModuleCardView] = useState<ModuleCardView>('wide');
+  const [attemptsByAssessment, setAttemptsByAssessment] = useState<
+    Record<string, AssessmentAttempt[]>
+  >({});
+  const [assignmentFilter, setAssignmentFilter] =
+    useState<AssignmentCategory>("upcoming");
+  const [moduleCardView, setModuleCardView] = useState<ModuleCardView>("wide");
   const [helpOpen, setHelpOpen] = useState(false);
   const [helpPage, setHelpPage] = useState(0);
   const dataClassIdRef = useRef<string | null>(null);
 
   // Auto-select discussion thread when navigated from notification
   useEffect(() => {
-    if (discussionId && currentTab === 'discussion' && discussionThreads.length > 0) {
+    if (
+      discussionId &&
+      currentTab === "discussion" &&
+      discussionThreads.length > 0
+    ) {
       const thread = discussionThreads.find((t) => t.id === discussionId);
       if (thread) {
         setSelectedDiscussionThreadId(discussionId);
@@ -1237,12 +1332,12 @@ export default function StudentClassDetailPage() {
       dataClassIdRef.current = null;
       setClassItem(null);
       setFailedRegions([]);
-      setOwnerErrorKind('not-found');
-      setPageStatus('error');
+      setOwnerErrorKind("not-found");
+      setPageStatus("error");
       return;
     }
 
-    setPageStatus('loading');
+    setPageStatus("loading");
 
     try {
       const classResponse = await classService.getById(classId);
@@ -1259,11 +1354,16 @@ export default function StudentClassDetailPage() {
       }
 
       let enrichedClass: ClassItem = classData;
-      if ((!classData.enrollments || classData.enrollments.length === 0) && user?.id) {
+      if (
+        (!classData.enrollments || classData.enrollments.length === 0) &&
+        user?.id
+      ) {
         const studentClasses = await classService
-          .getByStudent(user.id, 'all')
+          .getByStudent(user.id, "all")
           .catch(() => ({ data: [] as ClassItem[] }));
-        const matched = (studentClasses.data || []).find((entry) => entry.id === classId);
+        const matched = (studentClasses.data || []).find(
+          (entry) => entry.id === classId,
+        );
         if (matched?.enrollments?.length) {
           enrichedClass = { ...classData, enrollments: matched.enrollments };
         }
@@ -1271,47 +1371,51 @@ export default function StudentClassDetailPage() {
 
       setClassItem(enrichedClass);
 
-      if (currentTab === 'discussion') {
+      if (currentTab === "discussion") {
         setFailedRegions([]);
-        setPageStatus('ready');
+        setPageStatus("ready");
         return;
       }
 
-      const [modulesResult, assessmentsResult, announcementsResult, calendarResult] =
-        await Promise.allSettled([
-          moduleService.getByClass(classId),
-          assessmentService.getByClass(classId, {
-            page: 1,
-            limit: 100,
-            status: 'all',
-          }),
-          announcementService.getByClass(classId, { limit: 50 }),
-          schoolEventService.getAll({ schoolYear: classData.schoolYear }),
-        ]);
+      const [
+        modulesResult,
+        assessmentsResult,
+        announcementsResult,
+        calendarResult,
+      ] = await Promise.allSettled([
+        moduleService.getByClass(classId),
+        assessmentService.getByClass(classId, {
+          page: 1,
+          limit: 100,
+          status: "all",
+        }),
+        announcementService.getByClass(classId, { limit: 50 }),
+        schoolEventService.getAll({ schoolYear: classData.schoolYear }),
+      ]);
       const failures = new Set<ClassRegion>();
 
-      if (modulesResult.status === 'fulfilled') {
+      if (modulesResult.status === "fulfilled") {
         setModules(
           sortByDateAsc(modulesResult.value.data || [], () => null).sort(
             (a, b) => a.order - b.order,
           ),
         );
       } else {
-        failures.add('modules');
+        failures.add("modules");
       }
 
       let publishedAssessments: Assessment[] | null = null;
-      if (assessmentsResult.status === 'fulfilled') {
+      if (assessmentsResult.status === "fulfilled") {
         publishedAssessments = (assessmentsResult.value.data || []).filter(
           (entry) => entry.isPublished,
         );
         setAssessments(publishedAssessments);
       } else {
-        failures.add('assessments');
-        failures.add('attempts');
+        failures.add("assessments");
+        failures.add("attempts");
       }
 
-      if (announcementsResult.status === 'fulfilled') {
+      if (announcementsResult.status === "fulfilled") {
         setAnnouncements(
           [...(announcementsResult.value.data || [])].sort((left, right) => {
             if (left.isPinned !== right.isPinned) return left.isPinned ? -1 : 1;
@@ -1321,28 +1425,30 @@ export default function StudentClassDetailPage() {
           }),
         );
       } else {
-        failures.add('announcements');
+        failures.add("announcements");
       }
 
-      if (calendarResult.status === 'fulfilled') {
+      if (calendarResult.status === "fulfilled") {
         setSchoolEvents(calendarResult.value.data || []);
       } else {
-        failures.add('calendar');
+        failures.add("calendar");
       }
 
       if (publishedAssessments !== null) {
         const attemptResults = await Promise.allSettled(
           publishedAssessments.map(async (entry) => {
-            const response = await assessmentService.getStudentAttempts(entry.id);
+            const response = await assessmentService.getStudentAttempts(
+              entry.id,
+            );
             return [entry.id, response.data || []] as const;
           }),
         );
         const successfulAttempts = attemptResults.flatMap((result) =>
-          result.status === 'fulfilled' ? [result.value] : [],
+          result.status === "fulfilled" ? [result.value] : [],
         );
 
-        if (attemptResults.some((result) => result.status === 'rejected')) {
-          failures.add('attempts');
+        if (attemptResults.some((result) => result.status === "rejected")) {
+          failures.add("attempts");
           setAttemptsByAssessment((current) => ({
             ...current,
             ...Object.fromEntries(successfulAttempts),
@@ -1353,14 +1459,15 @@ export default function StudentClassDetailPage() {
       }
 
       setFailedRegions([...failures]);
-      setPageStatus('ready');
+      setPageStatus("ready");
     } catch (error) {
-      const status = (error as { response?: { status?: number } })?.response?.status ?? null;
+      const status =
+        (error as { response?: { status?: number } })?.response?.status ?? null;
       dataClassIdRef.current = null;
       setClassItem(null);
       setFailedRegions([]);
-      setOwnerErrorKind(status === 404 ? 'not-found' : 'general');
-      setPageStatus(status === 403 ? 'forbidden' : 'error');
+      setOwnerErrorKind(status === 404 ? "not-found" : "general");
+      setPageStatus(status === 403 ? "forbidden" : "error");
       setModules([]);
       setAssessments([]);
       setAnnouncements([]);
@@ -1378,7 +1485,7 @@ export default function StudentClassDetailPage() {
     const remaining = new Set(failedRegions);
     let assessmentSource: Assessment[] | null = null;
 
-    if (remaining.has('modules')) {
+    if (remaining.has("modules")) {
       try {
         const response = await moduleService.getByClass(classId);
         setModules(
@@ -1386,30 +1493,34 @@ export default function StudentClassDetailPage() {
             (a, b) => a.order - b.order,
           ),
         );
-        remaining.delete('modules');
+        remaining.delete("modules");
       } catch {
         // Keep the failed region marked for the next targeted retry.
       }
     }
 
-    if (remaining.has('assessments')) {
+    if (remaining.has("assessments")) {
       try {
         const response = await assessmentService.getByClass(classId, {
           page: 1,
           limit: 100,
-          status: 'all',
+          status: "all",
         });
-        assessmentSource = (response.data || []).filter((entry) => entry.isPublished);
+        assessmentSource = (response.data || []).filter(
+          (entry) => entry.isPublished,
+        );
         setAssessments(assessmentSource);
-        remaining.delete('assessments');
+        remaining.delete("assessments");
       } catch {
         // Attempts depend on a successful assessment collection.
       }
     }
 
-    if (remaining.has('announcements')) {
+    if (remaining.has("announcements")) {
       try {
-        const response = await announcementService.getByClass(classId, { limit: 50 });
+        const response = await announcementService.getByClass(classId, {
+          limit: 50,
+        });
         setAnnouncements(
           [...(response.data || [])].sort((left, right) => {
             if (left.isPinned !== right.isPinned) return left.isPinned ? -1 : 1;
@@ -1418,25 +1529,25 @@ export default function StudentClassDetailPage() {
             return rightTs - leftTs;
           }),
         );
-        remaining.delete('announcements');
+        remaining.delete("announcements");
       } catch {
         // Keep the failed region marked for the next targeted retry.
       }
     }
 
-    if (remaining.has('calendar')) {
+    if (remaining.has("calendar")) {
       try {
         const response = await schoolEventService.getAll({
           schoolYear: classItem.schoolYear,
         });
         setSchoolEvents(response.data || []);
-        remaining.delete('calendar');
+        remaining.delete("calendar");
       } catch {
         // Keep the failed region marked for the next targeted retry.
       }
     }
 
-    if (remaining.has('attempts') && !remaining.has('assessments')) {
+    if (remaining.has("attempts") && !remaining.has("assessments")) {
       const attemptResults = await Promise.allSettled(
         (assessmentSource || assessments).map(async (entry) => {
           const response = await assessmentService.getStudentAttempts(entry.id);
@@ -1444,15 +1555,15 @@ export default function StudentClassDetailPage() {
         }),
       );
       const successfulAttempts = attemptResults.flatMap((result) =>
-        result.status === 'fulfilled' ? [result.value] : [],
+        result.status === "fulfilled" ? [result.value] : [],
       );
 
       setAttemptsByAssessment((current) => ({
         ...current,
         ...Object.fromEntries(successfulAttempts),
       }));
-      if (!attemptResults.some((result) => result.status === 'rejected')) {
-        remaining.delete('attempts');
+      if (!attemptResults.some((result) => result.status === "rejected")) {
+        remaining.delete("attempts");
       }
     }
 
@@ -1472,7 +1583,9 @@ export default function StudentClassDetailPage() {
     }
 
     try {
-      const response = await discussionBoardService.listThreads(classId, { limit: 50 });
+      const response = await discussionBoardService.listThreads(classId, {
+        limit: 50,
+      });
       setDiscussionThreads(sortDiscussionThreads(response.data.items || []));
     } catch {
       setDiscussionThreads([]);
@@ -1482,7 +1595,7 @@ export default function StudentClassDetailPage() {
   }, [classId]);
 
   useEffect(() => {
-    if (currentTab !== 'discussion') return;
+    if (currentTab !== "discussion") return;
     void loadDiscussionThreads();
   }, [currentTab, loadDiscussionThreads]);
 
@@ -1490,16 +1603,16 @@ export default function StudentClassDetailPage() {
     if (!classId) return;
     const storageKey = `${MODULE_CARD_VIEW_STORAGE_KEY_PREFIX}.${classId}`;
     const saved = window.localStorage.getItem(storageKey);
-    if (saved === 'wide' || saved === 'card') {
+    if (saved === "wide" || saved === "card") {
       setModuleCardView(saved);
       return;
     }
-    if (saved === 'long') {
-      setModuleCardView('wide');
+    if (saved === "long") {
+      setModuleCardView("wide");
       return;
     }
-    if (saved === 'compact') {
-      setModuleCardView('card');
+    if (saved === "compact") {
+      setModuleCardView("card");
     }
   }, [classId]);
 
@@ -1516,7 +1629,10 @@ export default function StudentClassDetailPage() {
   const loadSelectedDiscussionThread = useCallback(
     async (threadId: string) => {
       try {
-        const response = await discussionBoardService.getThread(classId, threadId);
+        const response = await discussionBoardService.getThread(
+          classId,
+          threadId,
+        );
         setSelectedDiscussionThread(response.data);
       } catch {
         setSelectedDiscussionThread(null);
@@ -1534,7 +1650,7 @@ export default function StudentClassDetailPage() {
   }, [loadSelectedDiscussionThread, selectedDiscussionThreadId]);
 
   useDiscussionRealtimeRefresh({
-    enabled: currentTab === 'discussion',
+    enabled: currentTab === "discussion",
     selectedThreadId: selectedDiscussionThreadId,
     refreshThreads: loadDiscussionThreads,
     refreshThread: loadSelectedDiscussionThread,
@@ -1542,10 +1658,14 @@ export default function StudentClassDetailPage() {
 
   const handleSubmitDiscussionComment = useCallback(async () => {
     if (!selectedDiscussionThread || discussionSubmitting) return;
-    const limitState = getDiscussionLimitState(selectedDiscussionThread, user?.id, role);
+    const limitState = getDiscussionLimitState(
+      selectedDiscussionThread,
+      user?.id,
+      role,
+    );
     if (limitState?.reached) return;
     const plainBody = discussionCommentBody.trim();
-    const safeBody = plainBody ? plainTextToRichHtml(plainBody) : '';
+    const safeBody = plainBody ? plainTextToRichHtml(plainBody) : "";
     if (!safeBody && discussionCommentImages.length === 0) return;
 
     try {
@@ -1560,11 +1680,15 @@ export default function StudentClassDetailPage() {
         ),
       );
       const attachmentFileIds = uploads.map((entry) => entry.data.id);
-      await discussionBoardService.createComment(classId, selectedDiscussionThread.id, {
-        bodyHtml: safeBody || undefined,
-        attachmentFileIds,
-      });
-      setDiscussionCommentBody('');
+      await discussionBoardService.createComment(
+        classId,
+        selectedDiscussionThread.id,
+        {
+          bodyHtml: safeBody || undefined,
+          attachmentFileIds,
+        },
+      );
+      setDiscussionCommentBody("");
       setDiscussionCommentImages([]);
       await loadSelectedDiscussionThread(selectedDiscussionThread.id);
       await loadDiscussionThreads();
@@ -1594,11 +1718,16 @@ export default function StudentClassDetailPage() {
       await loadSelectedDiscussionThread(selectedDiscussionThread.id);
       await loadDiscussionThreads();
     },
-    [classId, loadDiscussionThreads, loadSelectedDiscussionThread, selectedDiscussionThread],
+    [
+      classId,
+      loadDiscussionThreads,
+      loadSelectedDiscussionThread,
+      selectedDiscussionThread,
+    ],
   );
 
   const handleToggleDiscussionReaction = useCallback(
-    async (commentId: string, reactionType: 'like' | 'heart' | 'wow') => {
+    async (commentId: string, reactionType: "like" | "heart" | "wow") => {
       if (!selectedDiscussionThread) return;
       const comment = selectedDiscussionThread.comments.find(
         (entry) => entry.id === commentId,
@@ -1652,13 +1781,17 @@ export default function StudentClassDetailPage() {
         dueDate.getTime() < now.getTime(),
       );
       const isOutOfAttempts =
-        assessment.type === 'file_upload'
+        assessment.type === "file_upload"
           ? false
           : submittedAttempts >= (assessment.maxAttempts ?? 1);
 
       return {
         assessment,
-        category: isCompleted ? 'completed' : isPastDue ? 'past_due' : 'upcoming',
+        category: isCompleted
+          ? "completed"
+          : isPastDue
+            ? "past_due"
+            : "upcoming",
         href: `/dashboard/student/assessments/${assessment.id}?classId=${classId}`,
         dueDate,
         latestSubmitted,
@@ -1668,9 +1801,11 @@ export default function StudentClassDetailPage() {
       } satisfies AssignmentRow;
     });
 
-    const filteredRows = rows.filter((entry) => entry.category === assignmentFilter);
+    const filteredRows = rows.filter(
+      (entry) => entry.category === assignmentFilter,
+    );
     return filteredRows.sort((left, right) => {
-      if (assignmentFilter === 'completed') {
+      if (assignmentFilter === "completed") {
         const leftTime = new Date(
           left.latestSubmitted?.submittedAt ||
             left.latestSubmitted?.updatedAt ||
@@ -1688,7 +1823,9 @@ export default function StudentClassDetailPage() {
 
       const leftTime = left.dueDate?.getTime() ?? Number.MAX_SAFE_INTEGER;
       const rightTime = right.dueDate?.getTime() ?? Number.MAX_SAFE_INTEGER;
-      return assignmentFilter === 'past_due' ? rightTime - leftTime : leftTime - rightTime;
+      return assignmentFilter === "past_due"
+        ? rightTime - leftTime
+        : leftTime - rightTime;
     });
   }, [assessments, assignmentFilter, attemptsByAssessment, classId]);
 
@@ -1697,28 +1834,36 @@ export default function StudentClassDetailPage() {
       .map((assessment) => {
         const category = resolveAssignmentCategory(assessment);
         const attempts = attemptsByAssessment[assessment.id] || [];
-        const submittedAttempts = attempts.filter((attempt) => attempt.isSubmitted);
+        const submittedAttempts = attempts.filter(
+          (attempt) => attempt.isSubmitted,
+        );
         const latestSubmitted = getLatestSubmittedAttempt(attempts);
-        const possiblePoints = latestSubmitted?.totalPoints ?? assessment.totalPoints ?? 0;
-        const score = typeof latestSubmitted?.score === 'number' ? latestSubmitted.score : null;
-        const percent =
-          score !== null && possiblePoints > 0 ? Math.round((score / possiblePoints) * 100) : null;
-        const submittedDate = parseDate(latestSubmitted?.submittedAt || latestSubmitted?.updatedAt);
+        const presentedScore = presentAcademicScore(latestSubmitted ?? {});
+        const possiblePoints =
+          latestSubmitted?.scoreBreakdown?.possiblePoints ??
+          latestSubmitted?.totalPoints ??
+          assessment.totalPoints ??
+          0;
+        const score = presentedScore.scorePercent;
+        const percent = presentedScore.scorePercent;
+        const submittedDate = parseDate(
+          latestSubmitted?.submittedAt || latestSubmitted?.updatedAt,
+        );
         const dueDate = parseDate(assessment.dueDate);
         const sortTime = (submittedDate || dueDate)?.getTime() ?? 0;
         const submittedCount = submittedAttempts.length;
         const statusLabel =
-          score !== null ? 'Graded' : latestSubmitted ? 'Submitted' : 'Pending';
-        const statusTone: GradeRow['statusTone'] =
-          score !== null ? 'graded' : latestSubmitted ? 'submitted' : 'pending';
-        const gradeTone: GradeRow['gradeTone'] =
+          score !== null ? "Graded" : latestSubmitted ? "Submitted" : "Pending";
+        const statusTone: GradeRow["statusTone"] =
+          score !== null ? "graded" : latestSubmitted ? "submitted" : "pending";
+        const gradeTone: GradeRow["gradeTone"] =
           score === null || percent === null
-            ? 'muted'
+            ? "muted"
             : percent >= 90
-              ? 'excellent'
+              ? "excellent"
               : percent >= 75
-                ? 'good'
-                : 'warning';
+                ? "good"
+                : "warning";
 
         return {
           id: assessment.id,
@@ -1727,13 +1872,18 @@ export default function StudentClassDetailPage() {
           categoryLabel: assignmentCategoryLabel(category),
           scoreText:
             score === null
-              ? 'Not graded'
-              : `${formatScoreNumber(score)} / ${possiblePoints || '--'}`,
-          percentText: score === null || percent === null ? '' : `${percent}%`,
+              ? "Not graded"
+              : (presentedScore.pointsLabel ?? presentedScore.percentageLabel),
+          percentText:
+            score === null || percent === null
+              ? ""
+              : presentedScore.pointsLabel
+                ? presentedScore.percentageLabel
+                : (presentedScore.bonusLabel ?? ""),
           dueText: formatDateLong(dueDate),
           detailText:
             submittedCount > 0
-              ? `${submittedCount} attempt${submittedCount === 1 ? '' : 's'} submitted`
+              ? `${submittedCount} attempt${submittedCount === 1 ? "" : "s"} submitted`
               : `${assessment.totalPoints ?? 0} pts available`,
           isPending: score === null,
           scoreValue: score,
@@ -1754,21 +1904,23 @@ export default function StudentClassDetailPage() {
       .map((assessment) => {
         const attempts = attemptsByAssessment[assessment.id] || [];
         const latestSubmitted = getLatestSubmittedAttempt(attempts);
-        const possible = latestSubmitted?.totalPoints ?? assessment.totalPoints ?? 0;
-        const earned = typeof latestSubmitted?.score === 'number' ? latestSubmitted.score : null;
-        if (earned === null || possible <= 0) return null;
-        return { earned, possible };
+        const percent = presentAcademicScore(
+          latestSubmitted ?? {},
+        ).scorePercent;
+        return percent;
       })
-      .filter((entry): entry is { earned: number; possible: number } => entry !== null);
+      .filter((entry): entry is number => entry !== null);
 
-    const earnedTotal = scoredRows.reduce((sum, row) => sum + row.earned, 0);
-    const possibleTotal = scoredRows.reduce((sum, row) => sum + row.possible, 0);
-    const percent = possibleTotal > 0 ? Math.round((earnedTotal / possibleTotal) * 100) : 0;
+    const percent =
+      scoredRows.length > 0
+        ? Math.round(
+            scoredRows.reduce((sum, scorePercent) => sum + scorePercent, 0) /
+              scoredRows.length,
+          )
+        : 0;
     const tone = getScoreTone(percent);
 
     return {
-      earnedTotal,
-      possibleTotal,
       percent,
       tone,
     };
@@ -1782,10 +1934,10 @@ export default function StudentClassDetailPage() {
       if (!date) continue;
       rows.push({
         id: `assessment-${assessment.id}`,
-        kind: 'assessment',
+        kind: "assessment",
         date,
         title: assessment.title,
-        subtitle: classItem?.subjectName || 'Assessment',
+        subtitle: classItem?.subjectName || "Assessment",
       });
     }
 
@@ -1794,32 +1946,41 @@ export default function StudentClassDetailPage() {
       if (!date) continue;
       rows.push({
         id: `event-${event.id}`,
-        kind: event.eventType === 'holiday_break' ? 'holiday' : 'event',
+        kind: event.eventType === "holiday_break" ? "holiday" : "event",
         date,
         title: event.title,
-        subtitle: event.location || 'All',
+        subtitle: event.location || "All",
       });
     }
 
-    return rows.sort((left, right) => left.date.getTime() - right.date.getTime());
+    return rows.sort(
+      (left, right) => left.date.getTime() - right.date.getTime(),
+    );
   }, [assessments, classItem?.subjectName, schoolEvents]);
 
-  const classmateRows = useMemo(() => getEnrollmentRows(classItem), [classItem]);
+  const classmateRows = useMemo(
+    () => getEnrollmentRows(classItem),
+    [classItem],
+  );
   const discussionLimitState = useMemo(
     () => getDiscussionLimitState(selectedDiscussionThread, user?.id, role),
     [role, selectedDiscussionThread, user?.id],
   );
-  const scheduleLabel = useMemo(() => formatScheduleLabel(classItem), [classItem]);
-  const activeGuidePage = studentClassGuidePages[helpPage] ?? studentClassGuidePages[0];
-  const modulesUnavailable = failedRegions.includes('modules');
+  const scheduleLabel = useMemo(
+    () => formatScheduleLabel(classItem),
+    [classItem],
+  );
+  const activeGuidePage =
+    studentClassGuidePages[helpPage] ?? studentClassGuidePages[0];
+  const modulesUnavailable = failedRegions.includes("modules");
   const assignmentsUnavailable =
-    failedRegions.includes('assessments') || failedRegions.includes('attempts');
-  const announcementsUnavailable = failedRegions.includes('announcements');
+    failedRegions.includes("assessments") || failedRegions.includes("attempts");
+  const announcementsUnavailable = failedRegions.includes("announcements");
   const gradesUnavailable = assignmentsUnavailable;
   const calendarUnavailable =
-    failedRegions.includes('assessments') || failedRegions.includes('calendar');
+    failedRegions.includes("assessments") || failedRegions.includes("calendar");
 
-  if (pageStatus === 'loading') {
+  if (pageStatus === "loading") {
     return (
       <div className="student-class-workspace-loading">
         <Skeleton className="h-44 rounded-xl" />
@@ -1831,34 +1992,41 @@ export default function StudentClassDetailPage() {
     );
   }
 
-  if (pageStatus === 'forbidden') {
+  if (pageStatus === "forbidden") {
     return (
       <DashboardStatePanel
         kind="error"
         title="You don't have access to this class"
         description="This class is not available to your account."
         primaryAction={{
-          label: 'Back to Courses',
-          href: '/dashboard/student/courses',
+          label: "Back to Courses",
+          href: "/dashboard/student/courses",
         }}
       />
     );
   }
 
-  if (pageStatus === 'error' || !classItem) {
+  if (pageStatus === "error" || !classItem) {
     return (
       <DashboardStatePanel
         kind="error"
-        title={ownerErrorKind === 'not-found' ? 'Class not found' : "Class couldn't be loaded"}
-        description={
-          ownerErrorKind === 'not-found'
-            ? 'The class may have been removed or is no longer available.'
-            : 'Class data is temporarily unavailable. Try again shortly.'
+        title={
+          ownerErrorKind === "not-found"
+            ? "Class not found"
+            : "Class couldn't be loaded"
         }
-        primaryAction={{ label: 'Try again', onClick: () => void fetchPageData() }}
+        description={
+          ownerErrorKind === "not-found"
+            ? "The class may have been removed or is no longer available."
+            : "Class data is temporarily unavailable. Try again shortly."
+        }
+        primaryAction={{
+          label: "Try again",
+          onClick: () => void fetchPageData(),
+        }}
         secondaryAction={{
-          label: 'Back to Courses',
-          href: '/dashboard/student/courses',
+          label: "Back to Courses",
+          href: "/dashboard/student/courses",
         }}
       />
     );
@@ -1876,25 +2044,25 @@ export default function StudentClassDetailPage() {
           </>
         }
         icon={<BookOpen className="h-5 w-5" />}
-        title={classItem.subjectName || classItem.className || 'Class'}
+        title={classItem.subjectName || classItem.className || "Class"}
         subtitle={formatClassLine(classItem)}
         metaItems={[
           {
-            key: 'schedule',
+            key: "schedule",
             icon: <Clock3 className="h-3.5 w-3.5" />,
             label: scheduleLabel,
           },
           {
-            key: 'room',
+            key: "room",
             icon: <School className="h-3.5 w-3.5" />,
-            label: classItem.room ? `Room ${classItem.room}` : 'Room TBA',
+            label: classItem.room ? `Room ${classItem.room}` : "Room TBA",
           },
           {
-            key: 'modules',
+            key: "modules",
             icon: <FolderOpen className="h-3.5 w-3.5" />,
             label: modulesUnavailable
-              ? 'Modules unavailable'
-              : `${modules.length} module${modules.length === 1 ? '' : 's'}`,
+              ? "Modules unavailable"
+              : `${modules.length} module${modules.length === 1 ? "" : "s"}`,
           },
         ]}
         tabs={workspaceTabs}
@@ -1913,688 +2081,841 @@ export default function StudentClassDetailPage() {
           </Button>
         }
       >
-      {failedRegions.length > 0 ? (
-        <DashboardStatePanel
-          kind="unavailable"
-          title="Class content is partially unavailable"
-          description="Some class content could not be loaded. Available content remains visible."
-          primaryAction={{
-            label: 'Retry failed content',
-            onClick: () => void retryFailedRegions(),
-          }}
-        />
-      ) : null}
+        {failedRegions.length > 0 ? (
+          <DashboardStatePanel
+            kind="unavailable"
+            title="Class content is partially unavailable"
+            description="Some class content could not be loaded. Available content remains visible."
+            primaryAction={{
+              label: "Retry failed content",
+              onClick: () => void retryFailedRegions(),
+            }}
+          />
+        ) : null}
 
-      {currentTab === 'modules' ? (
-        <motion.section
-          className="student-class-panel"
-          variants={staggerContainer}
-          initial="hidden"
-          animate="show"
-        >
-          <header className="student-class-panel__head student-class-panel__head--modules">
-            <div>
-              <h2>Course Modules</h2>
-              <p>
-                {modulesUnavailable
-                  ? 'Modules temporarily unavailable'
-                  : `${modules.length} modules available`}
-              </p>
-            </div>
-            <div className="teacher-home-view-toggle" role="group" aria-label="Module view style">
-              <button
-                type="button"
-                data-active={moduleCardView === 'card'}
-                aria-label="Grid View"
-                title="Grid View"
-                onClick={() => setPersistedModuleCardView('card')}
+        {currentTab === "modules" ? (
+          <motion.section
+            className="student-class-panel"
+            variants={staggerContainer}
+            initial="hidden"
+            animate="show"
+          >
+            <header className="student-class-panel__head student-class-panel__head--modules">
+              <div>
+                <h2>Course Modules</h2>
+                <p>
+                  {modulesUnavailable
+                    ? "Modules temporarily unavailable"
+                    : `${modules.length} modules available`}
+                </p>
+              </div>
+              <div
+                className="teacher-home-view-toggle"
+                role="group"
+                aria-label="Module view style"
               >
-                <Grid2X2 className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                data-active={moduleCardView === 'wide'}
-                aria-label="Wide Card View"
-                title="Wide Card View"
-                onClick={() => setPersistedModuleCardView('wide')}
-              >
-                <LayoutPanelTop className="h-4 w-4" />
-              </button>
-            </div>
-          </header>
-
-          {modulesUnavailable ? (
-            <div className="teacher-class-workspace__empty">
-              Module content is temporarily unavailable.
-            </div>
-          ) : modules.length === 0 ? (
-            <div className="teacher-class-workspace__empty">No modules available yet.</div>
-          ) : (
-            <div className="student-class-modules-grid" data-view={moduleCardView}>
-              {modules.map((moduleEntry, index) => {
-                const summary = summarizeModule(moduleEntry);
-                const openHref = getOpenModuleHref(moduleEntry, classId);
-                const mediaSource =
-                  moduleEntry.coverImageUrl ||
-                  MODULE_STOCK_IMAGES[index % MODULE_STOCK_IMAGES.length];
-                const gradientBackground = getModuleGradient(moduleEntry.gradientId);
-                const imagePositionX = moduleEntry.imagePositionX ?? 50;
-                const imagePositionY = moduleEntry.imagePositionY ?? 50;
-                const imageScale = moduleEntry.imageScale ?? 120;
-                return (
-                  <motion.article
-                    key={moduleEntry.id}
-                    className="student-class-module-card"
-                    data-tone={moduleToneByIndex[index % moduleToneByIndex.length]}
-                    data-locked={moduleEntry.isLocked}
-                    data-view={moduleCardView}
-                    variants={staggerItem}
-                  >
-                    <Link
-                      href={openHref}
-                      className="student-class-module-card__body-link"
-                      aria-label={`Open ${moduleEntry.title} module`}
-                    >
-                      <div className="student-class-module-card__media-wrap">
-                        <div
-                          className="student-class-module-card__media"
-                          style={{
-                            backgroundImage: `linear-gradient(120deg, color-mix(in srgb, var(--student-navy) 26%, transparent), color-mix(in srgb, var(--student-navy) 12%, transparent)), url(${mediaSource})`,
-                            backgroundSize: `${imageScale}%`,
-                            backgroundPosition: `${imagePositionX}% ${imagePositionY}%`,
-                            backgroundRepeat: 'no-repeat',
-                            backgroundColor: 'var(--student-surface-soft)',
-                          }}
-                        >
-                          <div
-                            className="student-class-module-card__media-gradient"
-                            style={{ background: gradientBackground }}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="student-class-module-card__content">
-                        <header>
-                          <span className="student-class-module-card__index">{index + 1}</span>
-                          <div className="student-class-module-card__copy">
-                          <h3>{moduleEntry.title}</h3>
-                            {moduleEntry.isCoreTemplateAsset ? (
-                              <span className="student-class-module-card__pill">Core Module</span>
-                            ) : null}
-                            {moduleEntry.description ? (
-                              <RichTextRenderer html={moduleEntry.description} />
-                            ) : null}
-                          </div>
-                        </header>
-
-                        <div className="student-class-module-card__stats">
-                          <article>
-                            <BookText className="h-3.5 w-3.5" />
-                            <strong>{summary.lessons}</strong>
-                            <span>Lessons</span>
-                          </article>
-                          <article>
-                            <ClipboardList className="h-3.5 w-3.5" />
-                            <strong>{summary.assessments}</strong>
-                            <span>Assessments</span>
-                          </article>
-                          <article>
-                            <strong>{moduleEntry.progressPercent ?? 0}%</strong>
-                            <span>Progress</span>
-                          </article>
-                        </div>
-                      </div>
-                    </Link>
-
-                    <footer>
-                      <span
-                        className={
-                          moduleEntry.isLocked
-                            ? 'student-class-chip student-class-chip--locked'
-                            : 'student-class-chip student-class-chip--open'
-                        }
-                      >
-                        {moduleEntry.isLocked ? 'Locked' : 'Available'}
-                      </span>
-                      <Link className="student-class-module-card__cta" href={openHref}>
-                        Open
-                      </Link>
-                    </footer>
-                  </motion.article>
-                );
-              })}
-            </div>
-          )}
-        </motion.section>
-      ) : null}
-
-      {currentTab === 'assignments' ? (
-        <motion.section
-          className="student-class-panel"
-          variants={staggerContainer}
-          initial="hidden"
-          animate="show"
-        >
-          <header className="student-class-panel__head">
-            <h2>Assignments</h2>
-            <p>
-              {assignmentsUnavailable
-                ? 'Assignment data temporarily unavailable'
-                : `${assignmentRows.length} assignments`}
-            </p>
-          </header>
-
-          <div className="student-class-filters">
-            {ASSIGNMENT_FILTERS.map((filter) => (
-              <button
-                key={filter.key}
-                type="button"
-                data-active={assignmentFilter === filter.key}
-                onClick={() => setAssignmentFilter(filter.key)}
-              >
-                {filter.label}
-              </button>
-            ))}
-          </div>
-
-          {assignmentsUnavailable ? (
-            <div className="teacher-class-workspace__empty">
-              Assignment data is temporarily unavailable.
-            </div>
-          ) : assignmentRows.length === 0 ? (
-            <div className="teacher-class-workspace__empty">No assignments for this filter.</div>
-          ) : (
-            <div key={assignmentFilter} className="student-class-stack">
-              {assignmentRows.map((row) => (
-                <Link
-                  key={row.assessment.id}
-                  href={row.href}
-                  className="student-class-assignment-row student-class-assignment-row__body"
+                <button
+                  type="button"
+                  data-active={moduleCardView === "card"}
+                  aria-label="Grid View"
+                  title="Grid View"
+                  onClick={() => setPersistedModuleCardView("card")}
                 >
+                  <Grid2X2 className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  data-active={moduleCardView === "wide"}
+                  aria-label="Wide Card View"
+                  title="Wide Card View"
+                  onClick={() => setPersistedModuleCardView("wide")}
+                >
+                  <LayoutPanelTop className="h-4 w-4" />
+                </button>
+              </div>
+            </header>
+
+            {modulesUnavailable ? (
+              <div className="teacher-class-workspace__empty">
+                Module content is temporarily unavailable.
+              </div>
+            ) : modules.length === 0 ? (
+              <div className="teacher-class-workspace__empty">
+                No modules available yet.
+              </div>
+            ) : (
+              <div
+                className="student-class-modules-grid"
+                data-view={moduleCardView}
+              >
+                {modules.map((moduleEntry, index) => {
+                  const summary = summarizeModule(moduleEntry);
+                  const openHref = getOpenModuleHref(moduleEntry, classId);
+                  const mediaSource =
+                    moduleEntry.coverImageUrl ||
+                    MODULE_STOCK_IMAGES[index % MODULE_STOCK_IMAGES.length];
+                  const gradientBackground = getModuleGradient(
+                    moduleEntry.gradientId,
+                  );
+                  const imagePositionX = moduleEntry.imagePositionX ?? 50;
+                  const imagePositionY = moduleEntry.imagePositionY ?? 50;
+                  const imageScale = moduleEntry.imageScale ?? 120;
+                  return (
+                    <motion.article
+                      key={moduleEntry.id}
+                      className="student-class-module-card"
+                      data-tone={
+                        moduleToneByIndex[index % moduleToneByIndex.length]
+                      }
+                      data-locked={moduleEntry.isLocked}
+                      data-view={moduleCardView}
+                      variants={staggerItem}
+                    >
+                      <Link
+                        href={openHref}
+                        className="student-class-module-card__body-link"
+                        aria-label={`Open ${moduleEntry.title} module`}
+                      >
+                        <div className="student-class-module-card__media-wrap">
+                          <div
+                            className="student-class-module-card__media"
+                            style={{
+                              backgroundImage: `linear-gradient(120deg, color-mix(in srgb, var(--student-navy) 26%, transparent), color-mix(in srgb, var(--student-navy) 12%, transparent)), url(${mediaSource})`,
+                              backgroundSize: `${imageScale}%`,
+                              backgroundPosition: `${imagePositionX}% ${imagePositionY}%`,
+                              backgroundRepeat: "no-repeat",
+                              backgroundColor: "var(--student-surface-soft)",
+                            }}
+                          >
+                            <div
+                              className="student-class-module-card__media-gradient"
+                              style={{ background: gradientBackground }}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="student-class-module-card__content">
+                          <header>
+                            <span className="student-class-module-card__index">
+                              {index + 1}
+                            </span>
+                            <div className="student-class-module-card__copy">
+                              <h3>{moduleEntry.title}</h3>
+                              {moduleEntry.isCoreTemplateAsset ? (
+                                <span className="student-class-module-card__pill">
+                                  Core Module
+                                </span>
+                              ) : null}
+                              {moduleEntry.description ? (
+                                <RichTextRenderer
+                                  html={moduleEntry.description}
+                                />
+                              ) : null}
+                            </div>
+                          </header>
+
+                          <div className="student-class-module-card__stats">
+                            <article>
+                              <BookText className="h-3.5 w-3.5" />
+                              <strong>{summary.lessons}</strong>
+                              <span>Lessons</span>
+                            </article>
+                            <article>
+                              <ClipboardList className="h-3.5 w-3.5" />
+                              <strong>{summary.assessments}</strong>
+                              <span>Assessments</span>
+                            </article>
+                            <article>
+                              <strong>
+                                {moduleEntry.progressPercent ?? 0}%
+                              </strong>
+                              <span>Progress</span>
+                            </article>
+                          </div>
+                        </div>
+                      </Link>
+
+                      <footer>
+                        <span
+                          className={
+                            moduleEntry.isLocked
+                              ? "student-class-chip student-class-chip--locked"
+                              : "student-class-chip student-class-chip--open"
+                          }
+                        >
+                          {moduleEntry.isLocked ? "Locked" : "Available"}
+                        </span>
+                        <Link
+                          className="student-class-module-card__cta"
+                          href={openHref}
+                        >
+                          Open
+                        </Link>
+                      </footer>
+                    </motion.article>
+                  );
+                })}
+              </div>
+            )}
+          </motion.section>
+        ) : null}
+
+        {currentTab === "assignments" ? (
+          <motion.section
+            className="student-class-panel"
+            variants={staggerContainer}
+            initial="hidden"
+            animate="show"
+          >
+            <header className="student-class-panel__head">
+              <h2>Assignments</h2>
+              <p>
+                {assignmentsUnavailable
+                  ? "Assignment data temporarily unavailable"
+                  : `${assignmentRows.length} assignments`}
+              </p>
+            </header>
+
+            <div className="student-class-filters">
+              {ASSIGNMENT_FILTERS.map((filter) => (
+                <button
+                  key={filter.key}
+                  type="button"
+                  data-active={assignmentFilter === filter.key}
+                  onClick={() => setAssignmentFilter(filter.key)}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+
+            {assignmentsUnavailable ? (
+              <div className="teacher-class-workspace__empty">
+                Assignment data is temporarily unavailable.
+              </div>
+            ) : assignmentRows.length === 0 ? (
+              <div className="teacher-class-workspace__empty">
+                No assignments for this filter.
+              </div>
+            ) : (
+              <div key={assignmentFilter} className="student-class-stack">
+                {assignmentRows.map((row) => (
+                  <Link
+                    key={row.assessment.id}
+                    href={row.href}
+                    className="student-class-assignment-row student-class-assignment-row__body"
+                  >
                     <div className="student-class-assignment-row__icon">
                       <ClipboardList className="h-5 w-5" />
                     </div>
                     <div className="student-class-assignment-row__main">
                       <div className="student-class-assignment-row__chips">
-                        {row.isGraded ? <span data-status="graded">Graded</span> : null}
-                        {row.isOutOfAttempts ? <span data-status="attempts">Out of Attempts</span> : null}
-                        {!row.isGraded && row.category === 'completed' ? <span data-status="submitted">Submitted</span> : null}
+                        {row.isGraded ? (
+                          <span data-status="graded">Graded</span>
+                        ) : null}
+                        {row.isOutOfAttempts ? (
+                          <span data-status="attempts">Out of Attempts</span>
+                        ) : null}
+                        {!row.isGraded && row.category === "completed" ? (
+                          <span data-status="submitted">Submitted</span>
+                        ) : null}
                       </div>
                       <h3>{row.assessment.title}</h3>
                       <p>
-                        Due {formatDateLong(row.dueDate)} - {row.assessment.totalPoints ?? 0} pts
+                        Due {formatDateLong(row.dueDate)} -{" "}
+                        {row.assessment.totalPoints ?? 0} pts
                       </p>
                     </div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </motion.section>
-      ) : null}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </motion.section>
+        ) : null}
 
-      {currentTab === 'announcements' ? (
-        <motion.section
-          className="student-class-panel"
-          variants={staggerContainer}
-          initial="hidden"
-          animate="show"
-        >
-          <header className="student-class-panel__head">
-            <h2>Announcements</h2>
-          </header>
+        {currentTab === "announcements" ? (
+          <motion.section
+            className="student-class-panel"
+            variants={staggerContainer}
+            initial="hidden"
+            animate="show"
+          >
+            <header className="student-class-panel__head">
+              <h2>Announcements</h2>
+            </header>
 
-          {announcementsUnavailable ? (
-            <div className="teacher-class-workspace__empty">
-              Announcements are temporarily unavailable.
-            </div>
-          ) : announcements.length === 0 ? (
-            <div className="teacher-class-workspace__empty">No announcements yet.</div>
-          ) : (
-            <div className="student-class-stack">
-              {announcements.map((entry) => (
-                <motion.article
-                  key={entry.id}
-                  className="student-class-announcement-card"
-                  data-pinned={entry.isPinned}
-                  variants={staggerItem}
+            {announcementsUnavailable ? (
+              <div className="teacher-class-workspace__empty">
+                Announcements are temporarily unavailable.
+              </div>
+            ) : announcements.length === 0 ? (
+              <div className="teacher-class-workspace__empty">
+                No announcements yet.
+              </div>
+            ) : (
+              <div className="student-class-stack">
+                {announcements.map((entry) => (
+                  <motion.article
+                    key={entry.id}
+                    className="student-class-announcement-card"
+                    data-pinned={entry.isPinned}
+                    variants={staggerItem}
                   >
-                    {entry.isPinned ? <span className="student-class-announcement-card__pin">Pinned</span> : null}
+                    {entry.isPinned ? (
+                      <span className="student-class-announcement-card__pin">
+                        Pinned
+                      </span>
+                    ) : null}
                     <h3>{entry.title}</h3>
                     <RichTextRenderer html={normalizeRichText(entry.content)} />
                     <small>
-                      {entry.author?.firstName} {entry.author?.lastName} -{' '}
+                      {entry.author?.firstName} {entry.author?.lastName} -{" "}
                       {formatDateLong(parseDate(entry.createdAt || null))}
-                  </small>
-                </motion.article>
-              ))}
-            </div>
-          )}
-        </motion.section>
-      ) : null}
+                    </small>
+                  </motion.article>
+                ))}
+              </div>
+            )}
+          </motion.section>
+        ) : null}
 
-      {currentTab === 'discussion' ? (
-        <motion.section
-          className="student-class-panel"
-          variants={staggerContainer}
-          initial="hidden"
-          animate="show"
-        >
-          <header className="student-class-panel__head">
-            <h2>Discussion Board</h2>
-            <p>{discussionThreads.length} active thread{discussionThreads.length === 1 ? '' : 's'} you can jump into</p>
-          </header>
+        {currentTab === "discussion" ? (
+          <motion.section
+            className="student-class-panel"
+            variants={staggerContainer}
+            initial="hidden"
+            animate="show"
+          >
+            <header className="student-class-panel__head">
+              <h2>Discussion Board</h2>
+              <p>
+                {discussionThreads.length} active thread
+                {discussionThreads.length === 1 ? "" : "s"} you can jump into
+              </p>
+            </header>
 
-          {discussionThreads.length === 0 ? (
-            <div className="teacher-class-workspace__empty">No discussion threads yet.</div>
-          ) : (
-            <div className="student-discussion-thread-list">
-              {discussionThreads.map((thread) => (
-                <motion.article
-                  key={thread.id}
-                  className="student-discussion-thread-card"
-                  data-pinned={thread.isPinned}
-                  data-active={selectedDiscussionThreadId === thread.id}
-                  variants={staggerItem}
-                >
-                  <div className="student-discussion-thread-card__meta">
-                    <div className="student-discussion-thread-card__author">
-                      <DiscussionAvatar author={thread.author} classItem={classItem} user={user} />
-                      <div className="student-discussion-comment__identity">
-                        <strong>{getDiscussionAuthorName(thread.author)}</strong>
-                        <span>
-                          {formatRelativeTime(thread.publishedAt || thread.createdAt)} •{' '}
-                          {thread.commentCount} comment{thread.commentCount === 1 ? '' : 's'}
+            {discussionThreads.length === 0 ? (
+              <div className="teacher-class-workspace__empty">
+                No discussion threads yet.
+              </div>
+            ) : (
+              <div className="student-discussion-thread-list">
+                {discussionThreads.map((thread) => (
+                  <motion.article
+                    key={thread.id}
+                    className="student-discussion-thread-card"
+                    data-pinned={thread.isPinned}
+                    data-active={selectedDiscussionThreadId === thread.id}
+                    variants={staggerItem}
+                  >
+                    <div className="student-discussion-thread-card__meta">
+                      <div className="student-discussion-thread-card__author">
+                        <DiscussionAvatar
+                          author={thread.author}
+                          classItem={classItem}
+                          user={user}
+                        />
+                        <div className="student-discussion-comment__identity">
+                          <strong>
+                            {getDiscussionAuthorName(thread.author)}
+                          </strong>
+                          <span>
+                            {formatRelativeTime(
+                              thread.publishedAt || thread.createdAt,
+                            )}{" "}
+                            • {thread.commentCount} comment
+                            {thread.commentCount === 1 ? "" : "s"}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="student-discussion-thread-card__badges">
+                        {thread.isPinned ? (
+                          <span className="student-class-announcement-card__pin">
+                            Pinned
+                          </span>
+                        ) : null}
+                        <span
+                          className="student-discussion-thread-card__badge"
+                          data-status={thread.status}
+                        >
+                          {thread.status}
                         </span>
                       </div>
                     </div>
-                    <div className="student-discussion-thread-card__badges">
-                      {thread.isPinned ? (
-                        <span className="student-class-announcement-card__pin">Pinned</span>
-                      ) : null}
-                      <span
-                        className="student-discussion-thread-card__badge"
-                        data-status={thread.status}
-                      >
-                        {thread.status}
+                    <div className="student-discussion-thread-card__content">
+                      <div>
+                        <h3>{thread.title}</h3>
+                        <RichTextRenderer
+                          html={thread.bodyHtml}
+                          className="student-discussion-thread-card__body"
+                        />
+                      </div>
+                      <div className="student-discussion-thread-card__footer">
+                        <DiscussionAttachmentList
+                          attachments={thread.attachments}
+                          compact
+                        />
+                        <button
+                          type="button"
+                          className="student-class-assignment-row__take"
+                          onClick={() =>
+                            setSelectedDiscussionThreadId(thread.id)
+                          }
+                        >
+                          {selectedDiscussionThreadId === thread.id
+                            ? "Viewing Thread"
+                            : "Open Thread"}
+                        </button>
+                      </div>
+                    </div>
+                  </motion.article>
+                ))}
+              </div>
+            )}
+
+            {selectedDiscussionThread ? (
+              <div className="student-discussion-focus">
+                <header className="student-class-panel__head student-discussion-focus__head">
+                  <div>
+                    <h2>{selectedDiscussionThread.title}</h2>
+                    <p>
+                      {selectedDiscussionThread.comments.length} comment
+                      {selectedDiscussionThread.comments.length === 1
+                        ? ""
+                        : "s"}{" "}
+                      in this thread
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="student-discussion-focus__close"
+                    onClick={() => setSelectedDiscussionThreadId(null)}
+                  >
+                    Close Thread
+                  </button>
+                </header>
+                <article className="student-discussion-focus__post">
+                  <div className="student-discussion-comment__head">
+                    <DiscussionAvatar
+                      author={selectedDiscussionThread.author}
+                      classItem={classItem}
+                      user={user}
+                    />
+                    <div className="student-discussion-comment__identity">
+                      <strong>
+                        {getDiscussionAuthorName(
+                          selectedDiscussionThread.author,
+                        )}
+                      </strong>
+                      <span>
+                        {formatDateTime(
+                          parseDate(
+                            selectedDiscussionThread.publishedAt ||
+                              selectedDiscussionThread.createdAt,
+                          ),
+                        )}{" "}
+                        •{" "}
+                        {selectedDiscussionThread.allowComments
+                          ? "Open replies"
+                          : "Replies closed"}
                       </span>
                     </div>
                   </div>
-                  <div className="student-discussion-thread-card__content">
-                    <div>
-                      <h3>{thread.title}</h3>
+                  <RichTextRenderer
+                    html={selectedDiscussionThread.bodyHtml}
+                    className="student-discussion-focus__body"
+                  />
+                  <DiscussionAttachmentList
+                    attachments={selectedDiscussionThread.attachments}
+                  />
+                </article>
+                <div className="student-class-stack">
+                  {selectedDiscussionThread.comments.map((comment) => (
+                    <article
+                      key={comment.id}
+                      className="student-discussion-comment-card"
+                    >
+                      <div className="student-discussion-comment__head">
+                        <DiscussionAvatar
+                          author={comment.author}
+                          classItem={classItem}
+                          user={user}
+                        />
+                        <div className="student-discussion-comment__identity">
+                          <strong>
+                            {getDiscussionAuthorName(comment.author)}
+                          </strong>
+                          <span
+                            title={formatDateTime(parseDate(comment.createdAt))}
+                          >
+                            {formatRelativeTime(comment.createdAt)}
+                          </span>
+                        </div>
+                        {comment.canDelete ? (
+                          <button
+                            type="button"
+                            className="student-discussion-delete"
+                            aria-label="Delete comment"
+                            onClick={() =>
+                              void handleDeleteDiscussionComment(comment.id)
+                            }
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Delete
+                          </button>
+                        ) : null}
+                      </div>
                       <RichTextRenderer
-                        html={thread.bodyHtml}
-                        className="student-discussion-thread-card__body"
+                        html={
+                          comment.bodyHtml ||
+                          '<p class="student-discussion-image-only">Photo reply</p>'
+                        }
+                        className="student-discussion-comment__body"
                       />
+                      <DiscussionAttachmentList
+                        attachments={comment.attachments}
+                      />
+                      <div className="student-discussion-reactions">
+                        {(
+                          [
+                            ["like", "Like", ThumbsUp, comment.reactions.like],
+                            ["heart", "Heart", Heart, comment.reactions.heart],
+                            ["wow", "Wow", Sparkles, comment.reactions.wow],
+                          ] as const
+                        ).map(([reactionType, label, Icon, count]) => {
+                          const hoverState = getReactionHoverState(
+                            comment.reactions,
+                            reactionType,
+                          );
+
+                          return (
+                            <motion.button
+                              key={reactionType}
+                              type="button"
+                              className="student-discussion-reaction"
+                              data-active={
+                                comment.reactions.userReaction === reactionType
+                              }
+                              aria-label={`${label} reaction`}
+                              whileHover={{ y: -1 }}
+                              whileTap={{ scale: 0.94 }}
+                              onClick={() =>
+                                void handleToggleDiscussionReaction(
+                                  comment.id,
+                                  reactionType,
+                                )
+                              }
+                            >
+                              <Icon className="h-4 w-4" />
+                              <span>{label}</span>
+                              <strong>{count}</strong>
+                              {hoverState.visible.length > 0 ? (
+                                <span
+                                  className="student-discussion-reactor-popover"
+                                  role="tooltip"
+                                >
+                                  <b>{label}</b>
+                                  {hoverState.visible.map((reactor) => (
+                                    <span
+                                      key={`${reactionType}-${reactor.userId}`}
+                                      className="student-discussion-reactor-popover__row"
+                                    >
+                                      <DiscussionAvatar
+                                        author={reactor.user}
+                                        classItem={classItem}
+                                        user={user}
+                                      />
+                                      <em>
+                                        {getDiscussionAuthorName(reactor.user)}
+                                      </em>
+                                    </span>
+                                  ))}
+                                  {hoverState.overflow > 0 ? (
+                                    <span className="student-discussion-reactor-popover__more">
+                                      +{hoverState.overflow} others
+                                    </span>
+                                  ) : null}
+                                </span>
+                              ) : null}
+                            </motion.button>
+                          );
+                        })}
+                      </div>
+                    </article>
+                  ))}
+                  {selectedDiscussionThread.comments.length === 0 ? (
+                    <div className="teacher-class-workspace__empty">
+                      No comments yet.
                     </div>
-                    <div className="student-discussion-thread-card__footer">
-                      <DiscussionAttachmentList attachments={thread.attachments} compact />
+                  ) : null}
+                </div>
+
+                {selectedDiscussionThread.status === "published" &&
+                selectedDiscussionThread.allowComments ? (
+                  <div className="student-discussion-composer">
+                    <div className="student-discussion-composer__head">
+                      <div>
+                        <strong>Post a reply</strong>
+                        <p>
+                          Keep it clear, respectful, and related to the class
+                          topic.
+                        </p>
+                      </div>
+                      <span>
+                        {discussionCommentImages.length} image
+                        {discussionCommentImages.length === 1 ? "" : "s"} ready
+                      </span>
+                    </div>
+                    {discussionLimitState ? (
+                      <div
+                        className="student-discussion-limit-banner"
+                        data-blocked={discussionLimitState.reached}
+                      >
+                        <strong>
+                          {discussionLimitState.reached
+                            ? "Comment limit reached"
+                            : `${discussionLimitState.remaining} repl${
+                                discussionLimitState.remaining === 1
+                                  ? "y"
+                                  : "ies"
+                              } left`}
+                        </strong>
+                        <span>
+                          You used {discussionLimitState.used} of{" "}
+                          {discussionLimitState.limit} allowed replies for this
+                          thread.
+                        </span>
+                      </div>
+                    ) : null}
+                    <Textarea
+                      variant="student"
+                      value={discussionCommentBody}
+                      onChange={(event) =>
+                        setDiscussionCommentBody(event.target.value)
+                      }
+                      placeholder="Write a respectful reply..."
+                      rows={5}
+                      className="student-discussion-composer__textarea"
+                      disabled={discussionLimitState?.reached}
+                    />
+                    <div className="student-discussion-composer__attachments">
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        disabled={discussionLimitState?.reached}
+                        onChange={(event) =>
+                          setDiscussionCommentImages(
+                            Array.from(event.target.files || []),
+                          )
+                        }
+                      />
+                      <LocalImagePreviewStrip files={discussionCommentImages} />
+                      {discussionCommentImages.length > 0 ? (
+                        <div className="student-discussion-composer__chips">
+                          {discussionCommentImages.map((file) => (
+                            <span key={`${file.name}-${file.size}`}>
+                              <Paperclip className="h-3.5 w-3.5" />
+                              {file.name}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="student-discussion-composer__actions">
+                      <span>
+                        {discussionCommentBody.trim()
+                          ? `${discussionCommentBody.trim().length} characters`
+                          : "Text or image replies are allowed"}
+                      </span>
                       <button
                         type="button"
                         className="student-class-assignment-row__take"
-                        onClick={() => setSelectedDiscussionThreadId(thread.id)}
+                        onClick={() => void handleSubmitDiscussionComment()}
+                        disabled={
+                          discussionSubmitting ||
+                          discussionLimitState?.reached ||
+                          (!discussionCommentBody.trim() &&
+                            discussionCommentImages.length === 0)
+                        }
                       >
-                        {selectedDiscussionThreadId === thread.id ? 'Viewing Thread' : 'Open Thread'}
+                        <SendHorizonal className="h-4 w-4" />
+                        {discussionSubmitting ? "Posting..." : "Post Comment"}
                       </button>
                     </div>
                   </div>
-                </motion.article>
-              ))}
-            </div>
-          )}
-
-          {selectedDiscussionThread ? (
-            <div className="student-discussion-focus">
-              <header className="student-class-panel__head student-discussion-focus__head">
-                <div>
-                  <h2>{selectedDiscussionThread.title}</h2>
-                  <p>
-                    {selectedDiscussionThread.comments.length} comment
-                    {selectedDiscussionThread.comments.length === 1 ? '' : 's'} in this thread
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="student-discussion-focus__close"
-                  onClick={() => setSelectedDiscussionThreadId(null)}
-                >
-                  Close Thread
-                </button>
-              </header>
-              <article className="student-discussion-focus__post">
-                <div className="student-discussion-comment__head">
-                  <DiscussionAvatar
-                    author={selectedDiscussionThread.author}
-                    classItem={classItem}
-                    user={user}
-                  />
-                  <div className="student-discussion-comment__identity">
-                    <strong>{getDiscussionAuthorName(selectedDiscussionThread.author)}</strong>
-                    <span>
-                      {formatDateTime(
-                        parseDate(
-                          selectedDiscussionThread.publishedAt || selectedDiscussionThread.createdAt,
-                        ),
-                      )}{' '}
-                      • {selectedDiscussionThread.allowComments ? 'Open replies' : 'Replies closed'}
-                    </span>
+                ) : (
+                  <div className="teacher-class-workspace__empty">
+                    This thread is closed for new comments.
                   </div>
-                </div>
-                <RichTextRenderer
-                  html={selectedDiscussionThread.bodyHtml}
-                  className="student-discussion-focus__body"
-                />
-                <DiscussionAttachmentList attachments={selectedDiscussionThread.attachments} />
-              </article>
-              <div className="student-class-stack">
-                {selectedDiscussionThread.comments.map((comment) => (
-                  <article key={comment.id} className="student-discussion-comment-card">
-                    <div className="student-discussion-comment__head">
-                      <DiscussionAvatar author={comment.author} classItem={classItem} user={user} />
-                      <div className="student-discussion-comment__identity">
-                        <strong>{getDiscussionAuthorName(comment.author)}</strong>
-                        <span title={formatDateTime(parseDate(comment.createdAt))}>
-                          {formatRelativeTime(comment.createdAt)}
-                        </span>
-                      </div>
-                      {comment.canDelete ? (
-                        <button
-                          type="button"
-                          className="student-discussion-delete"
-                          aria-label="Delete comment"
-                          onClick={() => void handleDeleteDiscussionComment(comment.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          Delete
-                        </button>
-                      ) : null}
-                    </div>
-                    <RichTextRenderer
-                      html={comment.bodyHtml || '<p class="student-discussion-image-only">Photo reply</p>'}
-                      className="student-discussion-comment__body"
-                    />
-                    <DiscussionAttachmentList attachments={comment.attachments} />
-                    <div className="student-discussion-reactions">
-                      {([
-                        ['like', 'Like', ThumbsUp, comment.reactions.like],
-                        ['heart', 'Heart', Heart, comment.reactions.heart],
-                        ['wow', 'Wow', Sparkles, comment.reactions.wow],
-                      ] as const).map(([reactionType, label, Icon, count]) => {
-                        const hoverState = getReactionHoverState(comment.reactions, reactionType);
-
-                        return (
-                          <motion.button
-                            key={reactionType}
-                            type="button"
-                            className="student-discussion-reaction"
-                            data-active={comment.reactions.userReaction === reactionType}
-                            aria-label={`${label} reaction`}
-                            whileHover={{ y: -1 }}
-                            whileTap={{ scale: 0.94 }}
-                            onClick={() =>
-                              void handleToggleDiscussionReaction(comment.id, reactionType)
-                            }
-                          >
-                            <Icon className="h-4 w-4" />
-                            <span>{label}</span>
-                            <strong>{count}</strong>
-                            {hoverState.visible.length > 0 ? (
-                              <span className="student-discussion-reactor-popover" role="tooltip">
-                                <b>{label}</b>
-                                {hoverState.visible.map((reactor) => (
-                                  <span
-                                    key={`${reactionType}-${reactor.userId}`}
-                                    className="student-discussion-reactor-popover__row"
-                                  >
-                                    <DiscussionAvatar
-                                      author={reactor.user}
-                                      classItem={classItem}
-                                      user={user}
-                                    />
-                                    <em>{getDiscussionAuthorName(reactor.user)}</em>
-                                  </span>
-                                ))}
-                                {hoverState.overflow > 0 ? (
-                                  <span className="student-discussion-reactor-popover__more">
-                                    +{hoverState.overflow} others
-                                  </span>
-                                ) : null}
-                              </span>
-                            ) : null}
-                          </motion.button>
-                        );
-                      })}
-                    </div>
-                  </article>
-                ))}
-                {selectedDiscussionThread.comments.length === 0 ? (
-                  <div className="teacher-class-workspace__empty">No comments yet.</div>
-                ) : null}
+                )}
               </div>
-
-              {selectedDiscussionThread.status === 'published' && selectedDiscussionThread.allowComments ? (
-                <div className="student-discussion-composer">
-                  <div className="student-discussion-composer__head">
-                    <div>
-                      <strong>Post a reply</strong>
-                      <p>Keep it clear, respectful, and related to the class topic.</p>
-                    </div>
-                    <span>
-                      {discussionCommentImages.length} image
-                      {discussionCommentImages.length === 1 ? '' : 's'} ready
-                    </span>
-                  </div>
-                  {discussionLimitState ? (
-                    <div
-                      className="student-discussion-limit-banner"
-                      data-blocked={discussionLimitState.reached}
-                    >
-                      <strong>
-                        {discussionLimitState.reached
-                          ? 'Comment limit reached'
-                          : `${discussionLimitState.remaining} repl${
-                              discussionLimitState.remaining === 1 ? 'y' : 'ies'
-                            } left`}
-                      </strong>
-                      <span>
-                        You used {discussionLimitState.used} of {discussionLimitState.limit} allowed
-                        replies for this thread.
-                      </span>
-                    </div>
-                  ) : null}
-                  <Textarea
-                    variant="student"
-                    value={discussionCommentBody}
-                    onChange={(event) => setDiscussionCommentBody(event.target.value)}
-                    placeholder="Write a respectful reply..."
-                    rows={5}
-                    className="student-discussion-composer__textarea"
-                    disabled={discussionLimitState?.reached}
-                  />
-                  <div className="student-discussion-composer__attachments">
-                    <Input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      disabled={discussionLimitState?.reached}
-                      onChange={(event) =>
-                        setDiscussionCommentImages(Array.from(event.target.files || []))
-                      }
-                    />
-                    <LocalImagePreviewStrip files={discussionCommentImages} />
-                    {discussionCommentImages.length > 0 ? (
-                      <div className="student-discussion-composer__chips">
-                        {discussionCommentImages.map((file) => (
-                          <span key={`${file.name}-${file.size}`}>
-                            <Paperclip className="h-3.5 w-3.5" />
-                            {file.name}
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className="student-discussion-composer__actions">
-                    <span>
-                      {discussionCommentBody.trim()
-                        ? `${discussionCommentBody.trim().length} characters`
-                        : 'Text or image replies are allowed'}
-                    </span>
-                    <button
-                      type="button"
-                      className="student-class-assignment-row__take"
-                      onClick={() => void handleSubmitDiscussionComment()}
-                      disabled={
-                        discussionSubmitting ||
-                        discussionLimitState?.reached ||
-                        (!discussionCommentBody.trim() && discussionCommentImages.length === 0)
-                      }
-                    >
-                      <SendHorizonal className="h-4 w-4" />
-                      {discussionSubmitting ? 'Posting...' : 'Post Comment'}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="teacher-class-workspace__empty">
-                  This thread is closed for new comments.
-                </div>
-              )}
-            </div>
-          ) : null}
-        </motion.section>
-      ) : null}
-
-      {currentTab === 'classmates' ? (
-        <motion.section className="student-class-panel" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-          <header className="student-class-panel__head">
-            <h2>Classmates</h2>
-            <p>{classmateRows.length} students in {classItem.section?.name || 'this class'}</p>
-          </header>
-
-          <div className="student-class-table-wrap">
-            <table className="student-class-table">
-              <thead>
-                <tr>
-                  <th>Student</th>
-                  <th>Email</th>
-                  <th>Section</th>
-                </tr>
-              </thead>
-              <tbody>
-                {classmateRows.map((row) => (
-                  <tr key={row.id}>
-                    <td>
-                      <div className="student-class-student-cell">
-                        <Avatar className="student-class-student-cell__avatar">
-                          {row.profilePicture ? (
-                            <AvatarImage src={row.profilePicture} alt={row.fullName} />
-                          ) : null}
-                          <AvatarFallback className="student-class-student-cell__avatar-fallback">
-                            {row.initials}
-                          </AvatarFallback>
-                        </Avatar>
-                        <strong>{row.fullName}</strong>
-                      </div>
-                    </td>
-                    <td>{row.email}</td>
-                    <td>{row.section}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {classmateRows.length === 0 ? (
-              <div className="teacher-class-workspace__empty">No classmates found.</div>
             ) : null}
-          </div>
-        </motion.section>
-      ) : null}
+          </motion.section>
+        ) : null}
 
-      {currentTab === 'grades' ? (
-        <motion.section className="student-class-panel" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-          <header className="student-gradebook__head">
-            <div>
-              <h2>Gradebook</h2>
+        {currentTab === "classmates" ? (
+          <motion.section
+            className="student-class-panel"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+          >
+            <header className="student-class-panel__head">
+              <h2>Classmates</h2>
               <p>
-                {gradesUnavailable
-                  ? 'Grade data temporarily unavailable'
-                  : `${gradeRows.length} graded items and submissions for ${classItem.subjectName}`}
+                {classmateRows.length} students in{" "}
+                {classItem.section?.name || "this class"}
               </p>
-            </div>
-            <div className="student-gradebook__overall" data-tone={gradeSummary.tone}>
-              <span>Overall</span>
-              <strong>{gradesUnavailable ? '--' : `${gradeSummary.percent}%`}</strong>
-            </div>
-          </header>
+            </header>
 
-          <div className="student-gradebook">
-            <div className="student-gradebook__rule" aria-hidden="true" />
-            <div className="student-class-table-wrap student-class-table-wrap--gradebook">
-
-              {gradesUnavailable ? (
-                <div className="teacher-class-workspace__empty">
-                  Grade data is temporarily unavailable.
-                </div>
-              ) : gradeRows.length === 0 ? (
-                <div className="teacher-class-workspace__empty">No grade records yet.</div>
-              ) : (
-                <table className="student-class-table student-class-table--gradebook">
-                  <thead>
-                    <tr>
-                      <th>Item Name</th>
-                      <th>Due Date</th>
-                      <th>Status</th>
-                      <th>Grade</th>
-                      <th>Results</th>
+            <div className="student-class-table-wrap">
+              <table className="student-class-table">
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Email</th>
+                    <th>Section</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {classmateRows.map((row) => (
+                    <tr key={row.id}>
+                      <td>
+                        <div className="student-class-student-cell">
+                          <Avatar className="student-class-student-cell__avatar">
+                            {row.profilePicture ? (
+                              <AvatarImage
+                                src={row.profilePicture}
+                                alt={row.fullName}
+                              />
+                            ) : null}
+                            <AvatarFallback className="student-class-student-cell__avatar-fallback">
+                              {row.initials}
+                            </AvatarFallback>
+                          </Avatar>
+                          <strong>{row.fullName}</strong>
+                        </div>
+                      </td>
+                      <td>{row.email}</td>
+                      <td>{row.section}</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {gradeRows.map((row) => (
-                      <tr key={row.id} data-pending={row.isPending}>
-                        <td>
-                          <div className="student-gradebook__item">
-                            <span
-                              className="student-gradebook__dot"
-                              data-category={row.category}
-                              aria-hidden="true"
-                            />
-                            <div className="student-gradebook__item-copy">
-                              <strong>{row.title}</strong>
-                              <p>
-                                {row.categoryLabel} - {row.detailText}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-                        <td>{row.dueText}</td>
-                        <td>
-                          <span className="student-gradebook__status" data-tone={row.statusTone}>
-                            {row.statusLabel}
-                          </span>
-                        </td>
-                        <td>
-                          <div className="student-gradebook__grade-cell">
-                            <span className="student-gradebook__grade-pill" data-tone={row.gradeTone}>
-                              {row.scoreText}
-                            </span>
-                            <small>{row.percentText || 'Not graded'}</small>
-                          </div>
-                        </td>
-                        <td>
-                          <Link href={row.actionHref} className="student-gradebook__view">
-                            View
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+                  ))}
+                </tbody>
+              </table>
+              {classmateRows.length === 0 ? (
+                <div className="teacher-class-workspace__empty">
+                  No classmates found.
+                </div>
+              ) : null}
             </div>
-          </div>
-        </motion.section>
-      ) : null}
+          </motion.section>
+        ) : null}
 
-        {currentTab === 'calendar' ? (
+        {currentTab === "grades" ? (
+          <motion.section
+            className="student-class-panel"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+          >
+            <header className="student-gradebook__head">
+              <div>
+                <h2>Gradebook</h2>
+                <p>
+                  {gradesUnavailable
+                    ? "Grade data temporarily unavailable"
+                    : `${gradeRows.length} graded items and submissions for ${classItem.subjectName}`}
+                </p>
+              </div>
+              <div
+                className="student-gradebook__overall"
+                data-tone={gradeSummary.tone}
+              >
+                <span>Assessment average (reference)</span>
+                <strong>
+                  {gradesUnavailable ? "--" : `${gradeSummary.percent}%`}
+                </strong>
+              </div>
+            </header>
+
+            <div className="student-gradebook">
+              <div className="student-gradebook__rule" aria-hidden="true" />
+              <div className="student-class-table-wrap student-class-table-wrap--gradebook">
+                {gradesUnavailable ? (
+                  <div className="teacher-class-workspace__empty">
+                    Grade data is temporarily unavailable.
+                  </div>
+                ) : gradeRows.length === 0 ? (
+                  <div className="teacher-class-workspace__empty">
+                    No grade records yet.
+                  </div>
+                ) : (
+                  <table className="student-class-table student-class-table--gradebook">
+                    <thead>
+                      <tr>
+                        <th>Item Name</th>
+                        <th>Due Date</th>
+                        <th>Status</th>
+                        <th>Grade</th>
+                        <th>Results</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {gradeRows.map((row) => (
+                        <tr key={row.id} data-pending={row.isPending}>
+                          <td>
+                            <div className="student-gradebook__item">
+                              <span
+                                className="student-gradebook__dot"
+                                data-category={row.category}
+                                aria-hidden="true"
+                              />
+                              <div className="student-gradebook__item-copy">
+                                <strong>{row.title}</strong>
+                                <p>
+                                  {row.categoryLabel} - {row.detailText}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+                          <td>{row.dueText}</td>
+                          <td>
+                            <span
+                              className="student-gradebook__status"
+                              data-tone={row.statusTone}
+                            >
+                              {row.statusLabel}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="student-gradebook__grade-cell">
+                              <span
+                                className="student-gradebook__grade-pill"
+                                data-tone={row.gradeTone}
+                              >
+                                {row.scoreText}
+                              </span>
+                              <small>{row.percentText || "Not graded"}</small>
+                            </div>
+                          </td>
+                          <td>
+                            <Link
+                              href={row.actionHref}
+                              className="student-gradebook__view"
+                            >
+                              View
+                            </Link>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          </motion.section>
+        ) : null}
+
+        {currentTab === "calendar" ? (
           <motion.section
             className="student-class-panel"
             variants={staggerContainer}
@@ -2611,7 +2932,9 @@ export default function StudentClassDetailPage() {
                 Calendar data is temporarily unavailable.
               </div>
             ) : calendarRows.length === 0 ? (
-              <div className="teacher-class-workspace__empty">No upcoming events.</div>
+              <div className="teacher-class-workspace__empty">
+                No upcoming events.
+              </div>
             ) : (
               <div className="student-class-stack">
                 {calendarRows.map((entry) => {
@@ -2632,11 +2955,11 @@ export default function StudentClassDetailPage() {
                         <p>{entry.subtitle}</p>
                       </div>
                       <span className="student-class-calendar-row__kind">
-                        {entry.kind === 'assessment'
-                          ? 'Assessment'
-                          : entry.kind === 'holiday'
-                            ? 'Holiday'
-                            : 'Event'}
+                        {entry.kind === "assessment"
+                          ? "Assessment"
+                          : entry.kind === "holiday"
+                            ? "Holiday"
+                            : "Event"}
                       </span>
                     </motion.article>
                   );
@@ -2657,18 +2980,22 @@ export default function StudentClassDetailPage() {
           <DialogHeader>
             <DialogTitle>Student guide: Class Page</DialogTitle>
             <DialogDescription>
-              This guide explains each part of the class page in simple steps, with examples that match the student view.
+              This guide explains each part of the class page in simple steps,
+              with examples that match the student view.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="teacher-intervention-workspace__manual-progress" aria-label="Class Page guide pages">
+          <div
+            className="teacher-intervention-workspace__manual-progress"
+            aria-label="Class Page guide pages"
+          >
             <span>{`Page ${helpPage + 1} of ${studentClassGuidePages.length}`}</span>
             <div className="teacher-intervention-workspace__manual-dots">
               {studentClassGuidePages.map((page, index) => (
                 <button
                   key={page.title}
                   type="button"
-                  className={index === helpPage ? 'is-active' : undefined}
+                  className={index === helpPage ? "is-active" : undefined}
                   onClick={() => setHelpPage(index)}
                   aria-label={`Open guide page ${index + 1}`}
                 />
@@ -2678,7 +3005,9 @@ export default function StudentClassDetailPage() {
 
           <div className="teacher-intervention-workspace__manual-layout">
             <div className="teacher-intervention-workspace__manual-copy">
-              <span className="teacher-intervention-workspace__manual-kicker">Class page tour</span>
+              <span className="teacher-intervention-workspace__manual-kicker">
+                Class page tour
+              </span>
               <h3>{activeGuidePage.title}</h3>
               <p>{activeGuidePage.description}</p>
 
@@ -2686,7 +3015,7 @@ export default function StudentClassDetailPage() {
                 {activeGuidePage.steps.map((step, index) => (
                   <div
                     key={`${activeGuidePage.title}-${step.action}-${index}`}
-                    className={`route-guide-step${step.tone ? ` is-${step.tone}` : ''}`}
+                    className={`route-guide-step${step.tone ? ` is-${step.tone}` : ""}`}
                   >
                     <span className="route-guide-step__index">{index + 1}</span>
                     <div>
@@ -2697,7 +3026,9 @@ export default function StudentClassDetailPage() {
                 ))}
               </div>
 
-              <div className="teacher-intervention-workspace__manual-reminder">{activeGuidePage.reminder}</div>
+              <div className="teacher-intervention-workspace__manual-reminder">
+                {activeGuidePage.reminder}
+              </div>
             </div>
 
             <StudentClassGuideScreenshot screen={activeGuidePage.screen} />
@@ -2713,13 +3044,20 @@ export default function StudentClassDetailPage() {
               <ChevronLeft className="mr-2 h-4 w-4" />
               Previous page
             </Button>
-            <Button type="button" variant="ghost" aria-label="Close guide" onClick={() => setHelpOpen(false)}>
+            <Button
+              type="button"
+              variant="ghost"
+              aria-label="Close guide"
+              onClick={() => setHelpOpen(false)}
+            >
               Close guide
             </Button>
             <Button
               type="button"
               onClick={() =>
-                setHelpPage((current) => Math.min(studentClassGuidePages.length - 1, current + 1))
+                setHelpPage((current) =>
+                  Math.min(studentClassGuidePages.length - 1, current + 1),
+                )
               }
               disabled={helpPage === studentClassGuidePages.length - 1}
             >

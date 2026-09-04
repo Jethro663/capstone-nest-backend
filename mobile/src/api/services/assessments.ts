@@ -1,4 +1,7 @@
-import type { SaveAssessmentEditorInput, AssessmentEditorResult } from "../../types/assessment";
+import type {
+  SaveAssessmentEditorInput,
+  AssessmentEditorResult,
+} from "../../types/assessment";
 import { apiClient } from "../client";
 import { normalizeArray, unwrapEnvelope } from "../http";
 import { fetchAllPages, normalizePageEnvelope } from "../pagination";
@@ -44,6 +47,8 @@ export type ReturnGradeDto = {
     questionId: string;
     pointsEarned: number;
   }>;
+  bonusPoints?: number;
+  bonusReason?: string;
 };
 
 type TeacherSubmissionAttemptPayload = {
@@ -65,7 +70,9 @@ type TeacherSubmissionPayload = Partial<TeacherAssessmentSubmission> & {
   attempt?: TeacherSubmissionAttemptPayload | null;
 };
 
-function normalizeTeacherSubmission(entry: TeacherSubmissionPayload): TeacherAssessmentSubmission {
+function normalizeTeacherSubmission(
+  entry: TeacherSubmissionPayload,
+): TeacherAssessmentSubmission {
   const attempt = entry.attempt;
   const studentName =
     entry.studentName ||
@@ -83,10 +90,13 @@ function normalizeTeacherSubmission(entry: TeacherSubmissionPayload): TeacherAss
     studentEmail: entry.studentEmail || entry.email || undefined,
     status: entry.status || "not_started",
     latestAttemptId: entry.latestAttemptId ?? attempt?.id ?? null,
-    latestAttemptNumber: entry.latestAttemptNumber ?? attempt?.attemptNumber ?? null,
+    latestAttemptNumber:
+      entry.latestAttemptNumber ?? attempt?.attemptNumber ?? null,
     latestAttemptScore: entry.latestAttemptScore ?? attempt?.score ?? null,
-    latestAttemptSubmittedAt: entry.latestAttemptSubmittedAt ?? attempt?.submittedAt ?? null,
-    latestAttemptReturnedAt: entry.latestAttemptReturnedAt ?? attempt?.returnedAt ?? null,
+    latestAttemptSubmittedAt:
+      entry.latestAttemptSubmittedAt ?? attempt?.submittedAt ?? null,
+    latestAttemptReturnedAt:
+      entry.latestAttemptReturnedAt ?? attempt?.returnedAt ?? null,
     teacherFeedback: entry.teacherFeedback ?? attempt?.teacherFeedback ?? null,
     directScore: entry.directScore ?? attempt?.directScore ?? null,
     submittedFiles: entry.submittedFiles ?? attempt?.submittedFiles ?? null,
@@ -107,35 +117,83 @@ function normalizeTeacherSubmissionsResponse(
 }
 
 export const assessmentsApi = {
-  async uploadAuthorImage(kind: 'questions' | 'options', id: string, file: { uri: string; fileName?: string | null; mimeType?: string | null }) {
+  async uploadAuthorImage(
+    kind: "questions" | "options",
+    id: string,
+    file: { uri: string; fileName?: string | null; mimeType?: string | null },
+  ) {
     const form = new FormData();
-    form.append('image', { uri: file.uri, name: file.fileName ?? 'image.jpg', type: file.mimeType ?? 'image/jpeg' } as unknown as Blob);
-    return unwrapEnvelope((await apiClient.post(`/assessments/${kind}/${id}/image`, form, { headers: { 'Content-Type': 'multipart/form-data' } })).data);
+    form.append("image", {
+      uri: file.uri,
+      name: file.fileName ?? "image.jpg",
+      type: file.mimeType ?? "image/jpeg",
+    } as unknown as Blob);
+    return unwrapEnvelope(
+      (
+        await apiClient.post(`/assessments/${kind}/${id}/image`, form, {
+          headers: { "Content-Type": "multipart/form-data" },
+        })
+      ).data,
+    );
   },
-  async uploadAuthorFile(id: string, kind: 'teacher-attachment' | 'rubric-source', file: { uri: string; name: string; mimeType?: string }) {
+  async uploadAuthorFile(
+    id: string,
+    kind: "teacher-attachment" | "rubric-source",
+    file: { uri: string; name: string; mimeType?: string },
+  ) {
     const form = new FormData();
-    form.append('file', { uri: file.uri, name: file.name, type: file.mimeType ?? 'application/octet-stream' } as unknown as Blob);
-    return unwrapEnvelope((await apiClient.post(`/assessments/${id}/${kind}`, form, { headers: { 'Content-Type': 'multipart/form-data' } })).data);
+    form.append("file", {
+      uri: file.uri,
+      name: file.name,
+      type: file.mimeType ?? "application/octet-stream",
+    } as unknown as Blob);
+    return unwrapEnvelope(
+      (
+        await apiClient.post(`/assessments/${id}/${kind}`, form, {
+          headers: { "Content-Type": "multipart/form-data" },
+        })
+      ).data,
+    );
   },
-  async saveEditor(id: string | undefined, input: SaveAssessmentEditorInput): Promise<AssessmentEditorResult> {
-    const response = id ? await apiClient.put<ApiEnvelope<AssessmentEditorResult>>(`/assessments/${id}/editor`, input)
-      : await apiClient.post<ApiEnvelope<AssessmentEditorResult>>('/assessments/editor', input);
+  async saveEditor(
+    id: string | undefined,
+    input: SaveAssessmentEditorInput,
+  ): Promise<AssessmentEditorResult> {
+    const response = id
+      ? await apiClient.put<ApiEnvelope<AssessmentEditorResult>>(
+          `/assessments/${id}/editor`,
+          input,
+        )
+      : await apiClient.post<ApiEnvelope<AssessmentEditorResult>>(
+          "/assessments/editor",
+          input,
+        );
     return unwrapEnvelope(response.data);
   },
   async create(payload: CreateAssessmentDto) {
-    const response = await apiClient.post<ApiEnvelope<Assessment>>("/assessments", payload);
+    const response = await apiClient.post<ApiEnvelope<Assessment>>(
+      "/assessments",
+      payload,
+    );
     return unwrapEnvelope(response.data);
   },
 
   async getPageByClass(
     classId: string,
-    query: { page?: number; limit?: number; status?: "all" | "upcoming" | "past_due" | "completed" } = {},
+    query: {
+      page?: number;
+      limit?: number;
+      status?: "all" | "upcoming" | "past_due" | "completed";
+    } = {},
   ) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 100;
-    const response = await apiClient.get<ApiEnvelope<Assessment[]>>(`/assessments/class/${classId}`, {
-      params: { ...query, page, limit },
-    });
+    const response = await apiClient.get<ApiEnvelope<Assessment[]>>(
+      `/assessments/class/${classId}`,
+      {
+        params: { ...query, page, limit },
+      },
+    );
     return normalizePageEnvelope(response.data, page, limit);
   },
 
@@ -144,7 +202,8 @@ export const assessmentsApi = {
     query: { status?: "all" | "upcoming" | "past_due" | "completed" } = {},
   ) {
     return fetchAllPages(
-      (page, limit) => assessmentsApi.getPageByClass(classId, { ...query, page, limit }),
+      (page, limit) =>
+        assessmentsApi.getPageByClass(classId, { ...query, page, limit }),
       { key: (assessment) => assessment.id },
     );
   },
@@ -154,7 +213,9 @@ export const assessmentsApi = {
   },
 
   async getById(assessmentId: string) {
-    const response = await apiClient.get<ApiEnvelope<Assessment>>(`/assessments/${assessmentId}`);
+    const response = await apiClient.get<ApiEnvelope<Assessment>>(
+      `/assessments/${assessmentId}`,
+    );
     return unwrapEnvelope(response.data);
   },
 
@@ -167,25 +228,32 @@ export const assessmentsApi = {
   },
 
   async startAttempt(assessmentId: string) {
-    const response = await apiClient.post<
-      ApiEnvelope<OngoingAttemptResult>
-    >(`/assessments/${assessmentId}/start`, {});
-    return unwrapEnvelope(response.data);
-  },
-
-  async getOngoingAttempt(assessmentId: string) {
-    const response = await apiClient.get<ApiEnvelope<OngoingAttemptResult | null>>(
-      `/assessments/${assessmentId}/ongoing-attempt`,
+    const response = await apiClient.post<ApiEnvelope<OngoingAttemptResult>>(
+      `/assessments/${assessmentId}/start`,
+      {},
     );
     return unwrapEnvelope(response.data);
   },
 
-  async submit(payload: SubmitAssessmentDto) {
-    const response = await apiClient.post<ApiEnvelope<unknown>>("/assessments/submit", payload);
+  async getOngoingAttempt(assessmentId: string) {
+    const response = await apiClient.get<
+      ApiEnvelope<OngoingAttemptResult | null>
+    >(`/assessments/${assessmentId}/ongoing-attempt`);
     return unwrapEnvelope(response.data);
   },
 
-  async updateAttemptProgress(attemptId: string, payload: UpdateAttemptProgressDto) {
+  async submit(payload: SubmitAssessmentDto) {
+    const response = await apiClient.post<ApiEnvelope<unknown>>(
+      "/assessments/submit",
+      payload,
+    );
+    return unwrapEnvelope(response.data);
+  },
+
+  async updateAttemptProgress(
+    attemptId: string,
+    payload: UpdateAttemptProgressDto,
+  ) {
     const response = await apiClient.patch<ApiEnvelope<AssessmentAttempt>>(
       `/assessments/attempts/${attemptId}/progress`,
       payload,
@@ -204,18 +272,18 @@ export const assessmentsApi = {
       type: file.type || "application/octet-stream",
     } as unknown as Blob);
 
-    const response = await apiClient.post<ApiEnvelope<UploadedAssessmentSubmission>>(
-      `/assessments/${assessmentId}/submission-file`,
-      formData,
-      { headers: { "Content-Type": "multipart/form-data" } },
-    );
+    const response = await apiClient.post<
+      ApiEnvelope<UploadedAssessmentSubmission>
+    >(`/assessments/${assessmentId}/submission-file`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
     return unwrapEnvelope(response.data);
   },
 
   async removeSubmissionFile(assessmentId: string, fileId: string) {
-    const response = await apiClient.delete<ApiEnvelope<RemovedAssessmentSubmissionFiles>>(
-      `/assessments/${assessmentId}/submission-files/${fileId}`,
-    );
+    const response = await apiClient.delete<
+      ApiEnvelope<RemovedAssessmentSubmissionFiles>
+    >(`/assessments/${assessmentId}/submission-files/${fileId}`);
     return unwrapEnvelope(response.data);
   },
 
@@ -235,19 +303,24 @@ export const assessmentsApi = {
   },
 
   async getAttemptResults(attemptId: string) {
-    const response = await apiClient.get<ApiEnvelope<AttemptResult>>(`/assessments/attempts/${attemptId}/results`);
+    const response = await apiClient.get<ApiEnvelope<AttemptResult>>(
+      `/assessments/attempts/${attemptId}/results`,
+    );
     return unwrapEnvelope(response.data);
   },
 
   async update(assessmentId: string, payload: UpdateAssessmentDto) {
-    const response = await apiClient.put<ApiEnvelope<Assessment>>(`/assessments/${assessmentId}`, payload);
+    const response = await apiClient.put<ApiEnvelope<Assessment>>(
+      `/assessments/${assessmentId}`,
+      payload,
+    );
     return unwrapEnvelope(response.data);
   },
 
   async delete(assessmentId: string) {
-    const response = await apiClient.delete<ApiEnvelope<{ success?: boolean; message?: string }>>(
-      `/assessments/${assessmentId}`,
-    );
+    const response = await apiClient.delete<
+      ApiEnvelope<{ success?: boolean; message?: string }>
+    >(`/assessments/${assessmentId}`);
     return unwrapEnvelope(response.data);
   },
 
@@ -275,53 +348,84 @@ export const assessmentsApi = {
   },
 
   async getTeacherSubmissions(assessmentId: string) {
-    const response = await apiClient.get<ApiEnvelope<TeacherAssessmentSubmissionsResponse>>(
-      `/assessments/${assessmentId}/submissions`,
-    );
+    const response = await apiClient.get<
+      ApiEnvelope<TeacherAssessmentSubmissionsResponse>
+    >(`/assessments/${assessmentId}/submissions`);
     return normalizeTeacherSubmissionsResponse(unwrapEnvelope(response.data));
   },
 
   async getAllAttempts(assessmentId: string) {
-    const response = await apiClient.get<ApiEnvelope<AssessmentAttempt[]>>(`/assessments/${assessmentId}/all-attempts`);
+    const response = await apiClient.get<ApiEnvelope<AssessmentAttempt[]>>(
+      `/assessments/${assessmentId}/all-attempts`,
+    );
     return normalizeArray<AssessmentAttempt>(unwrapEnvelope(response.data));
   },
 
   async getStats(assessmentId: string) {
-    const response = await apiClient.get<ApiEnvelope<AssessmentStats>>(`/assessments/${assessmentId}/stats`);
+    const response = await apiClient.get<ApiEnvelope<AssessmentStats>>(
+      `/assessments/${assessmentId}/stats`,
+    );
     return unwrapEnvelope(response.data);
   },
 
   async getQuestionAnalytics(assessmentId: string) {
-    const response = await apiClient.get<ApiEnvelope<AssessmentQuestionAnalyticsResponse>>(`/assessments/${assessmentId}/question-analytics`);
+    const response = await apiClient.get<
+      ApiEnvelope<AssessmentQuestionAnalyticsResponse>
+    >(`/assessments/${assessmentId}/question-analytics`);
     return unwrapEnvelope(response.data);
   },
 
   async returnAllGrades(assessmentId: string, teacherFeedback?: string) {
-    const response = await apiClient.post<ApiEnvelope<{ success?: boolean }>>(`/assessments/${assessmentId}/return-all`, { teacherFeedback: teacherFeedback || undefined });
+    const response = await apiClient.post<ApiEnvelope<{ success?: boolean }>>(
+      `/assessments/${assessmentId}/return-all`,
+      { teacherFeedback: teacherFeedback || undefined },
+    );
     return unwrapEnvelope(response.data);
   },
 
-  async bulkReturnGrades(payload: { attemptIds: string[]; teacherFeedback?: string }) {
-    const response = await apiClient.post<ApiEnvelope<{ returned: number; attemptIds: string[] }>>("/assessments/attempts/bulk-return", { attemptIds: payload.attemptIds, teacherFeedback: payload.teacherFeedback || undefined });
+  async bulkReturnGrades(payload: {
+    attemptIds: string[];
+    teacherFeedback?: string;
+  }) {
+    const response = await apiClient.post<
+      ApiEnvelope<{ returned: number; attemptIds: string[] }>
+    >("/assessments/attempts/bulk-return", {
+      attemptIds: payload.attemptIds,
+      teacherFeedback: payload.teacherFeedback || undefined,
+    });
     return unwrapEnvelope(response.data);
   },
 
-  async uploadRubricSource(assessmentId: string, file: { uri: string; name: string; type?: string }) {
-    const formData = new FormData();
-    formData.append("file", { uri: file.uri, name: file.name, type: file.type || "application/octet-stream" } as unknown as Blob);
-    const response = await apiClient.post<ApiEnvelope<Record<string, unknown>>>(`/assessments/${assessmentId}/rubric-source`, formData, { headers: { "Content-Type": "multipart/form-data" } });
-    return unwrapEnvelope(response.data);
-  },
-
-  async reviewRubric(assessmentId: string, rubricCriteria: Array<Record<string, unknown>>) {
-    const response = await apiClient.put<ApiEnvelope<Assessment>>(`/assessments/${assessmentId}/rubric-review`, { rubricCriteria });
-    return unwrapEnvelope(response.data);
-  },
-
-  async returnGrade(
-    attemptId: string,
-    payload: ReturnGradeDto = {},
+  async uploadRubricSource(
+    assessmentId: string,
+    file: { uri: string; name: string; type?: string },
   ) {
+    const formData = new FormData();
+    formData.append("file", {
+      uri: file.uri,
+      name: file.name,
+      type: file.type || "application/octet-stream",
+    } as unknown as Blob);
+    const response = await apiClient.post<ApiEnvelope<Record<string, unknown>>>(
+      `/assessments/${assessmentId}/rubric-source`,
+      formData,
+      { headers: { "Content-Type": "multipart/form-data" } },
+    );
+    return unwrapEnvelope(response.data);
+  },
+
+  async reviewRubric(
+    assessmentId: string,
+    rubricCriteria: Array<Record<string, unknown>>,
+  ) {
+    const response = await apiClient.put<ApiEnvelope<Assessment>>(
+      `/assessments/${assessmentId}/rubric-review`,
+      { rubricCriteria },
+    );
+    return unwrapEnvelope(response.data);
+  },
+
+  async returnGrade(attemptId: string, payload: ReturnGradeDto = {}) {
     const response = await apiClient.post<ApiEnvelope<{ success?: boolean }>>(
       `/assessments/attempts/${attemptId}/return`,
       payload,
@@ -337,7 +441,10 @@ export const assessmentsApi = {
     return unwrapEnvelope(response.data);
   },
 
-  async downloadTeacherAttachment(assessmentId: string, fallbackName = "teacher-attachment") {
+  async downloadTeacherAttachment(
+    assessmentId: string,
+    fallbackName = "teacher-attachment",
+  ) {
     return downloadProtectedFile({
       pathname: `/assessments/${assessmentId}/teacher-attachment/download`,
       fallbackName,
@@ -346,7 +453,10 @@ export const assessmentsApi = {
     });
   },
 
-  async openTeacherAttachment(assessmentId: string, fallbackName = "teacher-attachment") {
+  async openTeacherAttachment(
+    assessmentId: string,
+    fallbackName = "teacher-attachment",
+  ) {
     const download = await downloadProtectedFile({
       pathname: `/assessments/${assessmentId}/teacher-attachment/download`,
       fallbackName,
@@ -355,7 +465,10 @@ export const assessmentsApi = {
     return download;
   },
 
-  async downloadAttemptSubmissionFile(attemptId: string, fallbackName = "submission-file") {
+  async downloadAttemptSubmissionFile(
+    attemptId: string,
+    fallbackName = "submission-file",
+  ) {
     return downloadProtectedFile({
       pathname: `/assessments/attempts/${attemptId}/submission-file/download`,
       fallbackName,
@@ -364,7 +477,10 @@ export const assessmentsApi = {
     });
   },
 
-  async openAttemptSubmissionFile(attemptId: string, fallbackName = "submission-file") {
+  async openAttemptSubmissionFile(
+    attemptId: string,
+    fallbackName = "submission-file",
+  ) {
     const download = await downloadProtectedFile({
       pathname: `/assessments/attempts/${attemptId}/submission-file/download`,
       fallbackName,

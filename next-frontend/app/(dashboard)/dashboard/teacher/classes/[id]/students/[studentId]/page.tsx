@@ -1,56 +1,59 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
-import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
-import { toast } from 'sonner';
-import { classService } from '@/services/class-service';
-import type {
-  Enrollment,
-  TeacherClassStudentOverview,
-} from '@/types/class';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Skeleton } from '@/components/ui/skeleton';
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import {
+  useParams,
+  usePathname,
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
+import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
+import { toast } from "sonner";
+import { classService } from "@/services/class-service";
+import { boundAcademicPercentage } from "@/lib/academic-score";
+import type { Enrollment, TeacherClassStudentOverview } from "@/types/class";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   AssessmentHistoryWorklist,
   type AssessmentHistoryView,
-} from './_components/assessment-history-worklist';
-import './student-overview.css';
+} from "./_components/assessment-history-worklist";
+import "./student-overview.css";
 
 function formatFullName(data: TeacherClassStudentOverview | null) {
-  const first = data?.student.firstName?.trim() ?? '';
-  const last = data?.student.lastName?.trim() ?? '';
-  return `${first} ${last}`.trim() || 'Student';
+  const first = data?.student.firstName?.trim() ?? "";
+  const last = data?.student.lastName?.trim() ?? "";
+  return `${first} ${last}`.trim() || "Student";
 }
 
 function formatInitials(data: TeacherClassStudentOverview | null) {
-  const first = data?.student.firstName?.trim().charAt(0) ?? '';
-  const last = data?.student.lastName?.trim().charAt(0) ?? '';
-  return `${first}${last}`.toUpperCase() || 'ST';
+  const first = data?.student.firstName?.trim().charAt(0) ?? "";
+  const last = data?.student.lastName?.trim().charAt(0) ?? "";
+  return `${first}${last}`.toUpperCase() || "ST";
 }
 
 function toPercent(value: number | null | undefined) {
-  if (typeof value !== 'number') return '--';
-  return `${value.toFixed(1)}%`;
+  if (typeof value !== "number") return "--";
+  return `${boundAcademicPercentage(value).toFixed(1)}%`;
 }
 
 function prettifyStatus(status?: string | null) {
-  if (!status) return '--';
+  if (!status) return "--";
   return status
     .toLowerCase()
-    .split('_')
+    .split("_")
     .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
-    .join(' ');
+    .join(" ");
 }
 
 function parseHistoryView(value: string | null): AssessmentHistoryView {
-  if (value === 'finished' || value === 'all') return value;
-  return 'attention';
+  if (value === "finished" || value === "all") return value;
+  return "attention";
 }
 
 function isValidHistoryView(value: string | null) {
-  return value === 'attention' || value === 'finished' || value === 'all';
+  return value === "attention" || value === "finished" || value === "all";
 }
 
 function isValidHistoryPage(value: string | null) {
@@ -60,7 +63,7 @@ function isValidHistoryPage(value: string | null) {
 }
 
 function parseHistoryPage(value: string | null) {
-  return isValidHistoryPage(value) ? Number(value ?? '1') : 1;
+  return isValidHistoryPage(value) ? Number(value ?? "1") : 1;
 }
 
 export default function TeacherStudentProfilePage() {
@@ -71,12 +74,15 @@ export default function TeacherStudentProfilePage() {
   const classId = params.id as string;
   const studentId = params.studentId as string;
   const searchParamsString = searchParams.toString();
-  const historyParam = searchParams.get('history');
-  const pageParam = searchParams.get('page');
-  const hasInvalidHistoryView = historyParam !== null && !isValidHistoryView(historyParam);
+  const historyParam = searchParams.get("history");
+  const pageParam = searchParams.get("page");
+  const hasInvalidHistoryView =
+    historyParam !== null && !isValidHistoryView(historyParam);
   const hasInvalidHistoryPage = !isValidHistoryPage(pageParam);
   const activeHistoryView = parseHistoryView(historyParam);
-  const requestedHistoryPage = hasInvalidHistoryView ? 1 : parseHistoryPage(pageParam);
+  const requestedHistoryPage = hasInvalidHistoryView
+    ? 1
+    : parseHistoryPage(pageParam);
 
   const [loading, setLoading] = useState(true);
   const [overview, setOverview] = useState<TeacherClassStudentOverview | null>(
@@ -93,7 +99,7 @@ export default function TeacherStudentProfilePage() {
       );
       setOverview(response.data);
     } catch {
-      toast.error('Failed to load student overview');
+      toast.error("Failed to load student overview");
       setOverview(null);
     } finally {
       setLoading(false);
@@ -126,11 +132,11 @@ export default function TeacherStudentProfilePage() {
     (
       view: AssessmentHistoryView,
       page: number,
-      mode: 'push' | 'replace' = 'push',
+      mode: "push" | "replace" = "push",
     ) => {
       const nextParams = new URLSearchParams(searchParamsString);
-      nextParams.set('history', view);
-      nextParams.set('page', String(page));
+      nextParams.set("history", view);
+      nextParams.set("page", String(page));
       router[mode](`${pathname}?${nextParams.toString()}`, { scroll: false });
     },
     [pathname, router, searchParamsString],
@@ -138,7 +144,7 @@ export default function TeacherStudentProfilePage() {
 
   useEffect(() => {
     if (hasInvalidHistoryView || hasInvalidHistoryPage) {
-      navigateHistory(activeHistoryView, 1, 'replace');
+      navigateHistory(activeHistoryView, 1, "replace");
     }
   }, [
     activeHistoryView,
@@ -148,12 +154,12 @@ export default function TeacherStudentProfilePage() {
   ]);
 
   const handleHistoryViewChange = useCallback(
-    (view: AssessmentHistoryView) => navigateHistory(view, 1, 'push'),
+    (view: AssessmentHistoryView) => navigateHistory(view, 1, "push"),
     [navigateHistory],
   );
 
   const handleHistoryPageChange = useCallback(
-    (page: number, mode: 'push' | 'replace') =>
+    (page: number, mode: "push" | "replace") =>
       navigateHistory(activeHistoryView, page, mode),
     [activeHistoryView, navigateHistory],
   );
@@ -161,7 +167,8 @@ export default function TeacherStudentProfilePage() {
   const fullName = useMemo(() => formatFullName(overview), [overview]);
   const initials = useMemo(() => formatInitials(overview), [overview]);
   const profile = overview?.student.profile;
-  const rosterIndex = roster?.findIndex((entry) => entry.studentId === studentId) ?? -1;
+  const rosterIndex =
+    roster?.findIndex((entry) => entry.studentId === studentId) ?? -1;
   const previousStudent = rosterIndex > 0 ? roster?.[rosterIndex - 1] : null;
   const nextStudent =
     roster && rosterIndex >= 0 && rosterIndex < roster.length - 1
@@ -172,8 +179,8 @@ export default function TeacherStudentProfilePage() {
   const studentHref = useCallback(
     (targetStudentId: string) => {
       const nextParams = new URLSearchParams(searchParamsString);
-      nextParams.set('history', activeHistoryView);
-      nextParams.set('page', '1');
+      nextParams.set("history", activeHistoryView);
+      nextParams.set("page", "1");
       return `/dashboard/teacher/classes/${classId}/students/${targetStudentId}?${nextParams.toString()}`;
     },
     [activeHistoryView, classId, searchParamsString],
@@ -218,7 +225,7 @@ export default function TeacherStudentProfilePage() {
           <span className="teacher-student-overview__period">
             {overview.standing.gradingPeriod
               ? `Period: ${overview.standing.gradingPeriod.toUpperCase()}`
-              : 'No grading period data'}
+              : "No grading period data"}
           </span>
 
           {hasRosterPosition ? (
@@ -226,7 +233,9 @@ export default function TeacherStudentProfilePage() {
               className="teacher-student-overview__roster-nav"
               aria-label="Student roster navigation"
             >
-              <span>Student {rosterIndex + 1} of {roster?.length}</span>
+              <span>
+                Student {rosterIndex + 1} of {roster?.length}
+              </span>
               {previousStudent ? (
                 <Link
                   href={studentHref(previousStudent.studentId)}
@@ -270,7 +279,9 @@ export default function TeacherStudentProfilePage() {
               <AvatarFallback>{initials}</AvatarFallback>
             </Avatar>
             <div>
-              <span className="teacher-student-overview__eyebrow">Learner overview</span>
+              <span className="teacher-student-overview__eyebrow">
+                Learner overview
+              </span>
               <h1>{fullName}</h1>
               <p>{overview.student.email}</p>
             </div>
@@ -286,14 +297,19 @@ export default function TeacherStudentProfilePage() {
             </div>
             <div>
               <dt>LRN</dt>
-              <dd>{profile?.lrn || '--'}</dd>
+              <dd>{profile?.lrn || "--"}</dd>
             </div>
           </dl>
 
-          <section className="teacher-student-overview__standing" aria-labelledby="standing-heading">
+          <section
+            className="teacher-student-overview__standing"
+            aria-labelledby="standing-heading"
+          >
             <div className="teacher-student-overview__overall">
               <span id="standing-heading">Overall Grade</span>
-              <strong>{toPercent(overview.standing.overallGradePercent)}</strong>
+              <strong>
+                {toPercent(overview.standing.overallGradePercent)}
+              </strong>
             </div>
             <div
               className="teacher-student-overview__overall-track"
@@ -316,15 +332,23 @@ export default function TeacherStudentProfilePage() {
             <dl className="teacher-student-overview__grade-components">
               <div>
                 <dt>Written Work</dt>
-                <dd>{toPercent(overview.standing.components.writtenWorkPercent)}</dd>
+                <dd>
+                  {toPercent(overview.standing.components.writtenWorkPercent)}
+                </dd>
               </div>
               <div>
                 <dt>Performance Task</dt>
-                <dd>{toPercent(overview.standing.components.performanceTaskPercent)}</dd>
+                <dd>
+                  {toPercent(
+                    overview.standing.components.performanceTaskPercent,
+                  )}
+                </dd>
               </div>
               <div>
                 <dt>Quarterly Exam</dt>
-                <dd>{toPercent(overview.standing.components.quarterlyExamPercent)}</dd>
+                <dd>
+                  {toPercent(overview.standing.components.quarterlyExamPercent)}
+                </dd>
               </div>
             </dl>
           </section>

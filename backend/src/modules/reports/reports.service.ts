@@ -17,6 +17,7 @@ import {
   users,
 } from '../../drizzle/schema';
 import type { ReportQuery } from './dto/report-query.dto';
+import { boundPercentage } from '../academic-state/academic-score';
 
 type ExportableRow = Record<string, unknown>;
 
@@ -349,13 +350,18 @@ export class ReportsService {
       firstName: row.student?.firstName ?? '',
       lastName: row.student?.lastName ?? '',
       email: row.student?.email ?? '',
-      assessmentAverage: row.assessmentAverage
-        ? Number(row.assessmentAverage)
-        : null,
-      classRecordAverage: row.classRecordAverage
-        ? Number(row.classRecordAverage)
-        : null,
-      blendedScore: row.blendedScore ? Number(row.blendedScore) : null,
+      assessmentAverage:
+        row.assessmentAverage !== null
+          ? boundPercentage(Number(row.assessmentAverage))
+          : null,
+      classRecordAverage:
+        row.classRecordAverage !== null
+          ? boundPercentage(Number(row.classRecordAverage))
+          : null,
+      blendedScore:
+        row.blendedScore !== null
+          ? boundPercentage(Number(row.blendedScore))
+          : null,
       isAtRisk: row.isAtRisk,
       thresholdApplied: row.thresholdApplied
         ? Number(row.thresholdApplied)
@@ -567,10 +573,16 @@ export class ReportsService {
     const data = rows.map((row) => {
       const bucket = grouped.get(row.id) ?? [];
       const submitted = bucket.filter((attempt) => attempt.isSubmitted);
+      const graded = submitted.filter(
+        (attempt): attempt is typeof attempt & { score: number } =>
+          typeof attempt.score === 'number' && Number.isFinite(attempt.score),
+      );
       const average =
-        submitted.length > 0
-          ? submitted.reduce((sum, attempt) => sum + (attempt.score ?? 0), 0) /
-            submitted.length
+        graded.length > 0
+          ? graded.reduce(
+              (sum, attempt) => sum + boundPercentage(attempt.score),
+              0,
+            ) / graded.length
           : null;
 
       return {

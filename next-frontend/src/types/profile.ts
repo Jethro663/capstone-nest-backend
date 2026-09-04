@@ -106,6 +106,8 @@ export interface AcademicAssessmentAttempt {
   assessmentId: string;
   attemptNumber: number;
   score: number | null;
+  scorePercent?: number | null;
+  scoreBreakdown?: import("@/lib/academic-score").AcademicScoreBreakdown | null;
   isSubmitted: boolean;
   submittedAt?: string | null;
   expiresAt?: string | null;
@@ -170,7 +172,7 @@ export interface AcademicClassRecordHistory {
   id: string;
   classRecordId: string;
   finalPercentage: number | string;
-  remarks: 'Passed' | 'For Intervention';
+  remarks: "Passed" | "For Intervention";
   computedAt: string;
   classRecord?: {
     id: string;

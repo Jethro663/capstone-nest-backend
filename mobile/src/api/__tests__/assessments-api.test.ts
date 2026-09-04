@@ -1,6 +1,9 @@
 import { apiClient } from "../client";
 import { assessmentsApi } from "../services/assessments";
-import { assessmentResultFixture, paginatedFixture } from "./fixtures/contracts";
+import {
+  assessmentResultFixture,
+  paginatedFixture,
+} from "./fixtures/contracts";
 
 jest.mock("../services/protected-files", () => ({
   downloadProtectedFile: jest.fn(),
@@ -26,11 +29,21 @@ describe("assessmentsApi contract parity", () => {
     const payload: Parameters<typeof assessmentsApi.returnGrade>[1] = {
       teacherFeedback: "Good reasoning.",
       rubricScores: [
-        { criterionId: "criterion-1", pointsEarned: 8, feedback: "Clear explanation." },
+        {
+          criterionId: "criterion-1",
+          pointsEarned: 8,
+          feedback: "Clear explanation.",
+        },
       ],
-      manualResponseScores: [{ questionId: "8f59a1f9-2b6c-4f61-9ef2-4ff4ee3c5921", pointsEarned: 4 }],
+      manualResponseScores: [
+        { questionId: "8f59a1f9-2b6c-4f61-9ef2-4ff4ee3c5921", pointsEarned: 4 },
+      ],
+      bonusPoints: 2,
+      bonusReason: "Corrected teacher scoring omission",
     };
-    mockedApiClient.post.mockResolvedValue({ data: { success: true, data: { success: true } } });
+    mockedApiClient.post.mockResolvedValue({
+      data: { success: true, data: { success: true } },
+    });
 
     await assessmentsApi.returnGrade("attempt-1", payload);
 
@@ -48,9 +61,13 @@ describe("assessmentsApi contract parity", () => {
         rubricCriteria: [{ id: "criterion-1", title: "Reasoning", points: 10 }],
       },
     };
-    mockedApiClient.get.mockResolvedValue({ data: { success: true, data: result } });
+    mockedApiClient.get.mockResolvedValue({
+      data: { success: true, data: result },
+    });
 
-    await expect(assessmentsApi.getAttemptResults("attempt-1")).resolves.toEqual(result);
+    await expect(
+      assessmentsApi.getAttemptResults("attempt-1"),
+    ).resolves.toEqual(result);
   });
 
   it("preserves assessment pagination metadata and loads every page for legacy list consumers", async () => {
@@ -61,17 +78,35 @@ describe("assessmentsApi contract parity", () => {
       type: "quiz",
       isPublished: true,
     }));
-    const secondPage = [{ id: "assessment-101", classId: "class-1", title: "Assessment 101", type: "quiz", isPublished: true }];
+    const secondPage = [
+      {
+        id: "assessment-101",
+        classId: "class-1",
+        title: "Assessment 101",
+        type: "quiz",
+        isPublished: true,
+      },
+    ];
     mockedApiClient.get
       .mockResolvedValueOnce({ data: paginatedFixture(firstPage, 1, 100, 101) })
-      .mockResolvedValueOnce({ data: paginatedFixture(secondPage, 2, 100, 101) });
+      .mockResolvedValueOnce({
+        data: paginatedFixture(secondPage, 2, 100, 101),
+      });
 
     const page = await assessmentsApi.getAllByClass("class-1");
 
     expect(page.data).toHaveLength(101);
     expect(page.total).toBe(101);
     expect(page.hasMore).toBe(false);
-    expect(mockedApiClient.get).toHaveBeenNthCalledWith(1, "/assessments/class/class-1", { params: { page: 1, limit: 100 } });
-    expect(mockedApiClient.get).toHaveBeenNthCalledWith(2, "/assessments/class/class-1", { params: { page: 2, limit: 100 } });
+    expect(mockedApiClient.get).toHaveBeenNthCalledWith(
+      1,
+      "/assessments/class/class-1",
+      { params: { page: 1, limit: 100 } },
+    );
+    expect(mockedApiClient.get).toHaveBeenNthCalledWith(
+      2,
+      "/assessments/class/class-1",
+      { params: { page: 2, limit: 100 } },
+    );
   });
 });

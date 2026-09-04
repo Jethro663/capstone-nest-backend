@@ -9,12 +9,14 @@ import { PerformanceRecomputeQueueService } from './performance-recompute-queue.
 import { PerformanceRecomputeProcessor } from './performance-recompute.processor';
 import { AuditModule } from '../audit/audit.module';
 import { PerformanceSnapshotReadService } from './performance-snapshot-read.service';
+import { ClassRecordModule } from '../class-record/class-record.module';
 
 @Module({
   imports: [
     DatabaseModule,
     EventEmitterModule,
     AuditModule,
+    ClassRecordModule,
     BullModule.registerQueue({
       name: 'performance-recompute',
     }),

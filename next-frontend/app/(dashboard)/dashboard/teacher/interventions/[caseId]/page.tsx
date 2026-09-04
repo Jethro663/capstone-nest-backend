@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   CircleHelp,
@@ -9,14 +9,14 @@ import {
   Loader2,
   Trash2,
   Wand2,
-} from 'lucide-react';
-import { toast } from 'sonner';
-import { aiService } from '@/services/ai-service';
-import { assessmentService } from '@/services/assessment-service';
-import { lessonService } from '@/services/lesson-service';
-import { lxpService } from '@/services/lxp-service';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+} from "lucide-react";
+import { toast } from "sonner";
+import { aiService } from "@/services/ai-service";
+import { assessmentService } from "@/services/assessment-service";
+import { lessonService } from "@/services/lesson-service";
+import { lxpService } from "@/services/lxp-service";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -24,37 +24,54 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Progress } from '@/components/ui/progress';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Textarea } from '@/components/ui/textarea';
-import { getApiErrorMessage } from '@/lib/api-error';
-import { richTextToPlainText } from '@/lib/rich-text';
-import type { AiGenerationJob, ClassAiPolicy, InterventionStructuredOutput } from '@/types/ai';
-import type { Assessment } from '@/types/assessment';
-import type { Lesson } from '@/types/lesson';
-import type { TeacherInterventionQueueItem } from '@/types/lxp';
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
+import { getApiErrorMessage } from "@/lib/api-error";
+import { boundAcademicPercentage } from "@/lib/academic-score";
+import { richTextToPlainText } from "@/lib/rich-text";
+import type {
+  AiGenerationJob,
+  ClassAiPolicy,
+  InterventionStructuredOutput,
+} from "@/types/ai";
+import type { Assessment } from "@/types/assessment";
+import type { Lesson } from "@/types/lesson";
+import type { TeacherInterventionQueueItem } from "@/types/lxp";
 
-function studentName(entry: TeacherInterventionQueueItem['student']): string {
-  const first = entry?.firstName?.trim() ?? '';
-  const last = entry?.lastName?.trim() ?? '';
+function formatPercent(value?: number | null): string {
+  return value === null || value === undefined
+    ? "--"
+    : `${boundAcademicPercentage(value).toFixed(1)}%`;
+}
+
+function studentName(entry: TeacherInterventionQueueItem["student"]): string {
+  const first = entry?.firstName?.trim() ?? "";
+  const last = entry?.lastName?.trim() ?? "";
   if (first && last) return `${last}, ${first}`;
   if (last) return last;
   if (first) return first;
-  return entry?.email ?? 'Unknown student';
+  return entry?.email ?? "Unknown student";
 }
 
-function toPlainTeacherText(value: string | null | undefined, fallback = ''): string {
-  const cleaned = richTextToPlainText(value ?? '').replace(/\s+/g, ' ').trim();
+function toPlainTeacherText(
+  value: string | null | undefined,
+  fallback = "",
+): string {
+  const cleaned = richTextToPlainText(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
   return cleaned || fallback;
 }
 
 const JOB_STATUS_FAILURE_THRESHOLD = 3;
 
-type SuggestedAssignmentPayload = InterventionStructuredOutput['suggestedAssignmentPayload'];
-type WorkspaceTab = 'plan' | 'generating' | 'assign';
-type HelpManualScreen = 'plan' | 'generating' | 'assign' | 'progress';
+type SuggestedAssignmentPayload =
+  InterventionStructuredOutput["suggestedAssignmentPayload"];
+type WorkspaceTab = "plan" | "generating" | "assign";
+type HelpManualScreen = "plan" | "generating" | "assign" | "progress";
 
 const helpManualPages: Array<{
   title: string;
@@ -63,51 +80,51 @@ const helpManualPages: Array<{
   steps: string[];
 }> = [
   {
-    title: 'Start in Plan Creator',
+    title: "Start in Plan Creator",
     description:
-      'Use this first page to tell the system what kind of help the student needs before you generate or build a path.',
-    screen: 'plan',
+      "Use this first page to tell the system what kind of help the student needs before you generate or build a path.",
+    screen: "plan",
     steps: [
-      'Write a short teacher note if you want the plan to follow a specific concern.',
-      'Check the class AI policy if the student should only use class materials or stricter AI rules.',
-      'Use the manual selector when you already know a lesson or assessment that should be included.',
-      'Press Generate plan when you are ready for the system to draft the intervention path.',
+      "Write a short teacher note if you want the plan to follow a specific concern.",
+      "Check the class AI policy if the student should only use class materials or stricter AI rules.",
+      "Use the manual selector when you already know a lesson or assessment that should be included.",
+      "Press Generate plan when you are ready for the system to draft the intervention path.",
     ],
   },
   {
-    title: 'Watch the Generating tab',
+    title: "Watch the Generating tab",
     description:
-      'This page shows whether the AI plan is still working, finished, or needs you to retry loading the result.',
-    screen: 'generating',
+      "This page shows whether the AI plan is still working, finished, or needs you to retry loading the result.",
+    screen: "generating",
     steps: [
-      'The progress bar and percent tell you how far the system has gone.',
-      'Read the status message before leaving the page; it explains what is happening now.',
-      'If the result is complete but not shown, use Retry loading result.',
-      'When a result is available, use Review generated plan to move to the final check.',
+      "The progress bar and percent tell you how far the system has gone.",
+      "Read the status message before leaving the page; it explains what is happening now.",
+      "If the result is complete but not shown, use Retry loading result.",
+      "When a result is available, use Review generated plan to move to the final check.",
     ],
   },
   {
-    title: 'Clean Out & Assign',
+    title: "Clean Out & Assign",
     description:
-      'This is the teacher review page. Do not assign until the lessons, assessments, XP, and summary all make sense.',
-    screen: 'assign',
+      "This is the teacher review page. Do not assign until the lessons, assessments, XP, and summary all make sense.",
+    screen: "assign",
     steps: [
-      'Review weak concepts so you know why the student is receiving the path.',
-      'Remove a lesson or assessment if it does not fit the student.',
-      'Adjust XP only when the activity should count more or less.',
-      'Use Assign suggested path, or Replace current path, only after checking the whole page.',
+      "Review weak concepts so you know why the student is receiving the path.",
+      "Remove a lesson or assessment if it does not fit the student.",
+      "Adjust XP only when the activity should count more or less.",
+      "Use Assign suggested path, or Replace current path, only after checking the whole page.",
     ],
   },
   {
-    title: 'Understand replacement protection',
+    title: "Understand replacement protection",
     description:
-      'The system protects students from losing work. A new plan can replace an old path only when progress has not started.',
-    screen: 'progress',
+      "The system protects students from losing work. A new plan can replace an old path only when progress has not started.",
+    screen: "progress",
     steps: [
-      'If a student already has an unstarted path, the system warns you before generating another plan.',
-      'Generating a plan does not replace the student path immediately.',
-      'Replacement happens only when you assign the new plan.',
-      'If the student has already started progress, the assign button is blocked so their progress is not reset.',
+      "If a student already has an unstarted path, the system warns you before generating another plan.",
+      "Generating a plan does not replace the student path immediately.",
+      "Replacement happens only when you assign the new plan.",
+      "If the student has already started progress, the assign button is blocked so their progress is not reset.",
     ],
   },
 ];
@@ -124,9 +141,12 @@ function HelpManualScreenshot({ screen }: { screen: HelpManualScreen }) {
         <span />
       </div>
 
-      {screen === 'plan' ? (
+      {screen === "plan" ? (
         <>
-          <div className="teacher-intervention-workspace__manual-tabs" aria-hidden="true">
+          <div
+            className="teacher-intervention-workspace__manual-tabs"
+            aria-hidden="true"
+          >
             <b>1 Plan Creator</b>
             <span>2 Generating</span>
             <span>3 Clean Out</span>
@@ -135,8 +155,12 @@ function HelpManualScreenshot({ screen }: { screen: HelpManualScreen }) {
             <div className="teacher-intervention-workspace__manual-panel-shot">
               <small>Teacher note</small>
               <div className="teacher-intervention-workspace__manual-textarea-shot" />
-              <span className="teacher-intervention-workspace__manual-button-shot">Generate plan</span>
-              <em className="teacher-intervention-workspace__manual-pin is-generate">Generate plan</em>
+              <span className="teacher-intervention-workspace__manual-button-shot">
+                Generate plan
+              </span>
+              <em className="teacher-intervention-workspace__manual-pin is-generate">
+                Generate plan
+              </em>
             </div>
             <div className="teacher-intervention-workspace__manual-panel-shot">
               <small>Class AI policy</small>
@@ -147,20 +171,22 @@ function HelpManualScreenshot({ screen }: { screen: HelpManualScreen }) {
                 <span>Select lesson...</span>
                 <b>Add</b>
               </div>
-              <em className="teacher-intervention-workspace__manual-pin is-add">Add selected item</em>
+              <em className="teacher-intervention-workspace__manual-pin is-add">
+                Add selected item
+              </em>
             </div>
           </div>
         </>
       ) : null}
 
-      {screen === 'generating' ? (
+      {screen === "generating" ? (
         <>
           <div className="teacher-intervention-workspace__manual-heading-shot">
             <b>Generating</b>
             <span>completed</span>
           </div>
           <div className="teacher-intervention-workspace__manual-progress-shot">
-            <i style={{ width: '72%' }} />
+            <i style={{ width: "72%" }} />
           </div>
           <div className="teacher-intervention-workspace__manual-status-shot">
             <strong>72%</strong>
@@ -172,16 +198,22 @@ function HelpManualScreenshot({ screen }: { screen: HelpManualScreen }) {
           <span className="teacher-intervention-workspace__manual-action-shot is-primary">
             Review generated plan
           </span>
-          <em className="teacher-intervention-workspace__manual-pin is-progress">Progress and status</em>
-          <em className="teacher-intervention-workspace__manual-pin is-retry">Retry button</em>
+          <em className="teacher-intervention-workspace__manual-pin is-progress">
+            Progress and status
+          </em>
+          <em className="teacher-intervention-workspace__manual-pin is-retry">
+            Retry button
+          </em>
         </>
       ) : null}
 
-      {screen === 'assign' ? (
+      {screen === "assign" ? (
         <>
           <div className="teacher-intervention-workspace__manual-heading-shot">
             <b>Clean Out & Assign</b>
-            <span className="teacher-intervention-workspace__manual-button-shot">Assign suggested path</span>
+            <span className="teacher-intervention-workspace__manual-button-shot">
+              Assign suggested path
+            </span>
           </div>
           <div className="teacher-intervention-workspace__manual-review-shot">
             <section>
@@ -203,12 +235,16 @@ function HelpManualScreenshot({ screen }: { screen: HelpManualScreen }) {
               <p />
             </section>
           </div>
-          <em className="teacher-intervention-workspace__manual-pin is-assign">Assign or replace</em>
-          <em className="teacher-intervention-workspace__manual-pin is-remove">Remove item</em>
+          <em className="teacher-intervention-workspace__manual-pin is-assign">
+            Assign or replace
+          </em>
+          <em className="teacher-intervention-workspace__manual-pin is-remove">
+            Remove item
+          </em>
         </>
       ) : null}
 
-      {screen === 'progress' ? (
+      {screen === "progress" ? (
         <>
           <div className="teacher-intervention-workspace__manual-notice-shot">
             This case already has assigned checkpoints.
@@ -217,15 +253,23 @@ function HelpManualScreenshot({ screen }: { screen: HelpManualScreen }) {
             <b>Generate a new intervention plan?</b>
             <p />
             <div>
-              <span className="teacher-intervention-workspace__manual-button-shot">Keep current path</span>
-              <span className="teacher-intervention-workspace__manual-button-shot">Generate new AI plan</span>
+              <span className="teacher-intervention-workspace__manual-button-shot">
+                Keep current path
+              </span>
+              <span className="teacher-intervention-workspace__manual-button-shot">
+                Generate new AI plan
+              </span>
             </div>
           </div>
           <div className="teacher-intervention-workspace__manual-blocked-shot">
             Progress already started
           </div>
-          <em className="teacher-intervention-workspace__manual-pin is-warning">Warning first</em>
-          <em className="teacher-intervention-workspace__manual-pin is-blocked">Blocked when started</em>
+          <em className="teacher-intervention-workspace__manual-pin is-warning">
+            Warning first
+          </em>
+          <em className="teacher-intervention-workspace__manual-pin is-blocked">
+            Blocked when started
+          </em>
         </>
       ) : null}
     </div>
@@ -238,52 +282,54 @@ function normalizeSuggestedAssignmentPayload(
   assessmentIds: string[],
 ): SuggestedAssignmentPayload {
   const payloadObject =
-    payload && typeof payload === 'object'
+    payload && typeof payload === "object"
       ? (payload as Record<string, unknown>)
       : {};
 
   const safeLessonIds = Array.isArray(payloadObject.lessonIds)
-    ? payloadObject.lessonIds.filter((id): id is string => typeof id === 'string')
+    ? payloadObject.lessonIds.filter(
+        (id): id is string => typeof id === "string",
+      )
     : lessonIds;
   const safeAssessmentIds = Array.isArray(payloadObject.assessmentIds)
-    ? payloadObject.assessmentIds.filter((id): id is string => typeof id === 'string')
+    ? payloadObject.assessmentIds.filter(
+        (id): id is string => typeof id === "string",
+      )
     : assessmentIds;
 
   return {
     lessonIds: Array.from(new Set(safeLessonIds)),
     assessmentIds: Array.from(new Set(safeAssessmentIds)),
     lessonAssignments: Array.isArray(payloadObject.lessonAssignments)
-      ? (payloadObject.lessonAssignments as SuggestedAssignmentPayload['lessonAssignments'])
+      ? (payloadObject.lessonAssignments as SuggestedAssignmentPayload["lessonAssignments"])
       : undefined,
     assessmentAssignments: Array.isArray(payloadObject.assessmentAssignments)
-      ? (payloadObject.assessmentAssignments as SuggestedAssignmentPayload['assessmentAssignments'])
+      ? (payloadObject.assessmentAssignments as SuggestedAssignmentPayload["assessmentAssignments"])
       : undefined,
     note:
-      typeof payloadObject.note === 'string'
-        ? payloadObject.note
-        : undefined,
+      typeof payloadObject.note === "string" ? payloadObject.note : undefined,
   };
 }
 
 function normalizeStringList(payload: unknown): string[] {
   return Array.isArray(payload)
-    ? payload.filter((value): value is string => typeof value === 'string')
+    ? payload.filter((value): value is string => typeof value === "string")
     : [];
 }
 
 function normalizeAiSummary(
   payload: unknown,
-): InterventionStructuredOutput['aiSummary'] {
+): InterventionStructuredOutput["aiSummary"] {
   const payloadObject =
-    payload && typeof payload === 'object'
+    payload && typeof payload === "object"
       ? (payload as Record<string, unknown>)
       : {};
 
   return {
     summary:
-      typeof payloadObject.summary === 'string'
+      typeof payloadObject.summary === "string"
         ? payloadObject.summary
-        : 'AI intervention result loaded with degraded fields. Review and adjust before assigning.',
+        : "AI intervention result loaded with degraded fields. Review and adjust before assigning.",
     teacherActions: normalizeStringList(payloadObject.teacherActions),
     studentFocus: normalizeStringList(payloadObject.studentFocus),
   };
@@ -312,26 +358,38 @@ function normalizeStructuredOutput(
     ),
     generatedLessonDraft:
       payload?.generatedLessonDraft &&
-      typeof payload.generatedLessonDraft === 'object'
+      typeof payload.generatedLessonDraft === "object"
         ? {
             ...payload.generatedLessonDraft,
-            weakConcepts: normalizeStringList(payload.generatedLessonDraft.weakConcepts),
-            sourceLessonIds: normalizeStringList(payload.generatedLessonDraft.sourceLessonIds),
-            sourceReferences: Array.isArray(payload.generatedLessonDraft.sourceReferences)
+            weakConcepts: normalizeStringList(
+              payload.generatedLessonDraft.weakConcepts,
+            ),
+            sourceLessonIds: normalizeStringList(
+              payload.generatedLessonDraft.sourceLessonIds,
+            ),
+            sourceReferences: Array.isArray(
+              payload.generatedLessonDraft.sourceReferences,
+            )
               ? payload.generatedLessonDraft.sourceReferences
               : [],
           }
         : undefined,
     generatedGuidedAssessmentDraft:
       payload?.generatedGuidedAssessmentDraft &&
-      typeof payload.generatedGuidedAssessmentDraft === 'object'
+      typeof payload.generatedGuidedAssessmentDraft === "object"
         ? {
             ...payload.generatedGuidedAssessmentDraft,
-            weakConcepts: normalizeStringList(payload.generatedGuidedAssessmentDraft.weakConcepts),
-            sourceReferences: Array.isArray(payload.generatedGuidedAssessmentDraft.sourceReferences)
+            weakConcepts: normalizeStringList(
+              payload.generatedGuidedAssessmentDraft.weakConcepts,
+            ),
+            sourceReferences: Array.isArray(
+              payload.generatedGuidedAssessmentDraft.sourceReferences,
+            )
               ? payload.generatedGuidedAssessmentDraft.sourceReferences
               : [],
-            questions: Array.isArray(payload.generatedGuidedAssessmentDraft.questions)
+            questions: Array.isArray(
+              payload.generatedGuidedAssessmentDraft.questions,
+            )
               ? payload.generatedGuidedAssessmentDraft.questions
               : [],
           }
@@ -339,7 +397,9 @@ function normalizeStructuredOutput(
   };
 }
 
-function createManualStructuredOutput(caseId: string): InterventionStructuredOutput {
+function createManualStructuredOutput(
+  caseId: string,
+): InterventionStructuredOutput {
   return {
     caseId,
     weakConcepts: [],
@@ -347,8 +407,8 @@ function createManualStructuredOutput(caseId: string): InterventionStructuredOut
     recommendedAssessments: [],
     aiSummary: {
       summary:
-        'Manual intervention selection mode. You can assign class-scoped lessons and assessments without an AI-generated plan.',
-      teacherActions: ['Select intervention checkpoints manually.'],
+        "Manual intervention selection mode. You can assign class-scoped lessons and assessments without an AI-generated plan.",
+      teacherActions: ["Select intervention checkpoints manually."],
       studentFocus: [],
     },
     suggestedAssignmentPayload: {
@@ -363,15 +423,18 @@ export default function TeacherInterventionWorkspacePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const caseId = params.caseId as string;
-  const classId = searchParams.get('classId') ?? '';
+  const classId = searchParams.get("classId") ?? "";
 
   const [loading, setLoading] = useState(true);
   const [creatingJob, setCreatingJob] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [job, setJob] = useState<AiGenerationJob | null>(null);
-  const [queueEntry, setQueueEntry] = useState<TeacherInterventionQueueItem | null>(null);
-  const [note, setNote] = useState('');
-  const [result, setResult] = useState<InterventionStructuredOutput | null>(null);
+  const [queueEntry, setQueueEntry] =
+    useState<TeacherInterventionQueueItem | null>(null);
+  const [note, setNote] = useState("");
+  const [result, setResult] = useState<InterventionStructuredOutput | null>(
+    null,
+  );
   const [lessonXp, setLessonXp] = useState<Record<string, number>>({});
   const [assessmentXp, setAssessmentXp] = useState<Record<string, number>>({});
   const [statusWarning, setStatusWarning] = useState<string | null>(null);
@@ -382,12 +445,13 @@ export default function TeacherInterventionWorkspacePage() {
   const [manualLessons, setManualLessons] = useState<Lesson[]>([]);
   const [manualAssessments, setManualAssessments] = useState<Assessment[]>([]);
   const [loadingManualSources, setLoadingManualSources] = useState(false);
-  const [selectedManualLessonId, setSelectedManualLessonId] = useState('');
-  const [selectedManualAssessmentId, setSelectedManualAssessmentId] = useState('');
+  const [selectedManualLessonId, setSelectedManualLessonId] = useState("");
+  const [selectedManualAssessmentId, setSelectedManualAssessmentId] =
+    useState("");
   const [replacePlanWarningOpen, setReplacePlanWarningOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [helpPage, setHelpPage] = useState(0);
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>('plan');
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>("plan");
   const [approvedGeneratedContent, setApprovedGeneratedContent] = useState<{
     generatedLessonApproved: boolean;
     guidedAssessmentApproved: boolean;
@@ -395,11 +459,11 @@ export default function TeacherInterventionWorkspacePage() {
   const [artifactActionLoading, setArtifactActionLoading] = useState(false);
   const statusFailuresRef = useRef(0);
   const fetchedJobResultIdRef = useRef<string | null>(null);
-  const activeClassId = classId || queueEntry?.classId || '';
+  const activeClassId = classId || queueEntry?.classId || "";
   const interventionsRoute = useMemo(() => {
     return activeClassId
       ? `/dashboard/teacher/interventions?classId=${activeClassId}`
-      : '/dashboard/teacher/interventions';
+      : "/dashboard/teacher/interventions";
   }, [activeClassId]);
 
   const fetchCase = useCallback(async () => {
@@ -407,7 +471,9 @@ export default function TeacherInterventionWorkspacePage() {
       setLoading(true);
       if (classId) {
         const queueRes = await lxpService.getTeacherQueue(classId);
-        const queueEntry = queueRes.data.queue.find((entry) => entry.id === caseId);
+        const queueEntry = queueRes.data.queue.find(
+          (entry) => entry.id === caseId,
+        );
         if (queueEntry) {
           setQueueEntry(queueEntry);
         } else {
@@ -419,7 +485,9 @@ export default function TeacherInterventionWorkspacePage() {
         setQueueEntry(caseRes.data ?? null);
       }
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to load intervention workspace'));
+      toast.error(
+        getApiErrorMessage(error, "Failed to load intervention workspace"),
+      );
     } finally {
       setLoading(false);
     }
@@ -429,36 +497,51 @@ export default function TeacherInterventionWorkspacePage() {
     void fetchCase();
   }, [fetchCase]);
 
-  const loadInterventionJobResult = useCallback(async (jobId: string): Promise<boolean> => {
-    try {
-      setLoadingResult(true);
-      fetchedJobResultIdRef.current = jobId;
-      const resultRes = await aiService.getInterventionJobResult(jobId);
-      const rawStructured = resultRes?.data?.result?.structuredOutput;
-      const structured = normalizeStructuredOutput(rawStructured ?? ({} as InterventionStructuredOutput));
-      setResult(structured);
-      setApprovedGeneratedContent(null);
-      setStatusWarning(null);
-      setLessonXp(
-        Object.fromEntries((structured.recommendedLessons ?? []).map((lesson) => [lesson.lessonId, 20])),
-      );
-      setAssessmentXp(
-        Object.fromEntries((structured.recommendedAssessments ?? []).map((assessment) => [assessment.assessmentId, 30])),
-      );
-      setActiveTab('assign');
-      return true;
-    } catch (error) {
-      const message = getApiErrorMessage(
-        error,
-        'Intervention plan is ready but result details are temporarily unavailable.',
-      );
-      setStatusWarning(message);
-      toast.error(message);
-      return false;
-    } finally {
-      setLoadingResult(false);
-    }
-  }, []);
+  const loadInterventionJobResult = useCallback(
+    async (jobId: string): Promise<boolean> => {
+      try {
+        setLoadingResult(true);
+        fetchedJobResultIdRef.current = jobId;
+        const resultRes = await aiService.getInterventionJobResult(jobId);
+        const rawStructured = resultRes?.data?.result?.structuredOutput;
+        const structured = normalizeStructuredOutput(
+          rawStructured ?? ({} as InterventionStructuredOutput),
+        );
+        setResult(structured);
+        setApprovedGeneratedContent(null);
+        setStatusWarning(null);
+        setLessonXp(
+          Object.fromEntries(
+            (structured.recommendedLessons ?? []).map((lesson) => [
+              lesson.lessonId,
+              20,
+            ]),
+          ),
+        );
+        setAssessmentXp(
+          Object.fromEntries(
+            (structured.recommendedAssessments ?? []).map((assessment) => [
+              assessment.assessmentId,
+              30,
+            ]),
+          ),
+        );
+        setActiveTab("assign");
+        return true;
+      } catch (error) {
+        const message = getApiErrorMessage(
+          error,
+          "Intervention plan is ready but result details are temporarily unavailable.",
+        );
+        setStatusWarning(message);
+        toast.error(message);
+        return false;
+      } finally {
+        setLoadingResult(false);
+      }
+    },
+    [],
+  );
 
   const fetchManualSources = useCallback(async () => {
     if (!activeClassId) {
@@ -472,20 +555,26 @@ export default function TeacherInterventionWorkspacePage() {
         lessonService.getByClass(activeClassId, {
           page: 1,
           pageSize: 200,
-          status: 'all',
+          status: "all",
         }),
         assessmentService.getByClass(activeClassId, {
           page: 1,
           limit: 200,
-          status: 'all',
+          status: "all",
         }),
       ]);
-      setManualLessons((lessonsRes.data ?? []).filter((lesson) => !lesson.isDraft));
-      setManualAssessments((assessmentsRes.data ?? []).filter((assessment) => assessment.isPublished));
+      setManualLessons(
+        (lessonsRes.data ?? []).filter((lesson) => !lesson.isDraft),
+      );
+      setManualAssessments(
+        (assessmentsRes.data ?? []).filter(
+          (assessment) => assessment.isPublished,
+        ),
+      );
     } catch {
       setManualLessons([]);
       setManualAssessments([]);
-      toast.error('Failed to load class-scoped manual intervention options');
+      toast.error("Failed to load class-scoped manual intervention options");
     } finally {
       setLoadingManualSources(false);
     }
@@ -506,7 +595,7 @@ export default function TeacherInterventionWorkspacePage() {
       setClassPolicy(response.data);
     } catch (error) {
       setClassPolicy(null);
-      toast.error(getApiErrorMessage(error, 'Failed to load class AI policy'));
+      toast.error(getApiErrorMessage(error, "Failed to load class AI policy"));
     } finally {
       setPolicyLoading(false);
     }
@@ -524,15 +613,21 @@ export default function TeacherInterventionWorkspacePage() {
         const payload = {
           mentorExplainEnabled:
             patch.mentorExplainEnabled ?? classPolicy.mentorExplainEnabled,
-          maxFollowUpTurns: patch.maxFollowUpTurns ?? classPolicy.maxFollowUpTurns,
+          maxFollowUpTurns:
+            patch.maxFollowUpTurns ?? classPolicy.maxFollowUpTurns,
           sourceScope: patch.sourceScope ?? classPolicy.sourceScope,
           strictGrounding: patch.strictGrounding ?? classPolicy.strictGrounding,
         };
-        const response = await aiService.updateTeacherClassPolicy(activeClassId, payload);
+        const response = await aiService.updateTeacherClassPolicy(
+          activeClassId,
+          payload,
+        );
         setClassPolicy(response.data);
-        toast.success('Class AI policy updated.');
+        toast.success("Class AI policy updated.");
       } catch (error) {
-        toast.error(getApiErrorMessage(error, 'Failed to update class AI policy'));
+        toast.error(
+          getApiErrorMessage(error, "Failed to update class AI policy"),
+        );
       } finally {
         setPolicySaving(false);
       }
@@ -543,14 +638,14 @@ export default function TeacherInterventionWorkspacePage() {
   useEffect(() => {
     if (!job) return;
 
-    if (['completed', 'approved'].includes(job.status)) {
+    if (["completed", "approved"].includes(job.status)) {
       if (!result && fetchedJobResultIdRef.current !== job.jobId) {
         void loadInterventionJobResult(job.jobId);
       }
       return;
     }
 
-    if (['failed', 'rejected'].includes(job.status)) {
+    if (["failed", "rejected"].includes(job.status)) {
       return;
     }
 
@@ -560,22 +655,25 @@ export default function TeacherInterventionWorkspacePage() {
         statusFailuresRef.current = 0;
         setStatusWarning(null);
         setJob(statusRes.data);
-        if (['completed', 'approved'].includes(statusRes.data.status)) {
+        if (["completed", "approved"].includes(statusRes.data.status)) {
           window.clearInterval(interval);
           if (fetchedJobResultIdRef.current !== statusRes.data.jobId) {
             await loadInterventionJobResult(statusRes.data.jobId);
           }
-        } else if (['failed', 'rejected'].includes(statusRes.data.status)) {
+        } else if (["failed", "rejected"].includes(statusRes.data.status)) {
           window.clearInterval(interval);
           setStatusWarning(
             statusRes.data.errorMessage?.trim() ||
-              'The latest AI plan attempt failed. No new AI-generated intervention path was produced.',
+              "The latest AI plan attempt failed. No new AI-generated intervention path was produced.",
           );
         }
       } catch (error) {
         statusFailuresRef.current += 1;
         if (statusFailuresRef.current >= JOB_STATUS_FAILURE_THRESHOLD) {
-          const message = getApiErrorMessage(error, 'Failed to refresh intervention plan status');
+          const message = getApiErrorMessage(
+            error,
+            "Failed to refresh intervention plan status",
+          );
           setStatusWarning(message);
           toast.error(message);
           window.clearInterval(interval);
@@ -586,7 +684,9 @@ export default function TeacherInterventionWorkspacePage() {
     return () => window.clearInterval(interval);
   }, [job, result, loadInterventionJobResult]);
 
-  const hasCaseContext = Boolean(queueEntry && queueEntry.aiPlanEligible !== false);
+  const hasCaseContext = Boolean(
+    queueEntry && queueEntry.aiPlanEligible !== false,
+  );
   const existingCheckpointCount = queueEntry?.totalCheckpoints ?? 0;
   const completedCheckpointCount = queueEntry?.completedCheckpoints ?? 0;
   const hasExistingInterventionPath = existingCheckpointCount > 0;
@@ -597,7 +697,9 @@ export default function TeacherInterventionWorkspacePage() {
   const runGenerate = async () => {
     const hasCaseContext = Boolean(queueEntry);
     if (!hasCaseContext) {
-      toast.error('Select a valid intervention case from the queue before generating a plan.');
+      toast.error(
+        "Select a valid intervention case from the queue before generating a plan.",
+      );
       return;
     }
     try {
@@ -610,13 +712,15 @@ export default function TeacherInterventionWorkspacePage() {
         note: note.trim() || undefined,
       });
       setJob(res.data);
-      setActiveTab('generating');
-      toast.success('AI intervention planning started.');
-      if (['completed', 'approved'].includes(res.data.status)) {
+      setActiveTab("generating");
+      toast.success("AI intervention planning started.");
+      if (["completed", "approved"].includes(res.data.status)) {
         await loadInterventionJobResult(res.data.jobId);
       }
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to start AI intervention planning'));
+      toast.error(
+        getApiErrorMessage(error, "Failed to start AI intervention planning"),
+      );
     } finally {
       setCreatingJob(false);
     }
@@ -624,7 +728,9 @@ export default function TeacherInterventionWorkspacePage() {
 
   const handleGenerate = async () => {
     if (!hasCaseContext) {
-      toast.error('Select a valid intervention case from the queue before generating a plan.');
+      toast.error(
+        "Select a valid intervention case from the queue before generating a plan.",
+      );
       return;
     }
     if (hasUnstartedExistingInterventionPath) {
@@ -648,19 +754,26 @@ export default function TeacherInterventionWorkspacePage() {
     [result],
   );
   const hasGeneratedLessonDraft = Boolean(result?.generatedLessonDraft);
-  const hasGeneratedGuidedAssessmentDraft = Boolean(result?.generatedGuidedAssessmentDraft);
-  const hasGeneratedDrafts = hasGeneratedLessonDraft || hasGeneratedGuidedAssessmentDraft;
+  const hasGeneratedGuidedAssessmentDraft = Boolean(
+    result?.generatedGuidedAssessmentDraft,
+  );
+  const hasGeneratedDrafts =
+    hasGeneratedLessonDraft || hasGeneratedGuidedAssessmentDraft;
   const generatedLessonApproved =
-    !hasGeneratedLessonDraft || Boolean(approvedGeneratedContent?.generatedLessonApproved);
+    !hasGeneratedLessonDraft ||
+    Boolean(approvedGeneratedContent?.generatedLessonApproved);
   const guidedAssessmentApproved =
-    !hasGeneratedGuidedAssessmentDraft || Boolean(approvedGeneratedContent?.guidedAssessmentApproved);
-  const generatedDraftsApproved = generatedLessonApproved && guidedAssessmentApproved;
-  const hasAssignableItems = visibleLessons.length > 0 || visibleAssessments.length > 0;
+    !hasGeneratedGuidedAssessmentDraft ||
+    Boolean(approvedGeneratedContent?.guidedAssessmentApproved);
+  const generatedDraftsApproved =
+    generatedLessonApproved && guidedAssessmentApproved;
+  const hasAssignableItems =
+    visibleLessons.length > 0 || visibleAssessments.length > 0;
   const latestPlanAttemptFailed = Boolean(
-    job && ['failed', 'rejected'].includes(job.status),
+    job && ["failed", "rejected"].includes(job.status),
   );
   const failedPlanWithoutLoadedResult = latestPlanAttemptFailed && !result;
-  const isCaseActive = queueEntry?.status === 'active';
+  const isCaseActive = queueEntry?.status === "active";
   const assignDisabled =
     assigning ||
     !hasCaseContext ||
@@ -670,16 +783,16 @@ export default function TeacherInterventionWorkspacePage() {
     (hasGeneratedDrafts && !generatedDraftsApproved) ||
     hasStartedCheckpointProgress;
   const assignButtonLabel = assigning
-    ? 'Assigning...'
+    ? "Assigning..."
     : hasStartedCheckpointProgress
-      ? 'Progress already started'
+      ? "Progress already started"
       : failedPlanWithoutLoadedResult
-        ? 'Latest AI plan failed'
-      : hasGeneratedDrafts && !generatedDraftsApproved
-        ? 'Approve generated content first'
-      : hasUnstartedExistingInterventionPath
-        ? 'Replace current path'
-        : 'Assign suggested path';
+        ? "Latest AI plan failed"
+        : hasGeneratedDrafts && !generatedDraftsApproved
+          ? "Approve generated content first"
+          : hasUnstartedExistingInterventionPath
+            ? "Replace current path"
+            : "Assign suggested path";
   const workspaceTabs: Array<{
     key: WorkspaceTab;
     label: string;
@@ -687,74 +800,90 @@ export default function TeacherInterventionWorkspacePage() {
     icon: typeof Wand2;
   }> = [
     {
-      key: 'plan',
-      label: 'Plan Creator',
-      hint: 'Set teacher guidance and pick manual fallbacks.',
+      key: "plan",
+      label: "Plan Creator",
+      hint: "Set teacher guidance and pick manual fallbacks.",
       icon: Wand2,
     },
     {
-      key: 'generating',
-      label: 'Generating',
-      hint: 'Watch the AI job state and recover result loading.',
+      key: "generating",
+      label: "Generating",
+      hint: "Watch the AI job state and recover result loading.",
       icon: Loader2,
     },
     {
-      key: 'assign',
-      label: 'Clean Out & Assign',
-      hint: 'Trim weak concepts, resources, and summary before assignment.',
+      key: "assign",
+      label: "Clean Out & Assign",
+      hint: "Trim weak concepts, resources, and summary before assignment.",
       icon: ClipboardCheck,
     },
   ];
   const caseStatusLabel = queueEntry
     ? queueEntry.aiPlanEligible === false
       ? `${studentName(queueEntry.student)} is no longer at-risk, so AI planning is disabled for this case.`
-      : `${studentName(queueEntry.student)} - trigger ${queueEntry.triggerScore?.toFixed(1) ?? '--'}%`
-    : 'Select a case from the intervention queue first.';
+      : `${studentName(queueEntry.student)} - trigger ${formatPercent(queueEntry.triggerScore)}`
+    : "Select a case from the intervention queue first.";
   const policySummary = [
-    `Source scope: ${classPolicy?.sourceScope === 'recommended_only' ? 'recommended content only' : 'class materials'}`,
-    `Strict grounding: ${classPolicy?.strictGrounding ? 'on' : 'off'}`,
-    `AI mentor explanations: ${classPolicy?.mentorExplainEnabled ? 'enabled' : 'disabled'}${classPolicy ? `, follow-up cap ${classPolicy.maxFollowUpTurns}` : ''}`,
+    `Source scope: ${classPolicy?.sourceScope === "recommended_only" ? "recommended content only" : "class materials"}`,
+    `Strict grounding: ${classPolicy?.strictGrounding ? "on" : "off"}`,
+    `AI mentor explanations: ${classPolicy?.mentorExplainEnabled ? "enabled" : "disabled"}${classPolicy ? `, follow-up cap ${classPolicy.maxFollowUpTurns}` : ""}`,
   ];
 
   const handleRemoveLesson = (lessonId: string) => {
-    setResult((current) => current
-      ? {
-          ...current,
-          recommendedLessons: current.recommendedLessons.filter((lesson) => lesson.lessonId !== lessonId),
-          suggestedAssignmentPayload: normalizeSuggestedAssignmentPayload(
-            current.suggestedAssignmentPayload,
-            current.recommendedLessons
-              .filter((lesson) => lesson.lessonId !== lessonId)
-              .map((lesson) => lesson.lessonId),
-            current.recommendedAssessments.map((assessment) => assessment.assessmentId),
-          ),
-        }
-      : current);
+    setResult((current) =>
+      current
+        ? {
+            ...current,
+            recommendedLessons: current.recommendedLessons.filter(
+              (lesson) => lesson.lessonId !== lessonId,
+            ),
+            suggestedAssignmentPayload: normalizeSuggestedAssignmentPayload(
+              current.suggestedAssignmentPayload,
+              current.recommendedLessons
+                .filter((lesson) => lesson.lessonId !== lessonId)
+                .map((lesson) => lesson.lessonId),
+              current.recommendedAssessments.map(
+                (assessment) => assessment.assessmentId,
+              ),
+            ),
+          }
+        : current,
+    );
   };
 
   const handleRemoveAssessment = (assessmentId: string) => {
-    setResult((current) => current
-      ? {
-          ...current,
-          recommendedAssessments: current.recommendedAssessments.filter((assessment) => assessment.assessmentId !== assessmentId),
-          suggestedAssignmentPayload: normalizeSuggestedAssignmentPayload(
-            current.suggestedAssignmentPayload,
-            current.recommendedLessons.map((lesson) => lesson.lessonId),
-            current.recommendedAssessments
-              .filter((assessment) => assessment.assessmentId !== assessmentId)
-              .map((assessment) => assessment.assessmentId),
-          ),
-        }
-      : current);
+    setResult((current) =>
+      current
+        ? {
+            ...current,
+            recommendedAssessments: current.recommendedAssessments.filter(
+              (assessment) => assessment.assessmentId !== assessmentId,
+            ),
+            suggestedAssignmentPayload: normalizeSuggestedAssignmentPayload(
+              current.suggestedAssignmentPayload,
+              current.recommendedLessons.map((lesson) => lesson.lessonId),
+              current.recommendedAssessments
+                .filter(
+                  (assessment) => assessment.assessmentId !== assessmentId,
+                )
+                .map((assessment) => assessment.assessmentId),
+            ),
+          }
+        : current,
+    );
   };
 
   const handleAddManualLesson = () => {
     if (!selectedManualLessonId) return;
-    const lesson = manualLessons.find((entry) => entry.id === selectedManualLessonId);
+    const lesson = manualLessons.find(
+      (entry) => entry.id === selectedManualLessonId,
+    );
     if (!lesson) return;
     setResult((current) => {
       const base = current ?? createManualStructuredOutput(caseId);
-      if (base.recommendedLessons.some((entry) => entry.lessonId === lesson.id)) {
+      if (
+        base.recommendedLessons.some((entry) => entry.lessonId === lesson.id)
+      ) {
         return base;
       }
       const nextLessons = [
@@ -762,7 +891,7 @@ export default function TeacherInterventionWorkspacePage() {
         {
           lessonId: lesson.id,
           title: lesson.title,
-          reason: 'Manually selected from class lesson library.',
+          reason: "Manually selected from class lesson library.",
           chunkId: `manual-lesson-${lesson.id}`,
         },
       ];
@@ -776,7 +905,7 @@ export default function TeacherInterventionWorkspacePage() {
         ),
       };
     });
-    setSelectedManualLessonId('');
+    setSelectedManualLessonId("");
   };
 
   const handleAddManualAssessment = () => {
@@ -787,7 +916,11 @@ export default function TeacherInterventionWorkspacePage() {
     if (!assessment) return;
     setResult((current) => {
       const base = current ?? createManualStructuredOutput(caseId);
-      if (base.recommendedAssessments.some((entry) => entry.assessmentId === assessment.id)) {
+      if (
+        base.recommendedAssessments.some(
+          (entry) => entry.assessmentId === assessment.id,
+        )
+      ) {
         return base;
       }
       const nextAssessments = [
@@ -795,7 +928,7 @@ export default function TeacherInterventionWorkspacePage() {
         {
           assessmentId: assessment.id,
           title: assessment.title,
-          reason: 'Manually selected from class assessment list.',
+          reason: "Manually selected from class assessment list.",
         },
       ];
       return {
@@ -808,28 +941,34 @@ export default function TeacherInterventionWorkspacePage() {
         ),
       };
     });
-    setSelectedManualAssessmentId('');
+    setSelectedManualAssessmentId("");
   };
 
   const handleAssign = async () => {
     if (!hasCaseContext || !hasAssignableItems) {
       if (hasCaseContext && !hasAssignableItems) {
-        toast.error('Add at least one lesson or assessment before assigning this intervention plan.');
+        toast.error(
+          "Add at least one lesson or assessment before assigning this intervention plan.",
+        );
       }
       return;
     }
     if (failedPlanWithoutLoadedResult) {
       toast.error(
-        'The latest AI plan attempt failed. Generate a successful plan or build a manual fallback before assigning.',
+        "The latest AI plan attempt failed. Generate a successful plan or build a manual fallback before assigning.",
       );
       return;
     }
     if (!isCaseActive) {
-      toast.error('Activate this intervention case first before assigning a plan.');
+      toast.error(
+        "Activate this intervention case first before assigning a plan.",
+      );
       return;
     }
     if (hasStartedCheckpointProgress) {
-      toast.error('Progress has already started. Resolve this case or create a new intervention cycle instead.');
+      toast.error(
+        "Progress has already started. Resolve this case or create a new intervention cycle instead.",
+      );
       return;
     }
     const safeResult = result ?? createManualStructuredOutput(caseId);
@@ -853,18 +992,24 @@ export default function TeacherInterventionWorkspacePage() {
           xpAwarded: lessonXp[lesson.lessonId] ?? 20,
           label: `AI plan: ${lesson.title}`,
         })),
-        assessmentAssignments: visibleAssessments.length > 0 ? [
-          {
-            assessmentId: visibleAssessments[0].assessmentId,
-            xpAwarded: assessmentXp[visibleAssessments[0].assessmentId] ?? 30,
-            label: 'AI plan: Replay Assessments',
-          }
-        ] : [],
+        assessmentAssignments:
+          visibleAssessments.length > 0
+            ? [
+                {
+                  assessmentId: visibleAssessments[0].assessmentId,
+                  xpAwarded:
+                    assessmentXp[visibleAssessments[0].assessmentId] ?? 30,
+                  label: "AI plan: Replay Assessments",
+                },
+              ]
+            : [],
       });
-      toast.success('AI intervention plan assigned.');
+      toast.success("AI intervention plan assigned.");
       router.push(interventionsRoute);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to assign intervention plan'));
+      toast.error(
+        getApiErrorMessage(error, "Failed to assign intervention plan"),
+      );
     } finally {
       setAssigning(false);
     }
@@ -882,9 +1027,14 @@ export default function TeacherInterventionWorkspacePage() {
         generatedLessonApproved: Boolean(response.data.generatedLesson),
         guidedAssessmentApproved: Boolean(response.data.guidedAssessment),
       });
-      toast.success('Generated remedial content approved for assignment.');
+      toast.success("Generated remedial content approved for assignment.");
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to approve generated remedial content'));
+      toast.error(
+        getApiErrorMessage(
+          error,
+          "Failed to approve generated remedial content",
+        ),
+      );
     } finally {
       setArtifactActionLoading(false);
     }
@@ -899,9 +1049,16 @@ export default function TeacherInterventionWorkspacePage() {
         generatedGuidedAssessmentDraft: result.generatedGuidedAssessmentDraft,
       });
       setApprovedGeneratedContent(null);
-      toast.success('Generated remedial content rejected. You can regenerate the plan.');
+      toast.success(
+        "Generated remedial content rejected. You can regenerate the plan.",
+      );
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to reject generated remedial content'));
+      toast.error(
+        getApiErrorMessage(
+          error,
+          "Failed to reject generated remedial content",
+        ),
+      );
     } finally {
       setArtifactActionLoading(false);
     }
@@ -943,18 +1100,25 @@ export default function TeacherInterventionWorkspacePage() {
 
       <section className="teacher-intervention-workspace__intro">
         <div>
-          <p className="teacher-intervention-workspace__eyebrow">AI-assisted intervention workflow</p>
+          <p className="teacher-intervention-workspace__eyebrow">
+            AI-assisted intervention workflow
+          </p>
           <h1>Intervention Plan Workspace</h1>
           <p>{caseStatusLabel}</p>
         </div>
-        <dl className="teacher-intervention-workspace__summary" aria-label="Intervention case summary">
+        <dl
+          className="teacher-intervention-workspace__summary"
+          aria-label="Intervention case summary"
+        >
           <div>
             <dt>Status</dt>
-            <dd>{queueEntry?.status ?? '--'}</dd>
+            <dd>{queueEntry?.status ?? "--"}</dd>
           </div>
           <div>
             <dt>Checkpoints</dt>
-            <dd>{completedCheckpointCount}/{existingCheckpointCount}</dd>
+            <dd>
+              {completedCheckpointCount}/{existingCheckpointCount}
+            </dd>
           </div>
           <div>
             <dt>Progress</dt>
@@ -963,7 +1127,10 @@ export default function TeacherInterventionWorkspacePage() {
         </dl>
       </section>
 
-      <nav className="teacher-intervention-workspace__tabs" aria-label="Intervention plan steps">
+      <nav
+        className="teacher-intervention-workspace__tabs"
+        aria-label="Intervention plan steps"
+      >
         {workspaceTabs.map((tab, index) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.key;
@@ -971,12 +1138,20 @@ export default function TeacherInterventionWorkspacePage() {
             <button
               key={tab.key}
               type="button"
-              className={isActive ? 'is-active' : undefined}
+              className={isActive ? "is-active" : undefined}
               onClick={() => setActiveTab(tab.key)}
-              aria-current={isActive ? 'step' : undefined}
+              aria-current={isActive ? "step" : undefined}
             >
-              <span className="teacher-intervention-workspace__tab-index">{index + 1}</span>
-              <Icon className={tab.key === 'generating' && creatingJob ? 'animate-spin' : undefined} />
+              <span className="teacher-intervention-workspace__tab-index">
+                {index + 1}
+              </span>
+              <Icon
+                className={
+                  tab.key === "generating" && creatingJob
+                    ? "animate-spin"
+                    : undefined
+                }
+              />
               <span>
                 <strong>{tab.label}</strong>
                 <small>{tab.hint}</small>
@@ -988,35 +1163,45 @@ export default function TeacherInterventionWorkspacePage() {
 
       {hasUnstartedExistingInterventionPath ? (
         <div className="teacher-intervention-workspace__notice is-warning">
-          This case already has {existingCheckpointCount} assigned checkpoint{existingCheckpointCount === 1 ? '' : 's'}.
-          A new AI plan can replace the current unstarted path only after you confirm and assign it.
+          This case already has {existingCheckpointCount} assigned checkpoint
+          {existingCheckpointCount === 1 ? "" : "s"}. A new AI plan can replace
+          the current unstarted path only after you confirm and assign it.
         </div>
       ) : null}
       {hasStartedCheckpointProgress ? (
         <div className="teacher-intervention-workspace__notice is-warning">
-          This student has already started this intervention path. You can generate guidance for review,
-          but replacing the assigned path is blocked to preserve progress.
+          This student has already started this intervention path. You can
+          generate guidance for review, but replacing the assigned path is
+          blocked to preserve progress.
         </div>
       ) : null}
       {failedPlanWithoutLoadedResult ? (
         <div className="teacher-intervention-workspace__notice is-warning">
-          The latest AI intervention plan attempt failed, so no new AI-generated path was produced.
+          The latest AI intervention plan attempt failed, so no new AI-generated
+          path was produced.
           {hasExistingInterventionPath
-            ? ' Any assigned Learners Path shown here is an older path that remains active until you replace it with a valid plan.'
-            : ' Generate a valid plan or add manual fallback checkpoints before assigning anything new.'}
+            ? " Any assigned Learners Path shown here is an older path that remains active until you replace it with a valid plan."
+            : " Generate a valid plan or add manual fallback checkpoints before assigning anything new."}
         </div>
       ) : null}
 
-      {activeTab === 'plan' ? (
+      {activeTab === "plan" ? (
         <section className="teacher-intervention-workspace__panel">
           <div className="teacher-intervention-workspace__section-head">
             <div>
               <p>Step 1</p>
               <h2>Plan Creator</h2>
             </div>
-            <Button onClick={handleGenerate} disabled={creatingJob || !hasCaseContext}>
-              {creatingJob ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
-              {job ? 'Regenerate plan' : 'Generate plan'}
+            <Button
+              onClick={handleGenerate}
+              disabled={creatingJob || !hasCaseContext}
+            >
+              {creatingJob ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Wand2 className="mr-2 h-4 w-4" />
+              )}
+              {job ? "Regenerate plan" : "Generate plan"}
             </Button>
           </div>
 
@@ -1024,36 +1209,49 @@ export default function TeacherInterventionWorkspacePage() {
             <div className="teacher-intervention-workspace__subhead">
               <div>
                 <h3>Intervention Basis</h3>
-                <p>Use the weakness signals below to keep this targeted intervention grounded on class-scoped materials before assigning any review or assessment retry.</p>
+                <p>
+                  Use the weakness signals below to keep this targeted
+                  intervention grounded on class-scoped materials before
+                  assigning any review or assessment retry.
+                </p>
               </div>
             </div>
             <div className="teacher-intervention-workspace__chips">
               <Badge variant="secondary">
-                {queueEntry?.isCurrentlyAtRisk ? 'Currently at risk' : 'Recovered above threshold'}
+                {queueEntry?.isCurrentlyAtRisk
+                  ? "Currently at risk"
+                  : "Recovered above threshold"}
               </Badge>
               <Badge variant="outline">
-                Trigger {queueEntry?.triggerScore?.toFixed(1) ?? '--'}% vs threshold {queueEntry?.thresholdApplied?.toFixed(1) ?? '--'}%
+                Trigger {formatPercent(queueEntry?.triggerScore)} vs threshold{" "}
+                {formatPercent(queueEntry?.thresholdApplied)}
               </Badge>
               <Badge variant="outline">
-                Current blended score {queueEntry?.latestBlendedScore?.toFixed(1) ?? '--'}%
+                Current standing {formatPercent(queueEntry?.latestBlendedScore)}
               </Badge>
             </div>
             <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)]">
               <div className="rounded-xl border border-[#f0e5ea] bg-white p-3">
-                <strong className="block text-sm text-[#1f2937]">Teacher note</strong>
+                <strong className="block text-sm text-[#1f2937]">
+                  Teacher note
+                </strong>
                 <p className="mt-2 text-sm text-[#5f6b84]">
-                  {note.trim() || 'No teacher note added yet. Add context if you want the remedial plan to follow a specific weakness or pacing concern.'}
+                  {note.trim() ||
+                    "No teacher note added yet. Add context if you want the remedial plan to follow a specific weakness or pacing concern."}
                 </p>
               </div>
               <div className="rounded-xl border border-[#f0e5ea] bg-white p-3">
-                <strong className="block text-sm text-[#1f2937]">Grounding policy</strong>
+                <strong className="block text-sm text-[#1f2937]">
+                  Grounding policy
+                </strong>
                 <ul className="mt-2 space-y-1 text-sm text-[#5f6b84]">
                   {policySummary.map((item) => (
                     <li key={item}>{item}</li>
                   ))}
                 </ul>
                 <p className="mt-2 text-xs font-medium text-[#7a5160]">
-                  Recommended lessons and assessment retries stay grounded on class-scoped materials.
+                  Recommended lessons and assessment retries stay grounded on
+                  class-scoped materials.
                 </p>
               </div>
             </div>
@@ -1076,7 +1274,9 @@ export default function TeacherInterventionWorkspacePage() {
                 {policySaving ? <span>Saving...</span> : null}
               </div>
               {policyLoading ? (
-                <p className="teacher-intervention-workspace__empty">Loading class policy...</p>
+                <p className="teacher-intervention-workspace__empty">
+                  Loading class policy...
+                </p>
               ) : classPolicy ? (
                 <div className="teacher-intervention-workspace__policy-grid">
                   <label className="teacher-intervention-workspace__toggle-row">
@@ -1118,7 +1318,8 @@ export default function TeacherInterventionWorkspacePage() {
                           current
                             ? {
                                 ...current,
-                                maxFollowUpTurns: Number(event.target.value) || 0,
+                                maxFollowUpTurns:
+                                  Number(event.target.value) || 0,
                               }
                             : current,
                         )
@@ -1137,18 +1338,23 @@ export default function TeacherInterventionWorkspacePage() {
                       disabled={policySaving}
                       onChange={(event) =>
                         updateClassPolicy({
-                          sourceScope: event.target.value as ClassAiPolicy['sourceScope'],
+                          sourceScope: event.target
+                            .value as ClassAiPolicy["sourceScope"],
                         })
                       }
                       className="teacher-select text-sm"
                     >
                       <option value="class_materials">Class materials</option>
-                      <option value="recommended_only">Recommended content only</option>
+                      <option value="recommended_only">
+                        Recommended content only
+                      </option>
                     </select>
                   </label>
                 </div>
               ) : (
-                <p className="teacher-intervention-workspace__empty">Select a class to load policy controls.</p>
+                <p className="teacher-intervention-workspace__empty">
+                  Select a class to load policy controls.
+                </p>
               )}
             </div>
           </div>
@@ -1157,7 +1363,10 @@ export default function TeacherInterventionWorkspacePage() {
             <div className="teacher-intervention-workspace__subhead">
               <div>
                 <h3>Manual selector</h3>
-                <p>Add class-scoped lessons and assessments when AI suggestions are insufficient.</p>
+                <p>
+                  Add class-scoped lessons and assessments when AI suggestions
+                  are insufficient.
+                </p>
               </div>
               {loadingManualSources ? <span>Loading options...</span> : null}
             </div>
@@ -1167,9 +1376,13 @@ export default function TeacherInterventionWorkspacePage() {
                 <div>
                   <select
                     value={selectedManualLessonId}
-                    onChange={(event) => setSelectedManualLessonId(event.target.value)}
+                    onChange={(event) =>
+                      setSelectedManualLessonId(event.target.value)
+                    }
                     className="teacher-select text-sm"
-                    disabled={loadingManualSources || manualLessons.length === 0}
+                    disabled={
+                      loadingManualSources || manualLessons.length === 0
+                    }
                   >
                     <option value="">Select lesson...</option>
                     {manualLessons.map((lesson) => (
@@ -1193,9 +1406,13 @@ export default function TeacherInterventionWorkspacePage() {
                 <div>
                   <select
                     value={selectedManualAssessmentId}
-                    onChange={(event) => setSelectedManualAssessmentId(event.target.value)}
+                    onChange={(event) =>
+                      setSelectedManualAssessmentId(event.target.value)
+                    }
                     className="teacher-select text-sm"
-                    disabled={loadingManualSources || manualAssessments.length === 0}
+                    disabled={
+                      loadingManualSources || manualAssessments.length === 0
+                    }
                   >
                     <option value="">Select assessment...</option>
                     {manualAssessments.map((assessment) => (
@@ -1219,15 +1436,17 @@ export default function TeacherInterventionWorkspacePage() {
         </section>
       ) : null}
 
-      {activeTab === 'generating' ? (
+      {activeTab === "generating" ? (
         <section className="teacher-intervention-workspace__panel">
           <div className="teacher-intervention-workspace__section-head">
             <div>
               <p>Step 2</p>
               <h2>Generating</h2>
             </div>
-            <Badge variant={job?.status === 'failed' ? 'destructive' : 'secondary'}>
-              {job?.status || 'idle'}
+            <Badge
+              variant={job?.status === "failed" ? "destructive" : "secondary"}
+            >
+              {job?.status || "idle"}
             </Badge>
           </div>
 
@@ -1235,22 +1454,31 @@ export default function TeacherInterventionWorkspacePage() {
             <Progress value={job?.progressPercent ?? 0} />
             <div>
               <strong>{job?.progressPercent ?? 0}%</strong>
-              <span>{job?.statusMessage || 'Start planning to generate an AI intervention path.'}</span>
+              <span>
+                {job?.statusMessage ||
+                  "Start planning to generate an AI intervention path."}
+              </span>
             </div>
-            {job?.errorMessage ? <p className="is-error">{job.errorMessage}</p> : null}
-            {statusWarning ? <p className="is-warning">{statusWarning}</p> : null}
-            {job && ['completed', 'approved'].includes(job.status) && !result ? (
+            {job?.errorMessage ? (
+              <p className="is-error">{job.errorMessage}</p>
+            ) : null}
+            {statusWarning ? (
+              <p className="is-warning">{statusWarning}</p>
+            ) : null}
+            {job &&
+            ["completed", "approved"].includes(job.status) &&
+            !result ? (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleRetryResultLoad}
                 disabled={loadingResult}
               >
-                {loadingResult ? 'Retrying result...' : 'Retry loading result'}
+                {loadingResult ? "Retrying result..." : "Retry loading result"}
               </Button>
             ) : null}
             {result ? (
-              <Button type="button" onClick={() => setActiveTab('assign')}>
+              <Button type="button" onClick={() => setActiveTab("assign")}>
                 Review generated plan
               </Button>
             ) : null}
@@ -1258,7 +1486,7 @@ export default function TeacherInterventionWorkspacePage() {
         </section>
       ) : null}
 
-      {activeTab === 'assign' ? (
+      {activeTab === "assign" ? (
         <section className="teacher-intervention-workspace__panel">
           <div className="teacher-intervention-workspace__section-head">
             <div>
@@ -1273,13 +1501,17 @@ export default function TeacherInterventionWorkspacePage() {
                     onClick={handleRejectGeneratedContent}
                     disabled={artifactActionLoading}
                   >
-                    {artifactActionLoading ? 'Saving...' : 'Reject generated content'}
+                    {artifactActionLoading
+                      ? "Saving..."
+                      : "Reject generated content"}
                   </Button>
                   <Button
                     onClick={handleApproveGeneratedContent}
                     disabled={artifactActionLoading}
                   >
-                    {artifactActionLoading ? 'Saving...' : 'Approve generated content'}
+                    {artifactActionLoading
+                      ? "Saving..."
+                      : "Approve generated content"}
                   </Button>
                 </>
               ) : null}
@@ -1297,10 +1529,16 @@ export default function TeacherInterventionWorkspacePage() {
             <section className="teacher-intervention-workspace__assign-block">
               <h3>Weakness detected</h3>
               <div className="teacher-intervention-workspace__chips">
-                {result?.weakConcepts?.length ? result.weakConcepts.map((concept) => (
-                  <Badge key={concept} variant="secondary">{concept}</Badge>
-                )) : (
-                  <p className="teacher-intervention-workspace__empty">No concepts generated yet.</p>
+                {result?.weakConcepts?.length ? (
+                  result.weakConcepts.map((concept) => (
+                    <Badge key={concept} variant="secondary">
+                      {concept}
+                    </Badge>
+                  ))
+                ) : (
+                  <p className="teacher-intervention-workspace__empty">
+                    No concepts generated yet.
+                  </p>
                 )}
               </div>
             </section>
@@ -1309,18 +1547,23 @@ export default function TeacherInterventionWorkspacePage() {
               <section className="teacher-intervention-workspace__assign-block">
                 <h3>Generated remedial lesson preview</h3>
                 <p className="mb-3 text-sm text-[#5f6b84]">
-                  This simplified lesson is grounded on the recommended class lesson evidence and tailored to the student&apos;s weak concepts.
+                  This simplified lesson is grounded on the recommended class
+                  lesson evidence and tailored to the student&apos;s weak
+                  concepts.
                 </p>
                 <div className="rounded-xl border border-[#eadde3] bg-[#fff9fb] p-4">
                   <strong className="block text-base text-[#1f2937]">
                     {result.generatedLessonDraft.title}
                   </strong>
                   <p className="mt-2 text-sm text-[#5f6b84]">
-                    {result.generatedLessonDraft.summary || 'No summary provided.'}
+                    {result.generatedLessonDraft.summary ||
+                      "No summary provided."}
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {result.generatedLessonDraft.weakConcepts.map((concept) => (
-                      <Badge key={concept} variant="outline">{concept}</Badge>
+                      <Badge key={concept} variant="outline">
+                        {concept}
+                      </Badge>
                     ))}
                   </div>
                   <div className="mt-4 rounded-lg bg-white p-3 text-sm leading-6 text-[#30415d]">
@@ -1329,7 +1572,10 @@ export default function TeacherInterventionWorkspacePage() {
                     </pre>
                   </div>
                   <p className="mt-3 text-xs font-medium text-[#7a5160]">
-                    Approval status: {approvedGeneratedContent?.generatedLessonApproved ? 'Approved for assignment' : 'Waiting for teacher approval'}
+                    Approval status:{" "}
+                    {approvedGeneratedContent?.generatedLessonApproved
+                      ? "Approved for assignment"
+                      : "Waiting for teacher approval"}
                   </p>
                 </div>
               </section>
@@ -1338,67 +1584,92 @@ export default function TeacherInterventionWorkspacePage() {
             <section className="teacher-intervention-workspace__assign-block">
               <h3>Recommended lesson review</h3>
               <p className="mb-3 text-sm text-[#5f6b84]">
-                These lesson reviews were chosen to reinforce the weak concepts before the student reopens an assessment retry.
+                These lesson reviews were chosen to reinforce the weak concepts
+                before the student reopens an assessment retry.
               </p>
               {visibleLessons.length === 0 ? (
-                <p className="teacher-intervention-workspace__empty">No lessons selected yet.</p>
-              ) : visibleLessons.map((lesson) => (
-                <div key={lesson.lessonId} className="teacher-intervention-workspace__resource-row">
-                  <div>
-                    <strong>{lesson.title}</strong>
-                    <span>Why it was chosen: {lesson.reason}</span>
+                <p className="teacher-intervention-workspace__empty">
+                  No lessons selected yet.
+                </p>
+              ) : (
+                visibleLessons.map((lesson) => (
+                  <div
+                    key={lesson.lessonId}
+                    className="teacher-intervention-workspace__resource-row"
+                  >
+                    <div>
+                      <strong>{lesson.title}</strong>
+                      <span>Why it was chosen: {lesson.reason}</span>
+                    </div>
+                    <label>
+                      <span>XP</span>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={lessonXp[lesson.lessonId] ?? 20}
+                        onChange={(event) =>
+                          setLessonXp((current) => ({
+                            ...current,
+                            [lesson.lessonId]: Number(event.target.value) || 0,
+                          }))
+                        }
+                      />
+                    </label>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleRemoveLesson(lesson.lessonId)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
-                  <label>
-                    <span>XP</span>
-                    <Input
-                      type="number"
-                      min={0}
-                      value={lessonXp[lesson.lessonId] ?? 20}
-                      onChange={(event) => setLessonXp((current) => ({
-                        ...current,
-                        [lesson.lessonId]: Number(event.target.value) || 0,
-                      }))}
-                    />
-                  </label>
-                  <Button variant="ghost" size="icon" onClick={() => handleRemoveLesson(lesson.lessonId)}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
+                ))
+              )}
             </section>
 
             {result?.generatedGuidedAssessmentDraft ? (
               <section className="teacher-intervention-workspace__assign-block">
                 <h3>Generated guided assessment preview</h3>
                 <p className="mb-3 text-sm text-[#5f6b84]">
-                  This LXP-only remedial assessment uses the failed class assessment as a basis, then adds optional hints and post-answer explanations.
+                  This LXP-only remedial assessment uses the failed class
+                  assessment as a basis, then adds optional hints and
+                  post-answer explanations.
                 </p>
                 <div className="rounded-xl border border-[#eadde3] bg-[#fff9fb] p-4">
                   <strong className="block text-base text-[#1f2937]">
                     {result.generatedGuidedAssessmentDraft.title}
                   </strong>
                   <p className="mt-2 text-sm text-[#5f6b84]">
-                    {result.generatedGuidedAssessmentDraft.description || 'No description provided.'}
+                    {result.generatedGuidedAssessmentDraft.description ||
+                      "No description provided."}
                   </p>
                   <div className="mt-3 grid gap-3">
-                    {result.generatedGuidedAssessmentDraft.questions.slice(0, 3).map((question, index) => (
-                      <div key={question.id} className="rounded-lg border border-[#f0e5ea] bg-white p-3">
-                        <strong className="block text-sm text-[#1f2937]">
-                          Q{index + 1}. {question.stem}
-                        </strong>
-                        {question.hint ? (
-                          <p className="mt-2 text-xs font-medium text-[#7a5160]">
-                            Hint: {question.hint}
+                    {result.generatedGuidedAssessmentDraft.questions
+                      .slice(0, 3)
+                      .map((question, index) => (
+                        <div
+                          key={question.id}
+                          className="rounded-lg border border-[#f0e5ea] bg-white p-3"
+                        >
+                          <strong className="block text-sm text-[#1f2937]">
+                            Q{index + 1}. {question.stem}
+                          </strong>
+                          {question.hint ? (
+                            <p className="mt-2 text-xs font-medium text-[#7a5160]">
+                              Hint: {question.hint}
+                            </p>
+                          ) : null}
+                          <p className="mt-2 text-xs text-[#5f6b84]">
+                            Explanation: {question.explanation}
                           </p>
-                        ) : null}
-                        <p className="mt-2 text-xs text-[#5f6b84]">
-                          Explanation: {question.explanation}
-                        </p>
-                      </div>
-                    ))}
+                        </div>
+                      ))}
                   </div>
                   <p className="mt-3 text-xs font-medium text-[#7a5160]">
-                    Approval status: {approvedGeneratedContent?.guidedAssessmentApproved ? 'Approved for assignment' : 'Waiting for teacher approval'}
+                    Approval status:{" "}
+                    {approvedGeneratedContent?.guidedAssessmentApproved
+                      ? "Approved for assignment"
+                      : "Waiting for teacher approval"}
                   </p>
                 </div>
               </section>
@@ -1407,33 +1678,50 @@ export default function TeacherInterventionWorkspacePage() {
             <section className="teacher-intervention-workspace__assign-block">
               <h3>Recommended assessment retry</h3>
               <p className="mb-3 text-sm text-[#5f6b84]">
-                These assessment retries should validate improvement after guided review while staying inside the original class scope.
+                These assessment retries should validate improvement after
+                guided review while staying inside the original class scope.
               </p>
               {visibleAssessments.length === 0 ? (
-                <p className="teacher-intervention-workspace__empty">No assessments selected yet.</p>
-              ) : visibleAssessments.map((assessment) => (
-                <div key={assessment.assessmentId} className="teacher-intervention-workspace__resource-row">
-                  <div>
-                    <strong>{assessment.title}</strong>
-                    <span>Why it was chosen: {assessment.reason}</span>
+                <p className="teacher-intervention-workspace__empty">
+                  No assessments selected yet.
+                </p>
+              ) : (
+                visibleAssessments.map((assessment) => (
+                  <div
+                    key={assessment.assessmentId}
+                    className="teacher-intervention-workspace__resource-row"
+                  >
+                    <div>
+                      <strong>{assessment.title}</strong>
+                      <span>Why it was chosen: {assessment.reason}</span>
+                    </div>
+                    <label>
+                      <span>XP</span>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={assessmentXp[assessment.assessmentId] ?? 30}
+                        onChange={(event) =>
+                          setAssessmentXp((current) => ({
+                            ...current,
+                            [assessment.assessmentId]:
+                              Number(event.target.value) || 0,
+                          }))
+                        }
+                      />
+                    </label>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() =>
+                        handleRemoveAssessment(assessment.assessmentId)
+                      }
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
-                  <label>
-                    <span>XP</span>
-                    <Input
-                      type="number"
-                      min={0}
-                      value={assessmentXp[assessment.assessmentId] ?? 30}
-                      onChange={(event) => setAssessmentXp((current) => ({
-                        ...current,
-                        [assessment.assessmentId]: Number(event.target.value) || 0,
-                      }))}
-                    />
-                  </label>
-                  <Button variant="ghost" size="icon" onClick={() => handleRemoveAssessment(assessment.assessmentId)}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
+                ))
+              )}
             </section>
 
             <section className="teacher-intervention-workspace__assign-block is-summary">
@@ -1453,35 +1741,46 @@ export default function TeacherInterventionWorkspacePage() {
                     <strong>Student focus</strong>
                     <div className="teacher-intervention-workspace__chips">
                       {result.aiSummary.studentFocus.map((focus) => (
-                        <Badge key={focus} variant="outline">{toPlainTeacherText(focus)}</Badge>
+                        <Badge key={focus} variant="outline">
+                          {toPlainTeacherText(focus)}
+                        </Badge>
                       ))}
                     </div>
                   </div>
                   <p className="rounded-xl border border-[#f0d7df] bg-[#fff7f9] px-3 py-2 text-sm font-medium text-[#6a4f5b]">
-                    Formative support only: intervention checkpoints support remediation and teacher reference. They do not automatically alter official class records.
+                    Formative support only: intervention checkpoints support
+                    remediation and teacher reference. They do not automatically
+                    alter official class records.
                   </p>
                   {hasGeneratedDrafts ? (
                     <p className="rounded-xl border border-[#e4d8ff] bg-[#faf7ff] px-3 py-2 text-sm font-medium text-[#5e4b89]">
-                      Generated remedial content is teacher-reviewed and stays inside LXP. It does not create a new official LMS lesson or official assessment attempt.
+                      Generated remedial content is teacher-reviewed and stays
+                      inside LXP. It does not create a new official LMS lesson
+                      or official assessment attempt.
                     </p>
                   ) : null}
                 </>
               ) : (
                 <p className="teacher-intervention-workspace__empty">
-                  Generate an intervention plan or add manual selections to review the assignable path.
+                  Generate an intervention plan or add manual selections to
+                  review the assignable path.
                 </p>
               )}
             </section>
           </div>
         </section>
       ) : null}
-      <Dialog open={replacePlanWarningOpen} onOpenChange={setReplacePlanWarningOpen}>
+      <Dialog
+        open={replacePlanWarningOpen}
+        onOpenChange={setReplacePlanWarningOpen}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Generate a new intervention plan?</DialogTitle>
             <DialogDescription>
-              This student already has an assigned intervention path. Generating a new AI plan will not change
-              the student path yet, but assigning the new plan will replace the current unstarted checkpoints.
+              This student already has an assigned intervention path. Generating
+              a new AI plan will not change the student path yet, but assigning
+              the new plan will replace the current unstarted checkpoints.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -1513,20 +1812,28 @@ export default function TeacherInterventionWorkspacePage() {
       >
         <DialogContent className="teacher-intervention-workspace__manual-dialog">
           <DialogHeader>
-            <DialogTitle>Teacher guide: Intervention Plan Workspace</DialogTitle>
+            <DialogTitle>
+              Teacher guide: Intervention Plan Workspace
+            </DialogTitle>
             <DialogDescription>
-              Read this one page at a time. Each example shows the part of the system being explained.
+              Read this one page at a time. Each example shows the part of the
+              system being explained.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="teacher-intervention-workspace__manual-progress" aria-live="polite">
-            <span>Page {helpPage + 1} of {helpManualPages.length}</span>
+          <div
+            className="teacher-intervention-workspace__manual-progress"
+            aria-live="polite"
+          >
+            <span>
+              Page {helpPage + 1} of {helpManualPages.length}
+            </span>
             <div>
               {helpManualPages.map((page, index) => (
                 <button
                   key={page.title}
                   type="button"
-                  className={index === helpPage ? 'is-active' : undefined}
+                  className={index === helpPage ? "is-active" : undefined}
                   onClick={() => setHelpPage(index)}
                   aria-label={`Open guide page ${index + 1}`}
                 />
@@ -1537,7 +1844,9 @@ export default function TeacherInterventionWorkspacePage() {
           <div className="teacher-intervention-workspace__manual-layout">
             <HelpManualScreenshot screen={helpManualPages[helpPage].screen} />
             <section className="teacher-intervention-workspace__manual-copy">
-              <p className="teacher-intervention-workspace__manual-kicker">Teacher instruction manual</p>
+              <p className="teacher-intervention-workspace__manual-kicker">
+                Teacher instruction manual
+              </p>
               <h3>{helpManualPages[helpPage].title}</h3>
               <p>{helpManualPages[helpPage].description}</p>
               <ol>
@@ -1546,7 +1855,8 @@ export default function TeacherInterventionWorkspacePage() {
                 ))}
               </ol>
               <p className="teacher-intervention-workspace__manual-reminder">
-                Simple rule: move from left to right, review before assigning, and stop if the page says progress already started.
+                Simple rule: move from left to right, review before assigning,
+                and stop if the page says progress already started.
               </p>
             </section>
           </div>
@@ -1556,7 +1866,9 @@ export default function TeacherInterventionWorkspacePage() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setHelpPage((current) => Math.max(current - 1, 0))}
+                onClick={() =>
+                  setHelpPage((current) => Math.max(current - 1, 0))
+                }
                 disabled={helpPage === 0}
               >
                 Previous page
@@ -1565,7 +1877,9 @@ export default function TeacherInterventionWorkspacePage() {
                 <Button
                   type="button"
                   onClick={() =>
-                    setHelpPage((current) => Math.min(current + 1, helpManualPages.length - 1))
+                    setHelpPage((current) =>
+                      Math.min(current + 1, helpManualPages.length - 1),
+                    )
                   }
                 >
                   Next page

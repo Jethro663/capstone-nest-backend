@@ -47,6 +47,8 @@ export interface AssessmentHistoryRow {
   assessmentId: string;
   attemptNumber: number;
   score: number | null;
+  scorePercent?: number | null;
+  scoreBreakdown?: import("./assessment").AcademicScoreBreakdown | null;
   isSubmitted: boolean;
   submittedAt?: string | null;
   startedAt?: string | null;

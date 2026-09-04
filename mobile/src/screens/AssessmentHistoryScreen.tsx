@@ -8,6 +8,7 @@ import { useAssessmentHistory } from "../api/hooks";
 import type { RootStackParamList } from "../navigation/types";
 import { studentDarkTheme as theme } from "../theme/studentDark";
 import { Refreshable, ScreenScroll } from "../components/ui/primitives";
+import { presentAcademicScore } from "../lib/academicScore";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AssessmentHistory">;
 type SubmissionFilter = "all" | "submitted" | "in_progress";
@@ -65,7 +66,9 @@ function ToneTag({ label, tone }: { label: string; tone: Tone }) {
         paddingVertical: 5,
       }}
     >
-      <Text style={{ fontSize: 10, fontWeight: "700", color: toneStyle.color }}>{label}</Text>
+      <Text style={{ fontSize: 10, fontWeight: "700", color: toneStyle.color }}>
+        {label}
+      </Text>
     </View>
   );
 }
@@ -157,8 +160,16 @@ export function AssessmentHistoryScreen({ route, navigation }: Props) {
         />
       }
     >
-      <View style={{ backgroundColor: theme.header, borderBottomWidth: 1, borderBottomColor: theme.border }}>
-        <View style={{ paddingHorizontal: 16, paddingTop: 44, paddingBottom: 16 }}>
+      <View
+        style={{
+          backgroundColor: theme.header,
+          borderBottomWidth: 1,
+          borderBottomColor: theme.border,
+        }}
+      >
+        <View
+          style={{ paddingHorizontal: 16, paddingTop: 44, paddingBottom: 16 }}
+        >
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
             <Pressable
               onPress={() => navigation.goBack()}
@@ -171,11 +182,28 @@ export function AssessmentHistoryScreen({ route, navigation }: Props) {
                 backgroundColor: theme.active,
               }}
             >
-              <MaterialCommunityIcons name="chevron-left" size={20} color={theme.text} />
+              <MaterialCommunityIcons
+                name="chevron-left"
+                size={20}
+                color={theme.text}
+              />
             </Pressable>
             <View style={{ flex: 1 }}>
-              <Text style={{ color: theme.text, fontSize: 12, fontWeight: "700" }}>Student Records</Text>
-              <Text style={{ marginTop: 4, color: theme.text, fontSize: 28, fontWeight: "800" }}>Assessment History</Text>
+              <Text
+                style={{ color: theme.text, fontSize: 12, fontWeight: "700" }}
+              >
+                Student Records
+              </Text>
+              <Text
+                style={{
+                  marginTop: 4,
+                  color: theme.text,
+                  fontSize: 28,
+                  fontWeight: "800",
+                }}
+              >
+                Assessment History
+              </Text>
             </View>
             <ToneTag
               label={`${historyQuery.data?.total ?? filteredRows.length} attempts`}
@@ -210,8 +238,17 @@ export function AssessmentHistoryScreen({ route, navigation }: Props) {
 
       <View style={{ paddingHorizontal: 16, paddingTop: 18, gap: 10 }}>
         <DarkPanel>
-          <Text style={{ fontSize: 15, fontWeight: "800", color: theme.text }}>Filter attempts</Text>
-          <View style={{ marginTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          <Text style={{ fontSize: 15, fontWeight: "800", color: theme.text }}>
+            Filter attempts
+          </Text>
+          <View
+            style={{
+              marginTop: 12,
+              flexDirection: "row",
+              flexWrap: "wrap",
+              gap: 8,
+            }}
+          >
             {(["all", "submitted", "in_progress"] as const).map((value) => {
               const active = submission === value;
               return (
@@ -230,8 +267,18 @@ export function AssessmentHistoryScreen({ route, navigation }: Props) {
                     paddingVertical: 10,
                   }}
                 >
-                  <Text style={{ color: active ? theme.amber : theme.text, fontSize: 12, fontWeight: "800" }}>
-                    {value === "in_progress" ? "In Progress" : value === "submitted" ? "Submitted" : "All"}
+                  <Text
+                    style={{
+                      color: active ? theme.amber : theme.text,
+                      fontSize: 12,
+                      fontWeight: "800",
+                    }}
+                  >
+                    {value === "in_progress"
+                      ? "In Progress"
+                      : value === "submitted"
+                        ? "Submitted"
+                        : "All"}
                   </Text>
                 </Pressable>
               );
@@ -241,10 +288,19 @@ export function AssessmentHistoryScreen({ route, navigation }: Props) {
 
         {historyQuery.error ? (
           <DarkPanel>
-            <Text style={{ fontSize: 14, fontWeight: "800", color: theme.text }}>
+            <Text
+              style={{ fontSize: 14, fontWeight: "800", color: theme.text }}
+            >
               Assessment history is unavailable
             </Text>
-            <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: theme.muted }}>
+            <Text
+              style={{
+                marginTop: 6,
+                fontSize: 12,
+                lineHeight: 18,
+                color: theme.muted,
+              }}
+            >
               {peekAppError(historyQuery.error).message}
             </Text>
           </DarkPanel>
@@ -252,24 +308,39 @@ export function AssessmentHistoryScreen({ route, navigation }: Props) {
 
         {filteredRows.length === 0 ? (
           <DarkPanel>
-            <Text style={{ fontSize: 14, fontWeight: "800", color: theme.text }}>No attempts found</Text>
-            <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: theme.muted }}>
+            <Text
+              style={{ fontSize: 14, fontWeight: "800", color: theme.text }}
+            >
+              No attempts found
+            </Text>
+            <Text
+              style={{
+                marginTop: 6,
+                fontSize: 12,
+                lineHeight: 18,
+                color: theme.muted,
+              }}
+            >
               Try a different search or filter to find a previous attempt.
             </Text>
           </DarkPanel>
         ) : (
           filteredRows.map((row) => {
             const isSubmitted = row.isSubmitted !== false;
-            const actionLabel = isSubmitted ? "View Results" : "Continue Attempt";
+            const actionLabel = isSubmitted
+              ? "View Results"
+              : "Continue Attempt";
             const statusLabel = isSubmitted ? "Submitted" : "In Progress";
             const statusTone = isSubmitted ? "green" : "blue";
             const subjectLabel =
-              row.assessment?.class?.subjectName && row.assessment?.class?.subjectCode
+              row.assessment?.class?.subjectName &&
+              row.assessment?.class?.subjectCode
                 ? `${row.assessment.class.subjectName} (${row.assessment.class.subjectCode})`
                 : row.assessment?.class?.subjectName || "Class";
-            const rawScore = typeof row.score === "number" ? Math.round(row.score) : null;
-            const totalPoints = row.assessment?.totalPoints ?? 100;
-            const scoreLabel = rawScore !== null ? `${rawScore}/${totalPoints}` : "Checking";
+            const scoreLabel =
+              presentAcademicScore(row).scorePercent !== null
+                ? presentAcademicScore(row).compactLabel
+                : "Checking";
 
             if (isSubmitted) {
               return (
@@ -301,30 +372,79 @@ export function AssessmentHistoryScreen({ route, navigation }: Props) {
                         paddingHorizontal: 8,
                       }}
                     >
-                      <Text style={{ fontSize: 10, fontWeight: "800", letterSpacing: 0.5, color: theme.green }}>
+                      <Text
+                        style={{
+                          fontSize: 10,
+                          fontWeight: "800",
+                          letterSpacing: 0.5,
+                          color: theme.green,
+                        }}
+                      >
                         RESULT
                       </Text>
-                      <Text style={{ marginTop: 4, fontSize: 18, fontWeight: "900", color: theme.green }}>
+                      <Text
+                        style={{
+                          marginTop: 4,
+                          fontSize: 18,
+                          fontWeight: "900",
+                          color: theme.green,
+                        }}
+                      >
                         {scoreLabel}
                       </Text>
                     </View>
 
                     <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: "800", color: theme.blue }}>
+                      <Text
+                        numberOfLines={1}
+                        style={{
+                          fontSize: 12,
+                          fontWeight: "800",
+                          color: theme.blue,
+                        }}
+                      >
                         {subjectLabel}
                       </Text>
-                      <Text numberOfLines={2} style={{ marginTop: 3, fontSize: 15, lineHeight: 20, fontWeight: "900", color: theme.text }}>
+                      <Text
+                        numberOfLines={2}
+                        style={{
+                          marginTop: 3,
+                          fontSize: 15,
+                          lineHeight: 20,
+                          fontWeight: "900",
+                          color: theme.text,
+                        }}
+                      >
                         {row.assessment?.title || "Quiz"}
                       </Text>
-                      <Text style={{ marginTop: 4, fontSize: 11, color: theme.muted }}>
-                        Submitted {formatDate(row.submittedAt)} · Attempt #{row.attemptNumber}
+                      <Text
+                        style={{
+                          marginTop: 4,
+                          fontSize: 11,
+                          color: theme.muted,
+                        }}
+                      >
+                        Submitted {formatDate(row.submittedAt)} · Attempt #
+                        {row.attemptNumber}
                       </Text>
                     </View>
 
                     <View style={{ alignItems: "flex-end", gap: 6 }}>
                       <ToneTag label="Submitted" tone="green" />
-                      <Text style={{ fontSize: 11, fontWeight: "800", color: theme.blue }}>View Results</Text>
-                      <MaterialCommunityIcons name="chevron-right" size={18} color={theme.dim} />
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          fontWeight: "800",
+                          color: theme.blue,
+                        }}
+                      >
+                        View Results
+                      </Text>
+                      <MaterialCommunityIcons
+                        name="chevron-right"
+                        size={18}
+                        color={theme.dim}
+                      />
                     </View>
                   </Pressable>
                 </DarkPanel>
@@ -333,28 +453,51 @@ export function AssessmentHistoryScreen({ route, navigation }: Props) {
 
             return (
               <DarkPanel key={row.id}>
-                <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "flex-start",
+                    justifyContent: "space-between",
+                    gap: 12,
+                  }}
+                >
                   <View style={{ flex: 1 }}>
                     <Pressable
                       onPress={() =>
                         navigation.navigate("AssessmentDetail", {
                           assessmentId: row.assessmentId,
-                          classId: row.assessment?.classId || routeClassId || "",
+                          classId:
+                            row.assessment?.classId || routeClassId || "",
                         })
                       }
                     >
-                      <Text style={{ fontSize: 17, fontWeight: "800", color: theme.text }}>
+                      <Text
+                        style={{
+                          fontSize: 17,
+                          fontWeight: "800",
+                          color: theme.text,
+                        }}
+                      >
                         {row.assessment?.title || "Assessment"}
                       </Text>
                     </Pressable>
-                    <Text style={{ marginTop: 4, fontSize: 12, color: theme.muted }}>
+                    <Text
+                      style={{ marginTop: 4, fontSize: 12, color: theme.muted }}
+                    >
                       {subjectLabel} • Attempt #{row.attemptNumber}
                     </Text>
                   </View>
                   <ToneTag label={statusLabel} tone={statusTone} />
                 </View>
 
-                <View style={{ marginTop: 14, flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                <View
+                  style={{
+                    marginTop: 14,
+                    flexDirection: "row",
+                    flexWrap: "wrap",
+                    gap: 10,
+                  }}
+                >
                   <View
                     style={{
                       minWidth: 110,
@@ -367,8 +510,23 @@ export function AssessmentHistoryScreen({ route, navigation }: Props) {
                       paddingVertical: 12,
                     }}
                   >
-                    <Text style={{ fontSize: 10, fontWeight: "700", color: theme.muted }}>STARTED</Text>
-                    <Text style={{ marginTop: 8, fontSize: 13, fontWeight: "800", color: theme.text }}>
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        fontWeight: "700",
+                        color: theme.muted,
+                      }}
+                    >
+                      STARTED
+                    </Text>
+                    <Text
+                      style={{
+                        marginTop: 8,
+                        fontSize: 13,
+                        fontWeight: "800",
+                        color: theme.text,
+                      }}
+                    >
                       {formatDate(row.startedAt)}
                     </Text>
                   </View>
@@ -384,8 +542,23 @@ export function AssessmentHistoryScreen({ route, navigation }: Props) {
                       paddingVertical: 12,
                     }}
                   >
-                    <Text style={{ fontSize: 10, fontWeight: "700", color: theme.muted }}>SUBMITTED</Text>
-                    <Text style={{ marginTop: 8, fontSize: 13, fontWeight: "800", color: theme.text }}>
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        fontWeight: "700",
+                        color: theme.muted,
+                      }}
+                    >
+                      SUBMITTED
+                    </Text>
+                    <Text
+                      style={{
+                        marginTop: 8,
+                        fontSize: 13,
+                        fontWeight: "800",
+                        color: theme.text,
+                      }}
+                    >
                       {formatDate(row.submittedAt)}
                     </Text>
                   </View>
@@ -401,18 +574,46 @@ export function AssessmentHistoryScreen({ route, navigation }: Props) {
                       paddingVertical: 12,
                     }}
                   >
-                    <Text style={{ fontSize: 10, fontWeight: "700", color: theme.muted }}>SCORE</Text>
-                    <Text style={{ marginTop: 8, fontSize: 22, lineHeight: 26, fontWeight: "900", color: theme.text }}>
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        fontWeight: "700",
+                        color: theme.muted,
+                      }}
+                    >
+                      SCORE
+                    </Text>
+                    <Text
+                      style={{
+                        marginTop: 8,
+                        fontSize: 22,
+                        lineHeight: 26,
+                        fontWeight: "900",
+                        color: theme.text,
+                      }}
+                    >
                       {row.score ?? "--"}
                     </Text>
                   </View>
                 </View>
 
-                <Text style={{ marginTop: 12, fontSize: 12, color: theme.muted }}>
-                  Due: <Text style={{ color: theme.text, fontWeight: "700" }}>{formatDate(row.assessment?.dueDate)}</Text>
+                <Text
+                  style={{ marginTop: 12, fontSize: 12, color: theme.muted }}
+                >
+                  Due:{" "}
+                  <Text style={{ color: theme.text, fontWeight: "700" }}>
+                    {formatDate(row.assessment?.dueDate)}
+                  </Text>
                 </Text>
 
-                <View style={{ marginTop: 14, flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                <View
+                  style={{
+                    marginTop: 14,
+                    flexDirection: "row",
+                    flexWrap: "wrap",
+                    gap: 10,
+                  }}
+                >
                   <ActionButton
                     label={actionLabel}
                     onPress={() => {
@@ -424,7 +625,9 @@ export function AssessmentHistoryScreen({ route, navigation }: Props) {
                         return;
                       }
 
-                      navigation.navigate("AssessmentTake", { assessmentId: row.assessmentId });
+                      navigation.navigate("AssessmentTake", {
+                        assessmentId: row.assessmentId,
+                      });
                     }}
                   />
                   <ActionButton
@@ -445,9 +648,17 @@ export function AssessmentHistoryScreen({ route, navigation }: Props) {
 
         {!isScopedHistory && (historyQuery.data?.totalPages ?? 1) > 1 ? (
           <DarkPanel>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+              }}
+            >
               <Text style={{ fontSize: 12, color: theme.muted }}>
-                Page {historyQuery.data?.page ?? page} of {historyQuery.data?.totalPages ?? 1}
+                Page {historyQuery.data?.page ?? page} of{" "}
+                {historyQuery.data?.totalPages ?? 1}
               </Text>
               <View style={{ flexDirection: "row", gap: 10 }}>
                 <ActionButton
@@ -461,7 +672,12 @@ export function AssessmentHistoryScreen({ route, navigation }: Props) {
                   variant="secondary"
                   disabled={page >= (historyQuery.data?.totalPages ?? 1)}
                   onPress={() =>
-                    setPage((current) => Math.min(historyQuery.data?.totalPages ?? current, current + 1))
+                    setPage((current) =>
+                      Math.min(
+                        historyQuery.data?.totalPages ?? current,
+                        current + 1,
+                      ),
+                    )
                   }
                 />
               </View>

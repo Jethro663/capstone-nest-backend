@@ -11,6 +11,7 @@ import { AcademicPolicyService } from '../academic-state/academic-policy.service
 import { getSubjectWeights } from '../academic-state/academic-policy';
 import { calculateStudentRecord } from './class-record-calculation';
 import type { GradeBlocker } from './class-record-calculation';
+import { buildAcademicScoreContract } from '../academic-state/academic-score';
 
 @Injectable()
 export class ClassRecordReadinessService {
@@ -180,14 +181,25 @@ export class ClassRecordReadinessService {
             (score) => score.studentId === attempt.studentId,
           );
           if (score?.status === 'excused') continue;
-          const expectedScore =
-            Math.round((attempt.score / 100) * Number(item.maxScore) * 100) /
-            100;
+          const contract = buildAcademicScoreContract(attempt);
+          const expectedScore = contract.scoreBreakdown
+            ? (contract.scoreBreakdown.basePoints /
+                contract.scoreBreakdown.possiblePoints) *
+              Number(item.maxScore)
+            : ((contract.scorePercent ?? 0) / 100) * Number(item.maxScore);
+          const expectedBonus = contract.scoreBreakdown
+            ? (contract.scoreBreakdown.bonusPoints /
+                contract.scoreBreakdown.possiblePoints) *
+              Number(item.maxScore)
+            : 0;
           if (
             !score ||
             score.sourceAttemptId !== attempt.id ||
             score.score == null ||
-            Math.abs(Number(score.score) - expectedScore) > 0.001
+            Math.abs(Number(score.score) - expectedScore) > 0.001 ||
+            Math.abs(Number(score.bonusPoints ?? 0) - expectedBonus) > 0.001 ||
+            (score.bonusReason ?? null) !==
+              (contract.scoreBreakdown?.bonusReason ?? null)
           )
             blockers.push({
               code: 'pending_score_sync',

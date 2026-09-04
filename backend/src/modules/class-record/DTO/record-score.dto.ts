@@ -21,6 +21,17 @@ export class RecordScoreDto {
   score?: number | null;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsNumber({}, { message: 'bonusPoints must be a number' })
+  @Min(0, { message: 'bonusPoints must be at least 0' })
+  bonusPoints?: number;
+
+  @ValidateIf((value: RecordScoreDto) => (value.bonusPoints ?? 0) > 0)
+  @IsString()
+  @MaxLength(2000)
+  bonusReason?: string;
+
+  @IsOptional()
   @IsIn(['recorded', 'excused'])
   status?: 'recorded' | 'excused';
 

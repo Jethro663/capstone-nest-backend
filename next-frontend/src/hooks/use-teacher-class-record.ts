@@ -41,12 +41,16 @@ export interface TeacherClassRecordState {
   syncingItemId: string | null;
   editingCell: { itemId: string; studentId: string } | null;
   editValue: string;
+  editBonusPoints: string;
+  editBonusReason: string;
   editingHpsItemId: string | null;
   hpsValue: string;
   editRef: RefObject<HTMLInputElement | null>;
   hpsEditRef: RefObject<HTMLInputElement | null>;
   setSelectedRecordId: (id: string) => void;
   setEditValue: (value: string) => void;
+  setEditBonusPoints: (value: string) => void;
+  setEditBonusReason: (value: string) => void;
   setHpsValue: (value: string) => void;
   setEditingCell: (value: { itemId: string; studentId: string } | null) => void;
   refresh: () => Promise<void>;
@@ -71,7 +75,12 @@ export interface TeacherClassRecordState {
     itemId: string,
     studentId: string,
     score: number | null,
-    options?: { maxScore?: number | null; assessmentId?: string },
+    options?: {
+      maxScore?: number | null;
+      assessmentId?: string;
+      bonusPoints?: number;
+      bonusReason?: string | null;
+    },
   ) => void;
   handleCellSave: () => Promise<boolean>;
   handleCellKeyDown: (event: ReactKeyboardEvent) => void;
@@ -114,6 +123,8 @@ export function useTeacherClassRecord(
     studentId: string;
   } | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [editBonusPoints, setEditBonusPoints] = useState("0");
+  const [editBonusReason, setEditBonusReason] = useState("");
   const [editingHpsItemId, setEditingHpsItemId] = useState<string | null>(null);
   const [hpsValue, setHpsValue] = useState("");
   const editRef = useRef<HTMLInputElement>(null);
@@ -380,7 +391,12 @@ export function useTeacherClassRecord(
       itemId: string,
       studentId: string,
       score: number | null,
-      options?: { maxScore?: number | null; assessmentId?: string },
+      options?: {
+        maxScore?: number | null;
+        assessmentId?: string;
+        bonusPoints?: number;
+        bonusReason?: string | null;
+      },
     ) => {
       if (!spreadsheet?.academicCapabilities?.canGrade) return;
       if (options?.assessmentId) {
@@ -401,6 +417,8 @@ export function useTeacherClassRecord(
       setEditingHpsItemId(null);
       setEditingCell({ itemId, studentId });
       setEditValue(score == null ? "" : String(score));
+      setEditBonusPoints(String(options?.bonusPoints ?? 0));
+      setEditBonusReason(options?.bonusReason ?? "");
       setTimeout(() => editRef.current?.focus(), 0);
     },
     [spreadsheet, roster],
@@ -408,10 +426,19 @@ export function useTeacherClassRecord(
   const handleCellSave = useCallback(async () => {
     if (!editingCell || !editValue.trim()) return false;
     const score = Number(editValue);
+    const bonusPoints = Number(editBonusPoints || 0);
     if (!Number.isFinite(score) || score < 0) {
       toast.error(
         "Enter a valid score. Blank is missing; zero must be explicit.",
       );
+      return false;
+    }
+    if (!Number.isFinite(bonusPoints) || bonusPoints < 0) {
+      toast.error("Bonus points must be zero or greater.");
+      return false;
+    }
+    if (bonusPoints > 0 && !editBonusReason.trim()) {
+      toast.error("Explain why bonus points were added.");
       return false;
     }
     try {
@@ -419,6 +446,8 @@ export function useTeacherClassRecord(
         studentId: editingCell.studentId,
         status: "recorded",
         score,
+        bonusPoints,
+        bonusReason: bonusPoints > 0 ? editBonusReason.trim() : undefined,
       });
       setEditingCell(null);
       await refreshEvidence();
@@ -427,7 +456,13 @@ export function useTeacherClassRecord(
       fail(error, "Score was rejected.");
       return false;
     }
-  }, [editingCell, editValue, refreshEvidence]);
+  }, [
+    editingCell,
+    editValue,
+    editBonusPoints,
+    editBonusReason,
+    refreshEvidence,
+  ]);
   const handleCellKeyDown = useCallback(
     (event: ReactKeyboardEvent) => {
       if (event.key === "Enter") {
@@ -525,12 +560,16 @@ export function useTeacherClassRecord(
     syncingItemId,
     editingCell,
     editValue,
+    editBonusPoints,
+    editBonusReason,
     editingHpsItemId,
     hpsValue,
     editRef,
     hpsEditRef,
     setSelectedRecordId,
     setEditValue,
+    setEditBonusPoints,
+    setEditBonusReason,
     setHpsValue,
     setEditingCell,
     refresh,

@@ -7,6 +7,7 @@ import { DatabaseService } from '../../database/database.service';
 import { PerformanceStatusChangedEvent } from '../../common/events';
 import { AuditService } from '../audit/audit.service';
 import { PerformanceSnapshotReadService } from './performance-snapshot-read.service';
+import { ClassRecordService } from '../class-record/class-record.service';
 
 function buildMockDb() {
   const subqueryWhere = jest.fn((condition: any) => {
@@ -93,6 +94,7 @@ describe('PerformanceService', () => {
   let eventEmitter: EventEmitter2;
   let auditService: { log: jest.Mock };
   let snapshotReadService: { findForStudentClasses: jest.Mock };
+  let classRecordService: { getCanonicalStudentStanding: jest.Mock };
 
   beforeEach(async () => {
     db = buildMockDb();
@@ -100,6 +102,9 @@ describe('PerformanceService', () => {
     auditService = { log: jest.fn().mockResolvedValue(undefined) };
     snapshotReadService = {
       findForStudentClasses: jest.fn().mockResolvedValue(new Map()),
+    };
+    classRecordService = {
+      getCanonicalStudentStanding: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -112,6 +117,7 @@ describe('PerformanceService', () => {
           provide: PerformanceSnapshotReadService,
           useValue: snapshotReadService,
         },
+        { provide: ClassRecordService, useValue: classRecordService },
       ],
     }).compile();
 
@@ -144,6 +150,7 @@ describe('PerformanceService', () => {
     ]);
     db.query.classRecords.findMany.mockResolvedValue([
       {
+        id: 'record-1',
         items: [
           {
             maxScore: '20',
@@ -156,13 +163,16 @@ describe('PerformanceService', () => {
         ],
       },
     ]);
+    classRecordService.getCanonicalStudentStanding.mockResolvedValue({
+      overallGradePercent: 25,
+    });
     db.query.performanceSnapshots.findFirst.mockResolvedValue(null);
     mockInsertReturning(db, [
       {
         id: 'snap-1',
         assessmentAverage: '75',
         classRecordAverage: '25',
-        blendedScore: '50',
+        blendedScore: '25',
         assessmentSampleSize: 2,
         classRecordSampleSize: 2,
         hasData: true,
@@ -181,7 +191,7 @@ describe('PerformanceService', () => {
 
     expect(result.assessmentAverage).toBe(75);
     expect(result.classRecordAverage).toBe(25);
-    expect(result.blendedScore).toBe(50);
+    expect(result.blendedScore).toBe(25);
     expect(result.isAtRisk).toBe(true);
     expect(result.thresholdApplied).toBe(74);
     expect(db.insert).toHaveBeenCalledTimes(1);

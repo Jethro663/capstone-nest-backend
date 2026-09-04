@@ -57,7 +57,12 @@ export interface AssessmentFileRecord {
   downloadUrl?: string | null;
 }
 
-export interface RubricCriterion { id: string; title: string; description?: string; points: number; }
+export interface RubricCriterion {
+  id: string;
+  title: string;
+  description?: string;
+  points: number;
+}
 
 export interface RubricScore {
   criterionId: string;
@@ -66,10 +71,14 @@ export interface RubricScore {
 }
 
 export interface Assessment {
-  authoringRestrictions?: { hasAttempts: boolean; canEditQuestions: boolean; reason: string | null };
+  authoringRestrictions?: {
+    hasAttempts: boolean;
+    canEditQuestions: boolean;
+    reason: string | null;
+  };
   closeWhenDue?: boolean;
   randomizeQuestions?: boolean;
-  feedbackLevel?: 'immediate' | 'standard' | 'detailed';
+  feedbackLevel?: "immediate" | "standard" | "detailed";
   feedbackDelayHours?: number;
   rubricSourceFileId?: string | null;
   rubricSourceFile?: AssessmentFileRecord | null;
@@ -107,7 +116,7 @@ export interface Assessment {
 }
 
 export interface CreateAssessmentDto {
-  feedbackLevel?: 'immediate' | 'standard' | 'detailed';
+  feedbackLevel?: "immediate" | "standard" | "detailed";
   feedbackDelayHours?: number;
   teacherAttachmentFileId?: string | null;
   rubricSourceFileId?: string | null;
@@ -135,7 +144,7 @@ export interface CreateAssessmentDto {
 }
 
 export interface UpdateAssessmentDto {
-  feedbackLevel?: 'immediate' | 'standard' | 'detailed';
+  feedbackLevel?: "immediate" | "standard" | "detailed";
   feedbackDelayHours?: number;
   teacherAttachmentFileId?: string | null;
   rubricSourceFileId?: string | null;
@@ -164,7 +173,7 @@ export interface UpdateAssessmentDto {
 
 export interface QuestionOptionInput {
   imageUrl?: string | null;
-  imageDisplayMode?: 'default' | 'expanded';
+  imageDisplayMode?: "default" | "expanded";
   imageZoom?: number;
   imagePositionX?: number;
   imagePositionY?: number;
@@ -176,7 +185,7 @@ export interface QuestionOptionInput {
 export interface CreateQuestionDto {
   conceptTags?: string[];
   imageUrl?: string | null;
-  imageDisplayMode?: 'default' | 'expanded';
+  imageDisplayMode?: "default" | "expanded";
   imageZoom?: number;
   imagePositionX?: number;
   imagePositionY?: number;
@@ -193,7 +202,7 @@ export interface CreateQuestionDto {
 export interface UpdateQuestionDto {
   conceptTags?: string[];
   imageUrl?: string | null;
-  imageDisplayMode?: 'default' | 'expanded';
+  imageDisplayMode?: "default" | "expanded";
   imageZoom?: number;
   imagePositionX?: number;
   imagePositionY?: number;
@@ -205,12 +214,25 @@ export interface UpdateQuestionDto {
   options?: QuestionOptionInput[];
 }
 
+export interface AcademicScoreBreakdown {
+  basePoints: number;
+  bonusPoints: number;
+  awardedPoints: number;
+  possiblePoints: number;
+  effectivePoints: number;
+  scorePercent: number;
+  wasCapped: boolean;
+  bonusReason: string | null;
+}
+
 export interface AssessmentAttempt {
   id: string;
   assessmentId: string;
   studentId: string;
   attemptNumber?: number;
-  score?: number;
+  score?: number | null;
+  scorePercent?: number | null;
+  scoreBreakdown?: AcademicScoreBreakdown | null;
   totalPoints?: number;
   passed?: boolean;
   isSubmitted?: boolean;
@@ -287,6 +309,8 @@ export interface RemovedAssessmentSubmissionFiles {
 export interface AttemptResult {
   attempt?: AssessmentAttempt;
   score: number | null;
+  scorePercent?: number | null;
+  scoreBreakdown?: AcademicScoreBreakdown | null;
   passed: boolean | null;
   isReturned: boolean;
   attemptNumber?: number;
@@ -396,18 +420,23 @@ export interface AssessmentQuestionAnalyticsResponse {
   questions: AssessmentQuestionAnalytics[];
 }
 
-export interface EditorQuestionInput extends Omit<CreateQuestionDto, 'assessmentId' | 'options'> {
+export interface EditorQuestionInput extends Omit<
+  CreateQuestionDto,
+  "assessmentId" | "options"
+> {
   id?: string;
   clientId: string;
-  options?: (NonNullable<CreateQuestionDto['options']>[number] & { id?: string })[];
+  options?: (NonNullable<CreateQuestionDto["options"]>[number] & {
+    id?: string;
+  })[];
   deletedOptionIds?: string[];
 }
 export interface SaveAssessmentEditorInput {
   mutationId: string;
   classId?: string;
   expectedRevision?: number;
-  action: 'save' | 'publish' | 'unpublish';
-  settings: Omit<UpdateAssessmentDto, 'isPublished'>;
+  action: "save" | "publish" | "unpublish";
+  settings: Omit<UpdateAssessmentDto, "isPublished">;
   questions?: EditorQuestionInput[];
   deletedQuestionIds?: string[];
 }
@@ -417,4 +446,15 @@ export interface AssessmentEditorResult {
   questionIds: Record<string, string>;
   publicationIssues: { field: string; message: string }[];
 }
-export type AiAssessmentSettings = Omit<UpdateAssessmentDto, 'isPublished' | 'type' | 'fileUploadInstructions' | 'teacherAttachmentFileId' | 'rubricSourceFileId' | 'rubricCriteria' | 'allowedUploadMimeTypes' | 'allowedUploadExtensions' | 'maxUploadSizeBytes'> & { type?: 'quiz' | 'exam' | 'assignment' };
+export type AiAssessmentSettings = Omit<
+  UpdateAssessmentDto,
+  | "isPublished"
+  | "type"
+  | "fileUploadInstructions"
+  | "teacherAttachmentFileId"
+  | "rubricSourceFileId"
+  | "rubricCriteria"
+  | "allowedUploadMimeTypes"
+  | "allowedUploadExtensions"
+  | "maxUploadSizeBytes"
+> & { type?: "quiz" | "exam" | "assignment" };

@@ -67,4 +67,36 @@ describe('ReportsService', () => {
     expect(result.totalPages).toBe(0);
     expect(result.csv).toBe('No data\n');
   });
+
+  it('preserves zero scores and bounds malformed legacy performance percentages', async () => {
+    mockDb.query.performanceSnapshots.findMany.mockResolvedValue([
+      {
+        classId: 'class-1',
+        studentId: 'student-1',
+        assessmentAverage: '0',
+        classRecordAverage: '331',
+        blendedScore: '331',
+        isAtRisk: false,
+        thresholdApplied: '75',
+        lastComputedAt: new Date('2026-09-05T00:00:00.000Z'),
+        student: {
+          firstName: 'Alex',
+          lastName: 'Reyes',
+          email: 'alex@example.com',
+        },
+        class: { subjectName: 'Mathematics', subjectCode: 'MATH-1' },
+      },
+    ]);
+    mockSelectWhere.mockResolvedValue([{ value: 1 }]);
+
+    const result = await service.getStudentPerformance({});
+
+    expect(result.data[0]).toEqual(
+      expect.objectContaining({
+        assessmentAverage: 0,
+        classRecordAverage: 100,
+        blendedScore: 100,
+      }),
+    );
+  });
 });

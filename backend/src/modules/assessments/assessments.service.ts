@@ -57,6 +57,12 @@ import { AssessmentNotificationDispatchService } from '../notifications/assessme
 import { sanitizeRichTextHtml } from '../../common/utils/rich-text-sanitizer';
 import { AssessmentAccessService } from './assessment-access.service';
 import { assessmentPublicationIssues } from './assessment-readiness';
+import {
+  AcademicScoreBreakdown,
+  buildAcademicScoreContract,
+  boundPercentage,
+  calculateBoundedScore,
+} from '../academic-state/academic-score';
 
 const MAX_ASSESSMENT_UPLOAD_SIZE_BYTES = 100 * 1024 * 1024;
 const DEFAULT_FILE_UPLOAD_EXTENSIONS = [
@@ -251,6 +257,20 @@ export class AssessmentsService {
 
   private get db() {
     return this.databaseService.db;
+  }
+
+  private scoreContract(
+    attempt: Pick<
+      typeof assessmentAttempts.$inferSelect,
+      | 'score'
+      | 'basePointsEarned'
+      | 'possiblePointsSnapshot'
+      | 'bonusPoints'
+      | 'bonusReason'
+    >,
+    visible = true,
+  ) {
+    return buildAcademicScoreContract(attempt, { visible });
   }
 
   private async assertAcademicMutation(
@@ -1267,6 +1287,51 @@ export class AssessmentsService {
             : undefined,
         };
       });
+  }
+
+  private assertUniqueQuestionResponses(
+    responses: ReadonlyArray<{ questionId: string }>,
+  ): void {
+    const questionIds = responses.map((response) => response.questionId);
+    if (new Set(questionIds).size !== questionIds.length) {
+      throw new BadRequestException(
+        'Provide at most one response per question',
+      );
+    }
+  }
+
+  private responseFingerprint(raw: unknown): string {
+    return JSON.stringify(
+      this.normalizeProgressResponses(raw)
+        .map((response) => ({
+          questionId: response.questionId,
+          studentAnswer: response.studentAnswer ?? null,
+          selectedOptionId: response.selectedOptionId ?? null,
+          selectedOptionIds: [...(response.selectedOptionIds ?? [])].sort(),
+        }))
+        .sort((left, right) => left.questionId.localeCompare(right.questionId)),
+    );
+  }
+
+  private getAssessmentPossiblePoints(assessment: {
+    type: string;
+    totalPoints?: number | null;
+    questions?: ReadonlyArray<{ points?: number | null }>;
+  }): number | null {
+    if (assessment.type === AssessmentType.FILE_UPLOAD) return null;
+    const evidenceTotal = (assessment.questions ?? []).reduce(
+      (sum, question) => sum + Number(question.points ?? 0),
+      0,
+    );
+    if (
+      evidenceTotal <= 0 ||
+      Number(assessment.totalPoints ?? 0) !== evidenceTotal
+    ) {
+      throw new BadRequestException(
+        'Assessment total points do not match the current question evidence',
+      );
+    }
+    return evidenceTotal;
   }
 
   private calculateAttemptTimeSpentSeconds(startedAt: Date | string | null) {
@@ -3356,9 +3421,11 @@ export class AssessmentsService {
     }
 
     if (updateAttemptProgressDto.responses !== undefined) {
-      progressUpdates.draftResponses = this.normalizeProgressResponses(
+      const normalizedResponses = this.normalizeProgressResponses(
         updateAttemptProgressDto.responses,
       );
+      this.assertUniqueQuestionResponses(normalizedResponses);
+      progressUpdates.draftResponses = normalizedResponses;
     }
 
     const [updatedAttempt] = await this.db
@@ -3393,10 +3460,46 @@ export class AssessmentsService {
     });
 
     if (!attempt) {
+      const latestSubmittedAttempt =
+        await this.db.query.assessmentAttempts.findFirst({
+          where: and(
+            eq(assessmentAttempts.studentId, studentId),
+            eq(
+              assessmentAttempts.assessmentId,
+              submitAssessmentDto.assessmentId,
+            ),
+            eq(assessmentAttempts.isSubmitted, true),
+          ),
+          orderBy: (attempts, { desc: descending }) => [
+            descending(attempts.submittedAt),
+            descending(attempts.updatedAt),
+          ],
+        });
+      if (
+        latestSubmittedAttempt &&
+        this.responseFingerprint(latestSubmittedAttempt.draftResponses) ===
+          this.responseFingerprint(submitAssessmentDto.responses)
+      ) {
+        const responses = await this.db.query.assessmentResponses.findMany({
+          where: eq(assessmentResponses.attemptId, latestSubmittedAttempt.id),
+        });
+        const scoreContract = this.scoreContract(latestSubmittedAttempt);
+        return {
+          attempt: { ...latestSubmittedAttempt, ...scoreContract },
+          responses,
+          totalPoints: Number(latestSubmittedAttempt.basePointsEarned ?? 0),
+          ...scoreContract,
+          passed: latestSubmittedAttempt.passed,
+          idempotentReplay: true,
+        };
+      }
       throw new BadRequestException(
         'No active attempt found. Please start the assessment first.',
       );
     }
+
+    this.assertUniqueQuestionResponses(submitAssessmentDto.responses);
+    const possiblePoints = this.getAssessmentPossiblePoints(assessment);
 
     await this.assertAcademicMutation(assessment, 'complete', true);
 
@@ -3462,10 +3565,12 @@ export class AssessmentsService {
       });
 
       return {
-        attempt,
+        attempt: { ...attempt, ...this.scoreContract(attempt, false) },
         responses: [],
         totalPoints: 0,
         score: null,
+        scorePercent: null,
+        scoreBreakdown: null,
         passed: null,
       };
     }
@@ -3478,8 +3583,12 @@ export class AssessmentsService {
     );
 
     // Calculate score as percentage using actual totalPoints from questions
-    const assessmentTotal = assessment.totalPoints || 1;
-    const score = Math.round((totalPoints / assessmentTotal) * 100);
+    const assessmentTotal = possiblePoints!;
+    const normalizedScore = calculateBoundedScore({
+      basePoints: totalPoints,
+      possiblePoints: assessmentTotal,
+    });
+    const score = Math.round(normalizedScore.scorePercent);
     const passed = score >= (assessment.passingScore || 60);
 
     // Update attempt with final score
@@ -3488,6 +3597,10 @@ export class AssessmentsService {
       .set({
         score,
         passed,
+        basePointsEarned: normalizedScore.basePoints.toString(),
+        possiblePointsSnapshot: normalizedScore.possiblePoints.toString(),
+        bonusPoints: '0',
+        bonusReason: null,
       })
       .where(eq(assessmentAttempts.id, attempt.id))
       .returning();
@@ -3518,10 +3631,10 @@ export class AssessmentsService {
     });
 
     return {
-      attempt: finalAttempt,
+      attempt: { ...finalAttempt, ...this.scoreContract(finalAttempt) },
       responses,
       totalPoints,
-      score,
+      ...this.scoreContract(finalAttempt),
       passed,
     };
   }
@@ -4279,8 +4392,7 @@ export class AssessmentsService {
         isSubmitted: attempt.isSubmitted,
         submittedAt: attempt.submittedAt,
         isReturned: false,
-        // Hide score and detailed results
-        score: null,
+        ...this.scoreContract(attempt, false),
         passed: null,
         directScore: null,
         rubricScores: [],
@@ -4317,11 +4429,13 @@ export class AssessmentsService {
       filtered.submittedFiles = resolvedSubmittedFiles;
       filtered.directScore = attempt.directScore;
       filtered.rubricScores = attempt.rubricScores ?? [];
+      Object.assign(filtered, this.scoreContract(attempt));
       return filtered;
     }
 
     return {
       ...attempt,
+      ...this.scoreContract(attempt),
       responses: (attempt.responses || []).map((r: any) => ({
         ...r,
         hint:
@@ -4349,6 +4463,8 @@ export class AssessmentsService {
     const submissionResponses = this.normalizeProgressResponses(
       attempt.draftResponses,
     );
+    this.assertUniqueQuestionResponses(submissionResponses);
+    const possiblePoints = this.getAssessmentPossiblePoints(assessment);
 
     const [updatedAttempt] = await this.db
       .update(assessmentAttempts)
@@ -4388,13 +4504,24 @@ export class AssessmentsService {
       attempt.id,
     );
 
-    const assessmentTotal = assessment.totalPoints || 1;
-    const score = Math.round((totalPoints / assessmentTotal) * 100);
+    const assessmentTotal = possiblePoints!;
+    const normalizedScore = calculateBoundedScore({
+      basePoints: totalPoints,
+      possiblePoints: assessmentTotal,
+    });
+    const score = Math.round(normalizedScore.scorePercent);
     const passed = score >= (assessment.passingScore || 60);
 
     const [finalAttempt] = await this.db
       .update(assessmentAttempts)
-      .set({ score, passed })
+      .set({
+        score,
+        passed,
+        basePointsEarned: normalizedScore.basePoints.toString(),
+        possiblePointsSnapshot: normalizedScore.possiblePoints.toString(),
+        bonusPoints: '0',
+        bonusReason: null,
+      })
       .where(eq(assessmentAttempts.id, attempt.id))
       .returning();
 
@@ -4581,6 +4708,26 @@ export class AssessmentsService {
               : null,
           pointsEarned,
         })
+        .onConflictDoUpdate({
+          target: [
+            assessmentResponses.attemptId,
+            assessmentResponses.questionId,
+          ],
+          set: {
+            studentAnswer: response.studentAnswer ?? null,
+            selectedOptionId,
+            selectedOptionIds,
+            isCorrect:
+              question.type === QuestionType.MULTIPLE_CHOICE ||
+              question.type === QuestionType.TRUE_FALSE ||
+              question.type === QuestionType.DROPDOWN ||
+              question.type === QuestionType.MULTIPLE_SELECT ||
+              question.type === QuestionType.FILL_BLANK
+                ? isCorrect
+                : null,
+            pointsEarned,
+          },
+        })
         .returning();
 
       responses.push(storedResponse);
@@ -4668,8 +4815,7 @@ export class AssessmentsService {
 
     return attempts.map((attempt) => ({
       ...attempt,
-      // Hide score if not returned yet
-      score: attempt.isReturned ? attempt.score : null,
+      ...this.scoreContract(attempt, Boolean(attempt.isReturned)),
       passed: attempt.isReturned ? attempt.passed : null,
     }));
   }
@@ -4700,7 +4846,10 @@ export class AssessmentsService {
       orderBy: (a, { desc }) => [desc(a.submittedAt)],
     });
 
-    return attempts;
+    return attempts.map((attempt) => ({
+      ...attempt,
+      ...this.scoreContract(attempt),
+    }));
   }
 
   /**
@@ -4745,8 +4894,15 @@ export class AssessmentsService {
       };
     }
 
-    const scores = submittedAttempts.map((a) => a.score || 0);
-    const passedCount = submittedAttempts.filter((a) => a.passed).length;
+    const gradedAttempts = submittedAttempts.filter(
+      (attempt): attempt is typeof attempt & { score: number } =>
+        typeof attempt.score === 'number' && Number.isFinite(attempt.score),
+    );
+    const scores = gradedAttempts.map((attempt) =>
+      boundPercentage(attempt.score),
+    );
+    const passedCount = gradedAttempts.filter((attempt) => attempt.passed)
+      .length;
     const timesWithValues = submittedAttempts
       .map((a) => a.timeSpentSeconds)
       .filter((t): t is number => t != null && t > 0);
@@ -4768,12 +4924,16 @@ export class AssessmentsService {
     return {
       totalAttempts: attempts.length,
       submittedAttempts: submittedAttempts.length,
-      averageScore: Math.round(
-        scores.reduce((a, b) => a + b, 0) / scores.length,
-      ),
-      passRate: Math.round((passedCount / submittedAttempts.length) * 100),
-      highestScore: Math.max(...scores),
-      lowestScore: Math.min(...scores),
+      averageScore:
+        scores.length > 0
+          ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
+          : 0,
+      passRate:
+        gradedAttempts.length > 0
+          ? Math.round((passedCount / gradedAttempts.length) * 100)
+          : 0,
+      highestScore: scores.length > 0 ? Math.max(...scores) : 0,
+      lowestScore: scores.length > 0 ? Math.min(...scores) : 0,
       averageTimeSeconds,
       completionRate,
       totalEnrolled,
@@ -4817,7 +4977,7 @@ export class AssessmentsService {
       return {
         id: attempt.id,
         attemptNumber: attempt.attemptNumber,
-        score: attempt.score,
+        ...this.scoreContract(attempt),
         directScore: attempt.directScore,
         rubricScores: attempt.rubricScores ?? [],
         passed: attempt.passed,
@@ -5128,6 +5288,16 @@ export class AssessmentsService {
     let directScore: number | null = attempt.directScore ?? null;
     let rubricScores: ReturnedRubricScore[] | null =
       (attempt.rubricScores as ReturnedRubricScore[] | null) ?? null;
+    let basePointsEarned =
+      attempt.basePointsEarned !== null &&
+      attempt.basePointsEarned !== undefined
+        ? Number(attempt.basePointsEarned)
+        : null;
+    let possiblePointsSnapshot =
+      attempt.possiblePointsSnapshot !== null &&
+      attempt.possiblePointsSnapshot !== undefined
+        ? Number(attempt.possiblePointsSnapshot)
+        : null;
 
     if (attempt.assessment?.type === AssessmentType.FILE_UPLOAD) {
       const rubricCriteria = this.normalizeRubricCriteria(
@@ -5175,8 +5345,8 @@ export class AssessmentsService {
         );
         const totalPoints = Math.max(this.sumRubricPoints(rubricCriteria), 1);
 
-        score = Math.round((earnedPoints / totalPoints) * 100);
-        passed = score >= (attempt.assessment.passingScore || 60);
+        basePointsEarned = earnedPoints;
+        possiblePointsSnapshot = totalPoints;
         rubricScores = normalizedScores;
         directScore = null;
 
@@ -5201,15 +5371,15 @@ export class AssessmentsService {
           );
         }
 
-        score = Math.round(dto.directScore);
-        directScore = score;
+        basePointsEarned = dto.directScore;
+        possiblePointsSnapshot = 100;
+        directScore = Math.round(dto.directScore);
         rubricScores = [];
-        passed = score >= (attempt.assessment.passingScore || 60);
 
         this.emitSubmissionEvent(
           attempt.assessmentId,
           attempt.studentId,
-          score,
+          dto.directScore,
           100,
           attempt.assessment.classRecordCategory ?? undefined,
           attempt.assessment.quarter ?? undefined,
@@ -5279,17 +5449,12 @@ export class AssessmentsService {
           (overrideMap.get(response.questionId) ?? response.pointsEarned ?? 0),
         0,
       );
-      const totalAssessmentPoints = Math.max(
-        attempt.assessment?.totalPoints ??
-          (attempt.assessment?.questions ?? []).reduce(
-            (sumPoints, question) => sumPoints + (question.points ?? 0),
-            0,
-          ),
-        1,
-      );
+      const totalAssessmentPoints = this.getAssessmentPossiblePoints(
+        attempt.assessment,
+      )!;
 
-      score = Math.round((earnedPoints / totalAssessmentPoints) * 100);
-      passed = score >= (attempt.assessment?.passingScore || 60);
+      basePointsEarned = earnedPoints;
+      possiblePointsSnapshot = totalAssessmentPoints;
       directScore = null;
       rubricScores = [];
 
@@ -5303,6 +5468,41 @@ export class AssessmentsService {
       );
     }
 
+    if (
+      basePointsEarned === null &&
+      typeof score === 'number' &&
+      Number.isFinite(score)
+    ) {
+      possiblePointsSnapshot =
+        possiblePointsSnapshot ??
+        (attempt.assessment?.type === AssessmentType.FILE_UPLOAD
+          ? 100
+          : this.getAssessmentPossiblePoints(attempt.assessment));
+      if (possiblePointsSnapshot) {
+        basePointsEarned = (score / 100) * possiblePointsSnapshot;
+      }
+    }
+
+    let scoreBreakdown: AcademicScoreBreakdown | null = null;
+    if (basePointsEarned !== null && possiblePointsSnapshot !== null) {
+      try {
+        scoreBreakdown = calculateBoundedScore({
+          basePoints: basePointsEarned,
+          bonusPoints: dto.bonusPoints ?? Number(attempt.bonusPoints ?? 0),
+          bonusReason: dto.bonusReason ?? attempt.bonusReason,
+          possiblePoints: possiblePointsSnapshot,
+        });
+      } catch (error) {
+        throw new BadRequestException(
+          error instanceof Error
+            ? error.message
+            : 'Score adjustment is invalid',
+        );
+      }
+      score = Math.round(scoreBreakdown.scorePercent);
+      passed = score >= (attempt.assessment?.passingScore || 60);
+    }
+
     const [updated] = await this.db
       .update(assessmentAttempts)
       .set({
@@ -5313,6 +5513,17 @@ export class AssessmentsService {
         passed,
         directScore,
         rubricScores,
+        basePointsEarned:
+          scoreBreakdown?.basePoints.toString() ??
+          attempt.basePointsEarned ??
+          null,
+        possiblePointsSnapshot:
+          scoreBreakdown?.possiblePoints.toString() ??
+          attempt.possiblePointsSnapshot ??
+          null,
+        bonusPoints:
+          scoreBreakdown?.bonusPoints.toString() ?? attempt.bonusPoints ?? '0',
+        bonusReason: scoreBreakdown?.bonusReason ?? attempt.bonusReason ?? null,
       })
       .where(eq(assessmentAttempts.id, attemptId))
       .returning();
@@ -5330,10 +5541,12 @@ export class AssessmentsService {
         score: updated.score,
         passed: updated.passed,
         manualResponseScores: dto.manualResponseScores ?? [],
+        previousScoreBreakdown: this.scoreContract(attempt).scoreBreakdown,
+        scoreBreakdown: this.scoreContract(updated).scoreBreakdown,
       },
     });
 
-    return updated;
+    return { ...updated, ...this.scoreContract(updated) };
   }
 
   @AcademicMutation()
@@ -5423,7 +5636,7 @@ export class AssessmentsService {
       },
     });
 
-    return updated;
+    return { ...updated, ...this.scoreContract(updated) };
   }
 
   /**

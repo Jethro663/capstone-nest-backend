@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
+import { boundAcademicPercentage } from "@/lib/academic-score";
 import { ArrowLeft, CheckCircle2, Lightbulb, Send } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -98,7 +99,9 @@ function isGuidedAnswerCorrect(
 }
 
 function formatComparisonScore(value: number | null | undefined) {
-  return typeof value === "number" ? value.toFixed(1) + "%" : "No baseline";
+  return typeof value === "number"
+    ? boundAcademicPercentage(value).toFixed(1) + "%"
+    : "No baseline";
 }
 
 function formatComparisonDelta(value: number | null | undefined) {
@@ -433,25 +436,37 @@ export default function StudentGuidedAssessmentPage() {
             <p className="text-sm text-[var(--student-text-muted)]">
               Score: <strong>{result.scorePercent}%</strong> (
               {result.correctCount} correct) | Passing score:{" "}
-              <strong>{result.passingScore ?? result.attemptSummary?.passingScore ?? 60}%</strong>
+              <strong>
+                {result.passingScore ??
+                  result.attemptSummary?.passingScore ??
+                  60}
+                %
+              </strong>
             </p>
             {result.attemptSummary ? (
               <div className="flex flex-wrap items-center gap-2">
-                {Array.from({ length: result.attemptSummary.maxAttempts }).map((_, index) => {
-                  const attempt = result.attemptSummary?.attempts.find(
-                    (item) => item.attemptNumber === index + 1,
-                  );
-                  return (
-                    <span
-                      key={index}
-                      className="rounded-full border border-[var(--student-outline)] bg-white px-3 py-1 text-xs font-black text-[var(--student-navy-soft)]"
-                    >
-                      Try {index + 1}: {attempt?.scorePercent ?? "--"}%
-                    </span>
-                  );
-                })}
-                {result.attemptSummary.canRetry && !result.attemptSummary.isLocked ? (
-                  <Button type="button" variant="outline" onClick={() => void handleRetry()}>
+                {Array.from({ length: result.attemptSummary.maxAttempts }).map(
+                  (_, index) => {
+                    const attempt = result.attemptSummary?.attempts.find(
+                      (item) => item.attemptNumber === index + 1,
+                    );
+                    return (
+                      <span
+                        key={index}
+                        className="rounded-full border border-[var(--student-outline)] bg-white px-3 py-1 text-xs font-black text-[var(--student-navy-soft)]"
+                      >
+                        Try {index + 1}: {attempt?.scorePercent ?? "--"}%
+                      </span>
+                    );
+                  },
+                )}
+                {result.attemptSummary.canRetry &&
+                !result.attemptSummary.isLocked ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void handleRetry()}
+                  >
                     Retry guided assessment
                   </Button>
                 ) : null}
@@ -469,9 +484,15 @@ export default function StudentGuidedAssessmentPage() {
                     </h2>
                   </div>
                   <StudentStatusChip
-                    tone={result.scoreComparison.trend === "improved" ? "success" : "warning"}
+                    tone={
+                      result.scoreComparison.trend === "improved"
+                        ? "success"
+                        : "warning"
+                    }
                   >
-                    {formatComparisonDelta(result.scoreComparison.deltaScorePercent)}
+                    {formatComparisonDelta(
+                      result.scoreComparison.deltaScorePercent,
+                    )}
                   </StudentStatusChip>
                 </div>
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -480,7 +501,9 @@ export default function StudentGuidedAssessmentPage() {
                       Previous quiz score
                     </p>
                     <p className="mt-1 text-2xl font-black text-[var(--student-navy-soft)]">
-                      {formatComparisonScore(result.scoreComparison.baselineScorePercent)}
+                      {formatComparisonScore(
+                        result.scoreComparison.baselineScorePercent,
+                      )}
                     </p>
                   </div>
                   <div className="rounded-2xl border border-[var(--student-success-border)] bg-[var(--student-success-bg)] p-3">
@@ -488,7 +511,9 @@ export default function StudentGuidedAssessmentPage() {
                       Current AI quiz score
                     </p>
                     <p className="mt-1 text-2xl font-black text-[var(--student-success-text)]">
-                      {formatComparisonScore(result.scoreComparison.currentScorePercent)}
+                      {formatComparisonScore(
+                        result.scoreComparison.currentScorePercent,
+                      )}
                     </p>
                   </div>
                 </div>
@@ -594,7 +619,8 @@ export default function StudentGuidedAssessmentPage() {
             {session.attempt.status.replace("_", " ")}
           </StudentStatusChip>
           <StudentStatusChip tone="neutral">
-            Try {session.attempt.attemptNumber ?? 1}/{session.attemptSummary.maxAttempts}
+            Try {session.attempt.attemptNumber ?? 1}/
+            {session.attemptSummary.maxAttempts}
           </StudentStatusChip>
           <StudentStatusChip tone="neutral">
             Pass {session.attemptSummary.passingScore}%
@@ -714,12 +740,16 @@ export default function StudentGuidedAssessmentPage() {
               </div>
               {activeQuestionReviewHint ? (
                 <div className="mt-3 rounded-2xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-3 text-[var(--student-navy-soft)]">
-                  <strong className="block text-[var(--student-navy)]">JA clue</strong>
+                  <strong className="block text-[var(--student-navy)]">
+                    JA clue
+                  </strong>
                   <p className="mt-1">{activeQuestionReviewHint}</p>
                 </div>
               ) : null}
               <div className="guided-answer-feedback__explanation mt-3 rounded-2xl border border-white/70 bg-white/70 p-3">
-                <strong className="block text-[var(--student-navy)]">Why this works</strong>
+                <strong className="block text-[var(--student-navy)]">
+                  Why this works
+                </strong>
                 <p className="mt-2">
                   {stripRichText(activeQuestion?.explanation)}
                   {!currentAnswerCorrect && activeQuestion

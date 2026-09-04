@@ -50,7 +50,11 @@ export interface StudentAssessmentActivity {
 }
 
 export interface Assessment {
-  authoringRestrictions?: { hasAttempts: boolean; canEditQuestions: boolean; reason: string | null };
+  authoringRestrictions?: {
+    hasAttempts: boolean;
+    canEditQuestions: boolean;
+    reason: string | null;
+  };
   editorRevision?: number;
   academicCapabilities?: AcademicCapabilities;
   id: string;
@@ -246,7 +250,9 @@ export interface AssessmentAttempt {
   assessmentId: string;
   studentId: string;
   attemptNumber?: number;
-  score?: number;
+  score?: number | null;
+  scorePercent?: number | null;
+  scoreBreakdown?: import("@/lib/academic-score").AcademicScoreBreakdown | null;
   totalPoints?: number;
   passed?: boolean;
   isSubmitted?: boolean;
@@ -299,6 +305,8 @@ export interface SubmitAssessmentDto {
 export interface AttemptResult {
   attempt?: AssessmentAttempt;
   score: number | null;
+  scorePercent?: number | null;
+  scoreBreakdown?: import("@/lib/academic-score").AcademicScoreBreakdown | null;
   passed: boolean | null;
   isReturned: boolean;
   attemptNumber?: number;
@@ -414,7 +422,9 @@ export interface SubmissionTimelineEntry {
 export interface StudentAttemptSummary {
   id: string;
   attemptNumber?: number;
-  score?: number;
+  score?: number | null;
+  scorePercent?: number | null;
+  scoreBreakdown?: import("@/lib/academic-score").AcademicScoreBreakdown | null;
   directScore?: number | null;
   rubricScores?: RubricScore[];
   passed?: boolean;
@@ -517,18 +527,23 @@ export interface QuestionAnalyticsResponse {
   questions: QuestionAnalytics[];
 }
 
-export interface EditorQuestionInput extends Omit<CreateQuestionDto, 'assessmentId' | 'options'> {
+export interface EditorQuestionInput extends Omit<
+  CreateQuestionDto,
+  "assessmentId" | "options"
+> {
   id?: string;
   clientId: string;
-  options?: (NonNullable<CreateQuestionDto['options']>[number] & { id?: string })[];
+  options?: (NonNullable<CreateQuestionDto["options"]>[number] & {
+    id?: string;
+  })[];
   deletedOptionIds?: string[];
 }
 export interface SaveAssessmentEditorInput {
   mutationId: string;
   classId?: string;
   expectedRevision?: number;
-  action: 'save' | 'publish' | 'unpublish';
-  settings: Omit<UpdateAssessmentDto, 'isPublished'>;
+  action: "save" | "publish" | "unpublish";
+  settings: Omit<UpdateAssessmentDto, "isPublished">;
   questions?: EditorQuestionInput[];
   deletedQuestionIds?: string[];
 }
@@ -538,4 +553,15 @@ export interface AssessmentEditorResult {
   questionIds: Record<string, string>;
   publicationIssues: { field: string; message: string }[];
 }
-export type AiAssessmentSettings = Omit<UpdateAssessmentDto, 'isPublished' | 'type' | 'fileUploadInstructions' | 'teacherAttachmentFileId' | 'rubricSourceFileId' | 'rubricCriteria' | 'allowedUploadMimeTypes' | 'allowedUploadExtensions' | 'maxUploadSizeBytes'> & { type?: 'quiz' | 'exam' | 'assignment' };
+export type AiAssessmentSettings = Omit<
+  UpdateAssessmentDto,
+  | "isPublished"
+  | "type"
+  | "fileUploadInstructions"
+  | "teacherAttachmentFileId"
+  | "rubricSourceFileId"
+  | "rubricCriteria"
+  | "allowedUploadMimeTypes"
+  | "allowedUploadExtensions"
+  | "maxUploadSizeBytes"
+> & { type?: "quiz" | "exam" | "assignment" };

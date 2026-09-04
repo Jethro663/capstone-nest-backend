@@ -4,7 +4,11 @@ import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import type { CompositeScreenProps } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Pressable, Text, View } from "react-native";
-import { AnimatedEntrance, Refreshable, ScreenScroll } from "../components/ui/primitives";
+import {
+  AnimatedEntrance,
+  Refreshable,
+  ScreenScroll,
+} from "../components/ui/primitives";
 import { peekAppError } from "../api/http";
 import {
   useAssessments,
@@ -16,10 +20,16 @@ import {
   useSchoolEvents,
   useStudentClasses,
 } from "../api/hooks";
-import { findContinueLearning, toAssessmentCard, toLessonCards, toSubjectCard } from "../data/mappers";
+import {
+  findContinueLearning,
+  toAssessmentCard,
+  toLessonCards,
+  toSubjectCard,
+} from "../data/mappers";
 import type { MainTabParamList, RootStackParamList } from "../navigation/types";
 import { useAuth } from "../providers/AuthProvider";
 import { useLiveNotifications } from "../providers/LiveNotificationContext";
+import { boundAcademicPercentage } from "../lib/academicScore";
 import { computeProfileReadiness } from "./screen-flow";
 import type { Assessment, AssessmentAttempt } from "../types/assessment";
 import type { ClassItem } from "../types/class";
@@ -125,7 +135,10 @@ function getErrorSignature(error: unknown) {
   }
 }
 
-function areClassSnapshotsEqual(left: ClassDashboardSnapshot | undefined, right: ClassDashboardSnapshot) {
+function areClassSnapshotsEqual(
+  left: ClassDashboardSnapshot | undefined,
+  right: ClassDashboardSnapshot,
+) {
   if (!left) return false;
 
   return (
@@ -134,7 +147,8 @@ function areClassSnapshotsEqual(left: ClassDashboardSnapshot | undefined, right:
     JSON.stringify(left.lessons) === JSON.stringify(right.lessons) &&
     JSON.stringify(left.completions) === JSON.stringify(right.completions) &&
     JSON.stringify(left.assessments) === JSON.stringify(right.assessments) &&
-    JSON.stringify(left.assessmentAttempts) === JSON.stringify(right.assessmentAttempts)
+    JSON.stringify(left.assessmentAttempts) ===
+      JSON.stringify(right.assessmentAttempts)
   );
 }
 
@@ -234,8 +248,12 @@ function getSchoolYearRank(value?: string | null) {
   return match ? Number.parseInt(match[0], 10) : 0;
 }
 
-function selectDashboardClasses(classes: NonNullable<ReturnType<typeof useStudentClasses>["data"]>) {
-  const activeClasses = classes.filter((classItem) => classItem.isActive !== false);
+function selectDashboardClasses(
+  classes: NonNullable<ReturnType<typeof useStudentClasses>["data"]>,
+) {
+  const activeClasses = classes.filter(
+    (classItem) => classItem.isActive !== false,
+  );
   const candidateClasses = activeClasses.length > 0 ? activeClasses : classes;
 
   if (candidateClasses.length <= 1) {
@@ -243,10 +261,13 @@ function selectDashboardClasses(classes: NonNullable<ReturnType<typeof useStuden
   }
 
   const latestSchoolYearRank = Math.max(
-    ...candidateClasses.map((classItem) => getSchoolYearRank(classItem.schoolYear)),
+    ...candidateClasses.map((classItem) =>
+      getSchoolYearRank(classItem.schoolYear),
+    ),
   );
   const scopedClasses = candidateClasses.filter(
-    (classItem) => getSchoolYearRank(classItem.schoolYear) === latestSchoolYearRank,
+    (classItem) =>
+      getSchoolYearRank(classItem.schoolYear) === latestSchoolYearRank,
   );
 
   return scopedClasses.length > 0 ? scopedClasses : candidateClasses;
@@ -261,13 +282,23 @@ function buildTodaySchedule(
   return classes
     .flatMap((classItem) =>
       (classItem.schedules ?? [])
-        .filter((schedule) => (schedule.days ?? []).some((day) => getDayIndexToken(day) === todayIndex))
+        .filter((schedule) =>
+          (schedule.days ?? []).some(
+            (day) => getDayIndexToken(day) === todayIndex,
+          ),
+        )
         .map((schedule) => ({
           id: `${classItem.id}-${schedule.id}`,
           classId: classItem.id,
-          subjectName: classItem.subjectName || classItem.className || classItem.name || "Class",
+          subjectName:
+            classItem.subjectName ||
+            classItem.className ||
+            classItem.name ||
+            "Class",
           teacherName:
-            [classItem.teacher?.firstName, classItem.teacher?.lastName].filter(Boolean).join(" ") || "Assigned teacher",
+            [classItem.teacher?.firstName, classItem.teacher?.lastName]
+              .filter(Boolean)
+              .join(" ") || "Assigned teacher",
           sectionName: classItem.section?.name || "Assigned section",
           startTime: schedule.startTime,
           endTime: schedule.endTime,
@@ -278,7 +309,11 @@ function buildTodaySchedule(
     .slice(0, 4);
 }
 
-function resolveInitials(firstName?: string, lastName?: string, email?: string) {
+function resolveInitials(
+  firstName?: string,
+  lastName?: string,
+  email?: string,
+) {
   const fromNames = [firstName, lastName]
     .filter(Boolean)
     .map((value) => value?.trim()?.[0] ?? "")
@@ -310,7 +345,11 @@ function buildDashboardCalendar(
   schoolEvents: SchoolEvent[],
 ) {
   const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
-  const monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
+  const monthEnd = new Date(
+    monthDate.getFullYear(),
+    monthDate.getMonth() + 1,
+    0,
+  );
   const daysInMonth = monthEnd.getDate();
   const mondayFirstOffset = (monthStart.getDay() + 6) % 7;
   const classDays = new Set<number>();
@@ -356,7 +395,11 @@ function buildDashboardCalendar(
   }
 
   for (let day = 1; day <= daysInMonth; day += 1) {
-    const cellDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), day);
+    const cellDate = new Date(
+      monthDate.getFullYear(),
+      monthDate.getMonth(),
+      day,
+    );
 
     cells.push({
       key: cellDate.toISOString(),
@@ -378,9 +421,19 @@ function isScheduleActive(entry: ScheduleEntry, now = new Date()) {
   const [startHours = "0", startMinutes = "0"] = entry.startTime.split(":");
   const [endHours = "0", endMinutes = "0"] = entry.endTime.split(":");
   const start = new Date(now);
-  start.setHours(Number.parseInt(startHours, 10), Number.parseInt(startMinutes, 10), 0, 0);
+  start.setHours(
+    Number.parseInt(startHours, 10),
+    Number.parseInt(startMinutes, 10),
+    0,
+    0,
+  );
   const end = new Date(now);
-  end.setHours(Number.parseInt(endHours, 10), Number.parseInt(endMinutes, 10), 0, 0);
+  end.setHours(
+    Number.parseInt(endHours, 10),
+    Number.parseInt(endMinutes, 10),
+    0,
+    0,
+  );
   return now.getTime() >= start.getTime() && now.getTime() <= end.getTime();
 }
 
@@ -455,7 +508,10 @@ function DashboardSchoolEventsBridge({
 }) {
   const schoolEventsQuery = useSchoolEvents({ schoolYear });
 
-  const refetchEvents = useCallback(() => schoolEventsQuery.refetch(), [schoolEventsQuery]);
+  const refetchEvents = useCallback(
+    () => schoolEventsQuery.refetch(),
+    [schoolEventsQuery],
+  );
 
   const snapshot = useMemo<SchoolEventsSnapshot>(
     () => ({
@@ -463,7 +519,11 @@ function DashboardSchoolEventsBridge({
       error: schoolEventsQuery.error,
       isRefetching: schoolEventsQuery.isRefetching,
     }),
-    [schoolEventsQuery.data, schoolEventsQuery.error, schoolEventsQuery.isRefetching],
+    [
+      schoolEventsQuery.data,
+      schoolEventsQuery.error,
+      schoolEventsQuery.isRefetching,
+    ],
   );
 
   useEffect(() => {
@@ -486,18 +546,25 @@ function DashboardAssessmentAttemptBridge({
   assessmentId: string;
   onChange: (assessmentId: string, snapshot: AssessmentAttemptSnapshot) => void;
   onRemove: (assessmentId: string) => void;
-  onRefreshReady: (assessmentId: string, refresh: () => Promise<unknown>) => void;
+  onRefreshReady: (
+    assessmentId: string,
+    refresh: () => Promise<unknown>,
+  ) => void;
 }) {
   const attemptsQuery = useAssessmentAttempts(assessmentId);
 
-  const refetchAttempts = useCallback(() => attemptsQuery.refetch(), [attemptsQuery]);
+  const refetchAttempts = useCallback(
+    () => attemptsQuery.refetch(),
+    [attemptsQuery],
+  );
 
   const snapshot = useMemo<AssessmentAttemptSnapshot>(
     () => ({
       attempts: attemptsQuery.data ?? [],
       error: attemptsQuery.error,
       isRefetching: attemptsQuery.isRefetching,
-      isResolved: attemptsQuery.data !== undefined && attemptsQuery.error == null,
+      isResolved:
+        attemptsQuery.data !== undefined && attemptsQuery.error == null,
     }),
     [attemptsQuery.data, attemptsQuery.error, attemptsQuery.isRefetching],
   );
@@ -534,8 +601,12 @@ function DashboardClassDataBridge({
   const lessonsQuery = useLessons(classId);
   const completionsQuery = useLessonCompletions(classId);
   const assessmentsQuery = useAssessments(classId);
-  const [assessmentAttemptMap, setAssessmentAttemptMap] = useState<Record<string, AssessmentAttemptSnapshot>>({});
-  const assessmentRefreshersRef = useRef<Record<string, () => Promise<unknown>>>({});
+  const [assessmentAttemptMap, setAssessmentAttemptMap] = useState<
+    Record<string, AssessmentAttemptSnapshot>
+  >({});
+  const assessmentRefreshersRef = useRef<
+    Record<string, () => Promise<unknown>>
+  >({});
   const assessmentIds = useMemo(
     () => (assessmentsQuery.data ?? []).map((assessment) => assessment.id),
     [assessmentsQuery.data],
@@ -547,29 +618,36 @@ function DashboardClassDataBridge({
         lessonsQuery.refetch(),
         completionsQuery.refetch(),
         assessmentsQuery.refetch(),
-        ...Object.values(assessmentRefreshersRef.current).map((refresh) => refresh()),
+        ...Object.values(assessmentRefreshersRef.current).map((refresh) =>
+          refresh(),
+        ),
       ]),
     [assessmentsQuery, completionsQuery, lessonsQuery],
   );
 
-  const handleAttemptChange = useCallback((assessmentId: string, snapshot: AssessmentAttemptSnapshot) => {
-    setAssessmentAttemptMap((current) => {
-      const previous = current[assessmentId];
-      if (
-        getErrorSignature(previous?.error) === getErrorSignature(snapshot.error) &&
-        previous?.isRefetching === snapshot.isRefetching &&
-        previous?.isResolved === snapshot.isResolved &&
-        JSON.stringify(previous?.attempts ?? []) === JSON.stringify(snapshot.attempts)
-      ) {
-        return current;
-      }
+  const handleAttemptChange = useCallback(
+    (assessmentId: string, snapshot: AssessmentAttemptSnapshot) => {
+      setAssessmentAttemptMap((current) => {
+        const previous = current[assessmentId];
+        if (
+          getErrorSignature(previous?.error) ===
+            getErrorSignature(snapshot.error) &&
+          previous?.isRefetching === snapshot.isRefetching &&
+          previous?.isResolved === snapshot.isResolved &&
+          JSON.stringify(previous?.attempts ?? []) ===
+            JSON.stringify(snapshot.attempts)
+        ) {
+          return current;
+        }
 
-      return {
-        ...current,
-        [assessmentId]: snapshot,
-      };
-    });
-  }, []);
+        return {
+          ...current,
+          [assessmentId]: snapshot,
+        };
+      });
+    },
+    [],
+  );
 
   const handleAttemptRemove = useCallback((assessmentId: string) => {
     delete assessmentRefreshersRef.current[assessmentId];
@@ -581,9 +659,12 @@ function DashboardClassDataBridge({
     });
   }, []);
 
-  const handleAttemptRefreshReady = useCallback((assessmentId: string, refresh: () => Promise<unknown>) => {
-    assessmentRefreshersRef.current[assessmentId] = refresh;
-  }, []);
+  const handleAttemptRefreshReady = useCallback(
+    (assessmentId: string, refresh: () => Promise<unknown>) => {
+      assessmentRefreshersRef.current[assessmentId] = refresh;
+    },
+    [],
+  );
 
   useEffect(() => {
     setAssessmentAttemptMap((current) => {
@@ -699,8 +780,13 @@ function SectionLabel({
         {title}
       </Text>
       {actionLabel ? (
-        <Pressable onPress={onPressAction} style={{ minHeight: 44, justifyContent: "center" }}>
-          <Text style={{ color: actionColor, fontSize: 10, fontWeight: "600" }}>{actionLabel}</Text>
+        <Pressable
+          onPress={onPressAction}
+          style={{ minHeight: 44, justifyContent: "center" }}
+        >
+          <Text style={{ color: actionColor, fontSize: 10, fontWeight: "600" }}>
+            {actionLabel}
+          </Text>
         </Pressable>
       ) : null}
     </View>
@@ -745,8 +831,19 @@ function DashboardNotice({
         ...shadow.card,
       }}
     >
-      <Text style={{ color: theme.text, fontSize: 13, fontWeight: "700" }}>{title}</Text>
-      <Text style={{ marginTop: 5, color: theme.muted, fontSize: 11, lineHeight: 16 }}>{subtitle}</Text>
+      <Text style={{ color: theme.text, fontSize: 13, fontWeight: "700" }}>
+        {title}
+      </Text>
+      <Text
+        style={{
+          marginTop: 5,
+          color: theme.muted,
+          fontSize: 11,
+          lineHeight: 16,
+        }}
+      >
+        {subtitle}
+      </Text>
     </View>
   );
 }
@@ -757,10 +854,15 @@ export function DashboardScreen({ navigation }: Props) {
   const classesQuery = useStudentClasses(user?.userId || user?.id);
   const profileQuery = useProfile();
   const performanceQuery = usePerformanceSummary();
-  const [classDataMap, setClassDataMap] = useState<Record<string, ClassDashboardSnapshot>>({});
+  const [classDataMap, setClassDataMap] = useState<
+    Record<string, ClassDashboardSnapshot>
+  >({});
   const classRefreshersRef = useRef<Record<string, () => Promise<unknown>>>({});
-  const [schoolEventsSnapshot, setSchoolEventsSnapshot] = useState<SchoolEventsSnapshot | null>(null);
-  const schoolEventsRefresherRef = useRef<(() => Promise<unknown>) | null>(null);
+  const [schoolEventsSnapshot, setSchoolEventsSnapshot] =
+    useState<SchoolEventsSnapshot | null>(null);
+  const schoolEventsRefresherRef = useRef<(() => Promise<unknown>) | null>(
+    null,
+  );
   const [calendarMonth, setCalendarMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -772,21 +874,27 @@ export function DashboardScreen({ navigation }: Props) {
   );
   const schoolYear = dashboardClasses[0]?.schoolYear ?? null;
 
-  const classIds = useMemo(() => dashboardClasses.map((classItem) => classItem.id), [dashboardClasses]);
+  const classIds = useMemo(
+    () => dashboardClasses.map((classItem) => classItem.id),
+    [dashboardClasses],
+  );
 
-  const handleClassDataChange = useCallback((classId: string, snapshot: ClassDashboardSnapshot) => {
-    setClassDataMap((current) => {
-      const previous = current[classId];
-      if (areClassSnapshotsEqual(previous, snapshot)) {
-        return current;
-      }
+  const handleClassDataChange = useCallback(
+    (classId: string, snapshot: ClassDashboardSnapshot) => {
+      setClassDataMap((current) => {
+        const previous = current[classId];
+        if (areClassSnapshotsEqual(previous, snapshot)) {
+          return current;
+        }
 
-      return {
-        ...current,
-        [classId]: snapshot,
-      };
-    });
-  }, []);
+        return {
+          ...current,
+          [classId]: snapshot,
+        };
+      });
+    },
+    [],
+  );
 
   const handleClassDataRemove = useCallback((classId: string) => {
     delete classRefreshersRef.current[classId];
@@ -798,9 +906,12 @@ export function DashboardScreen({ navigation }: Props) {
     });
   }, []);
 
-  const handleClassRefreshReady = useCallback((classId: string, refresh: () => Promise<unknown>) => {
-    classRefreshersRef.current[classId] = refresh;
-  }, []);
+  const handleClassRefreshReady = useCallback(
+    (classId: string, refresh: () => Promise<unknown>) => {
+      classRefreshersRef.current[classId] = refresh;
+    },
+    [],
+  );
 
   useEffect(() => {
     setClassDataMap((current) => {
@@ -820,24 +931,31 @@ export function DashboardScreen({ navigation }: Props) {
     });
   }, [classIds]);
 
-  const handleSchoolEventsChange = useCallback((snapshot: SchoolEventsSnapshot) => {
-    setSchoolEventsSnapshot((current) => {
-      if (
-        current &&
-        getErrorSignature(current.error) === getErrorSignature(snapshot.error) &&
-        current.isRefetching === snapshot.isRefetching &&
-        JSON.stringify(current.events) === JSON.stringify(snapshot.events)
-      ) {
-        return current;
-      }
+  const handleSchoolEventsChange = useCallback(
+    (snapshot: SchoolEventsSnapshot) => {
+      setSchoolEventsSnapshot((current) => {
+        if (
+          current &&
+          getErrorSignature(current.error) ===
+            getErrorSignature(snapshot.error) &&
+          current.isRefetching === snapshot.isRefetching &&
+          JSON.stringify(current.events) === JSON.stringify(snapshot.events)
+        ) {
+          return current;
+        }
 
-      return snapshot;
-    });
-  }, []);
+        return snapshot;
+      });
+    },
+    [],
+  );
 
-  const handleSchoolEventsRefreshReady = useCallback((refresh: () => Promise<unknown>) => {
-    schoolEventsRefresherRef.current = refresh;
-  }, []);
+  const handleSchoolEventsRefreshReady = useCallback(
+    (refresh: () => Promise<unknown>) => {
+      schoolEventsRefresherRef.current = refresh;
+    },
+    [],
+  );
 
   useEffect(() => {
     if (schoolYear) return;
@@ -852,7 +970,9 @@ export function DashboardScreen({ navigation }: Props) {
           classItem,
           classDataMap[classItem.id]?.lessons ?? [],
           classDataMap[classItem.id]?.completions ?? [],
-          performanceQuery.data?.classes.find((entry) => entry.classId === classItem.id),
+          performanceQuery.data?.classes.find(
+            (entry) => entry.classId === classItem.id,
+          ),
         ),
       ),
     [classDataMap, dashboardClasses, performanceQuery.data?.classes],
@@ -873,7 +993,10 @@ export function DashboardScreen({ navigation }: Props) {
     [classDataMap, subjects],
   );
 
-  const continueLearning = useMemo(() => findContinueLearning(subjects, lessonMap), [lessonMap, subjects]);
+  const continueLearning = useMemo(
+    () => findContinueLearning(subjects, lessonMap),
+    [lessonMap, subjects],
+  );
   const recentLessons = useMemo(
     () =>
       subjects
@@ -887,7 +1010,9 @@ export function DashboardScreen({ navigation }: Props) {
   );
 
   const pendingAssessmentState = useMemo(() => {
-    const subjectByClassId = new Map(subjects.map((subject) => [subject.id, subject]));
+    const subjectByClassId = new Map(
+      subjects.map((subject) => [subject.id, subject]),
+    );
     const actionableItems: PendingAssessmentItem[] = [];
     let unresolvedCount = 0;
 
@@ -899,12 +1024,20 @@ export function DashboardScreen({ navigation }: Props) {
           if (!subject) return;
 
           const attemptSnapshot = entry.assessmentAttempts[assessment.id];
-          if (!attemptSnapshot || !attemptSnapshot.isResolved || attemptSnapshot.error) {
+          if (
+            !attemptSnapshot ||
+            !attemptSnapshot.isResolved ||
+            attemptSnapshot.error
+          ) {
             unresolvedCount += 1;
             return;
           }
 
-          const card = toAssessmentCard(assessment, subject, attemptSnapshot.attempts);
+          const card = toAssessmentCard(
+            assessment,
+            subject,
+            attemptSnapshot.attempts,
+          );
           if (card.status === "completed") {
             return;
           }
@@ -912,14 +1045,18 @@ export function DashboardScreen({ navigation }: Props) {
           actionableItems.push({
             assessment,
             subject,
-            dueTime: assessment.dueDate ? new Date(assessment.dueDate).getTime() : Number.POSITIVE_INFINITY,
+            dueTime: assessment.dueDate
+              ? new Date(assessment.dueDate).getTime()
+              : Number.POSITIVE_INFINITY,
             status: card.status,
           });
         });
     });
 
     return {
-      items: actionableItems.sort((left, right) => left.dueTime - right.dueTime).slice(0, 4),
+      items: actionableItems
+        .sort((left, right) => left.dueTime - right.dueTime)
+        .slice(0, 4),
       unresolvedCount,
     };
   }, [classDataMap, subjects]);
@@ -927,19 +1064,28 @@ export function DashboardScreen({ navigation }: Props) {
   const pendingAssessments = pendingAssessmentState.items;
   const pendingAssessmentStatusCount = pendingAssessmentState.unresolvedCount;
   const hasPendingAssessmentSync = pendingAssessmentStatusCount > 0;
-  const todaySchedule = useMemo(() => buildTodaySchedule(dashboardClasses), [dashboardClasses]);
+  const todaySchedule = useMemo(
+    () => buildTodaySchedule(dashboardClasses),
+    [dashboardClasses],
+  );
   const schoolEvents = schoolEventsSnapshot?.events ?? [];
 
-  const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "Student";
+  const fullName =
+    [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "Student";
   const firstName = user?.firstName || fullName;
   const profileReadiness = computeProfileReadiness({
     phone: profileQuery.data?.phone,
     address: profileQuery.data?.address,
     familyName: profileQuery.data?.familyName,
     familyContact: profileQuery.data?.familyContact,
-    profilePicture: profileQuery.data?.profilePicture || user?.profilePicture || null,
+    profilePicture:
+      profileQuery.data?.profilePicture || user?.profilePicture || null,
   });
-  const averageScore = Math.round(performanceQuery.data?.overall.averageBlendedScore ?? 0);
+  const averageScore = Math.round(
+    boundAcademicPercentage(
+      performanceQuery.data?.overall.averageBlendedScore ?? 0,
+    ),
+  );
   const primaryError =
     classesQuery.error ||
     profileQuery.error ||
@@ -965,12 +1111,17 @@ export function DashboardScreen({ navigation }: Props) {
     ]);
   };
 
-  const initials = resolveInitials(user?.firstName, user?.lastName, user?.email);
+  const initials = resolveInitials(
+    user?.firstName,
+    user?.lastName,
+    user?.email,
+  );
   const heroTaskCount =
     hasPendingAssessmentSync && pendingAssessments.length === 0
       ? pendingAssessmentStatusCount
       : pendingAssessments.length;
-  const heroTaskLabel = heroTaskCount === 1 ? "task needs attention" : "tasks need attention";
+  const heroTaskLabel =
+    heroTaskCount === 1 ? "task needs attention" : "tasks need attention";
   const dayScheduleLabel =
     todaySchedule.length === 0
       ? "No classes today"
@@ -983,16 +1134,24 @@ export function DashboardScreen({ navigation }: Props) {
       : `${heroTaskCount} task${heroTaskCount === 1 ? "" : "s"} still need${heroTaskCount === 1 ? "s" : ""} attention`;
 
   const calendarCells = useMemo(
-    () => buildDashboardCalendar(calendarMonth, dashboardClasses, pendingAssessments, schoolEvents),
+    () =>
+      buildDashboardCalendar(
+        calendarMonth,
+        dashboardClasses,
+        pendingAssessments,
+        schoolEvents,
+      ),
     [calendarMonth, dashboardClasses, pendingAssessments, schoolEvents],
   );
   const upcomingTimeline = useMemo(
-    () => buildUpcomingTimeline(todaySchedule, pendingAssessments, schoolEvents),
+    () =>
+      buildUpcomingTimeline(todaySchedule, pendingAssessments, schoolEvents),
     [pendingAssessments, schoolEvents, todaySchedule],
   );
 
   const handleContinueLearning = () => {
-    const nextClassId = continueLearning[0]?.subject.id ?? dashboardClasses[0]?.id;
+    const nextClassId =
+      continueLearning[0]?.subject.id ?? dashboardClasses[0]?.id;
     if (nextClassId) {
       navigation.navigate("ClassWorkspace", { classId: nextClassId });
       return;
@@ -1012,7 +1171,9 @@ export function DashboardScreen({ navigation }: Props) {
   return (
     <ScreenScroll
       backgroundColor={theme.bg}
-      refreshControl={<Refreshable refreshing={refreshing} onRefresh={handleRefresh} />}
+      refreshControl={
+        <Refreshable refreshing={refreshing} onRefresh={handleRefresh} />
+      }
     >
       {schoolYear ? (
         <DashboardSchoolEventsBridge
@@ -1050,7 +1211,9 @@ export function DashboardScreen({ navigation }: Props) {
               marginBottom: 14,
             }}
           >
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 9 }}>
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 9 }}
+            >
               <View
                 style={{
                   width: 28,
@@ -1061,12 +1224,22 @@ export function DashboardScreen({ navigation }: Props) {
                   justifyContent: "center",
                 }}
               >
-                <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "700" }}>N</Text>
+                <Text
+                  style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "700" }}
+                >
+                  N
+                </Text>
               </View>
-              <Text style={{ color: theme.text, fontSize: 17, fontWeight: "600" }}>Student Home</Text>
+              <Text
+                style={{ color: theme.text, fontSize: 17, fontWeight: "600" }}
+              >
+                Student Home
+              </Text>
             </View>
 
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
+            >
               <Pressable
                 accessibilityLabel="Open announcements"
                 onPress={() => navigation.navigate("Notifications" as never)}
@@ -1081,7 +1254,11 @@ export function DashboardScreen({ navigation }: Props) {
                   justifyContent: "center",
                 }}
               >
-                <MaterialCommunityIcons name="bullhorn-outline" size={18} color={theme.red} />
+                <MaterialCommunityIcons
+                  name="bullhorn-outline"
+                  size={18}
+                  color={theme.red}
+                />
               </Pressable>
 
               <Pressable
@@ -1098,7 +1275,11 @@ export function DashboardScreen({ navigation }: Props) {
                   justifyContent: "center",
                 }}
               >
-                <MaterialCommunityIcons name="bell-outline" size={18} color={theme.text} />
+                <MaterialCommunityIcons
+                  name="bell-outline"
+                  size={18}
+                  color={theme.text}
+                />
                 {unreadCount > 0 ? (
                   <View
                     style={{
@@ -1116,7 +1297,13 @@ export function DashboardScreen({ navigation }: Props) {
                       paddingHorizontal: 4,
                     }}
                   >
-                    <Text style={{ color: "#FFFFFF", fontSize: 9, fontWeight: "900" }}>
+                    <Text
+                      style={{
+                        color: "#FFFFFF",
+                        fontSize: 9,
+                        fontWeight: "900",
+                      }}
+                    >
                       {unreadCount > 9 ? "9+" : unreadCount}
                     </Text>
                   </View>
@@ -1135,13 +1322,21 @@ export function DashboardScreen({ navigation }: Props) {
                   justifyContent: "center",
                 }}
               >
-                <Text style={{ color: "#FFFFFF", fontSize: 11, fontWeight: "700" }}>{initials}</Text>
+                <Text
+                  style={{ color: "#FFFFFF", fontSize: 11, fontWeight: "700" }}
+                >
+                  {initials}
+                </Text>
               </Pressable>
             </View>
           </View>
 
           <Text style={{ color: theme.subtext, fontSize: 11 }}>
-            Ready for today, <Text style={{ color: theme.text, fontWeight: "600" }}>{firstName}</Text>?
+            Ready for today,{" "}
+            <Text style={{ color: theme.text, fontWeight: "600" }}>
+              {firstName}
+            </Text>
+            ?
           </Text>
         </View>
 
@@ -1183,9 +1378,31 @@ export function DashboardScreen({ navigation }: Props) {
             />
 
             <View style={{ position: "relative" }}>
-              <Text style={{ color: theme.red, fontSize: 11, marginBottom: 3, fontWeight: "900", letterSpacing: 1.2, textTransform: "uppercase" }}>Today</Text>
-              <Text style={{ color: theme.text, fontSize: 22, fontWeight: "900", marginBottom: 4 }}>{resolveGreeting()}, {firstName}</Text>
-              <Text style={{ color: theme.muted, fontSize: 12, marginBottom: 14 }}>
+              <Text
+                style={{
+                  color: theme.red,
+                  fontSize: 11,
+                  marginBottom: 3,
+                  fontWeight: "900",
+                  letterSpacing: 1.2,
+                  textTransform: "uppercase",
+                }}
+              >
+                Today
+              </Text>
+              <Text
+                style={{
+                  color: theme.text,
+                  fontSize: 22,
+                  fontWeight: "900",
+                  marginBottom: 4,
+                }}
+              >
+                {resolveGreeting()}, {firstName}
+              </Text>
+              <Text
+                style={{ color: theme.muted, fontSize: 12, marginBottom: 14 }}
+              >
                 {heroTaskCount === 0
                   ? "You are all caught up today"
                   : `You have ${heroTaskCount} pending ${heroTaskCount === 1 ? "task" : "tasks"} today`}
@@ -1213,11 +1430,43 @@ export function DashboardScreen({ navigation }: Props) {
                 >
                   Weekly Progress
                 </Text>
-                <View style={{ flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" }}>
-                  <Text style={{ color: theme.text, fontSize: 18, fontWeight: "800", flex: 1, paddingRight: 10 }}>{heroSummaryText}</Text>
-                  <Text style={{ color: theme.blue, fontSize: 22, fontWeight: "900" }}>{averageScore}%</Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "flex-end",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: theme.text,
+                      fontSize: 18,
+                      fontWeight: "800",
+                      flex: 1,
+                      paddingRight: 10,
+                    }}
+                  >
+                    {heroSummaryText}
+                  </Text>
+                  <Text
+                    style={{
+                      color: theme.blue,
+                      fontSize: 22,
+                      fontWeight: "900",
+                    }}
+                  >
+                    {averageScore}%
+                  </Text>
                 </View>
-                <View style={{ height: 8, borderRadius: 999, backgroundColor: theme.channel, overflow: "hidden", marginTop: 12 }}>
+                <View
+                  style={{
+                    height: 8,
+                    borderRadius: 999,
+                    backgroundColor: theme.channel,
+                    overflow: "hidden",
+                    marginTop: 12,
+                  }}
+                >
                   <View
                     style={{
                       height: "100%",
@@ -1227,7 +1476,14 @@ export function DashboardScreen({ navigation }: Props) {
                     }}
                   />
                 </View>
-                <Text style={{ color: theme.muted, fontSize: 11, lineHeight: 16, marginTop: 3 }}>
+                <Text
+                  style={{
+                    color: theme.muted,
+                    fontSize: 11,
+                    lineHeight: 16,
+                    marginTop: 3,
+                  }}
+                >
                   {hasPendingAssessmentSync && pendingAssessments.length === 0
                     ? "We are syncing your latest assessment submissions before finalizing what still needs attention."
                     : "Keep your streak moving by finishing the next lesson and clearing due work."}
@@ -1247,7 +1503,15 @@ export function DashboardScreen({ navigation }: Props) {
                     paddingVertical: 10,
                   }}
                 >
-                  <Text style={{ color: "#FFFFFF", fontSize: 12, fontWeight: "600" }}>Continue Learning</Text>
+                  <Text
+                    style={{
+                      color: "#FFFFFF",
+                      fontSize: 12,
+                      fontWeight: "600",
+                    }}
+                  >
+                    Continue Learning
+                  </Text>
                 </Pressable>
                 <Pressable
                   onPress={() => navigation.navigate("Courses")}
@@ -1263,7 +1527,15 @@ export function DashboardScreen({ navigation }: Props) {
                     paddingVertical: 10,
                   }}
                 >
-                  <Text style={{ color: theme.text, fontSize: 12, fontWeight: "500" }}>My Courses</Text>
+                  <Text
+                    style={{
+                      color: theme.text,
+                      fontSize: 12,
+                      fontWeight: "500",
+                    }}
+                  >
+                    My Courses
+                  </Text>
                 </Pressable>
               </View>
             </View>
@@ -1271,7 +1543,14 @@ export function DashboardScreen({ navigation }: Props) {
         </AnimatedEntrance>
 
         <AnimatedEntrance delay={40}>
-          <View style={{ flexDirection: "row", gap: 9, marginHorizontal: 16, marginTop: 12 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              gap: 9,
+              marginHorizontal: 16,
+              marginTop: 12,
+            }}
+          >
             {[
               {
                 label: "Classes",
@@ -1319,28 +1598,61 @@ export function DashboardScreen({ navigation }: Props) {
                   ...shadow.card,
                 }}
               >
-                <MaterialCommunityIcons name={item.icon} size={16} color={item.color} style={{ opacity: 0.8 }} />
-                <Text style={{ color: theme.text, fontSize: 17, fontWeight: "700", marginTop: 6 }}>{item.value}</Text>
-                <Text style={{ color: theme.muted, fontSize: 10, marginTop: 2 }}>{item.label}</Text>
+                <MaterialCommunityIcons
+                  name={item.icon}
+                  size={16}
+                  color={item.color}
+                  style={{ opacity: 0.8 }}
+                />
+                <Text
+                  style={{
+                    color: theme.text,
+                    fontSize: 17,
+                    fontWeight: "700",
+                    marginTop: 6,
+                  }}
+                >
+                  {item.value}
+                </Text>
+                <Text
+                  style={{ color: theme.muted, fontSize: 10, marginTop: 2 }}
+                >
+                  {item.label}
+                </Text>
               </Pressable>
             ))}
           </View>
         </AnimatedEntrance>
 
         {primaryError ? (
-          <DashboardNotice title="Some dashboard data could not load" subtitle={peekAppError(primaryError).message} />
+          <DashboardNotice
+            title="Some dashboard data could not load"
+            subtitle={peekAppError(primaryError).message}
+          />
         ) : null}
 
         <AnimatedEntrance delay={60}>
-          <SectionLabel title="Day Schedule" actionLabel="See All" onPressAction={() => navigation.navigate("Classes")} />
+          <SectionLabel
+            title="Day Schedule"
+            actionLabel="See All"
+            onPressAction={() => navigation.navigate("Classes")}
+          />
         </AnimatedEntrance>
 
         <AnimatedEntrance delay={80}>
           <DarkPanel>
             {todaySchedule.length === 0 ? (
               <View style={{ paddingHorizontal: 14, paddingVertical: 16 }}>
-                <Text style={{ color: theme.text, fontSize: 13, fontWeight: "600" }}>No scheduled classes today</Text>
-                <Text style={{ color: theme.muted, fontSize: 11, marginTop: 3 }}>{dayScheduleLabel}</Text>
+                <Text
+                  style={{ color: theme.text, fontSize: 13, fontWeight: "600" }}
+                >
+                  No scheduled classes today
+                </Text>
+                <Text
+                  style={{ color: theme.muted, fontSize: 11, marginTop: 3 }}
+                >
+                  {dayScheduleLabel}
+                </Text>
               </View>
             ) : (
               todaySchedule.map((entry, index) => {
@@ -1349,7 +1661,11 @@ export function DashboardScreen({ navigation }: Props) {
                 return (
                   <Pressable
                     key={entry.id}
-                    onPress={() => navigation.navigate("ClassWorkspace", { classId: entry.classId })}
+                    onPress={() =>
+                      navigation.navigate("ClassWorkspace", {
+                        classId: entry.classId,
+                      })
+                    }
                     style={{
                       flexDirection: "row",
                       alignItems: "center",
@@ -1357,13 +1673,28 @@ export function DashboardScreen({ navigation }: Props) {
                       paddingHorizontal: 14,
                       paddingVertical: 12,
                       minHeight: 64,
-                      borderBottomWidth: index === todaySchedule.length - 1 ? 0 : 1,
+                      borderBottomWidth:
+                        index === todaySchedule.length - 1 ? 0 : 1,
                       borderBottomColor: theme.border,
                     }}
                   >
                     <View style={{ minWidth: 52, alignItems: "flex-end" }}>
-                      <Text style={{ color: theme.blue, fontSize: 11, fontWeight: "600" }}>{formatClock(entry.startTime)}</Text>
-                      <Text style={{ color: theme.muted, fontSize: 10, marginTop: 1 }}>
+                      <Text
+                        style={{
+                          color: theme.blue,
+                          fontSize: 11,
+                          fontWeight: "600",
+                        }}
+                      >
+                        {formatClock(entry.startTime)}
+                      </Text>
+                      <Text
+                        style={{
+                          color: theme.muted,
+                          fontSize: 10,
+                          marginTop: 1,
+                        }}
+                      >
                         {formatDurationLabel(entry.startTime, entry.endTime)}
                       </Text>
                     </View>
@@ -1378,9 +1709,28 @@ export function DashboardScreen({ navigation }: Props) {
                     />
 
                     <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={{ color: theme.text, fontSize: 13, fontWeight: "600" }}>{entry.subjectName}</Text>
-                      <Text style={{ color: theme.muted, fontSize: 11, marginTop: 2 }}>
-                        {[entry.teacherName, entry.room ? `Room ${entry.room}` : null].filter(Boolean).join(" · ")}
+                      <Text
+                        style={{
+                          color: theme.text,
+                          fontSize: 13,
+                          fontWeight: "600",
+                        }}
+                      >
+                        {entry.subjectName}
+                      </Text>
+                      <Text
+                        style={{
+                          color: theme.muted,
+                          fontSize: 11,
+                          marginTop: 2,
+                        }}
+                      >
+                        {[
+                          entry.teacherName,
+                          entry.room ? `Room ${entry.room}` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
                       </Text>
                     </View>
 
@@ -1392,7 +1742,15 @@ export function DashboardScreen({ navigation }: Props) {
                         paddingVertical: 2,
                       }}
                     >
-                      <Text style={{ color: theme.blue, fontSize: 10, fontWeight: "700" }}>{active ? "Now" : "Today"}</Text>
+                      <Text
+                        style={{
+                          color: theme.blue,
+                          fontSize: 10,
+                          fontWeight: "700",
+                        }}
+                      >
+                        {active ? "Now" : "Today"}
+                      </Text>
                     </View>
                   </Pressable>
                 );
@@ -1404,7 +1762,11 @@ export function DashboardScreen({ navigation }: Props) {
         <AnimatedEntrance delay={100}>
           <SectionLabel
             title="Pending Tasks"
-            actionLabel={hasPendingAssessmentSync && pendingAssessments.length === 0 ? "Syncing" : `${pendingAssessments.length} due`}
+            actionLabel={
+              hasPendingAssessmentSync && pendingAssessments.length === 0
+                ? "Syncing"
+                : `${pendingAssessments.length} due`
+            }
             actionColor={theme.amber}
           />
         </AnimatedEntrance>
@@ -1417,10 +1779,27 @@ export function DashboardScreen({ navigation }: Props) {
             />
           ) : pendingAssessments.length === 0 ? (
             <DarkPanel>
-              <View style={{ alignItems: "center", paddingHorizontal: 16, paddingVertical: 18 }}>
+              <View
+                style={{
+                  alignItems: "center",
+                  paddingHorizontal: 16,
+                  paddingVertical: 18,
+                }}
+              >
                 <Text style={{ fontSize: 22, marginBottom: 6 }}>✓</Text>
-                <Text style={{ color: theme.text, fontSize: 13, fontWeight: "600", marginBottom: 3 }}>You are all caught up</Text>
-                <Text style={{ color: theme.muted, fontSize: 11 }}>No published assessments right now.</Text>
+                <Text
+                  style={{
+                    color: theme.text,
+                    fontSize: 13,
+                    fontWeight: "600",
+                    marginBottom: 3,
+                  }}
+                >
+                  You are all caught up
+                </Text>
+                <Text style={{ color: theme.muted, fontSize: 11 }}>
+                  No published assessments right now.
+                </Text>
               </View>
             </DarkPanel>
           ) : (
@@ -1455,19 +1834,47 @@ export function DashboardScreen({ navigation }: Props) {
                         height: 20,
                         borderRadius: 6,
                         borderWidth: 1.5,
-                        borderColor: assessment.dueDate ? theme.amber : theme.dim,
-                        backgroundColor: assessment.dueDate ? theme.amberSoft : "transparent",
+                        borderColor: assessment.dueDate
+                          ? theme.amber
+                          : theme.dim,
+                        backgroundColor: assessment.dueDate
+                          ? theme.amberSoft
+                          : "transparent",
                       }}
                     />
                     <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={{ color: theme.text, fontSize: 13, fontWeight: "500" }} numberOfLines={1}>
+                      <Text
+                        style={{
+                          color: theme.text,
+                          fontSize: 13,
+                          fontWeight: "500",
+                        }}
+                        numberOfLines={1}
+                      >
                         {assessment.title}
                       </Text>
-                      <Text style={{ color: theme.muted, fontSize: 11, marginTop: 2 }} numberOfLines={1}>
-                        {subject.name} · {(assessment.type || "Task").replace(/_/g, " ")} · {(assessment.totalPoints ?? 100)} pts
+                      <Text
+                        style={{
+                          color: theme.muted,
+                          fontSize: 11,
+                          marginTop: 2,
+                        }}
+                        numberOfLines={1}
+                      >
+                        {subject.name} ·{" "}
+                        {(assessment.type || "Task").replace(/_/g, " ")} ·{" "}
+                        {assessment.totalPoints ?? 100} pts
                       </Text>
                     </View>
-                    <Text style={{ color: theme.amber, fontSize: 10, fontWeight: "600" }}>{formatDueDate(assessment.dueDate)}</Text>
+                    <Text
+                      style={{
+                        color: theme.amber,
+                        fontSize: 10,
+                        fontWeight: "600",
+                      }}
+                    >
+                      {formatDueDate(assessment.dueDate)}
+                    </Text>
                   </Pressable>
                 </AnimatedEntrance>
               ))}
@@ -1476,7 +1883,11 @@ export function DashboardScreen({ navigation }: Props) {
         </AnimatedEntrance>
 
         <AnimatedEntrance delay={160}>
-          <SectionLabel title="Recent Lessons" actionLabel="View All" onPressAction={() => navigation.navigate("Classes")} />
+          <SectionLabel
+            title="Recent Lessons"
+            actionLabel="View All"
+            onPressAction={() => navigation.navigate("Classes")}
+          />
         </AnimatedEntrance>
 
         <AnimatedEntrance delay={180}>
@@ -1487,70 +1898,101 @@ export function DashboardScreen({ navigation }: Props) {
             />
           ) : (
             <View style={{ gap: 8 }}>
-              {recentLessons.map(({ id, title, status, subject, order }, index) => {
-                const completed = status === "completed";
+              {recentLessons.map(
+                ({ id, title, status, subject, order }, index) => {
+                  const completed = status === "completed";
 
-                return (
-                  <AnimatedEntrance key={id} delay={190 + index * 20}>
-                    <Pressable
-                      onPress={() => navigation.navigate("ClassWorkspace", { classId: subject.id })}
-                      style={{
-                        marginHorizontal: 16,
-                        borderRadius: 12,
-                        borderWidth: 1,
-                        borderColor: theme.border,
-                        backgroundColor: theme.surface,
-                        paddingHorizontal: 14,
-                        paddingVertical: 12,
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 12,
-                        minHeight: 64,
-                        ...shadow.card,
-                      }}
-                    >
-                      <View
+                  return (
+                    <AnimatedEntrance key={id} delay={190 + index * 20}>
+                      <Pressable
+                        onPress={() =>
+                          navigation.navigate("ClassWorkspace", {
+                            classId: subject.id,
+                          })
+                        }
                         style={{
-                        width: 28,
-                        height: 28,
-                          borderRadius: 7,
-                          backgroundColor: theme.redSoft,
+                          marginHorizontal: 16,
+                          borderRadius: 12,
+                          borderWidth: 1,
+                          borderColor: theme.border,
+                          backgroundColor: theme.surface,
+                          paddingHorizontal: 14,
+                          paddingVertical: 12,
+                          flexDirection: "row",
                           alignItems: "center",
-                          justifyContent: "center",
+                          gap: 12,
+                          minHeight: 64,
+                          ...shadow.card,
                         }}
                       >
-                        <Text style={{ color: theme.red, fontSize: 12, fontWeight: "700" }}>{order ?? index + 1}</Text>
-                      </View>
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text style={{ color: theme.text, fontSize: 13, fontWeight: "500" }} numberOfLines={1}>
-                          {title}
-                        </Text>
-                        <Text style={{ color: theme.muted, fontSize: 11, marginTop: 2 }} numberOfLines={1}>
-                          {subject.name} · Lesson {order ?? index + 1} {completed ? "· Done" : ""}
-                        </Text>
-                      </View>
-                      <View
-                        style={{
-                          borderRadius: 6,
-                          paddingHorizontal: 10,
-                          paddingVertical: 4,
-                          backgroundColor: completed ? theme.greenSoft : theme.blueSoft,
-                        }}
-                      >
-                        <Text
+                        <View
                           style={{
-                            color: completed ? theme.green : theme.blue,
-                            fontSize: 11,
-                            fontWeight: "600",
+                            width: 28,
+                            height: 28,
+                            borderRadius: 7,
+                            backgroundColor: theme.redSoft,
+                            alignItems: "center",
+                            justifyContent: "center",
                           }}
                         >
-                          {completed ? "Done" : "Open"}
-                        </Text>
-                      </View>
-                    </Pressable>
-                  </AnimatedEntrance>
-                );
-              })}
+                          <Text
+                            style={{
+                              color: theme.red,
+                              fontSize: 12,
+                              fontWeight: "700",
+                            }}
+                          >
+                            {order ?? index + 1}
+                          </Text>
+                        </View>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text
+                            style={{
+                              color: theme.text,
+                              fontSize: 13,
+                              fontWeight: "500",
+                            }}
+                            numberOfLines={1}
+                          >
+                            {title}
+                          </Text>
+                          <Text
+                            style={{
+                              color: theme.muted,
+                              fontSize: 11,
+                              marginTop: 2,
+                            }}
+                            numberOfLines={1}
+                          >
+                            {subject.name} · Lesson {order ?? index + 1}{" "}
+                            {completed ? "· Done" : ""}
+                          </Text>
+                        </View>
+                        <View
+                          style={{
+                            borderRadius: 6,
+                            paddingHorizontal: 10,
+                            paddingVertical: 4,
+                            backgroundColor: completed
+                              ? theme.greenSoft
+                              : theme.blueSoft,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color: completed ? theme.green : theme.blue,
+                              fontSize: 11,
+                              fontWeight: "600",
+                            }}
+                          >
+                            {completed ? "Done" : "Open"}
+                          </Text>
+                        </View>
+                      </Pressable>
+                    </AnimatedEntrance>
+                  );
+                },
+              )}
             </View>
           )}
         </AnimatedEntrance>
@@ -1575,11 +2017,22 @@ export function DashboardScreen({ navigation }: Props) {
                 paddingBottom: 8,
               }}
             >
-              <Text style={{ color: theme.text, fontSize: 14, fontWeight: "700" }}>{formatCalendarMonth(calendarMonth)}</Text>
+              <Text
+                style={{ color: theme.text, fontSize: 14, fontWeight: "700" }}
+              >
+                {formatCalendarMonth(calendarMonth)}
+              </Text>
               <View style={{ flexDirection: "row", gap: 6 }}>
                 <Pressable
                   onPress={() =>
-                    setCalendarMonth((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))
+                    setCalendarMonth(
+                      (current) =>
+                        new Date(
+                          current.getFullYear(),
+                          current.getMonth() - 1,
+                          1,
+                        ),
+                    )
                   }
                   style={{
                     width: 44,
@@ -1590,11 +2043,22 @@ export function DashboardScreen({ navigation }: Props) {
                     justifyContent: "center",
                   }}
                 >
-                  <MaterialCommunityIcons name="chevron-left" size={14} color={theme.muted} />
+                  <MaterialCommunityIcons
+                    name="chevron-left"
+                    size={14}
+                    color={theme.muted}
+                  />
                 </Pressable>
                 <Pressable
                   onPress={() =>
-                    setCalendarMonth((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))
+                    setCalendarMonth(
+                      (current) =>
+                        new Date(
+                          current.getFullYear(),
+                          current.getMonth() + 1,
+                          1,
+                        ),
+                    )
                   }
                   style={{
                     width: 44,
@@ -1605,7 +2069,11 @@ export function DashboardScreen({ navigation }: Props) {
                     justifyContent: "center",
                   }}
                 >
-                  <MaterialCommunityIcons name="chevron-right" size={14} color={theme.muted} />
+                  <MaterialCommunityIcons
+                    name="chevron-right"
+                    size={14}
+                    color={theme.muted}
+                  />
                 </Pressable>
               </View>
             </View>
@@ -1648,7 +2116,9 @@ export function DashboardScreen({ navigation }: Props) {
                           borderRadius: cell.isToday ? 16 : 6,
                           alignItems: "center",
                           justifyContent: "center",
-                          backgroundColor: cell.isToday ? theme.red : "transparent",
+                          backgroundColor: cell.isToday
+                            ? theme.red
+                            : "transparent",
                         }}
                       >
                         <Text
@@ -1663,7 +2133,8 @@ export function DashboardScreen({ navigation }: Props) {
                                     : theme.muted
                                   : theme.dim,
                             fontSize: 11,
-                            fontWeight: cell.isToday || cell.isClassDay ? "700" : "500",
+                            fontWeight:
+                              cell.isToday || cell.isClassDay ? "700" : "500",
                           }}
                         >
                           {cell.label}
@@ -1687,14 +2158,33 @@ export function DashboardScreen({ navigation }: Props) {
               </View>
             </View>
 
-            <View style={{ borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 10, paddingBottom: 4 }}>
-              <SectionLabel title="Upcoming" actionLabel="See All" onPressAction={() => navigation.navigate("Calendar")} />
+            <View
+              style={{
+                borderTopWidth: 1,
+                borderTopColor: theme.border,
+                paddingTop: 10,
+                paddingBottom: 4,
+              }}
+            >
+              <SectionLabel
+                title="Upcoming"
+                actionLabel="See All"
+                onPressAction={() => navigation.navigate("Calendar")}
+              />
             </View>
 
             {upcomingTimeline.length === 0 ? (
               <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
-                <Text style={{ color: theme.text, fontSize: 12, fontWeight: "600" }}>No upcoming items</Text>
-                <Text style={{ color: theme.muted, fontSize: 11, marginTop: 2 }}>Class sessions and due work will appear here.</Text>
+                <Text
+                  style={{ color: theme.text, fontSize: 12, fontWeight: "600" }}
+                >
+                  No upcoming items
+                </Text>
+                <Text
+                  style={{ color: theme.muted, fontSize: 11, marginTop: 2 }}
+                >
+                  Class sessions and due work will appear here.
+                </Text>
               </View>
             ) : (
               upcomingTimeline.map((item, index) => (
@@ -1716,12 +2206,28 @@ export function DashboardScreen({ navigation }: Props) {
                       height: 8,
                       borderRadius: 999,
                       backgroundColor:
-                        item.tone === "blue" ? theme.blue : item.tone === "amber" ? theme.amber : theme.purple,
+                        item.tone === "blue"
+                          ? theme.blue
+                          : item.tone === "amber"
+                            ? theme.amber
+                            : theme.purple,
                     }}
                   />
                   <View style={{ flex: 1 }}>
-                    <Text style={{ color: theme.text, fontSize: 12, fontWeight: "500" }}>{item.title}</Text>
-                    <Text style={{ color: theme.muted, fontSize: 11, marginTop: 1 }}>{item.subtitle}</Text>
+                    <Text
+                      style={{
+                        color: theme.text,
+                        fontSize: 12,
+                        fontWeight: "500",
+                      }}
+                    >
+                      {item.title}
+                    </Text>
+                    <Text
+                      style={{ color: theme.muted, fontSize: 11, marginTop: 1 }}
+                    >
+                      {item.subtitle}
+                    </Text>
                   </View>
                 </View>
               ))
@@ -1761,19 +2267,38 @@ export function DashboardScreen({ navigation }: Props) {
                 justifyContent: "center",
               }}
             >
-              <MaterialCommunityIcons name="account-outline" size={18} color={theme.purple} />
+              <MaterialCommunityIcons
+                name="account-outline"
+                size={18}
+                color={theme.purple}
+              />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ color: theme.text, fontSize: 13, fontWeight: "600", marginBottom: 3 }}>
-                {profileReadiness >= 100 ? "Learner profile ready" : "Complete your learner profile"}
+              <Text
+                style={{
+                  color: theme.text,
+                  fontSize: 13,
+                  fontWeight: "600",
+                  marginBottom: 3,
+                }}
+              >
+                {profileReadiness >= 100
+                  ? "Learner profile ready"
+                  : "Complete your learner profile"}
               </Text>
-              <Text style={{ color: theme.muted, fontSize: 11, lineHeight: 16 }}>
+              <Text
+                style={{ color: theme.muted, fontSize: 11, lineHeight: 16 }}
+              >
                 {profileReadiness >= 100
                   ? `${fullName} has the key learner details filled in.`
                   : "Add your phone, address, and guardian details so class updates stay accurate."}
               </Text>
             </View>
-            <MaterialCommunityIcons name="chevron-right" size={16} color={theme.dim} />
+            <MaterialCommunityIcons
+              name="chevron-right"
+              size={16}
+              color={theme.dim}
+            />
           </Pressable>
         </AnimatedEntrance>
 

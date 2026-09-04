@@ -1,12 +1,12 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
-} from 'react';
-import Link from 'next/link';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+} from "react";
+import Link from "next/link";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   BookOpen,
@@ -14,59 +14,61 @@ import {
   FileText,
   Lock,
   ScrollText,
-} from 'lucide-react';
-import { toast } from 'sonner';
-import { classService } from '@/services/class-service';
-import { moduleService } from '@/services/module-service';
-import { lessonService } from '@/services/lesson-service';
-import { assessmentService } from '@/services/assessment-service';
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
-import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
+} from "lucide-react";
+import { toast } from "sonner";
+import { classService } from "@/services/class-service";
+import { moduleService } from "@/services/module-service";
+import { lessonService } from "@/services/lesson-service";
+import { assessmentService } from "@/services/assessment-service";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { RichTextRenderer } from "@/components/shared/rich-text/RichTextRenderer";
 import {
   LESSON_COMPLETE_WAIT_SECONDS,
   StudentLessonReaderPanel,
-} from '@/components/student/lesson/StudentLessonReaderPanel';
-import { PptxDeckViewer } from '@/components/student/lesson/PptxDeckViewer';
-import { getTeacherName } from '@/utils/helpers';
+} from "@/components/student/lesson/StudentLessonReaderPanel";
+import { PptxDeckViewer } from "@/components/student/lesson/PptxDeckViewer";
+import { getTeacherName } from "@/utils/helpers";
 import {
   getStudentAssessmentAvailability,
   mapAssessmentStartError,
-} from '@/utils/student-assessment-availability';
-import type { Assessment, AssessmentAttempt } from '@/types/assessment';
-import type { ClassItem } from '@/types/class';
-import type { ContentBlock, Lesson } from '@/types/lesson';
-import type { ClassModule, ModuleItem } from '@/types/module';
+} from "@/utils/student-assessment-availability";
+import type { Assessment, AssessmentAttempt } from "@/types/assessment";
+import type { ClassItem } from "@/types/class";
+import type { ContentBlock, Lesson } from "@/types/lesson";
+import type { ClassModule, ModuleItem } from "@/types/module";
 import {
   getLessonCheckpointGate,
   normalizeStructuredLessonBlock,
-} from '@/features/lesson-blocks/structured-content';
-import { isPptxFile } from '@/lib/pptx-viewer';
+} from "@/features/lesson-blocks/structured-content";
+import { isPptxFile } from "@/lib/pptx-viewer";
+import { presentAcademicScore } from "@/lib/academic-score";
 import {
   type LessonCheckpointResults,
   type LessonCheckpointSelections,
-} from '@/features/lesson-blocks/LessonBlockStudentRenderer';
-import './student-module-detail.css';
+} from "@/features/lesson-blocks/LessonBlockStudentRenderer";
+import "./student-module-detail.css";
 
 function toParamValue(value: string | string[] | undefined) {
-  if (Array.isArray(value)) return value[0] || '';
-  return value || '';
+  if (Array.isArray(value)) return value[0] || "";
+  return value || "";
 }
 
 function formatDate(value?: string | null) {
-  if (!value) return '--';
+  if (!value) return "--";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '--';
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
+  if (Number.isNaN(date.getTime())) return "--";
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
   });
 }
 
 function formatClassLine(classItem: ClassItem | null) {
-  const gradeLevel = classItem?.section?.gradeLevel || classItem?.subjectGradeLevel || '--';
-  const sectionName = classItem?.section?.name || 'Section';
+  const gradeLevel =
+    classItem?.section?.gradeLevel || classItem?.subjectGradeLevel || "--";
+  const sectionName = classItem?.section?.name || "Section";
   const teacherName = getTeacherName(classItem?.teacher);
   return `Grade ${gradeLevel} - ${sectionName} - ${teacherName}`;
 }
@@ -82,9 +84,9 @@ export default function StudentModuleDetailPage() {
 
   const classId = toParamValue(params.id);
   const moduleId = toParamValue(params.moduleId);
-  const selectedLessonId = searchParams.get('lessonId');
-  const selectedAssessmentId = searchParams.get('assessmentId');
-  const selectedFileItemId = searchParams.get('fileItemId');
+  const selectedLessonId = searchParams.get("lessonId");
+  const selectedAssessmentId = searchParams.get("assessmentId");
+  const selectedFileItemId = searchParams.get("fileItemId");
 
   const [loading, setLoading] = useState(true);
   const [classItem, setClassItem] = useState<ClassItem | null>(null);
@@ -96,13 +98,19 @@ export default function StudentModuleDetailPage() {
   const [lessonCompleted, setLessonCompleted] = useState(false);
   const [completingLesson, setCompletingLesson] = useState(false);
   const [bottomReachedAt, setBottomReachedAt] = useState<number | null>(null);
-  const [countdownLeft, setCountdownLeft] = useState(LESSON_COMPLETE_WAIT_SECONDS);
-  const [checkpointSelections, setCheckpointSelections] = useState<LessonCheckpointSelections>({});
-  const [checkpointResults, setCheckpointResults] = useState<LessonCheckpointResults>({});
+  const [countdownLeft, setCountdownLeft] = useState(
+    LESSON_COMPLETE_WAIT_SECONDS,
+  );
+  const [checkpointSelections, setCheckpointSelections] =
+    useState<LessonCheckpointSelections>({});
+  const [checkpointResults, setCheckpointResults] =
+    useState<LessonCheckpointResults>({});
 
   const [assessmentLoading, setAssessmentLoading] = useState(false);
   const [assessment, setAssessment] = useState<Assessment | null>(null);
-  const [assessmentAttempts, setAssessmentAttempts] = useState<AssessmentAttempt[]>([]);
+  const [assessmentAttempts, setAssessmentAttempts] = useState<
+    AssessmentAttempt[]
+  >([]);
   const [startingAttempt, setStartingAttempt] = useState(false);
 
   const flatItems = useMemo(
@@ -113,7 +121,8 @@ export default function StudentModuleDetailPage() {
   const selectedLessonItem = useMemo(
     () =>
       flatItems.find(
-        (item) => item.itemType === 'lesson' && item.lessonId === selectedLessonId,
+        (item) =>
+          item.itemType === "lesson" && item.lessonId === selectedLessonId,
       ) ?? null,
     [flatItems, selectedLessonId],
   );
@@ -122,7 +131,8 @@ export default function StudentModuleDetailPage() {
     () =>
       flatItems.find(
         (item) =>
-          item.itemType === 'assessment' && item.assessmentId === selectedAssessmentId,
+          item.itemType === "assessment" &&
+          item.assessmentId === selectedAssessmentId,
       ) ?? null,
     [flatItems, selectedAssessmentId],
   );
@@ -130,7 +140,7 @@ export default function StudentModuleDetailPage() {
   const selectedFileItem = useMemo(
     () =>
       flatItems.find(
-        (item) => item.itemType === 'file' && item.id === selectedFileItemId,
+        (item) => item.itemType === "file" && item.id === selectedFileItemId,
       ) ?? null,
     [flatItems, selectedFileItemId],
   );
@@ -141,7 +151,9 @@ export default function StudentModuleDetailPage() {
       entry.items.some((item) => item.id === selectedLessonItem.id),
     );
     if (!section) return [];
-    return section.items.filter((item) => item.itemType === 'file' && item.fileId);
+    return section.items.filter(
+      (item) => item.itemType === "file" && item.fileId,
+    );
   }, [module, selectedLessonItem]);
 
   const submittedAttempts = useMemo(
@@ -163,16 +175,19 @@ export default function StudentModuleDetailPage() {
   );
 
   const currentMode = selectedLessonId
-    ? 'lesson'
+    ? "lesson"
     : selectedAssessmentId
-      ? 'assessment'
+      ? "assessment"
       : selectedFileItemId
-        ? 'file'
-        : 'overview';
+        ? "file"
+        : "overview";
 
   const refreshModule = useCallback(async () => {
     if (!classId || !moduleId) return;
-    const moduleResponse = await moduleService.getByClassAndModule(classId, moduleId);
+    const moduleResponse = await moduleService.getByClassAndModule(
+      classId,
+      moduleId,
+    );
     setModule(moduleResponse.data);
   }, [classId, moduleId]);
 
@@ -215,7 +230,9 @@ export default function StudentModuleDetailPage() {
       return;
     }
     if (!selectedLessonItem?.lessonId) {
-      router.replace(`/dashboard/student/classes/${classId}/modules/${moduleId}`);
+      router.replace(
+        `/dashboard/student/classes/${classId}/modules/${moduleId}`,
+      );
       return;
     }
 
@@ -241,14 +258,20 @@ export default function StudentModuleDetailPage() {
         setCheckpointSelections({});
         setCheckpointResults({});
       } catch {
-        toast.error('Failed to load lesson content.');
+        toast.error("Failed to load lesson content.");
       } finally {
         setLessonLoading(false);
       }
     };
 
     void run();
-  }, [classId, moduleId, router, selectedLessonId, selectedLessonItem?.lessonId]);
+  }, [
+    classId,
+    moduleId,
+    router,
+    selectedLessonId,
+    selectedLessonItem?.lessonId,
+  ]);
 
   useEffect(() => {
     if (!selectedAssessmentId) {
@@ -257,41 +280,66 @@ export default function StudentModuleDetailPage() {
       return;
     }
     if (!selectedAssessmentItem?.assessmentId) {
-      router.replace(`/dashboard/student/classes/${classId}/modules/${moduleId}`);
+      router.replace(
+        `/dashboard/student/classes/${classId}/modules/${moduleId}`,
+      );
       return;
     }
     const run = async () => {
       try {
         setAssessmentLoading(true);
         const [assessmentResponse, attemptsResponse] = await Promise.all([
-          assessmentService.getById(selectedAssessmentItem.assessmentId as string),
-          assessmentService.getStudentAttempts(selectedAssessmentItem.assessmentId as string),
+          assessmentService.getById(
+            selectedAssessmentItem.assessmentId as string,
+          ),
+          assessmentService.getStudentAttempts(
+            selectedAssessmentItem.assessmentId as string,
+          ),
         ]);
         setAssessment(assessmentResponse.data);
         setAssessmentAttempts(attemptsResponse.data || []);
       } catch {
-        toast.error('Failed to load assessment state.');
+        toast.error("Failed to load assessment state.");
       } finally {
         setAssessmentLoading(false);
       }
     };
     void run();
-  }, [classId, moduleId, router, selectedAssessmentId, selectedAssessmentItem?.assessmentId]);
+  }, [
+    classId,
+    moduleId,
+    router,
+    selectedAssessmentId,
+    selectedAssessmentItem?.assessmentId,
+  ]);
 
   useEffect(() => {
     if (!selectedFileItemId || loading || !module) return;
-    if (!selectedFileItem?.fileId || !isPptxFile({
-      fileName: selectedFileItem.file?.originalName,
-      mimeType: selectedFileItem.file?.mimeType,
-      fileKind: selectedFileItem.file?.fileKind,
-      metadata: selectedFileItem.metadata,
-    })) {
-      router.replace(`/dashboard/student/classes/${classId}/modules/${moduleId}`);
+    if (
+      !selectedFileItem?.fileId ||
+      !isPptxFile({
+        fileName: selectedFileItem.file?.originalName,
+        mimeType: selectedFileItem.file?.mimeType,
+        fileKind: selectedFileItem.file?.fileKind,
+        metadata: selectedFileItem.metadata,
+      })
+    ) {
+      router.replace(
+        `/dashboard/student/classes/${classId}/modules/${moduleId}`,
+      );
     }
-  }, [classId, loading, module, moduleId, router, selectedFileItem, selectedFileItemId]);
+  }, [
+    classId,
+    loading,
+    module,
+    moduleId,
+    router,
+    selectedFileItem,
+    selectedFileItemId,
+  ]);
 
   useEffect(() => {
-    if (currentMode !== 'lesson' || lessonCompleted || !checkpointGate.ready) {
+    if (currentMode !== "lesson" || lessonCompleted || !checkpointGate.ready) {
       setBottomReachedAt(null);
       return undefined;
     }
@@ -302,10 +350,10 @@ export default function StudentModuleDetailPage() {
         setBottomReachedAt(Date.now());
       }
     };
-    window.addEventListener('scroll', onScroll);
+    window.addEventListener("scroll", onScroll);
     onScroll();
     return () => {
-      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener("scroll", onScroll);
     };
   }, [bottomReachedAt, checkpointGate.ready, currentMode, lessonCompleted]);
 
@@ -323,27 +371,38 @@ export default function StudentModuleDetailPage() {
   }, [bottomReachedAt, checkpointGate.ready, lessonCompleted]);
 
   const completeLesson = useCallback(async () => {
-    if (!selectedLessonItem?.lessonId || completingLesson || lessonCompleted) return;
+    if (!selectedLessonItem?.lessonId || completingLesson || lessonCompleted)
+      return;
     try {
       setCompletingLesson(true);
-      const response = await lessonService.complete(selectedLessonItem.lessonId);
+      const response = await lessonService.complete(
+        selectedLessonItem.lessonId,
+      );
       setLessonCompleted(Boolean(response.data?.completed));
-      if (typeof response.data?.lessonPoints === 'number' && response.data.lessonPoints > 0) {
+      if (
+        typeof response.data?.lessonPoints === "number" &&
+        response.data.lessonPoints > 0
+      ) {
         toast.success(`Lesson completed. +${response.data.lessonPoints} pts`);
       } else {
-        toast.success('Lesson marked as complete.');
+        toast.success("Lesson marked as complete.");
       }
       await refreshModule();
     } catch {
-      toast.error('Unable to complete lesson.');
+      toast.error("Unable to complete lesson.");
     } finally {
       setCompletingLesson(false);
     }
-  }, [completingLesson, lessonCompleted, refreshModule, selectedLessonItem?.lessonId]);
+  }, [
+    completingLesson,
+    lessonCompleted,
+    refreshModule,
+    selectedLessonItem?.lessonId,
+  ]);
 
   useEffect(() => {
     if (
-      currentMode === 'lesson' &&
+      currentMode === "lesson" &&
       selectedLessonItem?.lessonId &&
       checkpointGate.ready &&
       bottomReachedAt !== null &&
@@ -393,15 +452,15 @@ export default function StudentModuleDetailPage() {
     try {
       const blob = await moduleService.downloadAttachedFile(item.id);
       const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
+      const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = item.file?.originalName || 'attachment';
+      anchor.download = item.file?.originalName || "attachment";
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(url);
     } catch {
-      toast.error('Unable to download attachment.');
+      toast.error("Unable to download attachment.");
     }
   }, []);
 
@@ -425,31 +484,30 @@ export default function StudentModuleDetailPage() {
     [classId, handleDownloadAttachment, moduleId, router],
   );
 
-  const handleCheckpointAnswer = useCallback((
-    blockId: string,
-    selectedChoiceIds: string[],
-    isCorrect: boolean,
-  ) => {
-    setCheckpointSelections((current) => ({
-      ...current,
-      [blockId]: selectedChoiceIds,
-    }));
-    setCheckpointResults((current) => ({
-      ...current,
-      [blockId]: isCorrect,
-    }));
-    if (!isCorrect) {
-      setBottomReachedAt(null);
-    }
-  }, []);
+  const handleCheckpointAnswer = useCallback(
+    (blockId: string, selectedChoiceIds: string[], isCorrect: boolean) => {
+      setCheckpointSelections((current) => ({
+        ...current,
+        [blockId]: selectedChoiceIds,
+      }));
+      setCheckpointResults((current) => ({
+        ...current,
+        [blockId]: isCorrect,
+      }));
+      if (!isCorrect) {
+        setBottomReachedAt(null);
+      }
+    },
+    [],
+  );
 
   const triggerItemAction = useCallback(
     (item: ModuleItem) => {
-      if (item.itemType === 'lesson') {
+      if (item.itemType === "lesson") {
         openLesson(item);
         return;
       }
-      if (item.itemType === 'assessment') {
+      if (item.itemType === "assessment") {
         openAssessment(item);
         return;
       }
@@ -461,8 +519,11 @@ export default function StudentModuleDetailPage() {
   const handleItemCardClick = useCallback(
     (event: ReactMouseEvent<HTMLElement>, item: ModuleItem) => {
       if (!(event.target instanceof Element)) return;
-      const interactiveAncestor = event.target.closest('button, a, [role="button"]');
-      if (interactiveAncestor && interactiveAncestor !== event.currentTarget) return;
+      const interactiveAncestor = event.target.closest(
+        'button, a, [role="button"]',
+      );
+      if (interactiveAncestor && interactiveAncestor !== event.currentTarget)
+        return;
       triggerItemAction(item);
     },
     [triggerItemAction],
@@ -470,9 +531,11 @@ export default function StudentModuleDetailPage() {
 
   const handleItemCardKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLElement>, item: ModuleItem) => {
-      if (event.key !== 'Enter' && event.key !== ' ') return;
+      if (event.key !== "Enter" && event.key !== " ") return;
       if (!(event.target instanceof Element)) return;
-      const interactiveAncestor = event.target.closest('button, a, [role="button"]');
+      const interactiveAncestor = event.target.closest(
+        'button, a, [role="button"]',
+      );
       if (interactiveAncestor && interactiveAncestor !== event.currentTarget) {
         return;
       }
@@ -483,7 +546,8 @@ export default function StudentModuleDetailPage() {
   );
 
   const handleStartAttempt = useCallback(async () => {
-    if (!assessment?.id || startingAttempt || !assessmentAvailability.canStart) return;
+    if (!assessment?.id || startingAttempt || !assessmentAvailability.canStart)
+      return;
     try {
       setStartingAttempt(true);
       const response = await assessmentService.startAttempt(assessment.id);
@@ -499,11 +563,16 @@ export default function StudentModuleDetailPage() {
     } finally {
       setStartingAttempt(false);
     }
-  }, [assessment?.id, assessmentAvailability.canStart, router, startingAttempt]);
+  }, [
+    assessment?.id,
+    assessmentAvailability.canStart,
+    router,
+    startingAttempt,
+  ]);
 
   const loadSelectedDeck = useCallback(async () => {
     if (!selectedFileItem) {
-      throw new Error('Selected module file is unavailable');
+      throw new Error("Selected module file is unavailable");
     }
     return moduleService.downloadAttachedFile(selectedFileItem.id);
   }, [selectedFileItem]);
@@ -520,10 +589,14 @@ export default function StudentModuleDetailPage() {
   }
 
   if (!module || !classItem) {
-    return <p className="text-sm text-[var(--student-text-muted)]">Module not found.</p>;
+    return (
+      <p className="text-sm text-[var(--student-text-muted)]">
+        Module not found.
+      </p>
+    );
   }
 
-  if (currentMode === 'lesson' && !module.isLocked) {
+  if (currentMode === "lesson" && !module.isLocked) {
     return (
       <StudentLessonReaderPanel
         classItem={classItem}
@@ -551,8 +624,12 @@ export default function StudentModuleDetailPage() {
     );
   }
 
-  const lessonCount = flatItems.filter((item) => item.itemType === 'lesson').length;
-  const assessmentCount = flatItems.filter((item) => item.itemType === 'assessment').length;
+  const lessonCount = flatItems.filter(
+    (item) => item.itemType === "lesson",
+  ).length;
+  const assessmentCount = flatItems.filter(
+    (item) => item.itemType === "assessment",
+  ).length;
 
   return (
     <div className="student-module-view">
@@ -562,22 +639,24 @@ export default function StudentModuleDetailPage() {
           className="student-module-view__back"
         >
           <ArrowLeft className="h-4 w-4" />
-          {currentMode === 'overview' ? classItem.subjectName || 'Back to Class' : 'Back'}
+          {currentMode === "overview"
+            ? classItem.subjectName || "Back to Class"
+            : "Back"}
         </Link>
 
         <div className="student-module-view__hero-row">
           <span className="student-module-view__pill">M{module.order}</span>
           <div className="student-module-view__hero-copy">
             <h1>
-              {currentMode === 'lesson'
+              {currentMode === "lesson"
                 ? lesson?.title || module.title
-                : currentMode === 'assessment'
+                : currentMode === "assessment"
                   ? assessment?.title || module.title
-                  : currentMode === 'file'
+                  : currentMode === "file"
                     ? selectedFileItem?.file?.originalName || module.title
-                  : module.title}
+                    : module.title}
             </h1>
-            {currentMode === 'overview' ? (
+            {currentMode === "overview" ? (
               module.description ? (
                 <RichTextRenderer html={module.description} />
               ) : (
@@ -597,7 +676,8 @@ export default function StudentModuleDetailPage() {
               </span>
               <span>
                 <ClipboardCheck className="h-3.5 w-3.5" />
-                {module.requiredCompletedCount ?? 0}/{module.requiredVisibleCount ?? 0} required
+                {module.requiredCompletedCount ?? 0}/
+                {module.requiredVisibleCount ?? 0} required
               </span>
               <span>{module.progressPercent ?? 0}% progress</span>
             </div>
@@ -612,11 +692,14 @@ export default function StudentModuleDetailPage() {
               <Lock className="h-4 w-4" />
               This module is currently locked.
             </p>
-            <p>Overview is available, but lessons and assessments will appear once your teacher unlocks it.</p>
+            <p>
+              Overview is available, but lessons and assessments will appear
+              once your teacher unlocks it.
+            </p>
           </div>
         ) : null}
 
-        {currentMode === 'overview' && !module.isLocked ? (
+        {currentMode === "overview" && !module.isLocked ? (
           module.sections.length === 0 ? (
             <div className="student-module-view__locked">
               No content blocks have been published in this module yet.
@@ -624,29 +707,37 @@ export default function StudentModuleDetailPage() {
           ) : (
             module.sections.map((section) => (
               <div key={section.id}>
-                <p className="student-module-view__section-label">{section.title}</p>
+                <p className="student-module-view__section-label">
+                  {section.title}
+                </p>
                 <div className="space-y-3">
                   {section.items.map((item) => {
-                    const isAssessment = item.itemType === 'assessment';
-                    const isDeck = item.itemType === 'file' && isPptxFile({
-                      fileName: item.file?.originalName,
-                      mimeType: item.file?.mimeType,
-                      fileKind: item.file?.fileKind,
-                      metadata: item.metadata,
-                    });
+                    const isAssessment = item.itemType === "assessment";
+                    const isDeck =
+                      item.itemType === "file" &&
+                      isPptxFile({
+                        fileName: item.file?.originalName,
+                        mimeType: item.file?.mimeType,
+                        fileKind: item.file?.fileKind,
+                        metadata: item.metadata,
+                      });
                     const isDraft =
-                      item.itemType === 'lesson'
+                      item.itemType === "lesson"
                         ? Boolean(item.lesson?.isDraft)
-                        : item.itemType === 'assessment'
+                        : item.itemType === "assessment"
                           ? !item.assessment?.isPublished
                           : false;
                     const title =
-                      item.itemType === 'lesson'
-                        ? item.lesson?.title || 'Untitled lesson'
-                        : item.itemType === 'assessment'
-                          ? item.assessment?.title || 'Untitled assessment'
-                          : item.file?.originalName || 'Attachment';
-                    const Icon = isAssessment ? ScrollText : item.itemType === 'file' ? FileText : BookOpen;
+                      item.itemType === "lesson"
+                        ? item.lesson?.title || "Untitled lesson"
+                        : item.itemType === "assessment"
+                          ? item.assessment?.title || "Untitled assessment"
+                          : item.file?.originalName || "Attachment";
+                    const Icon = isAssessment
+                      ? ScrollText
+                      : item.itemType === "file"
+                        ? FileText
+                        : BookOpen;
                     return (
                       <article
                         key={item.id}
@@ -655,7 +746,9 @@ export default function StudentModuleDetailPage() {
                         role="button"
                         tabIndex={0}
                         onClick={(event) => handleItemCardClick(event, item)}
-                        onKeyDown={(event) => handleItemCardKeyDown(event, item)}
+                        onKeyDown={(event) =>
+                          handleItemCardKeyDown(event, item)
+                        }
                       >
                         <div className="student-module-view__item-main">
                           <span className="student-module-view__item-icon">
@@ -674,24 +767,26 @@ export default function StudentModuleDetailPage() {
                                 </span>
                               ) : null}
                               <span
-                                className={`student-module-view__chip ${isDraft ? 'student-module-view__chip--state-draft' : 'student-module-view__chip--state'}`}
+                                className={`student-module-view__chip ${isDraft ? "student-module-view__chip--state-draft" : "student-module-view__chip--state"}`}
                               >
-                                {isDraft ? 'Draft' : 'Published'}
+                                {isDraft ? "Draft" : "Published"}
                               </span>
                             </div>
-                            <h3 className="student-module-view__item-title">{title}</h3>
+                            <h3 className="student-module-view__item-title">
+                              {title}
+                            </h3>
                             <p className="student-module-view__item-meta">
-                              {item.itemType === 'assessment'
+                              {item.itemType === "assessment"
                                 ? `Due ${formatDate(item.assessment?.dueDate)} - ${item.assessment?.totalPoints ?? 0} pts`
-                                 : item.itemType === 'lesson'
-                                   ? `${item.lessonPoints ?? 0} pts`
-                                   : isDeck
-                                     ? 'PowerPoint deck'
-                                     : item.file?.mimeType || 'Attachment'}
-                             </p>
-                           </div>
-                         </div>
-                        {item.itemType === 'lesson' ? (
+                                : item.itemType === "lesson"
+                                  ? `${item.lessonPoints ?? 0} pts`
+                                  : isDeck
+                                    ? "PowerPoint deck"
+                                    : item.file?.mimeType || "Attachment"}
+                            </p>
+                          </div>
+                        </div>
+                        {item.itemType === "lesson" ? (
                           <button
                             type="button"
                             className="student-module-view__open"
@@ -699,7 +794,7 @@ export default function StudentModuleDetailPage() {
                           >
                             Open
                           </button>
-                        ) : item.itemType === 'assessment' ? (
+                        ) : item.itemType === "assessment" ? (
                           <button
                             type="button"
                             className="student-module-view__open"
@@ -707,16 +802,16 @@ export default function StudentModuleDetailPage() {
                           >
                             Take
                           </button>
-                         ) : (
-                           <button
-                             type="button"
-                             className="student-module-view__open"
-                             onClick={() => openFile(item)}
-                           >
-                             {isDeck ? 'Open' : 'Download'}
-                           </button>
-                         )}
-                       </article>
+                        ) : (
+                          <button
+                            type="button"
+                            className="student-module-view__open"
+                            onClick={() => openFile(item)}
+                          >
+                            {isDeck ? "Open" : "Download"}
+                          </button>
+                        )}
+                      </article>
                     );
                   })}
                 </div>
@@ -725,7 +820,7 @@ export default function StudentModuleDetailPage() {
           )
         ) : null}
 
-        {currentMode === 'assessment' && !module.isLocked ? (
+        {currentMode === "assessment" && !module.isLocked ? (
           <div className="student-module-view__assessment">
             {assessmentLoading ? (
               <>
@@ -745,7 +840,9 @@ export default function StudentModuleDetailPage() {
                 </Button>
 
                 <article className="student-module-view__assessment-card student-module-view__assessment-card--snapshot">
-                  <h2 className="text-lg font-semibold text-[var(--student-text-strong)]">Assessment Snapshot</h2>
+                  <h2 className="text-lg font-semibold text-[var(--student-text-strong)]">
+                    Assessment Snapshot
+                  </h2>
                   <div className="student-module-view__assessment-grid">
                     <article>
                       <span>Questions</span>
@@ -757,7 +854,10 @@ export default function StudentModuleDetailPage() {
                     </article>
                     <article>
                       <span>Attempts</span>
-                      <strong>{submittedAttempts.length}/{assessment?.maxAttempts ?? 1}</strong>
+                      <strong>
+                        {submittedAttempts.length}/
+                        {assessment?.maxAttempts ?? 1}
+                      </strong>
                     </article>
                     <article>
                       <span>Due Date</span>
@@ -765,36 +865,51 @@ export default function StudentModuleDetailPage() {
                     </article>
                   </div>
                   {!assessmentAvailability.canStart ? (
-                    <div className="student-module-view__assessment-warning" role="status" aria-live="polite">
+                    <div
+                      className="student-module-view__assessment-warning"
+                      role="status"
+                      aria-live="polite"
+                    >
                       {assessmentAvailability.blockedReason}
                     </div>
                   ) : null}
                 </article>
 
                 <article className="student-module-view__assessment-card student-module-view__assessment-card--attempts">
-                  <h2 className="text-lg font-semibold text-[var(--student-text-strong)]">Attempts</h2>
+                  <h2 className="text-lg font-semibold text-[var(--student-text-strong)]">
+                    Attempts
+                  </h2>
                   <div className="mt-3 space-y-2">
                     {submittedAttempts.length === 0 ? (
-                      <p className="text-sm text-[var(--student-text-muted)]">No submitted attempts yet.</p>
+                      <p className="text-sm text-[var(--student-text-muted)]">
+                        No submitted attempts yet.
+                      </p>
                     ) : (
                       submittedAttempts.map((attempt) => (
-                        <div key={attempt.id} className="student-module-view__attempt">
+                        <div
+                          key={attempt.id}
+                          className="student-module-view__attempt"
+                        >
                           <div>
                             <p className="font-semibold text-[var(--student-text-strong)]">
                               Attempt {attempt.attemptNumber || 1}
                             </p>
                             <p className="text-xs text-[var(--student-text-muted)]">
-                              {formatDate(attempt.submittedAt || attempt.createdAt)}
+                              {formatDate(
+                                attempt.submittedAt || attempt.createdAt,
+                              )}
                             </p>
                           </div>
                           <div className="student-module-view__attempt-actions">
                             <span className="text-sm font-semibold text-[var(--student-success-text)]">
-                              {typeof attempt.score === 'number' ? `${attempt.score}/${attempt.totalPoints ?? '--'}` : 'Pending'}
+                              {presentAcademicScore(attempt).compactLabel}
                             </span>
                             <button
                               type="button"
                               onClick={() =>
-                                router.push(`/dashboard/student/assessments/${assessment?.id}/results/${attempt.id}`)
+                                router.push(
+                                  `/dashboard/student/assessments/${assessment?.id}/results/${attempt.id}`,
+                                )
                               }
                             >
                               View
@@ -808,20 +923,26 @@ export default function StudentModuleDetailPage() {
                     <button
                       type="button"
                       data-variant="primary"
-                      disabled={startingAttempt || !assessmentAvailability.canStart}
+                      disabled={
+                        startingAttempt || !assessmentAvailability.canStart
+                      }
                       onClick={() => void handleStartAttempt()}
                     >
                       {startingAttempt
-                        ? 'Starting...'
+                        ? "Starting..."
                         : assessmentAvailability.isPastDue
-                          ? 'Closed'
+                          ? "Closed"
                           : assessmentAvailability.hasAttemptsRemaining
-                            ? 'Start New Attempt'
-                            : 'Attempt Limit Reached'}
+                            ? "Start New Attempt"
+                            : "Attempt Limit Reached"}
                     </button>
                     <button
                       type="button"
-                      onClick={() => router.push(`/dashboard/student/assessments/${assessment?.id}`)}
+                      onClick={() =>
+                        router.push(
+                          `/dashboard/student/assessments/${assessment?.id}`,
+                        )
+                      }
                     >
                       Results
                     </button>
@@ -832,7 +953,7 @@ export default function StudentModuleDetailPage() {
           </div>
         ) : null}
 
-        {currentMode === 'file' && selectedFileItem && !module.isLocked ? (
+        {currentMode === "file" && selectedFileItem && !module.isLocked ? (
           <div className="student-module-view__file">
             <Button
               variant="ghost"
@@ -844,8 +965,10 @@ export default function StudentModuleDetailPage() {
               Back to Module
             </Button>
             <PptxDeckViewer
-              title={selectedFileItem.file?.originalName || 'PowerPoint deck'}
-              subtitle={selectedFileItem.file?.mimeType || 'PowerPoint presentation'}
+              title={selectedFileItem.file?.originalName || "PowerPoint deck"}
+              subtitle={
+                selectedFileItem.file?.mimeType || "PowerPoint presentation"
+              }
               loadFile={loadSelectedDeck}
               onDownload={() => handleDownloadAttachment(selectedFileItem)}
             />

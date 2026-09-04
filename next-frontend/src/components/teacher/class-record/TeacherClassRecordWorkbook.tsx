@@ -58,7 +58,12 @@ export function TeacherClassRecordWorkbook({
   const [mode, setMode] = useState<"recorded" | "excused">("recorded");
   const [excuseReason, setExcuseReason] = useState("");
   const [savingCell, setSavingCell] = useState(false);
-  const { spreadsheet: sheet, selectedRecord: record, loadAnnual, loadHistory } = state;
+  const {
+    spreadsheet: sheet,
+    selectedRecord: record,
+    loadAnnual,
+    loadHistory,
+  } = state;
   const canGrade =
     Boolean(sheet?.academicCapabilities?.canGrade) &&
     state.spreadsheetStatus === "ready";
@@ -82,19 +87,15 @@ export function TeacherClassRecordWorkbook({
   useEffect(() => {
     if (tab === "annual") void loadAnnual();
     if (tab === "history") void loadHistory();
-  }, [
-    tab,
-    record?.id,
-    sheet?.classRecord.revision,
-    loadAnnual,
-    loadHistory,
-  ]);
+  }, [tab, record?.id, sheet?.classRecord.revision, loadAnnual, loadHistory]);
   const openCell = (
     item: Cell["item"],
     student: SpreadsheetStudentRow,
     score: number | null,
     status: string,
     reason: string,
+    bonusPoints: number,
+    bonusReason: string,
   ) => {
     if (!canGrade || student.eligibility !== "eligible" || !item.hps) return;
     setCell({ item, student, status, reason });
@@ -103,6 +104,8 @@ export function TeacherClassRecordWorkbook({
     if (!item.assessmentId)
       state.handleCellClick(item.id, student.studentId, score, {
         maxScore: item.hps,
+        bonusPoints,
+        bonusReason,
       });
   };
   const saveCell = async () => {
@@ -146,19 +149,13 @@ export function TeacherClassRecordWorkbook({
     (candidate) => !state.quarters.includes(candidate.gradingPeriod),
   );
   const readinessGroups = Array.from(
-    (state.readiness?.blockers ?? []).reduce(
-      (groups, blocker) => {
-        const key = blocker.studentId ?? "record";
-        const existing = groups.get(key) ?? [];
-        existing.push(blocker);
-        groups.set(key, existing);
-        return groups;
-      },
-      new Map<
-        string,
-        NonNullable<TeacherClassRecordState["readiness"]>["blockers"]
-      >(),
-    ),
+    (state.readiness?.blockers ?? []).reduce((groups, blocker) => {
+      const key = blocker.studentId ?? "record";
+      const existing = groups.get(key) ?? [];
+      existing.push(blocker);
+      groups.set(key, existing);
+      return groups;
+    }, new Map<string, NonNullable<TeacherClassRecordState["readiness"]>["blockers"]>()),
   );
   const recordStatus = record?.status
     ? `${record.status.charAt(0).toUpperCase()}${record.status.slice(1)}`
@@ -215,9 +212,7 @@ export function TeacherClassRecordWorkbook({
               const existing = state.classRecords.find(
                 (candidate) => candidate.gradingPeriod === period,
               );
-              const selected = Boolean(
-                existing && record?.id === existing.id,
-              );
+              const selected = Boolean(existing && record?.id === existing.id);
               return (
                 <button
                   key={period}
@@ -255,7 +250,10 @@ export function TeacherClassRecordWorkbook({
                 >
                   <option value="">Choose a historical record</option>
                   {historicalRecords.map((historicalRecord) => (
-                    <option key={historicalRecord.id} value={historicalRecord.id}>
+                    <option
+                      key={historicalRecord.id}
+                      value={historicalRecord.id}
+                    >
                       {label(historicalRecord.gradingPeriod)}
                     </option>
                   ))}
@@ -264,456 +262,472 @@ export function TeacherClassRecordWorkbook({
             )}
           </div>
         )}
-      {state.spreadsheetStatus === "error" && (
-        <p role="alert" className={styles.alert}>
-          Readiness could not be refreshed. The previous view may be stale;
-          refresh before editing or finalizing.
-        </p>
-      )}
-      {!record ? (
-        <p className={styles.emptyState}>{emptyMessage}</p>
-      ) : !sheet ? (
-        <p role="status" className={styles.loadingState}>
-          Loading period evidence…
-        </p>
-      ) : (
-        <>
-          <div className={styles.statusPanel}>
-            <div className={styles.statusCopy}>
-              <p>
-              {sheet.academicCapabilities?.readOnlyReason ??
-                (!canGrade && canPrepare
-                  ? "Future draft: preparation is allowed; scores and finalization wait until this period is active."
-                  : "Blank scores are missing. Enter zero explicitly; exemptions require a reason.")}
-              </p>
-              {!sheet.classRecord.rosterConfirmedAt && (
-                <p data-status="warning">
-                  Period eligibility is unconfirmed. Current enrollment does not
-                  establish earlier-period eligibility.
+        {state.spreadsheetStatus === "error" && (
+          <p role="alert" className={styles.alert}>
+            Readiness could not be refreshed. The previous view may be stale;
+            refresh before editing or finalizing.
+          </p>
+        )}
+        {!record ? (
+          <p className={styles.emptyState}>{emptyMessage}</p>
+        ) : !sheet ? (
+          <p role="status" className={styles.loadingState}>
+            Loading period evidence…
+          </p>
+        ) : (
+          <>
+            <div className={styles.statusPanel}>
+              <div className={styles.statusCopy}>
+                <p>
+                  {sheet.academicCapabilities?.readOnlyReason ??
+                    (!canGrade && canPrepare
+                      ? "Future draft: preparation is allowed; scores and finalization wait until this period is active."
+                      : "Blank scores are missing. Enter zero explicitly; exemptions require a reason.")}
                 </p>
-              )}
-            </div>
-            <div className={styles.statusActions}>
-              <Button
-                disabled={
-                  !canGrade ||
-                  !state.readiness?.ready ||
-                  state.finalizing ||
-                  state.spreadsheetStatus !== "ready"
-                }
-                onClick={() => setDialog("finalize")}
-              >
-                Finalize {label(record.gradingPeriod)}
-              </Button>
-              {sheet.canReopen && (
-                <Button
-                  variant="outline"
-                  disabled={state.reopening}
-                  onClick={() => {
-                    setCorrectionReason("");
-                    setDialog("reopen");
-                  }}
-                >
-                  Reopen with reason
-                </Button>
-              )}
-              {!state.readiness?.ready && (
-                <Button variant="outline" onClick={() => setTab("readiness")}>
-                  Review {state.readiness?.blockers.length ?? 0} blockers
-                </Button>
-              )}
-            </div>
-          </div>
-          <div
-            className={styles.tabs}
-            role="tablist"
-            aria-label="Academic evidence"
-          >
-            {tabs.map(({ key, label: tabLabel }) => (
-              <button
-                key={key}
-                type="button"
-                role="tab"
-                aria-selected={tab === key}
-                aria-controls={`class-record-panel-${key}`}
-                id={`class-record-tab-${key}`}
-                className={styles.tab}
-                onClick={() => setTab(key)}
-              >
-                {tabLabel}
-                {key === "readiness" &&
-                  Boolean(state.readiness?.blockers.length) && (
-                    <span className={styles.tabCount}>
-                      ({state.readiness?.blockers.length})
-                    </span>
-                  )}
-              </button>
-            ))}
-          </div>
-          {tab === "scores" && (
-            <div
-              role="tabpanel"
-              id="class-record-panel-scores"
-              aria-labelledby="class-record-tab-scores"
-              className={styles.panel}
-            >
-              {state.policy?.examComponents.length ? (
-                <p className={styles.panelIntro}>
-                  Examination components:{" "}
-                  {state.policy.examComponents
-                    .map((c) => `${c.key} ${c.weight}%`)
-                    .join(" · ")}
-                  . The examination PS uses these component weights.
-                </p>
-              ) : null}
-              <TeacherClassRecordGradeGrid
-                key={sheet.classRecord.id}
-                state={state}
-                sheet={sheet}
-                canGrade={canGrade}
-                canPrepare={canPrepare}
-                onOpenCell={({ item, student, score, status, reason }) =>
-                  openCell(item, student, score, status, reason)
-                }
-              />
-            </div>
-          )}
-          {tab === "roster" && (
-            <form
-              role="tabpanel"
-              id="class-record-panel-roster"
-              aria-labelledby="class-record-tab-roster"
-              className={styles.panel}
-              onSubmit={async (e) => {
-                e.preventDefault();
-                const saved = await state.confirmRoster({
-                  reason: rosterReason,
-                  participants: (state.roster?.participants ?? []).map(
-                    (person) => ({
-                      studentId: person.studentId,
-                      eligibility: decisions[person.studentId]
-                        .eligibility as PeriodEligibility,
-                      reason: decisions[person.studentId].reason || undefined,
-                    }),
-                  ),
-                });
-                if (saved) setRosterReason("");
-              }}
-            >
-              <p className={styles.panelIntro}>
-                Confirm each learner’s actual eligibility for{" "}
-                {label(record.gradingPeriod)}. Past scores and membership remain
-                in history when a learner is excluded.
-              </p>
-              <div className={styles.tableShell}>
-                <table className={styles.secondaryTable}>
-                  <thead>
-                    <tr>
-                      <th className="p-3">Learner</th>
-                      <th className="p-3">Period eligibility</th>
-                      <th className="p-3">Exclusion evidence</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {state.roster?.participants.map((person) => (
-                      <tr key={person.studentId}>
-                        <th
-                          scope="row"
-                          className={styles.secondaryNameCell}
-                          data-surname-band={getSurnameBand(
-                            person.lastName ?? "",
-                          )}
-                        >
-                          <span className={styles.annualLearner}>
-                            <span
-                              className={styles.surnameBadge}
-                              aria-hidden="true"
-                            >
-                              {getSurnameInitial(person.lastName)}
-                            </span>
-                            <span className={styles.learnerIdentity}>
-                              <span>
-                                <strong>{person.lastName ?? "Unknown"}</strong>,{" "}
-                                {person.firstName ?? "Unknown"}
-                              </span>
-                              <small>
-                                {person.currentlyEnrolled
-                                  ? "Currently enrolled"
-                                  : "Not currently enrolled"}
-                              </small>
-                            </span>
-                          </span>
-                        </th>
-                        <td className="p-3">
-                          <select
-                            aria-label={`Eligibility for ${person.firstName} ${person.lastName}`}
-                            required
-                            disabled={!canPrepare}
-                            className={styles.eligibilitySelect}
-                            data-eligibility-status={
-                              decisions[person.studentId]?.eligibility ||
-                              "unconfirmed"
-                            }
-                            value={
-                              decisions[person.studentId]?.eligibility ?? ""
-                            }
-                            onChange={(e) =>
-                              setDecisions((previous) => ({
-                                ...previous,
-                                [person.studentId]: {
-                                  ...previous[person.studentId],
-                                  eligibility: e.target
-                                    .value as PeriodEligibility,
-                                },
-                              }))
-                            }
-                          >
-                            <option value="">Choose explicitly</option>
-                            <option value="eligible">Eligible</option>
-                            <option value="not_enrolled">
-                              Not enrolled in period
-                            </option>
-                            <option value="transferred">Transferred</option>
-                            <option value="withdrawn">Withdrawn</option>
-                          </select>
-                        </td>
-                        <td className="p-3">
-                          <Input
-                            aria-label={`Eligibility reason for ${person.firstName} ${person.lastName}`}
-                            disabled={!canPrepare}
-                            required={Boolean(
-                              decisions[person.studentId]?.eligibility &&
-                              decisions[person.studentId].eligibility !==
-                                "eligible",
-                            )}
-                            value={decisions[person.studentId]?.reason ?? ""}
-                            onChange={(e) =>
-                              setDecisions((previous) => ({
-                                ...previous,
-                                [person.studentId]: {
-                                  ...previous[person.studentId],
-                                  reason: e.target.value,
-                                },
-                              }))
-                            }
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <Label htmlFor="roster-confirmation-reason">
-                Register confirmation reason
-              </Label>
-              <Input
-                id="roster-confirmation-reason"
-                required
-                minLength={3}
-                value={rosterReason}
-                onChange={(e) => setRosterReason(e.target.value)}
-                disabled={!canPrepare}
-              />
-              <Button
-                type="submit"
-                disabled={
-                  !canPrepare ||
-                  !state.roster ||
-                  state.savingRoster ||
-                  !rosterReason.trim() ||
-                  state.roster.participants.some(
-                    (person) => !decisions[person.studentId]?.eligibility,
-                  )
-                }
-              >
-                Confirm period eligibility
-              </Button>
-            </form>
-          )}
-          {tab === "readiness" && (
-            <div
-              role="tabpanel"
-              id="class-record-panel-readiness"
-              aria-labelledby="class-record-tab-readiness"
-              className={styles.panel}
-            >
-              <p
-                className={
-                  state.readiness?.ready
-                    ? styles.readyMessage
-                    : styles.panelIntro
-                }
-              >
-                {state.readiness?.ready
-                  ? "All finalization checks pass."
-                  : "Resolve every blocker before finalizing. No missing score is converted to zero."}
-              </p>
-              <Button
-                variant="outline"
-                onClick={() => void state.refreshEvidence()}
-              >
-                Refresh readiness
-              </Button>
-              <div className={styles.blockerGroups}>
-                {readinessGroups.map(([groupKey, blockers]) => (
-                  <section className={styles.blockerGroup} key={groupKey}>
-                    <h3>
-                      {groupKey === "record"
-                        ? "Record checks"
-                        : learnerName(groupKey)}
-                    </h3>
-                    <ul className={styles.blockerList}>
-                      {blockers.map((blocker, index) => (
-                        <li
-                          key={`${blocker.code}-${index}`}
-                          className={styles.blocker}
-                        >
-                          {blocker.message}
-                          {blocker.itemId && (
-                            <small>
-                              Assessment:{" "}
-                              {sheet.categories
-                                .flatMap((category) => category.items)
-                                .find((item) => item.id === blocker.itemId)
-                                ?.title ?? blocker.itemId}
-                            </small>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                ))}
-              </div>
-            </div>
-          )}
-          {tab === "annual" && (
-            <div
-              role="tabpanel"
-              id="class-record-panel-annual"
-              aria-labelledby="class-record-tab-annual"
-              className={styles.panel}
-            >
-              {state.annualSummary ? (
-                <AcademicAnnualSummary
-                  summary={state.annualSummary}
-                  refresh={state.loadAnnual}
-                />
-              ) : (
-                <div className={styles.panel}>
-                  <p className={styles.panelIntro}>
-                    Annual evidence is not loaded.
+                {!sheet.classRecord.rosterConfirmedAt && (
+                  <p data-status="warning">
+                    Period eligibility is unconfirmed. Current enrollment does
+                    not establish earlier-period eligibility.
                   </p>
+                )}
+              </div>
+              <div className={styles.statusActions}>
+                <Button
+                  disabled={
+                    !canGrade ||
+                    !state.readiness?.ready ||
+                    state.finalizing ||
+                    state.spreadsheetStatus !== "ready"
+                  }
+                  onClick={() => setDialog("finalize")}
+                >
+                  Finalize {label(record.gradingPeriod)}
+                </Button>
+                {sheet.canReopen && (
                   <Button
                     variant="outline"
-                    onClick={() => void loadAnnual()}
+                    disabled={state.reopening}
+                    onClick={() => {
+                      setCorrectionReason("");
+                      setDialog("reopen");
+                    }}
                   >
-                    Load annual evidence
+                    Reopen with reason
                   </Button>
-                </div>
-              )}
+                )}
+                {!state.readiness?.ready && (
+                  <Button variant="outline" onClick={() => setTab("readiness")}>
+                    Review {state.readiness?.blockers.length ?? 0} blockers
+                  </Button>
+                )}
+              </div>
             </div>
-          )}
-          {tab === "history" && (
             <div
-              role="tabpanel"
-              id="class-record-panel-history"
-              aria-labelledby="class-record-tab-history"
-              className={styles.panel}
+              className={styles.tabs}
+              role="tablist"
+              aria-label="Academic evidence"
             >
-              <Button
-                variant="outline"
-                onClick={() => void loadHistory()}
-              >
-                Refresh history
-              </Button>
-              {state.history && (
-                <>
-                  <div className={styles.tableShell}>
-                    <table className={styles.secondaryTable}>
-                      <thead>
-                        <tr>
-                          <th>Learner</th>
-                          <th>Revision</th>
-                          <th>Grade</th>
-                          <th>Evidence</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {state.history.revisions.map((version) => {
-                          const participant = state.roster?.participants.find(
-                            (person) => person.studentId === version.studentId,
-                          );
-                          return (
-                            <tr key={version.id}>
-                              <th
-                                scope="row"
-                                className={styles.secondaryNameCell}
-                                data-surname-band={getSurnameBand(
-                                  participant?.lastName ?? "",
-                                )}
-                              >
-                                <span className={styles.annualLearner}>
-                                  <span
-                                    className={styles.surnameBadge}
-                                    aria-hidden="true"
-                                  >
-                                    {getSurnameInitial(participant?.lastName)}
-                                  </span>
-                                  <span className={styles.learnerIdentity}>
-                                    <span>
-                                      {learnerName(version.studentId)}
-                                    </span>
-                                    <small>Recorded learner</small>
-                                  </span>
-                                </span>
-                              </th>
-                              <td>
-                                {version.revision} ·{" "}
-                                {version.isCurrent ? "current" : "superseded"}
-                              </td>
-                              <td>{version.grade}</td>
-                              <td>
-                                <span className={styles.evidenceId}>
-                                  {version.id}
-                                </span>
-                                {new Date(version.computedAt).toLocaleString()}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                  {state.history.legacyEvidence.map((legacy) => (
-                    <details
-                      key={legacy.id}
-                      className={styles.historyEvidence}
-                    >
-                      <summary>
-                        Unverified legacy evidence ·{" "}
-                        {learnerName(legacy.studentId)} · {legacy.period}
-                      </summary>
-                      <p>
-                        This preserved snapshot is not a trusted annual source.
-                      </p>
-                      <pre>
-                        {JSON.stringify(legacy.sourceSnapshot, null, 2)}
-                      </pre>
-                    </details>
-                  ))}
-                  {!state.history.revisions.length &&
-                    !state.history.legacyEvidence.length && (
-                      <p className={styles.panelIntro}>
-                        No finalized grade revisions or archived legacy
-                        evidence.
-                      </p>
+              {tabs.map(({ key, label: tabLabel }) => (
+                <button
+                  key={key}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === key}
+                  aria-controls={`class-record-panel-${key}`}
+                  id={`class-record-tab-${key}`}
+                  className={styles.tab}
+                  onClick={() => setTab(key)}
+                >
+                  {tabLabel}
+                  {key === "readiness" &&
+                    Boolean(state.readiness?.blockers.length) && (
+                      <span className={styles.tabCount}>
+                        ({state.readiness?.blockers.length})
+                      </span>
                     )}
-                </>
-              )}
+                </button>
+              ))}
             </div>
-          )}
-        </>
-      )}
+            {tab === "scores" && (
+              <div
+                role="tabpanel"
+                id="class-record-panel-scores"
+                aria-labelledby="class-record-tab-scores"
+                className={styles.panel}
+              >
+                {state.policy?.examComponents.length ? (
+                  <p className={styles.panelIntro}>
+                    Examination components:{" "}
+                    {state.policy.examComponents
+                      .map((c) => `${c.key} ${c.weight}%`)
+                      .join(" · ")}
+                    . The examination PS uses these component weights.
+                  </p>
+                ) : null}
+                <TeacherClassRecordGradeGrid
+                  key={sheet.classRecord.id}
+                  state={state}
+                  sheet={sheet}
+                  canGrade={canGrade}
+                  canPrepare={canPrepare}
+                  onOpenCell={({
+                    item,
+                    student,
+                    score,
+                    status,
+                    reason,
+                    bonusPoints,
+                    bonusReason,
+                  }) =>
+                    openCell(
+                      item,
+                      student,
+                      score,
+                      status,
+                      reason,
+                      bonusPoints,
+                      bonusReason,
+                    )
+                  }
+                />
+              </div>
+            )}
+            {tab === "roster" && (
+              <form
+                role="tabpanel"
+                id="class-record-panel-roster"
+                aria-labelledby="class-record-tab-roster"
+                className={styles.panel}
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  const saved = await state.confirmRoster({
+                    reason: rosterReason,
+                    participants: (state.roster?.participants ?? []).map(
+                      (person) => ({
+                        studentId: person.studentId,
+                        eligibility: decisions[person.studentId]
+                          .eligibility as PeriodEligibility,
+                        reason: decisions[person.studentId].reason || undefined,
+                      }),
+                    ),
+                  });
+                  if (saved) setRosterReason("");
+                }}
+              >
+                <p className={styles.panelIntro}>
+                  Confirm each learner’s actual eligibility for{" "}
+                  {label(record.gradingPeriod)}. Past scores and membership
+                  remain in history when a learner is excluded.
+                </p>
+                <div className={styles.tableShell}>
+                  <table className={styles.secondaryTable}>
+                    <thead>
+                      <tr>
+                        <th className="p-3">Learner</th>
+                        <th className="p-3">Period eligibility</th>
+                        <th className="p-3">Exclusion evidence</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {state.roster?.participants.map((person) => (
+                        <tr key={person.studentId}>
+                          <th
+                            scope="row"
+                            className={styles.secondaryNameCell}
+                            data-surname-band={getSurnameBand(
+                              person.lastName ?? "",
+                            )}
+                          >
+                            <span className={styles.annualLearner}>
+                              <span
+                                className={styles.surnameBadge}
+                                aria-hidden="true"
+                              >
+                                {getSurnameInitial(person.lastName)}
+                              </span>
+                              <span className={styles.learnerIdentity}>
+                                <span>
+                                  <strong>
+                                    {person.lastName ?? "Unknown"}
+                                  </strong>
+                                  , {person.firstName ?? "Unknown"}
+                                </span>
+                                <small>
+                                  {person.currentlyEnrolled
+                                    ? "Currently enrolled"
+                                    : "Not currently enrolled"}
+                                </small>
+                              </span>
+                            </span>
+                          </th>
+                          <td className="p-3">
+                            <select
+                              aria-label={`Eligibility for ${person.firstName} ${person.lastName}`}
+                              required
+                              disabled={!canPrepare}
+                              className={styles.eligibilitySelect}
+                              data-eligibility-status={
+                                decisions[person.studentId]?.eligibility ||
+                                "unconfirmed"
+                              }
+                              value={
+                                decisions[person.studentId]?.eligibility ?? ""
+                              }
+                              onChange={(e) =>
+                                setDecisions((previous) => ({
+                                  ...previous,
+                                  [person.studentId]: {
+                                    ...previous[person.studentId],
+                                    eligibility: e.target
+                                      .value as PeriodEligibility,
+                                  },
+                                }))
+                              }
+                            >
+                              <option value="">Choose explicitly</option>
+                              <option value="eligible">Eligible</option>
+                              <option value="not_enrolled">
+                                Not enrolled in period
+                              </option>
+                              <option value="transferred">Transferred</option>
+                              <option value="withdrawn">Withdrawn</option>
+                            </select>
+                          </td>
+                          <td className="p-3">
+                            <Input
+                              aria-label={`Eligibility reason for ${person.firstName} ${person.lastName}`}
+                              disabled={!canPrepare}
+                              required={Boolean(
+                                decisions[person.studentId]?.eligibility &&
+                                decisions[person.studentId].eligibility !==
+                                  "eligible",
+                              )}
+                              value={decisions[person.studentId]?.reason ?? ""}
+                              onChange={(e) =>
+                                setDecisions((previous) => ({
+                                  ...previous,
+                                  [person.studentId]: {
+                                    ...previous[person.studentId],
+                                    reason: e.target.value,
+                                  },
+                                }))
+                              }
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <Label htmlFor="roster-confirmation-reason">
+                  Register confirmation reason
+                </Label>
+                <Input
+                  id="roster-confirmation-reason"
+                  required
+                  minLength={3}
+                  value={rosterReason}
+                  onChange={(e) => setRosterReason(e.target.value)}
+                  disabled={!canPrepare}
+                />
+                <Button
+                  type="submit"
+                  disabled={
+                    !canPrepare ||
+                    !state.roster ||
+                    state.savingRoster ||
+                    !rosterReason.trim() ||
+                    state.roster.participants.some(
+                      (person) => !decisions[person.studentId]?.eligibility,
+                    )
+                  }
+                >
+                  Confirm period eligibility
+                </Button>
+              </form>
+            )}
+            {tab === "readiness" && (
+              <div
+                role="tabpanel"
+                id="class-record-panel-readiness"
+                aria-labelledby="class-record-tab-readiness"
+                className={styles.panel}
+              >
+                <p
+                  className={
+                    state.readiness?.ready
+                      ? styles.readyMessage
+                      : styles.panelIntro
+                  }
+                >
+                  {state.readiness?.ready
+                    ? "All finalization checks pass."
+                    : "Resolve every blocker before finalizing. No missing score is converted to zero."}
+                </p>
+                <Button
+                  variant="outline"
+                  onClick={() => void state.refreshEvidence()}
+                >
+                  Refresh readiness
+                </Button>
+                <div className={styles.blockerGroups}>
+                  {readinessGroups.map(([groupKey, blockers]) => (
+                    <section className={styles.blockerGroup} key={groupKey}>
+                      <h3>
+                        {groupKey === "record"
+                          ? "Record checks"
+                          : learnerName(groupKey)}
+                      </h3>
+                      <ul className={styles.blockerList}>
+                        {blockers.map((blocker, index) => (
+                          <li
+                            key={`${blocker.code}-${index}`}
+                            className={styles.blocker}
+                          >
+                            {blocker.message}
+                            {blocker.itemId && (
+                              <small>
+                                Assessment:{" "}
+                                {sheet.categories
+                                  .flatMap((category) => category.items)
+                                  .find((item) => item.id === blocker.itemId)
+                                  ?.title ?? blocker.itemId}
+                              </small>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
+                  ))}
+                </div>
+              </div>
+            )}
+            {tab === "annual" && (
+              <div
+                role="tabpanel"
+                id="class-record-panel-annual"
+                aria-labelledby="class-record-tab-annual"
+                className={styles.panel}
+              >
+                {state.annualSummary ? (
+                  <AcademicAnnualSummary
+                    summary={state.annualSummary}
+                    refresh={state.loadAnnual}
+                  />
+                ) : (
+                  <div className={styles.panel}>
+                    <p className={styles.panelIntro}>
+                      Annual evidence is not loaded.
+                    </p>
+                    <Button variant="outline" onClick={() => void loadAnnual()}>
+                      Load annual evidence
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+            {tab === "history" && (
+              <div
+                role="tabpanel"
+                id="class-record-panel-history"
+                aria-labelledby="class-record-tab-history"
+                className={styles.panel}
+              >
+                <Button variant="outline" onClick={() => void loadHistory()}>
+                  Refresh history
+                </Button>
+                {state.history && (
+                  <>
+                    <div className={styles.tableShell}>
+                      <table className={styles.secondaryTable}>
+                        <thead>
+                          <tr>
+                            <th>Learner</th>
+                            <th>Revision</th>
+                            <th>Grade</th>
+                            <th>Evidence</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {state.history.revisions.map((version) => {
+                            const participant = state.roster?.participants.find(
+                              (person) =>
+                                person.studentId === version.studentId,
+                            );
+                            return (
+                              <tr key={version.id}>
+                                <th
+                                  scope="row"
+                                  className={styles.secondaryNameCell}
+                                  data-surname-band={getSurnameBand(
+                                    participant?.lastName ?? "",
+                                  )}
+                                >
+                                  <span className={styles.annualLearner}>
+                                    <span
+                                      className={styles.surnameBadge}
+                                      aria-hidden="true"
+                                    >
+                                      {getSurnameInitial(participant?.lastName)}
+                                    </span>
+                                    <span className={styles.learnerIdentity}>
+                                      <span>
+                                        {learnerName(version.studentId)}
+                                      </span>
+                                      <small>Recorded learner</small>
+                                    </span>
+                                  </span>
+                                </th>
+                                <td>
+                                  {version.revision} ·{" "}
+                                  {version.isCurrent ? "current" : "superseded"}
+                                </td>
+                                <td>{version.grade}</td>
+                                <td>
+                                  <span className={styles.evidenceId}>
+                                    {version.id}
+                                  </span>
+                                  {new Date(
+                                    version.computedAt,
+                                  ).toLocaleString()}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    {state.history.legacyEvidence.map((legacy) => (
+                      <details
+                        key={legacy.id}
+                        className={styles.historyEvidence}
+                      >
+                        <summary>
+                          Unverified legacy evidence ·{" "}
+                          {learnerName(legacy.studentId)} · {legacy.period}
+                        </summary>
+                        <p>
+                          This preserved snapshot is not a trusted annual
+                          source.
+                        </p>
+                        <pre>
+                          {JSON.stringify(legacy.sourceSnapshot, null, 2)}
+                        </pre>
+                      </details>
+                    ))}
+                    {!state.history.revisions.length &&
+                      !state.history.legacyEvidence.length && (
+                        <p className={styles.panelIntro}>
+                          No finalized grade revisions or archived legacy
+                          evidence.
+                        </p>
+                      )}
+                  </>
+                )}
+              </div>
+            )}
+          </>
+        )}
       </div>
       <Dialog
         open={dialog !== null}
@@ -840,6 +854,30 @@ export function TeacherClassRecordWorkbook({
                 value={state.editValue}
                 onChange={(e) => state.setEditValue(e.target.value)}
               />
+              <Label htmlFor="manual-bonus">Bonus points</Label>
+              <Input
+                id="manual-bonus"
+                type="number"
+                min={0}
+                step="0.01"
+                value={state.editBonusPoints}
+                onChange={(e) => state.setEditBonusPoints(e.target.value)}
+              />
+              {Number(state.editBonusPoints || 0) > 0 ? (
+                <>
+                  <Label htmlFor="manual-bonus-reason">Bonus reason</Label>
+                  <Input
+                    id="manual-bonus-reason"
+                    value={state.editBonusReason}
+                    onChange={(e) => state.setEditBonusReason(e.target.value)}
+                    placeholder="Example: corrected scoring key"
+                  />
+                  <p className="text-sm text-amber-700">
+                    The adjustment is preserved, but this item can contribute no
+                    more than its highest possible score.
+                  </p>
+                </>
+              ) : null}
             </>
           )}
           {mode === "recorded" &&
@@ -889,7 +927,9 @@ export function TeacherClassRecordWorkbook({
                   savingCell ||
                   (mode === "excused" || cell?.item.assessmentId
                     ? !excuseReason.trim()
-                    : !state.editValue.trim())
+                    : !state.editValue.trim() ||
+                      (Number(state.editBonusPoints || 0) > 0 &&
+                        !state.editBonusReason.trim()))
                 }
                 onClick={() => void saveCell()}
               >

@@ -71,7 +71,13 @@ jest.mock("react-native", () => {
     KeyboardAvoidingView: component("KeyboardAvoidingView"),
     ScrollView: component("ScrollView"),
     FlatList: ReactRuntime.forwardRef(function MockFlatList(
-      { data = [], renderItem, ListEmptyComponent, ListFooterComponent, ...props }: Record<string, unknown>,
+      {
+        data = [],
+        renderItem,
+        ListEmptyComponent,
+        ListFooterComponent,
+        ...props
+      }: Record<string, unknown>,
       ref,
     ) {
       ReactRuntime.useImperativeHandle(ref, () => ({ scrollToEnd: jest.fn() }));
@@ -89,11 +95,13 @@ jest.mock("react-native", () => {
         "FlatList",
         props,
         data.length
-          ? data.map((item: unknown, index: number) => ReactRuntime.createElement(
-              ReactRuntime.Fragment,
-              { key: props.keyExtractor?.(item, index) ?? index },
-              renderItem({ item, index }),
-            ))
+          ? data.map((item: unknown, index: number) =>
+              ReactRuntime.createElement(
+                ReactRuntime.Fragment,
+                { key: props.keyExtractor?.(item, index) ?? index },
+                renderItem({ item, index }),
+              ),
+            )
           : empty,
         footer,
       );
@@ -114,7 +122,8 @@ jest.mock("react-native", () => {
     },
     Platform: {
       OS: "ios",
-      select: (options: Record<string, unknown>) => options.ios ?? options.default,
+      select: (options: Record<string, unknown>) =>
+        options.ios ?? options.default,
     },
     useWindowDimensions: () => ({ width: 390, height: 844 }),
     Animated: {
@@ -135,10 +144,16 @@ jest.mock("@expo/vector-icons", () => {
 });
 
 jest.mock("expo-image-picker", () => ({
-  launchImageLibraryAsync: jest.fn().mockResolvedValue({ canceled: true, assets: [] }),
-  launchCameraAsync: jest.fn().mockResolvedValue({ canceled: true, assets: [] }),
+  launchImageLibraryAsync: jest
+    .fn()
+    .mockResolvedValue({ canceled: true, assets: [] }),
+  launchCameraAsync: jest
+    .fn()
+    .mockResolvedValue({ canceled: true, assets: [] }),
   requestCameraPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
-  requestMediaLibraryPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
+  requestMediaLibraryPermissionsAsync: jest
+    .fn()
+    .mockResolvedValue({ granted: true }),
   MediaTypeOptions: { Images: "Images" },
 }));
 
@@ -168,7 +183,9 @@ jest.mock("expo-file-system/legacy", () => ({
       "content-disposition": 'inline; filename="downloaded.pdf"',
     },
   }),
-  getContentUriAsync: jest.fn().mockResolvedValue("file:///documents/downloaded.pdf"),
+  getContentUriAsync: jest
+    .fn()
+    .mockResolvedValue("file:///documents/downloaded.pdf"),
   readAsStringAsync: jest.fn().mockResolvedValue(""),
   writeAsStringAsync: jest.fn().mockResolvedValue(undefined),
 }));
@@ -237,13 +254,21 @@ jest.mock("../../components/ui/primitives", () => {
       ),
     FloatingIconButton: component("FloatingIconButton"),
     Pill: ({ label }: { label: string }) =>
-      ReactRuntime.createElement("Pill", null, ReactRuntime.createElement(Text, null, label)),
+      ReactRuntime.createElement(
+        "Pill",
+        null,
+        ReactRuntime.createElement(Text, null, label),
+      ),
     ProgressBar: component("ProgressBar"),
     Refreshable: component("Refreshable"),
     SearchField: component("SearchField"),
     ScreenScroll: component("ScreenScroll"),
     SectionTitle: ({ title }: { title: string }) =>
-      ReactRuntime.createElement("SectionTitle", null, ReactRuntime.createElement(Text, null, title)),
+      ReactRuntime.createElement(
+        "SectionTitle",
+        null,
+        ReactRuntime.createElement(Text, null, title),
+      ),
     SimpleBarChart: component("SimpleBarChart"),
     StatCard: ({ value, label }: { value: string | number; label: string }) =>
       ReactRuntime.createElement(
@@ -339,7 +364,9 @@ jest.mock("../../api/services/assessments", () => ({
     openTeacherAttachment: jest.fn().mockResolvedValue(undefined),
     downloadTeacherAttachment: jest.fn().mockResolvedValue(undefined),
     openAttemptSubmissionAttachmentFile: jest.fn().mockResolvedValue(undefined),
-    downloadAttemptSubmissionAttachmentFile: jest.fn().mockResolvedValue(undefined),
+    downloadAttemptSubmissionAttachmentFile: jest
+      .fn()
+      .mockResolvedValue(undefined),
   },
 }));
 
@@ -353,7 +380,9 @@ jest.mock("../../api/services/modules", () => ({
 
 jest.mock("../../api/services/discussion-board", () => ({
   discussionBoardApi: {
-    uploadCommentImage: jest.fn().mockResolvedValue({ id: "discussion-upload-1" }),
+    uploadCommentImage: jest
+      .fn()
+      .mockResolvedValue({ id: "discussion-upload-1" }),
     openAttachment: jest.fn().mockResolvedValue(undefined),
     downloadAttachment: jest.fn().mockResolvedValue(undefined),
   },
@@ -376,9 +405,15 @@ jest.mock("../../api/hooks", () => ({
     classModules: (classId: string) => ["class-modules", classId],
     lessons: (classId: string) => ["lessons", classId],
     lessonCompletions: (classId: string) => ["lesson-completions", classId],
-    lessonCompletionStatus: (lessonId: string) => ["lesson-completion-status", lessonId],
+    lessonCompletionStatus: (lessonId: string) => [
+      "lesson-completion-status",
+      lessonId,
+    ],
     assessments: (classId: string) => ["assessments", classId],
-    assessmentAttempts: (assessmentId: string) => ["assessment-attempts", assessmentId],
+    assessmentAttempts: (assessmentId: string) => [
+      "assessment-attempts",
+      assessmentId,
+    ],
     announcements: (classId: string) => ["announcements", classId],
   },
   useStudentClasses: jest.fn(),
@@ -422,10 +457,20 @@ jest.mock("../../data/mappers", () => ({
   findContinueLearning: jest.fn(
     (
       subjects: Array<{ id: string; name: string }>,
-      lessonMap: Record<string, Array<{ id: string; title: string; description: string; duration: string }>>,
+      lessonMap: Record<
+        string,
+        Array<{
+          id: string;
+          title: string;
+          description: string;
+          duration: string;
+        }>
+      >,
     ) =>
       subjects.flatMap((subject) =>
-        (lessonMap[subject.id] ?? []).slice(0, 1).map((lesson) => ({ lesson, subject })),
+        (lessonMap[subject.id] ?? [])
+          .slice(0, 1)
+          .map((lesson) => ({ lesson, subject })),
       ),
   ),
   toLessonCards: jest.fn(() => [
@@ -437,15 +482,20 @@ jest.mock("../../data/mappers", () => ({
       status: "ongoing",
     },
   ]),
-  toAnnouncementPreview: jest.fn((announcement: { id: string; title?: string; content?: string }, subject: { name: string }) => ({
-    id: announcement.id,
-    title: announcement.title || "Announcement",
-    content: announcement.content || "Announcement content",
-    subject: subject.name,
-    createdAt: "Today",
-    isPinned: false,
-    emoji: "!",
-  })),
+  toAnnouncementPreview: jest.fn(
+    (
+      announcement: { id: string; title?: string; content?: string },
+      subject: { name: string },
+    ) => ({
+      id: announcement.id,
+      title: announcement.title || "Announcement",
+      content: announcement.content || "Announcement content",
+      subject: subject.name,
+      createdAt: "Today",
+      isPinned: false,
+      emoji: "!",
+    }),
+  ),
   toTutorRecommendationCards: jest.fn(() => [
     {
       id: "checkpoint-1",
@@ -506,7 +556,10 @@ type QueryState<T> = {
   refetch: jest.Mock<Promise<unknown>>;
 };
 
-function createQueryState<T>(data: T, overrides?: Partial<QueryState<T>>): QueryState<T> {
+function createQueryState<T>(
+  data: T,
+  overrides?: Partial<QueryState<T>>,
+): QueryState<T> {
   return {
     data,
     error: null,
@@ -526,15 +579,25 @@ function flattenText(node: TestRenderer.ReactTestInstance): string {
     .join("");
 }
 
-function findPressableByText(root: TestRenderer.ReactTestInstance, text: string) {
-  return root.find((node) => node.type === "Pressable" && flattenText(node).includes(text));
+function findPressableByText(
+  root: TestRenderer.ReactTestInstance,
+  text: string,
+) {
+  return root.find(
+    (node) => node.type === "Pressable" && flattenText(node).includes(text),
+  );
 }
 
-function findPressableByIcon(root: TestRenderer.ReactTestInstance, iconName: string) {
+function findPressableByIcon(
+  root: TestRenderer.ReactTestInstance,
+  iconName: string,
+) {
   return root.find((node) => {
     if (node.type !== "Pressable") return false;
     const icons = node.findAll(
-      (child) => child.type === "MaterialCommunityIcons" && child.props.name === iconName,
+      (child) =>
+        child.type === "MaterialCommunityIcons" &&
+        child.props.name === iconName,
     );
     return icons.length > 0;
   });
@@ -545,53 +608,124 @@ function findTextInputByPlaceholder(
   placeholder: string,
 ) {
   return root.find(
-    (node) => node.type === "TextInput" && node.props.placeholder === placeholder,
+    (node) =>
+      node.type === "TextInput" && node.props.placeholder === placeholder,
   );
 }
 
 const mockedUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
-const mockedUseStudentClasses = useStudentClasses as jest.MockedFunction<typeof useStudentClasses>;
-const mockedUseClassDetail = useClassDetail as jest.MockedFunction<typeof useClassDetail>;
-const mockedUseClassModules = useClassModules as jest.MockedFunction<typeof useClassModules>;
-const mockedUseDiscussionThreads = useDiscussionThreads as jest.MockedFunction<typeof useDiscussionThreads>;
-const mockedUseDiscussionThread = useDiscussionThread as jest.MockedFunction<typeof useDiscussionThread>;
-const mockedUseDiscussionCommentMutation = useDiscussionCommentMutation as jest.MockedFunction<typeof useDiscussionCommentMutation>;
-const mockedUseDiscussionDeleteCommentMutation = useDiscussionDeleteCommentMutation as jest.MockedFunction<typeof useDiscussionDeleteCommentMutation>;
-const mockedUseDiscussionReactionMutation = useDiscussionReactionMutation as jest.MockedFunction<typeof useDiscussionReactionMutation>;
-const mockedUseLxpEligibility = useLxpEligibility as jest.MockedFunction<typeof useLxpEligibility>;
-const mockedUseLxpOverview = useLxpOverview as jest.MockedFunction<typeof useLxpOverview>;
-const mockedUseJaHub = useJaHub as jest.MockedFunction<typeof useJaHub>;
-const mockedUseJaActivityHistory = useJaActivityHistory as jest.MockedFunction<typeof useJaActivityHistory>;
-const mockedUseTutorBootstrap = useTutorBootstrap as jest.MockedFunction<typeof useTutorBootstrap>;
-const mockedUseLxpPlaylist = useLxpPlaylist as jest.MockedFunction<typeof useLxpPlaylist>;
-const mockedUseLxpCheckpointMutation = useLxpCheckpointMutation as jest.MockedFunction<typeof useLxpCheckpointMutation>;
-const mockedUseTutorSession = useTutorSession as jest.MockedFunction<typeof useTutorSession>;
-const mockedUseProfile = useProfile as jest.MockedFunction<typeof useProfile>;
-const mockedUseProfileUpdateMutation = useProfileUpdateMutation as jest.MockedFunction<typeof useProfileUpdateMutation>;
-const mockedUseProfileAvatarMutation = useProfileAvatarMutation as jest.MockedFunction<typeof useProfileAvatarMutation>;
-const mockedUseTranscript = useTranscript as jest.MockedFunction<typeof useTranscript>;
-const mockedUsePerformanceSummary = usePerformanceSummary as jest.MockedFunction<typeof usePerformanceSummary>;
-const mockedUseSchoolEvents = useSchoolEvents as jest.MockedFunction<typeof useSchoolEvents>;
-const mockedUseAnnouncements = useAnnouncements as jest.MockedFunction<typeof useAnnouncements>;
-const mockedUseLessons = useLessons as jest.MockedFunction<typeof useLessons>;
-const mockedUseLessonDetail = useLessonDetail as jest.MockedFunction<typeof useLessonDetail>;
-const mockedUseLessonCompletionStatus = useLessonCompletionStatus as jest.MockedFunction<typeof useLessonCompletionStatus>;
-const mockedUseLessonCompletions = useLessonCompletions as jest.MockedFunction<typeof useLessonCompletions>;
-const mockedUseLessonCompleteMutation = useLessonCompleteMutation as jest.MockedFunction<typeof useLessonCompleteMutation>;
-const mockedUseModuleDetail = useModuleDetail as jest.MockedFunction<typeof useModuleDetail>;
-const mockedUseAssessmentDetail = useAssessmentDetail as jest.MockedFunction<typeof useAssessmentDetail>;
-const mockedUseAssessmentHistory = useAssessmentHistory as jest.MockedFunction<typeof useAssessmentHistory>;
-const mockedUseAssessments = useAssessments as jest.MockedFunction<typeof useAssessments>;
-const mockedUseAssessmentAttempts = useAssessmentAttempts as jest.MockedFunction<typeof useAssessmentAttempts>;
-const mockedUseAssessmentResult = useAssessmentResult as jest.MockedFunction<typeof useAssessmentResult>;
-const mockedUseAssessmentSubmitMutation = useAssessmentSubmitMutation as jest.MockedFunction<
-  typeof useAssessmentSubmitMutation
+const mockedUseStudentClasses = useStudentClasses as jest.MockedFunction<
+  typeof useStudentClasses
 >;
+const mockedUseClassDetail = useClassDetail as jest.MockedFunction<
+  typeof useClassDetail
+>;
+const mockedUseClassModules = useClassModules as jest.MockedFunction<
+  typeof useClassModules
+>;
+const mockedUseDiscussionThreads = useDiscussionThreads as jest.MockedFunction<
+  typeof useDiscussionThreads
+>;
+const mockedUseDiscussionThread = useDiscussionThread as jest.MockedFunction<
+  typeof useDiscussionThread
+>;
+const mockedUseDiscussionCommentMutation =
+  useDiscussionCommentMutation as jest.MockedFunction<
+    typeof useDiscussionCommentMutation
+  >;
+const mockedUseDiscussionDeleteCommentMutation =
+  useDiscussionDeleteCommentMutation as jest.MockedFunction<
+    typeof useDiscussionDeleteCommentMutation
+  >;
+const mockedUseDiscussionReactionMutation =
+  useDiscussionReactionMutation as jest.MockedFunction<
+    typeof useDiscussionReactionMutation
+  >;
+const mockedUseLxpEligibility = useLxpEligibility as jest.MockedFunction<
+  typeof useLxpEligibility
+>;
+const mockedUseLxpOverview = useLxpOverview as jest.MockedFunction<
+  typeof useLxpOverview
+>;
+const mockedUseJaHub = useJaHub as jest.MockedFunction<typeof useJaHub>;
+const mockedUseJaActivityHistory = useJaActivityHistory as jest.MockedFunction<
+  typeof useJaActivityHistory
+>;
+const mockedUseTutorBootstrap = useTutorBootstrap as jest.MockedFunction<
+  typeof useTutorBootstrap
+>;
+const mockedUseLxpPlaylist = useLxpPlaylist as jest.MockedFunction<
+  typeof useLxpPlaylist
+>;
+const mockedUseLxpCheckpointMutation =
+  useLxpCheckpointMutation as jest.MockedFunction<
+    typeof useLxpCheckpointMutation
+  >;
+const mockedUseTutorSession = useTutorSession as jest.MockedFunction<
+  typeof useTutorSession
+>;
+const mockedUseProfile = useProfile as jest.MockedFunction<typeof useProfile>;
+const mockedUseProfileUpdateMutation =
+  useProfileUpdateMutation as jest.MockedFunction<
+    typeof useProfileUpdateMutation
+  >;
+const mockedUseProfileAvatarMutation =
+  useProfileAvatarMutation as jest.MockedFunction<
+    typeof useProfileAvatarMutation
+  >;
+const mockedUseTranscript = useTranscript as jest.MockedFunction<
+  typeof useTranscript
+>;
+const mockedUsePerformanceSummary =
+  usePerformanceSummary as jest.MockedFunction<typeof usePerformanceSummary>;
+const mockedUseSchoolEvents = useSchoolEvents as jest.MockedFunction<
+  typeof useSchoolEvents
+>;
+const mockedUseAnnouncements = useAnnouncements as jest.MockedFunction<
+  typeof useAnnouncements
+>;
+const mockedUseLessons = useLessons as jest.MockedFunction<typeof useLessons>;
+const mockedUseLessonDetail = useLessonDetail as jest.MockedFunction<
+  typeof useLessonDetail
+>;
+const mockedUseLessonCompletionStatus =
+  useLessonCompletionStatus as jest.MockedFunction<
+    typeof useLessonCompletionStatus
+  >;
+const mockedUseLessonCompletions = useLessonCompletions as jest.MockedFunction<
+  typeof useLessonCompletions
+>;
+const mockedUseLessonCompleteMutation =
+  useLessonCompleteMutation as jest.MockedFunction<
+    typeof useLessonCompleteMutation
+  >;
+const mockedUseModuleDetail = useModuleDetail as jest.MockedFunction<
+  typeof useModuleDetail
+>;
+const mockedUseAssessmentDetail = useAssessmentDetail as jest.MockedFunction<
+  typeof useAssessmentDetail
+>;
+const mockedUseAssessmentHistory = useAssessmentHistory as jest.MockedFunction<
+  typeof useAssessmentHistory
+>;
+const mockedUseAssessments = useAssessments as jest.MockedFunction<
+  typeof useAssessments
+>;
+const mockedUseAssessmentAttempts =
+  useAssessmentAttempts as jest.MockedFunction<typeof useAssessmentAttempts>;
+const mockedUseAssessmentResult = useAssessmentResult as jest.MockedFunction<
+  typeof useAssessmentResult
+>;
+const mockedUseAssessmentSubmitMutation =
+  useAssessmentSubmitMutation as jest.MockedFunction<
+    typeof useAssessmentSubmitMutation
+  >;
 const mockedUseQueries = useQueries as jest.Mock;
 const mockedUseQueryClient = useQueryClient as jest.Mock;
 const mockedAiApi = aiApi as jest.Mocked<typeof aiApi>;
 const mockedJaApi = jaApi as jest.Mocked<typeof jaApi>;
-const mockedAssessmentsApi = require("../../api/services/assessments").assessmentsApi as {
+const mockedAssessmentsApi = require("../../api/services/assessments")
+  .assessmentsApi as {
   getOngoingAttempt: jest.Mock;
   startAttempt: jest.Mock;
   submit: jest.Mock;
@@ -609,7 +743,8 @@ const mockedModulesApi = require("../../api/services/modules").modulesApi as {
   openAttachedFile: jest.Mock;
   downloadAttachedFile: jest.Mock;
 };
-const mockedDiscussionBoardApi = require("../../api/services/discussion-board").discussionBoardApi as {
+const mockedDiscussionBoardApi = require("../../api/services/discussion-board")
+  .discussionBoardApi as {
   uploadCommentImage: jest.Mock;
   openAttachment: jest.Mock;
   downloadAttachment: jest.Mock;
@@ -625,12 +760,14 @@ let consoleErrorSpy: jest.SpyInstance;
 describe("mobile rendered screen flows", () => {
   beforeAll(() => {
     const originalConsoleError = console.error;
-    consoleErrorSpy = jest.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
-      const first = typeof args[0] === "string" ? args[0] : "";
-      if (first.includes("react-test-renderer is deprecated")) return;
-      if (first.includes("not wrapped in act")) return;
-      originalConsoleError(...(args as Parameters<typeof console.error>));
-    });
+    consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation((...args: unknown[]) => {
+        const first = typeof args[0] === "string" ? args[0] : "";
+        if (first.includes("react-test-renderer is deprecated")) return;
+        if (first.includes("not wrapped in act")) return;
+        originalConsoleError(...(args as Parameters<typeof console.error>));
+      });
   });
 
   afterAll(() => {
@@ -658,75 +795,115 @@ describe("mobile rendered screen flows", () => {
     } as ReturnType<typeof useAuth>);
 
     mockedUseStudentClasses.mockReturnValue(
-      createQueryState([{ id: "class-1", subjectName: "Mathematics", subjectCode: "MATH-1", schoolYear: "2025-2026" }]) as ReturnType<typeof useStudentClasses>,
+      createQueryState([
+        {
+          id: "class-1",
+          subjectName: "Mathematics",
+          subjectCode: "MATH-1",
+          schoolYear: "2025-2026",
+        },
+      ]) as ReturnType<typeof useStudentClasses>,
     );
-    mockedUseClassDetail.mockImplementation(
-      ((classId?: string) =>
-        createQueryState(
-          classId
-            ? {
-                id: classId,
-                subjectName: "Mathematics",
-                subjectCode: "MATH-1",
-                subjectGradeLevel: "10",
-                sectionId: "section-1",
-                section: { id: "section-1", name: "Section A", gradeLevel: "10" },
-                teacherId: "teacher-1",
-                teacher: { id: "teacher-1", firstName: "Teacher", lastName: "One" },
-                schoolYear: "2025-2026",
-                isActive: true,
-                room: "Room 201",
-                schedules: [{ id: "schedule-1", days: ["Mon", "Wed"], startTime: "08:00", endTime: "09:00" }],
-                enrollments: [
-                  { id: "enrollment-1", student: { id: "student-1", firstName: "Alex", lastName: "Reyes", email: "alex@example.com" } },
-                  { id: "enrollment-2", student: { id: "student-2", firstName: "Jamie", lastName: "Cruz", email: "jamie@example.com" } },
-                ],
-              }
-            : undefined,
-        )) as ReturnType<typeof useClassDetail>,
-    );
-    mockedUseClassModules.mockImplementation(
-      ((classId?: string) =>
-        createQueryState(
-          classId
-            ? [
+    mockedUseClassDetail.mockImplementation(((classId?: string) =>
+      createQueryState(
+        classId
+          ? {
+              id: classId,
+              subjectName: "Mathematics",
+              subjectCode: "MATH-1",
+              subjectGradeLevel: "10",
+              sectionId: "section-1",
+              section: { id: "section-1", name: "Section A", gradeLevel: "10" },
+              teacherId: "teacher-1",
+              teacher: {
+                id: "teacher-1",
+                firstName: "Teacher",
+                lastName: "One",
+              },
+              schoolYear: "2025-2026",
+              isActive: true,
+              room: "Room 201",
+              schedules: [
                 {
-                  id: "module-1",
-                  classId,
-                  title: "Number Sense Module",
-                  description: "Foundations for fractions and decimals",
-                  order: 1,
-                  progressPercent: 40,
-                  sections: [
-                    {
-                      id: "section-1",
-                      title: "Core Lessons",
-                      order: 1,
-                      items: [
-                        {
-                          id: "item-lesson-1",
-                          itemType: "lesson",
-                          order: 1,
-                          lessonId: "lesson-1",
-                          completed: false,
-                          lessonPoints: 25,
-                          lesson: { id: "lesson-1", title: "Lesson 1", isDraft: false },
-                        },
-                        {
-                          id: "item-assessment-1",
-                          itemType: "assessment",
-                          order: 2,
-                          assessmentId: "assessment-1",
-                          assessment: { id: "assessment-1", title: "Assessment 1", totalPoints: 100, dueDate: "2026-04-20T09:00:00.000Z", isPublished: true },
-                        },
-                      ],
-                    },
-                  ],
+                  id: "schedule-1",
+                  days: ["Mon", "Wed"],
+                  startTime: "08:00",
+                  endTime: "09:00",
                 },
-              ]
-            : [],
-        )) as ReturnType<typeof useClassModules>,
-    );
+              ],
+              enrollments: [
+                {
+                  id: "enrollment-1",
+                  student: {
+                    id: "student-1",
+                    firstName: "Alex",
+                    lastName: "Reyes",
+                    email: "alex@example.com",
+                  },
+                },
+                {
+                  id: "enrollment-2",
+                  student: {
+                    id: "student-2",
+                    firstName: "Jamie",
+                    lastName: "Cruz",
+                    email: "jamie@example.com",
+                  },
+                },
+              ],
+            }
+          : undefined,
+      )) as ReturnType<typeof useClassDetail>);
+    mockedUseClassModules.mockImplementation(((classId?: string) =>
+      createQueryState(
+        classId
+          ? [
+              {
+                id: "module-1",
+                classId,
+                title: "Number Sense Module",
+                description: "Foundations for fractions and decimals",
+                order: 1,
+                progressPercent: 40,
+                sections: [
+                  {
+                    id: "section-1",
+                    title: "Core Lessons",
+                    order: 1,
+                    items: [
+                      {
+                        id: "item-lesson-1",
+                        itemType: "lesson",
+                        order: 1,
+                        lessonId: "lesson-1",
+                        completed: false,
+                        lessonPoints: 25,
+                        lesson: {
+                          id: "lesson-1",
+                          title: "Lesson 1",
+                          isDraft: false,
+                        },
+                      },
+                      {
+                        id: "item-assessment-1",
+                        itemType: "assessment",
+                        order: 2,
+                        assessmentId: "assessment-1",
+                        assessment: {
+                          id: "assessment-1",
+                          title: "Assessment 1",
+                          totalPoints: 100,
+                          dueDate: "2026-04-20T09:00:00.000Z",
+                          isPublished: true,
+                        },
+                      },
+                    ],
+                  },
+                ],
+              },
+            ]
+          : [],
+      )) as ReturnType<typeof useClassModules>);
     mockedUseDiscussionThreads.mockReturnValue(
       createQueryState({
         items: [],
@@ -736,7 +913,9 @@ describe("mobile rendered screen flows", () => {
       }) as ReturnType<typeof useDiscussionThreads>,
     );
     mockedUseDiscussionThread.mockReturnValue(
-      createQueryState(undefined, { data: undefined }) as ReturnType<typeof useDiscussionThread>,
+      createQueryState(undefined, { data: undefined }) as ReturnType<
+        typeof useDiscussionThread
+      >,
     );
     discussionCommentMutateAsync = jest.fn().mockResolvedValue(undefined);
     mockedUseDiscussionCommentMutation.mockReturnValue({
@@ -772,8 +951,18 @@ describe("mobile rendered screen flows", () => {
             thresholdApplied: 60,
             openedAt: "2026-04-18T08:00:00.000Z",
             closedAt: null,
-            counts: { steps: 1, replays: 1, pending: 2, total: 2, completed: 0 },
-            progress: { totalCheckpoints: 2, completedCheckpoints: 0, completionPercent: 0 },
+            counts: {
+              steps: 1,
+              replays: 1,
+              pending: 2,
+              total: 2,
+              completed: 0,
+            },
+            progress: {
+              totalCheckpoints: 2,
+              completedCheckpoints: 0,
+              completionPercent: 0,
+            },
           },
         ],
         eligibleClasses: [
@@ -853,7 +1042,12 @@ describe("mobile rendered screen flows", () => {
           },
         ],
         selectedClassId: "class-1",
-        progress: { xpTotal: 120, streakDays: 3, sessionsCompleted: 2, lastActivityAt: null },
+        progress: {
+          xpTotal: 120,
+          streakDays: 3,
+          sessionsCompleted: 2,
+          lastActivityAt: null,
+        },
         mastery: { classId: "class-1", percent: 72, label: "Building" },
         badges: [],
         practice: {
@@ -914,12 +1108,20 @@ describe("mobile rendered screen flows", () => {
       createQueryState({
         items: [],
         counts: { all: 0, ask: 0, review: 0 },
-        pagination: { page: 1, limit: 20, total: 0, totalPages: 0, hasNext: false },
+        pagination: {
+          page: 1,
+          limit: 20,
+          total: 0,
+          totalPages: 0,
+          hasNext: false,
+        },
       }) as ReturnType<typeof useJaActivityHistory>,
     );
     mockedUseTutorBootstrap.mockReturnValue(
       createQueryState({
-        classes: [{ id: "class-1", subjectName: "Mathematics", subjectCode: "MATH-1" }],
+        classes: [
+          { id: "class-1", subjectName: "Mathematics", subjectCode: "MATH-1" },
+        ],
         selectedClassId: "class-1",
         recommendations: [
           {
@@ -949,7 +1151,12 @@ describe("mobile rendered screen flows", () => {
             xpAwarded: 20,
             isCompleted: false,
             completedAt: null,
-            lesson: { id: "lesson-1", title: "Fractions Lesson", description: "Compare fractions", order: 1 },
+            lesson: {
+              id: "lesson-1",
+              title: "Fractions Lesson",
+              description: "Compare fractions",
+              order: 1,
+            },
           },
           {
             id: "checkpoint-2",
@@ -959,7 +1166,11 @@ describe("mobile rendered screen flows", () => {
             xpAwarded: 20,
             isCompleted: false,
             completedAt: null,
-            assessment: { id: "assessment-1", title: "Fractions Quiz", passingScore: 75 },
+            assessment: {
+              id: "assessment-1",
+              title: "Fractions Quiz",
+              passingScore: 75,
+            },
           },
         ],
       }) as ReturnType<typeof useLxpPlaylist>,
@@ -1052,150 +1263,167 @@ describe("mobile rendered screen flows", () => {
         },
       ]) as ReturnType<typeof useSchoolEvents>,
     );
-    mockedUseAnnouncements.mockImplementation(
-      ((classId?: string) =>
-        createQueryState(
-          classId
-            ? [
-                {
-                  id: "announcement-1",
-                  classId,
-                  title: "Bring your notebook",
-                  content: "We will use it for guided practice.",
-                  isPinned: true,
-                  isArchived: false,
-                  author: { firstName: "Teacher", lastName: "One" },
-                  createdAt: "2026-04-18T08:00:00.000Z",
-                },
-              ]
-            : [],
-        )) as ReturnType<typeof useAnnouncements>,
-    );
-    mockedUseLessons.mockImplementation(
-      ((classId?: string) =>
-        createQueryState(
-          classId
-            ? [
-                {
-                  id: "lesson-1",
-                  classId,
-                  title: "Lesson 1",
-                  description: "Start with number sense foundations.",
-                  order: 1,
-                  isDraft: false,
-                },
-              ]
-            : [],
-        )) as ReturnType<typeof useLessons>,
-    );
-    mockedUseLessonDetail.mockImplementation(
-      ((lessonId?: string) =>
-        createQueryState(
-          lessonId
-            ? {
-                id: lessonId,
-                classId: "class-1",
+    mockedUseAnnouncements.mockImplementation(((classId?: string) =>
+      createQueryState(
+        classId
+          ? [
+              {
+                id: "announcement-1",
+                classId,
+                title: "Bring your notebook",
+                content: "We will use it for guided practice.",
+                isPinned: true,
+                isArchived: false,
+                author: { firstName: "Teacher", lastName: "One" },
+                createdAt: "2026-04-18T08:00:00.000Z",
+              },
+            ]
+          : [],
+      )) as ReturnType<typeof useAnnouncements>);
+    mockedUseLessons.mockImplementation(((classId?: string) =>
+      createQueryState(
+        classId
+          ? [
+              {
+                id: "lesson-1",
+                classId,
                 title: "Lesson 1",
                 description: "Start with number sense foundations.",
                 order: 1,
                 isDraft: false,
-                contentBlocks: [
-                  { id: "block-1", lessonId, type: "text", order: 1, content: "<p>Understand equivalent fractions.</p>" },
-                  { id: "block-2", lessonId, type: "question", order: 2, content: { text: "What is 1/2 equal to?" } },
-                ],
-              }
-            : undefined,
-        )) as ReturnType<typeof useLessonDetail>,
-    );
-    mockedUseLessonCompletionStatus.mockImplementation(
-      ((lessonId?: string) =>
-        createQueryState(lessonId ? { completed: false } : { completed: false })) as ReturnType<typeof useLessonCompletionStatus>,
-    );
-    mockedUseLessonCompletions.mockImplementation(
-      ((classId?: string) =>
-        createQueryState(classId ? [{ lessonId: "lesson-1", completed: false }] : [])) as ReturnType<typeof useLessonCompletions>,
-    );
-    lessonCompleteMutateAsync = jest.fn().mockResolvedValue({ completed: true });
+              },
+            ]
+          : [],
+      )) as ReturnType<typeof useLessons>);
+    mockedUseLessonDetail.mockImplementation(((lessonId?: string) =>
+      createQueryState(
+        lessonId
+          ? {
+              id: lessonId,
+              classId: "class-1",
+              title: "Lesson 1",
+              description: "Start with number sense foundations.",
+              order: 1,
+              isDraft: false,
+              contentBlocks: [
+                {
+                  id: "block-1",
+                  lessonId,
+                  type: "text",
+                  order: 1,
+                  content: "<p>Understand equivalent fractions.</p>",
+                },
+                {
+                  id: "block-2",
+                  lessonId,
+                  type: "question",
+                  order: 2,
+                  content: { text: "What is 1/2 equal to?" },
+                },
+              ],
+            }
+          : undefined,
+      )) as ReturnType<typeof useLessonDetail>);
+    mockedUseLessonCompletionStatus.mockImplementation(((lessonId?: string) =>
+      createQueryState(
+        lessonId ? { completed: false } : { completed: false },
+      )) as ReturnType<typeof useLessonCompletionStatus>);
+    mockedUseLessonCompletions.mockImplementation(((classId?: string) =>
+      createQueryState(
+        classId ? [{ lessonId: "lesson-1", completed: false }] : [],
+      )) as ReturnType<typeof useLessonCompletions>);
+    lessonCompleteMutateAsync = jest
+      .fn()
+      .mockResolvedValue({ completed: true });
     mockedUseLessonCompleteMutation.mockReturnValue({
       mutateAsync: lessonCompleteMutateAsync,
       isPending: false,
       error: null,
     } as ReturnType<typeof useLessonCompleteMutation>);
-    mockedUseModuleDetail.mockImplementation(
-      ((classId?: string, moduleId?: string) =>
-        createQueryState(
-          classId && moduleId
-            ? {
-                id: moduleId,
-                classId,
-                title: "Number Sense Module",
-                description: "Foundations for fractions and decimals",
-                order: 1,
-                progressPercent: 40,
-                sections: [
-                  {
-                    id: "section-1",
-                    title: "Core Lessons",
-                    order: 1,
-                    items: [
-                      {
-                        id: "item-lesson-1",
-                        itemType: "lesson",
-                        order: 1,
-                        lessonId: "lesson-1",
-                        completed: false,
-                        lessonPoints: 25,
-                        isRequired: true,
-                        lesson: { id: "lesson-1", title: "Lesson 1", isDraft: false },
+    mockedUseModuleDetail.mockImplementation(((
+      classId?: string,
+      moduleId?: string,
+    ) =>
+      createQueryState(
+        classId && moduleId
+          ? {
+              id: moduleId,
+              classId,
+              title: "Number Sense Module",
+              description: "Foundations for fractions and decimals",
+              order: 1,
+              progressPercent: 40,
+              sections: [
+                {
+                  id: "section-1",
+                  title: "Core Lessons",
+                  order: 1,
+                  items: [
+                    {
+                      id: "item-lesson-1",
+                      itemType: "lesson",
+                      order: 1,
+                      lessonId: "lesson-1",
+                      completed: false,
+                      lessonPoints: 25,
+                      isRequired: true,
+                      lesson: {
+                        id: "lesson-1",
+                        title: "Lesson 1",
+                        isDraft: false,
                       },
-                      {
-                        id: "item-assessment-1",
-                        itemType: "assessment",
-                        order: 2,
-                        assessmentId: "assessment-1",
-                        assessment: { id: "assessment-1", title: "Assessment 1", totalPoints: 100, dueDate: "2026-04-20T09:00:00.000Z", isPublished: true },
+                    },
+                    {
+                      id: "item-assessment-1",
+                      itemType: "assessment",
+                      order: 2,
+                      assessmentId: "assessment-1",
+                      assessment: {
+                        id: "assessment-1",
+                        title: "Assessment 1",
+                        totalPoints: 100,
+                        dueDate: "2026-04-20T09:00:00.000Z",
+                        isPublished: true,
                       },
-                    ],
-                  },
-                ],
-              }
-            : undefined,
-        )) as ReturnType<typeof useModuleDetail>,
-    );
-    mockedUseAssessmentDetail.mockImplementation(
-      ((assessmentId?: string) =>
-        createQueryState(
-          assessmentId
-            ? {
-                id: assessmentId,
-                classId: "class-1",
-                title: "Assessment 1",
-                description: "Show your work before submitting.",
-                type: "quiz",
-                isPublished: true,
-                totalPoints: 100,
-                passingScore: 75,
-                maxAttempts: 2,
-                timeLimitMinutes: 30,
-                dueDate: "2026-04-20T09:00:00.000Z",
-                questions: [
-                  {
-                    id: "question-1",
-                    assessmentId,
-                    type: "multiple_choice",
-                    content: "What is 2 + 2?",
-                    points: 5,
-                    order: 1,
-                    options: [
-                      { id: "option-1", text: "4", isCorrect: true, order: 1 },
-                      { id: "option-2", text: "5", isCorrect: false, order: 2 },
-                    ],
-                  },
-                ],
-              }
-            : undefined,
-        )) as ReturnType<typeof useAssessmentDetail>,
-    );
+                    },
+                  ],
+                },
+              ],
+            }
+          : undefined,
+      )) as ReturnType<typeof useModuleDetail>);
+    mockedUseAssessmentDetail.mockImplementation(((assessmentId?: string) =>
+      createQueryState(
+        assessmentId
+          ? {
+              id: assessmentId,
+              classId: "class-1",
+              title: "Assessment 1",
+              description: "Show your work before submitting.",
+              type: "quiz",
+              isPublished: true,
+              totalPoints: 100,
+              passingScore: 75,
+              maxAttempts: 2,
+              timeLimitMinutes: 30,
+              dueDate: "2026-04-20T09:00:00.000Z",
+              questions: [
+                {
+                  id: "question-1",
+                  assessmentId,
+                  type: "multiple_choice",
+                  content: "What is 2 + 2?",
+                  points: 5,
+                  order: 1,
+                  options: [
+                    { id: "option-1", text: "4", isCorrect: true, order: 1 },
+                    { id: "option-2", text: "5", isCorrect: false, order: 2 },
+                  ],
+                },
+              ],
+            }
+          : undefined,
+      )) as ReturnType<typeof useAssessmentDetail>);
     mockedUseAssessmentHistory.mockReturnValue(
       createQueryState({
         data: [
@@ -1249,93 +1477,112 @@ describe("mobile rendered screen flows", () => {
         totalPages: 1,
       }) as ReturnType<typeof useAssessmentHistory>,
     );
-    mockedUseAssessments.mockImplementation(
-      ((classId?: string) =>
-        createQueryState(
-          classId
-            ? [{ id: "assessment-1", classId, title: "Assessment 1", type: "quiz", isPublished: true, dueDate: "2026-04-20T09:00:00.000Z" }]
-            : [],
-        )) as ReturnType<typeof useAssessments>,
-    );
-    mockedUseAssessmentAttempts.mockImplementation(
-      ((assessmentId?: string) =>
-        createQueryState(assessmentId ? [] : [])) as ReturnType<typeof useAssessmentAttempts>,
-    );
+    mockedUseAssessments.mockImplementation(((classId?: string) =>
+      createQueryState(
+        classId
+          ? [
+              {
+                id: "assessment-1",
+                classId,
+                title: "Assessment 1",
+                type: "quiz",
+                isPublished: true,
+                dueDate: "2026-04-20T09:00:00.000Z",
+              },
+            ]
+          : [],
+      )) as ReturnType<typeof useAssessments>);
+    mockedUseAssessmentAttempts.mockImplementation(((assessmentId?: string) =>
+      createQueryState(assessmentId ? [] : [])) as ReturnType<
+      typeof useAssessmentAttempts
+    >);
     mockedUseAssessmentSubmitMutation.mockReturnValue({
       mutateAsync: jest.fn().mockResolvedValue(undefined),
       isPending: false,
       error: null,
     } as ReturnType<typeof useAssessmentSubmitMutation>);
-    mockedUseAssessmentResult.mockImplementation(
-      ((attemptId?: string) =>
-        createQueryState(
-          attemptId
-            ? {
-                attempt: {
-                  id: attemptId,
-                  assessmentId: "assessment-1",
-                  isSubmitted: true,
-                  isReturned: true,
-                },
-                score: 92,
-                passed: true,
+    mockedUseAssessmentResult.mockImplementation(((attemptId?: string) =>
+      createQueryState(
+        attemptId
+          ? {
+              attempt: {
+                id: attemptId,
+                assessmentId: "assessment-1",
+                isSubmitted: true,
                 isReturned: true,
-                attemptNumber: 1,
-                teacherFeedback: "Strong work.",
-                responses: [],
-                assessment: {
-                  id: "assessment-1",
-                  title: "Assessment 1",
-                  type: "quiz",
-                  totalPoints: 100,
-                },
-              }
-            : undefined,
-        )) as ReturnType<typeof useAssessmentResult>,
-    );
+              },
+              score: 92,
+              passed: true,
+              isReturned: true,
+              attemptNumber: 1,
+              teacherFeedback: "Strong work.",
+              responses: [],
+              assessment: {
+                id: "assessment-1",
+                title: "Assessment 1",
+                type: "quiz",
+                totalPoints: 100,
+              },
+            }
+          : undefined,
+      )) as ReturnType<typeof useAssessmentResult>);
 
     let useQueriesCall = 0;
-    mockedUseQueries.mockImplementation(({ queries }: { queries: unknown[] }) => {
-      useQueriesCall += 1;
-      const phase = ((useQueriesCall - 1) % 4) + 1;
+    mockedUseQueries.mockImplementation(
+      ({ queries }: { queries: unknown[] }) => {
+        useQueriesCall += 1;
+        const phase = ((useQueriesCall - 1) % 4) + 1;
 
-      if (phase === 1) {
+        if (phase === 1) {
+          return queries.map(() => ({
+            data: [
+              {
+                id: "module-1",
+                classId: "class-1",
+                title: "Number Sense Module",
+                order: 1,
+                isLocked: false,
+                sections: [
+                  {
+                    id: "section-1",
+                    title: "Core Lessons",
+                    order: 1,
+                    items: [
+                      {
+                        id: "item-lesson-1",
+                        itemType: "lesson",
+                        order: 1,
+                        lessonId: "lesson-1",
+                        lesson: {
+                          id: "lesson-1",
+                          title: "Lesson 1",
+                          isDraft: false,
+                        },
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+            error: null,
+          }));
+        }
+        if (useQueriesCall === 2) {
+          return queries.map(() => ({
+            data: [{ id: "completed-1" }],
+            error: null,
+          }));
+        }
         return queries.map(() => ({
-          data: [
-            {
-              id: "module-1",
-              classId: "class-1",
-              title: "Number Sense Module",
-              order: 1,
-              isLocked: false,
-              sections: [
-                {
-                  id: "section-1",
-                  title: "Core Lessons",
-                  order: 1,
-                  items: [
-                    {
-                      id: "item-lesson-1",
-                      itemType: "lesson",
-                      order: 1,
-                      lessonId: "lesson-1",
-                      lesson: { id: "lesson-1", title: "Lesson 1", isDraft: false },
-                    },
-                  ],
-                },
-              ],
-            },
-          ],
+          data: [{ id: "assessment-1" }],
           error: null,
         }));
-      }
-      if (useQueriesCall === 2) {
-        return queries.map(() => ({ data: [{ id: "completed-1" }], error: null }));
-      }
-      return queries.map(() => ({ data: [{ id: "assessment-1" }], error: null }));
-    });
+      },
+    );
 
-    mockedAiApi.startTutorSession.mockResolvedValue({ sessionId: "session-1" } as Awaited<ReturnType<typeof aiApi.startTutorSession>>);
+    mockedAiApi.startTutorSession.mockResolvedValue({
+      sessionId: "session-1",
+    } as Awaited<ReturnType<typeof aiApi.startTutorSession>>);
     mockedAiApi.sendTutorMessage.mockResolvedValue(undefined as never);
     mockedAiApi.submitTutorAnswers.mockResolvedValue(undefined as never);
     mockedJaApi.createAskThread.mockResolvedValue({
@@ -1356,7 +1603,8 @@ describe("mobile rendered screen flows", () => {
       message: {
         id: "message-1",
         role: "assistant",
-        content: "<p><strong>Here is a grounded explanation.</strong></p><ul><li>Review the equivalent values first.</li></ul>",
+        content:
+          "<p><strong>Here is a grounded explanation.</strong></p><ul><li>Review the equivalent values first.</li></ul>",
         blocked: false,
       },
       blocked: false,
@@ -1412,14 +1660,32 @@ describe("mobile rendered screen flows", () => {
         },
       ],
     } as never);
-    mockedJaApi.getSession.mockImplementation(async () => mockedJaApi.createSession.mock.results[0]?.value ?? {
-      session: { id: "practice-live", status: "active", currentIndex: 0, questionCount: 1 },
-      items: [],
-    } as never);
-    mockedJaApi.getReviewSession.mockImplementation(async () => mockedJaApi.createReviewSession.mock.results[0]?.value ?? {
-      session: { id: "review-live", status: "active", currentIndex: 0, questionCount: 1 },
-      items: [],
-    } as never);
+    mockedJaApi.getSession.mockImplementation(
+      async () =>
+        mockedJaApi.createSession.mock.results[0]?.value ??
+        ({
+          session: {
+            id: "practice-live",
+            status: "active",
+            currentIndex: 0,
+            questionCount: 1,
+          },
+          items: [],
+        } as never),
+    );
+    mockedJaApi.getReviewSession.mockImplementation(
+      async () =>
+        mockedJaApi.createReviewSession.mock.results[0]?.value ??
+        ({
+          session: {
+            id: "review-live",
+            status: "active",
+            currentIndex: 0,
+            questionCount: 1,
+          },
+          items: [],
+        } as never),
+    );
     mockedJaApi.submitResponse.mockResolvedValue({
       sessionId: "practice-live",
       itemId: "practice-item-1",
@@ -1478,7 +1744,9 @@ describe("mobile rendered screen flows", () => {
 
     expect(
       testRenderer!.root.find(
-        (node) => node.type === "Text" && flattenText(node).includes("Welcome to Nexora"),
+        (node) =>
+          node.type === "Text" &&
+          flattenText(node).includes("Welcome to Nexora"),
       ),
     ).toBeTruthy();
 
@@ -1511,10 +1779,16 @@ describe("mobile rendered screen flows", () => {
     });
 
     expect(
-      testRenderer!.root.find((node) => node.type === "Text" && flattenText(node).includes("LXP Dashboard")),
+      testRenderer!.root.find(
+        (node) =>
+          node.type === "Text" && flattenText(node).includes("LXP Dashboard"),
+      ),
     ).toBeTruthy();
 
-    const openTutorButton = findPressableByText(testRenderer!.root, "Open Tutor");
+    const openTutorButton = findPressableByText(
+      testRenderer!.root,
+      "Open Tutor",
+    );
     act(() => {
       openTutorButton.props.onPress();
     });
@@ -1579,8 +1853,13 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).not.toContain("Practice");
     expect(renderedText).not.toContain("Generate Practice Run");
 
-    await act(async () => findPressableByIcon(testRenderer!.root, "menu").props.onPress());
-    renderedText = testRenderer!.root.findAll((node) => node.type === "Text").map(flattenText).join(" ");
+    await act(async () =>
+      findPressableByIcon(testRenderer!.root, "menu").props.onPress(),
+    );
+    renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map(flattenText)
+      .join(" ");
     expect(renderedText).toContain("Activity History");
     expect(renderedText).toContain("Replay");
     expect(renderedText).toContain("Learner's Path");
@@ -1603,11 +1882,22 @@ describe("mobile rendered screen flows", () => {
       .map((node) => flattenText(node))
       .join(" ");
     expect(renderedBeforePrompt).toContain("Using Fractions Lesson");
-    expect(testRenderer!.root.findAll((node) => node.type === "FlatList")).toHaveLength(1);
-    expect(testRenderer!.root.findAll((node) => node.type === "TextInput")).toHaveLength(0);
-    expect(mockedUseJaActivityHistory).toHaveBeenLastCalledWith("class-1", "all", false);
+    expect(
+      testRenderer!.root.findAll((node) => node.type === "FlatList"),
+    ).toHaveLength(1);
+    expect(
+      testRenderer!.root.findAll((node) => node.type === "TextInput"),
+    ).toHaveLength(0);
+    expect(mockedUseJaActivityHistory).toHaveBeenLastCalledWith(
+      "class-1",
+      "all",
+      false,
+    );
 
-    const promptButton = findPressableByText(testRenderer!.root, "Ask JA about this lesson");
+    const promptButton = findPressableByText(
+      testRenderer!.root,
+      "Ask JA about this lesson",
+    );
     await act(async () => {
       promptButton.props.onPress();
     });
@@ -1627,7 +1917,10 @@ describe("mobile rendered screen flows", () => {
     });
 
     await act(async () => {
-      const explainAction = findPressableByText(testRenderer!.root, "Explain the lesson");
+      const explainAction = findPressableByText(
+        testRenderer!.root,
+        "Explain the lesson",
+      );
       await explainAction.props.onPress();
       await Promise.resolve();
     });
@@ -1653,17 +1946,36 @@ describe("mobile rendered screen flows", () => {
       testRenderer = TestRenderer.create(
         React.createElement(JaScreen, {
           navigation: { navigate: jest.fn() } as never,
-          route: { key: "JA", name: "JA", params: { panel: "ask", classId: "class-1" } } as never,
+          route: {
+            key: "JA",
+            name: "JA",
+            params: { panel: "ask", classId: "class-1" },
+          } as never,
         }),
       );
     });
 
-    expect(mockedUseJaActivityHistory).toHaveBeenLastCalledWith("class-1", "all", false);
+    expect(mockedUseJaActivityHistory).toHaveBeenLastCalledWith(
+      "class-1",
+      "all",
+      false,
+    );
 
-    await act(async () => findPressableByIcon(testRenderer!.root, "menu").props.onPress());
-    await act(async () => findPressableByText(testRenderer!.root, "Activity History").props.onPress());
+    await act(async () =>
+      findPressableByIcon(testRenderer!.root, "menu").props.onPress(),
+    );
+    await act(async () =>
+      findPressableByText(
+        testRenderer!.root,
+        "Activity History",
+      ).props.onPress(),
+    );
 
-    expect(mockedUseJaActivityHistory).toHaveBeenLastCalledWith("class-1", "all", true);
+    expect(mockedUseJaActivityHistory).toHaveBeenLastCalledWith(
+      "class-1",
+      "all",
+      true,
+    );
   });
 
   it("automatically resumes the most recently updated active JA thread", async () => {
@@ -1676,16 +1988,44 @@ describe("mobile rendered screen flows", () => {
         ask: {
           ...currentHub.data!.ask,
           threads: [
-            { id: "thread-old", title: "Old", status: "active", updatedAt: "2026-09-01T08:00:00.000Z" },
-            { id: "thread-new", title: "New", status: "active", updatedAt: "2026-09-02T08:00:00.000Z", contextLessonId: "lesson-1" },
-            { id: "thread-archived", title: "Archived", status: "archived", updatedAt: "2026-09-03T08:00:00.000Z" },
+            {
+              id: "thread-old",
+              title: "Old",
+              status: "active",
+              updatedAt: "2026-09-01T08:00:00.000Z",
+            },
+            {
+              id: "thread-new",
+              title: "New",
+              status: "active",
+              updatedAt: "2026-09-02T08:00:00.000Z",
+              contextLessonId: "lesson-1",
+            },
+            {
+              id: "thread-archived",
+              title: "Archived",
+              status: "archived",
+              updatedAt: "2026-09-03T08:00:00.000Z",
+            },
           ],
         },
       },
     } as ReturnType<typeof useJaHub>);
     mockedJaApi.getAskThread.mockResolvedValue({
-      thread: { id: "thread-new", classId: "class-1", contextLessonId: "lesson-1", contextLessonTitle: "Fractions Lesson" },
-      messages: [{ id: "saved-answer", role: "assistant", content: "Saved latest answer", blocked: false }],
+      thread: {
+        id: "thread-new",
+        classId: "class-1",
+        contextLessonId: "lesson-1",
+        contextLessonTitle: "Fractions Lesson",
+      },
+      messages: [
+        {
+          id: "saved-answer",
+          role: "assistant",
+          content: "Saved latest answer",
+          blocked: false,
+        },
+      ],
     } as never);
 
     const { JaScreen } = require("../JaScreen");
@@ -1694,7 +2034,11 @@ describe("mobile rendered screen flows", () => {
       testRenderer = TestRenderer.create(
         React.createElement(JaScreen, {
           navigation: { navigate: jest.fn() } as never,
-          route: { key: "JA", name: "JA", params: { panel: "ask", classId: "class-1" } } as never,
+          route: {
+            key: "JA",
+            name: "JA",
+            params: { panel: "ask", classId: "class-1" },
+          } as never,
         }),
       );
       await Promise.resolve();
@@ -1702,7 +2046,9 @@ describe("mobile rendered screen flows", () => {
 
     expect(mockedJaApi.getAskThread).toHaveBeenCalledTimes(1);
     expect(mockedJaApi.getAskThread).toHaveBeenCalledWith("thread-new");
-    expect(testRenderer!.root.findByProps({ html: "Saved latest answer" })).toBeTruthy();
+    expect(
+      testRenderer!.root.findByProps({ html: "Saved latest answer" }),
+    ).toBeTruthy();
   });
 
   it("keeps New chat from reopening the previous JA thread", async () => {
@@ -1714,13 +2060,33 @@ describe("mobile rendered screen flows", () => {
         ...currentHub.data!,
         ask: {
           ...currentHub.data!.ask,
-          threads: [{ id: "thread-new", title: "New", status: "active", updatedAt: "2026-09-02T08:00:00.000Z", contextLessonId: "lesson-1" }],
+          threads: [
+            {
+              id: "thread-new",
+              title: "New",
+              status: "active",
+              updatedAt: "2026-09-02T08:00:00.000Z",
+              contextLessonId: "lesson-1",
+            },
+          ],
         },
       },
     } as ReturnType<typeof useJaHub>);
     mockedJaApi.getAskThread.mockResolvedValue({
-      thread: { id: "thread-new", classId: "class-1", contextLessonId: "lesson-1", contextLessonTitle: "Fractions Lesson" },
-      messages: [{ id: "saved-answer", role: "assistant", content: "Saved latest answer", blocked: false }],
+      thread: {
+        id: "thread-new",
+        classId: "class-1",
+        contextLessonId: "lesson-1",
+        contextLessonTitle: "Fractions Lesson",
+      },
+      messages: [
+        {
+          id: "saved-answer",
+          role: "assistant",
+          content: "Saved latest answer",
+          blocked: false,
+        },
+      ],
     } as never);
 
     const { JaScreen } = require("../JaScreen");
@@ -1729,7 +2095,11 @@ describe("mobile rendered screen flows", () => {
       testRenderer = TestRenderer.create(
         React.createElement(JaScreen, {
           navigation: { navigate: jest.fn() } as never,
-          route: { key: "JA", name: "JA", params: { panel: "ask", classId: "class-1" } } as never,
+          route: {
+            key: "JA",
+            name: "JA",
+            params: { panel: "ask", classId: "class-1" },
+          } as never,
         }),
       );
       await Promise.resolve();
@@ -1737,12 +2107,19 @@ describe("mobile rendered screen flows", () => {
     expect(mockedJaApi.getAskThread).toHaveBeenCalledTimes(1);
     mockedJaApi.getAskThread.mockClear();
 
-    await act(async () => findPressableByIcon(testRenderer!.root, "menu").props.onPress());
-    await act(async () => findPressableByText(testRenderer!.root, "New chat").props.onPress());
+    await act(async () =>
+      findPressableByIcon(testRenderer!.root, "menu").props.onPress(),
+    );
+    await act(async () =>
+      findPressableByText(testRenderer!.root, "New chat").props.onPress(),
+    );
     await act(async () => Promise.resolve());
 
     expect(mockedJaApi.getAskThread).not.toHaveBeenCalled();
-    const text = testRenderer!.root.findAll((node) => node.type === "Text").map(flattenText).join(" ");
+    const text = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map(flattenText)
+      .join(" ");
     expect(text).not.toContain("Saved latest answer");
   });
 
@@ -1755,7 +2132,15 @@ describe("mobile rendered screen flows", () => {
         ...currentHub.data!,
         ask: {
           ...currentHub.data!.ask,
-          threads: [{ id: "thread-stale", title: "Old lesson", status: "active", updatedAt: "2026-09-02T08:00:00.000Z", contextLessonId: "lesson-removed" }],
+          threads: [
+            {
+              id: "thread-stale",
+              title: "Old lesson",
+              status: "active",
+              updatedAt: "2026-09-02T08:00:00.000Z",
+              contextLessonId: "lesson-removed",
+            },
+          ],
           lessonContexts: [
             { lessonId: "lesson-1", title: "Fractions Lesson" },
             { lessonId: "lesson-2", title: "Decimals Lesson" },
@@ -1764,8 +2149,20 @@ describe("mobile rendered screen flows", () => {
       },
     } as ReturnType<typeof useJaHub>);
     mockedJaApi.getAskThread.mockResolvedValue({
-      thread: { id: "thread-stale", classId: "class-1", contextLessonId: "lesson-removed", contextLessonTitle: "Removed Lesson" },
-      messages: [{ id: "saved-answer", role: "assistant", content: "Historical answer stays readable", blocked: false }],
+      thread: {
+        id: "thread-stale",
+        classId: "class-1",
+        contextLessonId: "lesson-removed",
+        contextLessonTitle: "Removed Lesson",
+      },
+      messages: [
+        {
+          id: "saved-answer",
+          role: "assistant",
+          content: "Historical answer stays readable",
+          blocked: false,
+        },
+      ],
     } as never);
 
     const { JaScreen } = require("../JaScreen");
@@ -1774,16 +2171,26 @@ describe("mobile rendered screen flows", () => {
       testRenderer = TestRenderer.create(
         React.createElement(JaScreen, {
           navigation: { navigate: jest.fn() } as never,
-          route: { key: "JA", name: "JA", params: { panel: "ask", classId: "class-1" } } as never,
+          route: {
+            key: "JA",
+            name: "JA",
+            params: { panel: "ask", classId: "class-1" },
+          } as never,
         }),
       );
       await Promise.resolve();
     });
 
-    const text = testRenderer!.root.findAll((node) => node.type === "Text").map(flattenText).join(" ");
+    const text = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map(flattenText)
+      .join(" ");
     expect(text).toContain("Historical answer stays readable");
     expect(text).toContain("This chat's lesson is no longer available");
-    expect(findPressableByText(testRenderer!.root, "Ask JA about this lesson").props.disabled).toBe(true);
+    expect(
+      findPressableByText(testRenderer!.root, "Ask JA about this lesson").props
+        .disabled,
+    ).toBe(true);
   });
 
   it("opens lesson context for a new chat with multiple visible lessons", async () => {
@@ -1810,17 +2217,34 @@ describe("mobile rendered screen flows", () => {
       testRenderer = TestRenderer.create(
         React.createElement(JaScreen, {
           navigation: { navigate: jest.fn() } as never,
-          route: { key: "JA", name: "JA", params: { panel: "ask", classId: "class-1" } } as never,
+          route: {
+            key: "JA",
+            name: "JA",
+            params: { panel: "ask", classId: "class-1" },
+          } as never,
         }),
       );
     });
 
     expect(testRenderer!.root.findByType("Modal")).toBeTruthy();
-    expect(findPressableByText(testRenderer!.root, "Ask JA about this lesson").props.disabled).toBe(true);
+    expect(
+      findPressableByText(testRenderer!.root, "Ask JA about this lesson").props
+        .disabled,
+    ).toBe(true);
 
-    await act(async () => findPressableByText(testRenderer!.root, "Fractions Lesson").props.onPress());
-    expect(testRenderer!.root.findAll((node) => node.type === "Modal")).toHaveLength(0);
-    expect(findPressableByText(testRenderer!.root, "Ask JA about this lesson").props.disabled).toBe(false);
+    await act(async () =>
+      findPressableByText(
+        testRenderer!.root,
+        "Fractions Lesson",
+      ).props.onPress(),
+    );
+    expect(
+      testRenderer!.root.findAll((node) => node.type === "Modal"),
+    ).toHaveLength(0);
+    expect(
+      findPressableByText(testRenderer!.root, "Ask JA about this lesson").props
+        .disabled,
+    ).toBe(false);
   });
 
   it("confirms that changing an active thread lesson starts a new conversation", async () => {
@@ -1832,7 +2256,15 @@ describe("mobile rendered screen flows", () => {
         ...currentHub.data!,
         ask: {
           ...currentHub.data!.ask,
-          threads: [{ id: "thread-1", title: "Fractions", status: "active", updatedAt: "2026-09-02T08:00:00.000Z", contextLessonId: "lesson-1" }],
+          threads: [
+            {
+              id: "thread-1",
+              title: "Fractions",
+              status: "active",
+              updatedAt: "2026-09-02T08:00:00.000Z",
+              contextLessonId: "lesson-1",
+            },
+          ],
           lessonContexts: [
             { lessonId: "lesson-1", title: "Fractions Lesson" },
             { lessonId: "lesson-2", title: "Decimals Lesson" },
@@ -1841,8 +2273,20 @@ describe("mobile rendered screen flows", () => {
       },
     } as ReturnType<typeof useJaHub>);
     mockedJaApi.getAskThread.mockResolvedValue({
-      thread: { id: "thread-1", classId: "class-1", contextLessonId: "lesson-1", contextLessonTitle: "Fractions Lesson" },
-      messages: [{ id: "saved-answer", role: "assistant", content: "Saved fractions answer", blocked: false }],
+      thread: {
+        id: "thread-1",
+        classId: "class-1",
+        contextLessonId: "lesson-1",
+        contextLessonTitle: "Fractions Lesson",
+      },
+      messages: [
+        {
+          id: "saved-answer",
+          role: "assistant",
+          content: "Saved fractions answer",
+          blocked: false,
+        },
+      ],
     } as never);
 
     const { JaScreen } = require("../JaScreen");
@@ -1851,14 +2295,28 @@ describe("mobile rendered screen flows", () => {
       testRenderer = TestRenderer.create(
         React.createElement(JaScreen, {
           navigation: { navigate: jest.fn() } as never,
-          route: { key: "JA", name: "JA", params: { panel: "ask", classId: "class-1" } } as never,
+          route: {
+            key: "JA",
+            name: "JA",
+            params: { panel: "ask", classId: "class-1" },
+          } as never,
         }),
       );
       await Promise.resolve();
     });
 
-    await act(async () => findPressableByText(testRenderer!.root, "Using Fractions Lesson").props.onPress());
-    await act(async () => findPressableByText(testRenderer!.root, "Decimals Lesson").props.onPress());
+    await act(async () =>
+      findPressableByText(
+        testRenderer!.root,
+        "Using Fractions Lesson",
+      ).props.onPress(),
+    );
+    await act(async () =>
+      findPressableByText(
+        testRenderer!.root,
+        "Decimals Lesson",
+      ).props.onPress(),
+    );
 
     const alert = require("react-native").Alert.alert as jest.Mock;
     expect(alert).toHaveBeenCalledWith(
@@ -1869,7 +2327,10 @@ describe("mobile rendered screen flows", () => {
     const confirm = alert.mock.calls.at(-1)?.[2]?.[1]?.onPress;
     await act(async () => confirm());
 
-    const text = testRenderer!.root.findAll((node) => node.type === "Text").map(flattenText).join(" ");
+    const text = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map(flattenText)
+      .join(" ");
     expect(text).toContain("Using Decimals Lesson");
     expect(text).not.toContain("Saved fractions answer");
   });
@@ -1894,7 +2355,12 @@ describe("mobile rendered screen flows", () => {
           },
         ],
         selectedClassId: "class-1",
-        progress: { xpTotal: 120, streakDays: 3, sessionsCompleted: 2, lastActivityAt: null },
+        progress: {
+          xpTotal: 120,
+          streakDays: 3,
+          sessionsCompleted: 2,
+          lastActivityAt: null,
+        },
         mastery: { classId: "class-1", percent: 72, label: "Building" },
         badges: [],
         practice: {
@@ -1931,17 +2397,23 @@ describe("mobile rendered screen flows", () => {
       }) as ReturnType<typeof useJaHub>,
     );
     const classOneHub = mockedUseJaHub("class-1");
-    mockedUseJaHub.mockImplementation((classId) => ({
-      ...classOneHub,
-      data: {
-        ...classOneHub.data!,
-        selectedClassId: classId || "class-1",
-        ask: {
-          ...classOneHub.data!.ask,
-          lessonContexts: classId === "class-2" ? [] : classOneHub.data!.ask.lessonContexts,
-        },
-      },
-    }) as ReturnType<typeof useJaHub>);
+    mockedUseJaHub.mockImplementation(
+      (classId) =>
+        ({
+          ...classOneHub,
+          data: {
+            ...classOneHub.data!,
+            selectedClassId: classId || "class-1",
+            ask: {
+              ...classOneHub.data!.ask,
+              lessonContexts:
+                classId === "class-2"
+                  ? []
+                  : classOneHub.data!.ask.lessonContexts,
+            },
+          },
+        }) as ReturnType<typeof useJaHub>,
+    );
 
     const { JaScreen } = require("../JaScreen");
     let testRenderer: TestRenderer.ReactTestRenderer;
@@ -1949,16 +2421,26 @@ describe("mobile rendered screen flows", () => {
       testRenderer = TestRenderer.create(
         React.createElement(JaScreen, {
           navigation: { navigate: jest.fn() } as never,
-          route: { key: "JA", name: "JA", params: { panel: "ask", classId: "class-1" } } as never,
+          route: {
+            key: "JA",
+            name: "JA",
+            params: { panel: "ask", classId: "class-1" },
+          } as never,
         }),
       );
     });
 
-    let promptButton = findPressableByText(testRenderer!.root, "Ask JA about this lesson");
+    let promptButton = findPressableByText(
+      testRenderer!.root,
+      "Ask JA about this lesson",
+    );
     await act(async () => {
       promptButton.props.onPress();
     });
-    const explainAction = findPressableByText(testRenderer!.root, "Explain the lesson");
+    const explainAction = findPressableByText(
+      testRenderer!.root,
+      "Explain the lesson",
+    );
     await act(async () => {
       await explainAction.props.onPress();
       await Promise.resolve();
@@ -1966,13 +2448,20 @@ describe("mobile rendered screen flows", () => {
 
     expect(
       testRenderer!.root.find(
-        (node) => node.type === "Text" && flattenText(node).includes("Here is a grounded explanation."),
+        (node) =>
+          node.type === "Text" &&
+          flattenText(node).includes("Here is a grounded explanation."),
       ),
     ).toBeTruthy();
 
-    await act(async () => findPressableByIcon(testRenderer!.root, "menu").props.onPress());
+    await act(async () =>
+      findPressableByIcon(testRenderer!.root, "menu").props.onPress(),
+    );
 
-    const scienceOption = findPressableByText(testRenderer!.root, "Science (SCI-1)");
+    const scienceOption = findPressableByText(
+      testRenderer!.root,
+      "Science (SCI-1)",
+    );
     await act(async () => {
       scienceOption.props.onPress();
     });
@@ -1985,7 +2474,10 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).toContain("Science (SCI-1)");
     expect(renderedText).not.toContain("Here is a grounded explanation.");
 
-    promptButton = findPressableByText(testRenderer!.root, "Ask JA about this lesson");
+    promptButton = findPressableByText(
+      testRenderer!.root,
+      "Ask JA about this lesson",
+    );
     expect(promptButton.props.disabled).toBe(true);
     expect(mockedJaApi.sendAskMessage).toHaveBeenCalledTimes(1);
     expect(
@@ -2011,7 +2503,10 @@ describe("mobile rendered screen flows", () => {
     });
 
     expect(
-      testRenderer!.root.find((node) => node.type === "Text" && flattenText(node).includes("My Paths")),
+      testRenderer!.root.find(
+        (node) =>
+          node.type === "Text" && flattenText(node).includes("My Paths"),
+      ),
     ).toBeTruthy();
 
     const pathButton = findPressableByText(testRenderer!.root, "Mathematics");
@@ -2085,7 +2580,10 @@ describe("mobile rendered screen flows", () => {
       );
     });
 
-    const myCoursesButton = findPressableByText(testRenderer!.root, "My Courses");
+    const myCoursesButton = findPressableByText(
+      testRenderer!.root,
+      "My Courses",
+    );
     act(() => {
       myCoursesButton.props.onPress();
     });
@@ -2108,8 +2606,14 @@ describe("mobile rendered screen flows", () => {
     });
 
     const classesShortcut = findPressableByText(testRenderer!.root, "Classes");
-    const performanceShortcut = findPressableByText(testRenderer!.root, "Average");
-    const profileShortcut = findPressableByText(testRenderer!.root, "Complete your learner profile");
+    const performanceShortcut = findPressableByText(
+      testRenderer!.root,
+      "Average",
+    );
+    const profileShortcut = findPressableByText(
+      testRenderer!.root,
+      "Complete your learner profile",
+    );
 
     act(() => {
       classesShortcut.props.onPress();
@@ -2153,7 +2657,9 @@ describe("mobile rendered screen flows", () => {
       courseCard.props.onPress();
     });
 
-    expect(navigate).toHaveBeenCalledWith("ClassDetail", { classId: "class-1" });
+    expect(navigate).toHaveBeenCalledWith("ClassDetail", {
+      classId: "class-1",
+    });
   });
 
   it("refreshes course-derived lesson, completion, and assessment queries from pull-to-refresh", async () => {
@@ -2165,63 +2671,76 @@ describe("mobile rendered screen flows", () => {
 
     mockedUseStudentClasses.mockReturnValue(
       createQueryState(
-        [{ id: "class-1", subjectName: "Mathematics", subjectCode: "MATH-1", schoolYear: "2025-2026" }],
+        [
+          {
+            id: "class-1",
+            subjectName: "Mathematics",
+            subjectCode: "MATH-1",
+            schoolYear: "2025-2026",
+          },
+        ],
         { refetch: classesRefetch },
       ) as ReturnType<typeof useStudentClasses>,
     );
 
     let useQueriesCall = 0;
-    mockedUseQueries.mockImplementation(({ queries }: { queries: unknown[] }) => {
-      useQueriesCall += 1;
-      const phase = ((useQueriesCall - 1) % 4) + 1;
+    mockedUseQueries.mockImplementation(
+      ({ queries }: { queries: unknown[] }) => {
+        useQueriesCall += 1;
+        const phase = ((useQueriesCall - 1) % 4) + 1;
 
-      if (phase === 1) {
+        if (phase === 1) {
+          return queries.map(() => ({
+            data: [
+              {
+                id: "module-1",
+                classId: "class-1",
+                title: "Number Sense Module",
+                order: 1,
+                isLocked: false,
+                sections: [
+                  {
+                    id: "section-1",
+                    title: "Core Lessons",
+                    order: 1,
+                    items: [
+                      {
+                        id: "item-lesson-1",
+                        itemType: "lesson",
+                        order: 1,
+                        lessonId: "lesson-1",
+                        lesson: {
+                          id: "lesson-1",
+                          title: "Lesson 1",
+                          isDraft: false,
+                        },
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+            error: null,
+            isRefetching: false,
+            refetch: moduleRefetch,
+          }));
+        }
+        if (useQueriesCall === 2) {
+          return queries.map(() => ({
+            data: [{ lessonId: "lesson-1", completed: false }],
+            error: null,
+            isRefetching: false,
+            refetch: completionRefetch,
+          }));
+        }
         return queries.map(() => ({
-          data: [
-            {
-              id: "module-1",
-              classId: "class-1",
-              title: "Number Sense Module",
-              order: 1,
-              isLocked: false,
-              sections: [
-                {
-                  id: "section-1",
-                  title: "Core Lessons",
-                  order: 1,
-                  items: [
-                    {
-                      id: "item-lesson-1",
-                      itemType: "lesson",
-                      order: 1,
-                      lessonId: "lesson-1",
-                      lesson: { id: "lesson-1", title: "Lesson 1", isDraft: false },
-                    },
-                  ],
-                },
-              ],
-            },
-          ],
+          data: [{ id: "assessment-1" }],
           error: null,
           isRefetching: false,
-          refetch: moduleRefetch,
+          refetch: assessmentRefetch,
         }));
-      }
-      if (useQueriesCall === 2) {
-        return queries.map(() => ({
-          data: [{ lessonId: "lesson-1", completed: false }],
-          error: null,
-          isRefetching: false,
-          refetch: completionRefetch,
-        }));
-      }
-      return queries.map(() => ({
-        data: [{ id: "assessment-1" }],
-        error: null,
-        isRefetching: false,
-        refetch: assessmentRefetch,
-      }));
-    });
+      },
+    );
 
     let testRenderer: TestRenderer.ReactTestRenderer;
     act(() => {
@@ -2233,7 +2752,9 @@ describe("mobile rendered screen flows", () => {
       );
     });
 
-    const screenScroll = testRenderer!.root.find((node) => node.type === "ScreenScroll");
+    const screenScroll = testRenderer!.root.find(
+      (node) => node.type === "ScreenScroll",
+    );
     await act(async () => {
       await screenScroll.props.refreshControl.props.onRefresh();
     });
@@ -2248,80 +2769,90 @@ describe("mobile rendered screen flows", () => {
     const { CoursesScreen } = require("../CoursesScreen");
 
     let useQueriesCall = 0;
-    mockedUseQueries.mockImplementation(({ queries }: { queries: unknown[] }) => {
-      useQueriesCall += 1;
-      const phase = ((useQueriesCall - 1) % 4) + 1;
+    mockedUseQueries.mockImplementation(
+      ({ queries }: { queries: unknown[] }) => {
+        useQueriesCall += 1;
+        const phase = ((useQueriesCall - 1) % 4) + 1;
 
-      if (phase === 1) {
+        if (phase === 1) {
+          return queries.map(() => ({
+            data: [
+              {
+                id: "module-open",
+                classId: "class-1",
+                title: "Open Module",
+                order: 1,
+                isLocked: false,
+                sections: [
+                  {
+                    id: "section-open",
+                    title: "Visible Lessons",
+                    order: 1,
+                    items: [
+                      {
+                        id: "item-visible-lesson",
+                        itemType: "lesson",
+                        order: 1,
+                        lessonId: "lesson-visible",
+                        lesson: {
+                          id: "lesson-visible",
+                          title: "Visible Lesson",
+                          isDraft: false,
+                        },
+                      },
+                    ],
+                  },
+                ],
+              },
+              {
+                id: "module-locked",
+                classId: "class-1",
+                title: "Locked Module",
+                order: 2,
+                isLocked: true,
+                sections: [
+                  {
+                    id: "section-locked",
+                    title: "Locked Lessons",
+                    order: 1,
+                    items: [
+                      {
+                        id: "item-locked-lesson",
+                        itemType: "lesson",
+                        order: 1,
+                        lessonId: "lesson-locked",
+                        lesson: {
+                          id: "lesson-locked",
+                          title: "Locked Lesson",
+                          isDraft: false,
+                        },
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+            error: null,
+            isRefetching: false,
+            refetch: jest.fn().mockResolvedValue(undefined),
+          }));
+        }
+        if (useQueriesCall === 2) {
+          return queries.map(() => ({
+            data: [{ lessonId: "lesson-locked", completed: true }],
+            error: null,
+            isRefetching: false,
+            refetch: jest.fn().mockResolvedValue(undefined),
+          }));
+        }
         return queries.map(() => ({
-          data: [
-            {
-              id: "module-open",
-              classId: "class-1",
-              title: "Open Module",
-              order: 1,
-              isLocked: false,
-              sections: [
-                {
-                  id: "section-open",
-                  title: "Visible Lessons",
-                  order: 1,
-                  items: [
-                    {
-                      id: "item-visible-lesson",
-                      itemType: "lesson",
-                      order: 1,
-                      lessonId: "lesson-visible",
-                      lesson: { id: "lesson-visible", title: "Visible Lesson", isDraft: false },
-                    },
-                  ],
-                },
-              ],
-            },
-            {
-              id: "module-locked",
-              classId: "class-1",
-              title: "Locked Module",
-              order: 2,
-              isLocked: true,
-              sections: [
-                {
-                  id: "section-locked",
-                  title: "Locked Lessons",
-                  order: 1,
-                  items: [
-                    {
-                      id: "item-locked-lesson",
-                      itemType: "lesson",
-                      order: 1,
-                      lessonId: "lesson-locked",
-                      lesson: { id: "lesson-locked", title: "Locked Lesson", isDraft: false },
-                    },
-                  ],
-                },
-              ],
-            },
-          ],
+          data: [{ id: "assessment-1" }],
           error: null,
           isRefetching: false,
           refetch: jest.fn().mockResolvedValue(undefined),
         }));
-      }
-      if (useQueriesCall === 2) {
-        return queries.map(() => ({
-          data: [{ lessonId: "lesson-locked", completed: true }],
-          error: null,
-          isRefetching: false,
-          refetch: jest.fn().mockResolvedValue(undefined),
-        }));
-      }
-      return queries.map(() => ({
-        data: [{ id: "assessment-1" }],
-        error: null,
-        isRefetching: false,
-        refetch: jest.fn().mockResolvedValue(undefined),
-      }));
-    });
+      },
+    );
 
     let testRenderer: TestRenderer.ReactTestRenderer;
     act(() => {
@@ -2392,7 +2923,14 @@ describe("mobile rendered screen flows", () => {
           schoolYear: "2025-2026",
           section: { id: "section-1", name: "Section A", gradeLevel: "10" },
           teacher: { id: "teacher-1", firstName: "Teacher", lastName: "One" },
-          schedules: [{ id: "schedule-1", days: ["Mon"], startTime: "08:00", endTime: "09:00" }],
+          schedules: [
+            {
+              id: "schedule-1",
+              days: ["Mon"],
+              startTime: "08:00",
+              endTime: "09:00",
+            },
+          ],
         },
         {
           id: "class-2",
@@ -2406,104 +2944,147 @@ describe("mobile rendered screen flows", () => {
     );
 
     let useQueriesCall = 0;
-    mockedUseQueries.mockImplementation(({ queries }: { queries: unknown[] }) => {
-      useQueriesCall += 1;
-      const phase = ((useQueriesCall - 1) % 4) + 1;
+    mockedUseQueries.mockImplementation(
+      ({ queries }: { queries: unknown[] }) => {
+        useQueriesCall += 1;
+        const phase = ((useQueriesCall - 1) % 4) + 1;
 
-      if (phase === 1) {
+        if (phase === 1) {
+          return [
+            {
+              data: [
+                {
+                  id: "module-1",
+                  classId: "class-1",
+                  title: "Number Sense Module",
+                  order: 1,
+                  isLocked: false,
+                  sections: [
+                    {
+                      id: "section-1",
+                      title: "Lessons",
+                      order: 1,
+                      items: [
+                        {
+                          id: "item-lesson-1",
+                          itemType: "lesson",
+                          order: 1,
+                          lessonId: "lesson-1",
+                          lesson: {
+                            id: "lesson-1",
+                            title: "Lesson 1",
+                            isDraft: false,
+                          },
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+              error: null,
+              isRefetching: false,
+              refetch: jest.fn().mockResolvedValue(undefined),
+            },
+            {
+              data: [
+                {
+                  id: "module-2",
+                  classId: "class-2",
+                  title: "Reading Module",
+                  order: 1,
+                  isLocked: false,
+                  sections: [
+                    {
+                      id: "section-2",
+                      title: "Lessons",
+                      order: 1,
+                      items: [
+                        {
+                          id: "item-lesson-2",
+                          itemType: "lesson",
+                          order: 1,
+                          lessonId: "lesson-2",
+                          lesson: {
+                            id: "lesson-2",
+                            title: "Lesson 2",
+                            isDraft: false,
+                          },
+                        },
+                        {
+                          id: "item-lesson-3",
+                          itemType: "lesson",
+                          order: 2,
+                          lessonId: "lesson-3",
+                          lesson: {
+                            id: "lesson-3",
+                            title: "Lesson 3",
+                            isDraft: false,
+                          },
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+              error: null,
+              isRefetching: false,
+              refetch: jest.fn().mockResolvedValue(undefined),
+            },
+          ];
+        }
+        if (phase === 2) {
+          return [
+            {
+              data: [{ lessonId: "lesson-1", completed: false }],
+              error: null,
+              isRefetching: false,
+              refetch: jest.fn().mockResolvedValue(undefined),
+            },
+            {
+              data: [
+                { lessonId: "lesson-2", completed: true },
+                { lessonId: "lesson-3", completed: true },
+              ],
+              error: null,
+              isRefetching: false,
+              refetch: jest.fn().mockResolvedValue(undefined),
+            },
+          ];
+        }
+        if (phase === 3) {
+          return [
+            {
+              data: [
+                {
+                  id: "announcement-1",
+                  title: "Notebook",
+                  content: "Bring it tomorrow.",
+                },
+              ],
+              error: null,
+              isRefetching: false,
+              refetch: jest.fn().mockResolvedValue(undefined),
+            },
+            {
+              data: [],
+              error: null,
+              isRefetching: false,
+              refetch: jest.fn().mockResolvedValue(undefined),
+            },
+          ];
+        }
+
         return [
           {
             data: [
               {
-                id: "module-1",
+                id: "assessment-1",
                 classId: "class-1",
-                title: "Number Sense Module",
-                order: 1,
-                isLocked: false,
-                sections: [
-                  {
-                    id: "section-1",
-                    title: "Lessons",
-                    order: 1,
-                    items: [
-                      {
-                        id: "item-lesson-1",
-                        itemType: "lesson",
-                        order: 1,
-                        lessonId: "lesson-1",
-                        lesson: { id: "lesson-1", title: "Lesson 1", isDraft: false },
-                      },
-                    ],
-                  },
-                ],
+                title: "Assessment 1",
+                isPublished: true,
+                dueDate: "2026-04-20T09:00:00.000Z",
               },
             ],
-            error: null,
-            isRefetching: false,
-            refetch: jest.fn().mockResolvedValue(undefined),
-          },
-          {
-            data: [
-              {
-                id: "module-2",
-                classId: "class-2",
-                title: "Reading Module",
-                order: 1,
-                isLocked: false,
-                sections: [
-                  {
-                    id: "section-2",
-                    title: "Lessons",
-                    order: 1,
-                    items: [
-                      {
-                        id: "item-lesson-2",
-                        itemType: "lesson",
-                        order: 1,
-                        lessonId: "lesson-2",
-                        lesson: { id: "lesson-2", title: "Lesson 2", isDraft: false },
-                      },
-                      {
-                        id: "item-lesson-3",
-                        itemType: "lesson",
-                        order: 2,
-                        lessonId: "lesson-3",
-                        lesson: { id: "lesson-3", title: "Lesson 3", isDraft: false },
-                      },
-                    ],
-                  },
-                ],
-              },
-            ],
-            error: null,
-            isRefetching: false,
-            refetch: jest.fn().mockResolvedValue(undefined),
-          },
-        ];
-      }
-      if (phase === 2) {
-        return [
-          {
-            data: [{ lessonId: "lesson-1", completed: false }],
-            error: null,
-            isRefetching: false,
-            refetch: jest.fn().mockResolvedValue(undefined),
-          },
-          {
-            data: [
-              { lessonId: "lesson-2", completed: true },
-              { lessonId: "lesson-3", completed: true },
-            ],
-            error: null,
-            isRefetching: false,
-            refetch: jest.fn().mockResolvedValue(undefined),
-          },
-        ];
-      }
-      if (phase === 3) {
-        return [
-          {
-            data: [{ id: "announcement-1", title: "Notebook", content: "Bring it tomorrow." }],
             error: null,
             isRefetching: false,
             refetch: jest.fn().mockResolvedValue(undefined),
@@ -2515,23 +3096,8 @@ describe("mobile rendered screen flows", () => {
             refetch: jest.fn().mockResolvedValue(undefined),
           },
         ];
-      }
-
-      return [
-        {
-          data: [{ id: "assessment-1", classId: "class-1", title: "Assessment 1", isPublished: true, dueDate: "2026-04-20T09:00:00.000Z" }],
-          error: null,
-          isRefetching: false,
-          refetch: jest.fn().mockResolvedValue(undefined),
-        },
-        {
-          data: [],
-          error: null,
-          isRefetching: false,
-          refetch: jest.fn().mockResolvedValue(undefined),
-        },
-      ];
-    });
+      },
+    );
 
     let testRenderer: TestRenderer.ReactTestRenderer;
     act(() => {
@@ -2576,7 +3142,10 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).toContain("1 new");
     expect(renderedText).toContain("2 events");
 
-    const announcementsAction = findPressableByText(testRenderer!.root, "Announcements");
+    const announcementsAction = findPressableByText(
+      testRenderer!.root,
+      "Announcements",
+    );
     act(() => {
       announcementsAction.props.onPress();
     });
@@ -2606,14 +3175,28 @@ describe("mobile rendered screen flows", () => {
     const mappers = require("../../data/mappers");
     const originalToSubjectCard = mappers.toSubjectCard.getMockImplementation();
     const originalToLessonCards = mappers.toLessonCards.getMockImplementation();
-    const originalFindContinueLearning = mappers.findContinueLearning.getMockImplementation();
+    const originalFindContinueLearning =
+      mappers.findContinueLearning.getMockImplementation();
 
     mappers.toSubjectCard.mockImplementation(
-      (classItem: { id: string; subjectName: string; subjectCode: string }, lessons: Array<{ id: string }>, completions: Array<{ lessonId: string; completed: boolean }>) => {
-        const completedIds = new Set(completions.filter((entry) => entry.completed).map((entry) => entry.lessonId));
+      (
+        classItem: { id: string; subjectName: string; subjectCode: string },
+        lessons: Array<{ id: string }>,
+        completions: Array<{ lessonId: string; completed: boolean }>,
+      ) => {
+        const completedIds = new Set(
+          completions
+            .filter((entry) => entry.completed)
+            .map((entry) => entry.lessonId),
+        );
         const totalLessons = lessons.length;
-        const completedLessons = lessons.filter((lesson) => completedIds.has(lesson.id)).length;
-        const progress = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
+        const completedLessons = lessons.filter((lesson) =>
+          completedIds.has(lesson.id),
+        ).length;
+        const progress =
+          totalLessons > 0
+            ? Math.round((completedLessons / totalLessons) * 100)
+            : 0;
 
         return {
           id: classItem.id,
@@ -2632,21 +3215,40 @@ describe("mobile rendered screen flows", () => {
     );
     mappers.toLessonCards.mockImplementation(
       (
-        lessons: Array<{ id: string; title: string; description?: string; order?: number }>,
+        lessons: Array<{
+          id: string;
+          title: string;
+          description?: string;
+          order?: number;
+        }>,
         completions: Array<{ lessonId: string; completed: boolean }>,
         subject: { id: string },
       ) => {
-        const completedIds = new Set(completions.filter((entry) => entry.completed).map((entry) => entry.lessonId));
-        const ordered = [...lessons].sort((left, right) => (left.order ?? 0) - (right.order ?? 0));
-        const firstIncompleteIndex = ordered.findIndex((lesson) => !completedIds.has(lesson.id));
+        const completedIds = new Set(
+          completions
+            .filter((entry) => entry.completed)
+            .map((entry) => entry.lessonId),
+        );
+        const ordered = [...lessons].sort(
+          (left, right) => (left.order ?? 0) - (right.order ?? 0),
+        );
+        const firstIncompleteIndex = ordered.findIndex(
+          (lesson) => !completedIds.has(lesson.id),
+        );
 
         return ordered.map((lesson, index) => ({
           id: lesson.id,
           subjectId: subject.id,
           title: lesson.title,
-          description: lesson.description || "Lesson content is available in the class module.",
+          description:
+            lesson.description ||
+            "Lesson content is available in the class module.",
           duration: "15 min",
-          status: completedIds.has(lesson.id) ? "completed" : firstIncompleteIndex === -1 || index === firstIncompleteIndex ? "ongoing" : "locked",
+          status: completedIds.has(lesson.id)
+            ? "completed"
+            : firstIncompleteIndex === -1 || index === firstIncompleteIndex
+              ? "ongoing"
+              : "locked",
         }));
       },
     );
@@ -2663,88 +3265,98 @@ describe("mobile rendered screen flows", () => {
     );
 
     let useQueriesCall = 0;
-    mockedUseQueries.mockImplementation(({ queries }: { queries: unknown[] }) => {
-      useQueriesCall += 1;
-      const phase = ((useQueriesCall - 1) % 4) + 1;
+    mockedUseQueries.mockImplementation(
+      ({ queries }: { queries: unknown[] }) => {
+        useQueriesCall += 1;
+        const phase = ((useQueriesCall - 1) % 4) + 1;
 
-      if (phase === 1) {
-        return queries.map(() => ({
-          data: [
-            {
-              id: "module-open",
-              classId: "class-1",
-              title: "Visible Module",
-              order: 1,
-              isLocked: false,
-              sections: [
-                {
-                  id: "section-open",
-                  title: "Visible Lessons",
-                  order: 1,
-                  items: [
-                    {
-                      id: "item-visible-lesson",
-                      itemType: "lesson",
-                      order: 1,
-                      lessonId: "lesson-visible",
-                      lesson: { id: "lesson-visible", title: "Visible Lesson", isDraft: false },
-                    },
-                  ],
-                },
-              ],
-            },
-            {
-              id: "module-locked",
-              classId: "class-1",
-              title: "Locked Module",
-              order: 2,
-              isLocked: true,
-              sections: [
-                {
-                  id: "section-locked",
-                  title: "Locked Lessons",
-                  order: 1,
-                  items: [
-                    {
-                      id: "item-locked-lesson",
-                      itemType: "lesson",
-                      order: 1,
-                      lessonId: "lesson-locked",
-                      lesson: { id: "lesson-locked", title: "Locked Lesson", isDraft: false },
-                    },
-                  ],
-                },
-              ],
-            },
-          ],
-          error: null,
-          isRefetching: false,
-          refetch: jest.fn().mockResolvedValue(undefined),
-        }));
-      }
-      if (phase === 2) {
-        return queries.map(() => ({
-          data: [{ lessonId: "lesson-locked", completed: true }],
-          error: null,
-          isRefetching: false,
-          refetch: jest.fn().mockResolvedValue(undefined),
-        }));
-      }
-      if (phase === 3) {
+        if (phase === 1) {
+          return queries.map(() => ({
+            data: [
+              {
+                id: "module-open",
+                classId: "class-1",
+                title: "Visible Module",
+                order: 1,
+                isLocked: false,
+                sections: [
+                  {
+                    id: "section-open",
+                    title: "Visible Lessons",
+                    order: 1,
+                    items: [
+                      {
+                        id: "item-visible-lesson",
+                        itemType: "lesson",
+                        order: 1,
+                        lessonId: "lesson-visible",
+                        lesson: {
+                          id: "lesson-visible",
+                          title: "Visible Lesson",
+                          isDraft: false,
+                        },
+                      },
+                    ],
+                  },
+                ],
+              },
+              {
+                id: "module-locked",
+                classId: "class-1",
+                title: "Locked Module",
+                order: 2,
+                isLocked: true,
+                sections: [
+                  {
+                    id: "section-locked",
+                    title: "Locked Lessons",
+                    order: 1,
+                    items: [
+                      {
+                        id: "item-locked-lesson",
+                        itemType: "lesson",
+                        order: 1,
+                        lessonId: "lesson-locked",
+                        lesson: {
+                          id: "lesson-locked",
+                          title: "Locked Lesson",
+                          isDraft: false,
+                        },
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+            error: null,
+            isRefetching: false,
+            refetch: jest.fn().mockResolvedValue(undefined),
+          }));
+        }
+        if (phase === 2) {
+          return queries.map(() => ({
+            data: [{ lessonId: "lesson-locked", completed: true }],
+            error: null,
+            isRefetching: false,
+            refetch: jest.fn().mockResolvedValue(undefined),
+          }));
+        }
+        if (phase === 3) {
+          return queries.map(() => ({
+            data: [],
+            error: null,
+            isRefetching: false,
+            refetch: jest.fn().mockResolvedValue(undefined),
+          }));
+        }
         return queries.map(() => ({
           data: [],
           error: null,
           isRefetching: false,
           refetch: jest.fn().mockResolvedValue(undefined),
         }));
-      }
-      return queries.map(() => ({
-        data: [],
-        error: null,
-        isRefetching: false,
-        refetch: jest.fn().mockResolvedValue(undefined),
-      }));
-    });
+      },
+    );
 
     try {
       let testRenderer: TestRenderer.ReactTestRenderer;
@@ -2797,7 +3409,9 @@ describe("mobile rendered screen flows", () => {
     } finally {
       mappers.toSubjectCard.mockImplementation(originalToSubjectCard);
       mappers.toLessonCards.mockImplementation(originalToLessonCards);
-      mappers.findContinueLearning.mockImplementation(originalFindContinueLearning);
+      mappers.findContinueLearning.mockImplementation(
+        originalFindContinueLearning,
+      );
     }
   });
 
@@ -2826,75 +3440,116 @@ describe("mobile rendered screen flows", () => {
     );
 
     let useQueriesCall = 0;
-    mockedUseQueries.mockImplementation(({ queries }: { queries: unknown[] }) => {
-      useQueriesCall += 1;
-      const phase = ((useQueriesCall - 1) % 4) + 1;
+    mockedUseQueries.mockImplementation(
+      ({ queries }: { queries: unknown[] }) => {
+        useQueriesCall += 1;
+        const phase = ((useQueriesCall - 1) % 4) + 1;
 
-      if (phase === 1) {
-        return [
-          {
-            data: [
-              {
-                id: "module-1",
-                classId: "class-1",
-                title: "Math Module",
-                order: 1,
-                isLocked: false,
-                sections: [
-                  {
-                    id: "section-1",
-                    title: "Lessons",
-                    order: 1,
-                    items: [
-                      {
-                        id: "item-lesson-1",
-                        itemType: "lesson",
-                        order: 1,
-                        lessonId: "lesson-1",
-                        lesson: { id: "lesson-1", title: "Lesson 1", isDraft: false },
-                      },
-                    ],
-                  },
-                ],
-              },
-            ],
-            error: null,
-            isRefetching: false,
-            refetch: jest.fn().mockResolvedValue(undefined),
-          },
-          {
-            data: [
-              {
-                id: "module-2",
-                classId: "class-2",
-                title: "English Module",
-                order: 1,
-                isLocked: false,
-                sections: [
-                  {
-                    id: "section-2",
-                    title: "Lessons",
-                    order: 1,
-                    items: [
-                      {
-                        id: "item-lesson-2",
-                        itemType: "lesson",
-                        order: 1,
-                        lessonId: "lesson-2",
-                        lesson: { id: "lesson-2", title: "Lesson 2", isDraft: false },
-                      },
-                    ],
-                  },
-                ],
-              },
-            ],
-            error: null,
-            isRefetching: false,
-            refetch: jest.fn().mockResolvedValue(undefined),
-          },
-        ];
-      }
-      if (phase === 2) {
+        if (phase === 1) {
+          return [
+            {
+              data: [
+                {
+                  id: "module-1",
+                  classId: "class-1",
+                  title: "Math Module",
+                  order: 1,
+                  isLocked: false,
+                  sections: [
+                    {
+                      id: "section-1",
+                      title: "Lessons",
+                      order: 1,
+                      items: [
+                        {
+                          id: "item-lesson-1",
+                          itemType: "lesson",
+                          order: 1,
+                          lessonId: "lesson-1",
+                          lesson: {
+                            id: "lesson-1",
+                            title: "Lesson 1",
+                            isDraft: false,
+                          },
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+              error: null,
+              isRefetching: false,
+              refetch: jest.fn().mockResolvedValue(undefined),
+            },
+            {
+              data: [
+                {
+                  id: "module-2",
+                  classId: "class-2",
+                  title: "English Module",
+                  order: 1,
+                  isLocked: false,
+                  sections: [
+                    {
+                      id: "section-2",
+                      title: "Lessons",
+                      order: 1,
+                      items: [
+                        {
+                          id: "item-lesson-2",
+                          itemType: "lesson",
+                          order: 1,
+                          lessonId: "lesson-2",
+                          lesson: {
+                            id: "lesson-2",
+                            title: "Lesson 2",
+                            isDraft: false,
+                          },
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+              error: null,
+              isRefetching: false,
+              refetch: jest.fn().mockResolvedValue(undefined),
+            },
+          ];
+        }
+        if (phase === 2) {
+          return [
+            {
+              data: [],
+              error: null,
+              isRefetching: false,
+              refetch: jest.fn().mockResolvedValue(undefined),
+            },
+            {
+              data: [{ lessonId: "lesson-2", completed: true }],
+              error: null,
+              isRefetching: false,
+              refetch: jest.fn().mockResolvedValue(undefined),
+            },
+          ];
+        }
+        if (phase === 3) {
+          return [
+            {
+              data: [],
+              error: null,
+              isRefetching: false,
+              refetch: jest.fn().mockResolvedValue(undefined),
+            },
+            {
+              data: [],
+              error: null,
+              isRefetching: false,
+              refetch: jest.fn().mockResolvedValue(undefined),
+            },
+          ];
+        }
+
         return [
           {
             data: [],
@@ -2903,35 +3558,14 @@ describe("mobile rendered screen flows", () => {
             refetch: jest.fn().mockResolvedValue(undefined),
           },
           {
-            data: [{ lessonId: "lesson-2", completed: true }],
+            data: [],
             error: null,
             isRefetching: false,
             refetch: jest.fn().mockResolvedValue(undefined),
           },
         ];
-      }
-      if (phase === 3) {
-        return [
-          { data: [], error: null, isRefetching: false, refetch: jest.fn().mockResolvedValue(undefined) },
-          { data: [], error: null, isRefetching: false, refetch: jest.fn().mockResolvedValue(undefined) },
-        ];
-      }
-
-      return [
-        {
-          data: [],
-          error: null,
-          isRefetching: false,
-          refetch: jest.fn().mockResolvedValue(undefined),
-        },
-        {
-          data: [],
-          error: null,
-          isRefetching: false,
-          refetch: jest.fn().mockResolvedValue(undefined),
-        },
-      ];
-    });
+      },
+    );
 
     let testRenderer: TestRenderer.ReactTestRenderer;
     act(() => {
@@ -2959,13 +3593,17 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).not.toContain("Mathematics");
 
     const searchButton = testRenderer!.root.find(
-      (node) => node.type === "Pressable" && node.props.accessibilityLabel === "Open class search",
+      (node) =>
+        node.type === "Pressable" &&
+        node.props.accessibilityLabel === "Open class search",
     );
     act(() => {
       searchButton.props.onPress();
     });
 
-    const searchField = testRenderer!.root.find((node) => node.type === "TextInput");
+    const searchField = testRenderer!.root.find(
+      (node) => node.type === "TextInput",
+    );
     act(() => {
       searchField.props.onChangeText("science");
     });
@@ -2987,7 +3625,11 @@ describe("mobile rendered screen flows", () => {
       testRenderer = TestRenderer.create(
         React.createElement(ClassDetailScreen, {
           navigation: { goBack: jest.fn(), navigate } as never,
-          route: { key: "ClassDetail", name: "ClassDetail", params: { classId: "class-1" } } as never,
+          route: {
+            key: "ClassDetail",
+            name: "ClassDetail",
+            params: { classId: "class-1" },
+          } as never,
         }),
       );
     });
@@ -3000,12 +3642,18 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).toContain("Mathematics");
     expect(renderedText).toContain("Number Sense Module");
 
-    const moduleCard = findPressableByText(testRenderer!.root, "Number Sense Module");
+    const moduleCard = findPressableByText(
+      testRenderer!.root,
+      "Number Sense Module",
+    );
     act(() => {
       moduleCard.props.onPress();
     });
 
-    expect(navigate).toHaveBeenCalledWith("ModuleDetail", { classId: "class-1", moduleId: "module-1" });
+    expect(navigate).toHaveBeenCalledWith("ModuleDetail", {
+      classId: "class-1",
+      moduleId: "module-1",
+    });
   });
 
   it("refreshes class-detail queries from pull-to-refresh", async () => {
@@ -3017,42 +3665,64 @@ describe("mobile rendered screen flows", () => {
     const announcementRefetch = jest.fn().mockResolvedValue(undefined);
     const attemptRefetch = jest.fn().mockResolvedValue(undefined);
 
-    mockedUseClassDetail.mockImplementation(
-      ((classId?: string) =>
-        createQueryState(
-          classId
-            ? {
-                id: classId,
-                subjectName: "Mathematics",
-                subjectCode: "MATH-1",
-                sectionId: "section-1",
-                section: { id: "section-1", name: "Section A", gradeLevel: "10" },
-                teacherId: "teacher-1",
-                teacher: { id: "teacher-1", firstName: "Teacher", lastName: "One" },
-                schoolYear: "2025-2026",
-                isActive: true,
-              }
-            : undefined,
-          { refetch: classRefetch },
-        )) as ReturnType<typeof useClassDetail>,
-    );
+    mockedUseClassDetail.mockImplementation(((classId?: string) =>
+      createQueryState(
+        classId
+          ? {
+              id: classId,
+              subjectName: "Mathematics",
+              subjectCode: "MATH-1",
+              sectionId: "section-1",
+              section: { id: "section-1", name: "Section A", gradeLevel: "10" },
+              teacherId: "teacher-1",
+              teacher: {
+                id: "teacher-1",
+                firstName: "Teacher",
+                lastName: "One",
+              },
+              schoolYear: "2025-2026",
+              isActive: true,
+            }
+          : undefined,
+        { refetch: classRefetch },
+      )) as ReturnType<typeof useClassDetail>);
     mockedUseClassModules.mockReturnValue(
       createQueryState(
-        [{ id: "module-1", classId: "class-1", title: "Number Sense Module", order: 1, sections: [] }],
+        [
+          {
+            id: "module-1",
+            classId: "class-1",
+            title: "Number Sense Module",
+            order: 1,
+            sections: [],
+          },
+        ],
         { refetch: moduleRefetch },
       ) as ReturnType<typeof useClassModules>,
     );
     mockedUseLessonCompletions.mockReturnValue(
-      createQueryState([], { refetch: completionRefetch }) as ReturnType<typeof useLessonCompletions>,
+      createQueryState([], { refetch: completionRefetch }) as ReturnType<
+        typeof useLessonCompletions
+      >,
     );
     mockedUseAssessments.mockReturnValue(
       createQueryState(
-        [{ id: "assessment-1", classId: "class-1", title: "Assessment 1", type: "quiz", isPublished: true }],
+        [
+          {
+            id: "assessment-1",
+            classId: "class-1",
+            title: "Assessment 1",
+            type: "quiz",
+            isPublished: true,
+          },
+        ],
         { refetch: assessmentRefetch },
       ) as ReturnType<typeof useAssessments>,
     );
     mockedUseAnnouncements.mockReturnValue(
-      createQueryState([], { refetch: announcementRefetch }) as ReturnType<typeof useAnnouncements>,
+      createQueryState([], { refetch: announcementRefetch }) as ReturnType<
+        typeof useAnnouncements
+      >,
     );
     mockedUseQueries.mockImplementation(({ queries }: { queries: unknown[] }) =>
       queries.map(() => ({
@@ -3068,12 +3738,18 @@ describe("mobile rendered screen flows", () => {
       testRenderer = TestRenderer.create(
         React.createElement(ClassDetailScreen, {
           navigation: { goBack: jest.fn(), navigate: jest.fn() } as never,
-          route: { key: "ClassDetail", name: "ClassDetail", params: { classId: "class-1" } } as never,
+          route: {
+            key: "ClassDetail",
+            name: "ClassDetail",
+            params: { classId: "class-1" },
+          } as never,
         }),
       );
     });
 
-    const screenScroll = testRenderer!.root.find((node) => node.type === "ScreenScroll");
+    const screenScroll = testRenderer!.root.find(
+      (node) => node.type === "ScreenScroll",
+    );
     await act(async () => {
       await screenScroll.props.refreshControl.props.onRefresh();
     });
@@ -3194,90 +3870,96 @@ describe("mobile rendered screen flows", () => {
     const { ClassDetailScreen } = require("../ClassDetailScreen");
     const navigate = jest.fn();
 
-    mockedUseClassModules.mockImplementation(
-      ((classId?: string) =>
-        createQueryState(
-          classId
-            ? [
-                {
-                  id: "module-open",
-                  classId,
-                  title: "Open Module",
-                  order: 1,
-                  progressPercent: 0,
-                  isLocked: false,
-                  sections: [
-                    {
-                      id: "section-open",
-                      title: "Visible Lessons",
-                      order: 1,
-                      items: [
-                        {
-                          id: "item-visible-lesson",
-                          itemType: "lesson",
-                          order: 1,
-                          lessonId: "lesson-visible",
-                          lesson: { id: "lesson-visible", title: "Visible Lesson", isDraft: false },
+    mockedUseClassModules.mockImplementation(((classId?: string) =>
+      createQueryState(
+        classId
+          ? [
+              {
+                id: "module-open",
+                classId,
+                title: "Open Module",
+                order: 1,
+                progressPercent: 0,
+                isLocked: false,
+                sections: [
+                  {
+                    id: "section-open",
+                    title: "Visible Lessons",
+                    order: 1,
+                    items: [
+                      {
+                        id: "item-visible-lesson",
+                        itemType: "lesson",
+                        order: 1,
+                        lessonId: "lesson-visible",
+                        lesson: {
+                          id: "lesson-visible",
+                          title: "Visible Lesson",
+                          isDraft: false,
                         },
-                      ],
-                    },
-                  ],
-                },
-                {
-                  id: "module-locked",
-                  classId,
-                  title: "Locked Module",
-                  order: 2,
-                  progressPercent: 100,
-                  isLocked: true,
-                  sections: [
-                    {
-                      id: "section-locked",
-                      title: "Locked Lessons",
-                      order: 1,
-                      items: [
-                        {
-                          id: "item-locked-lesson",
-                          itemType: "lesson",
-                          order: 1,
-                          lessonId: "lesson-locked",
-                          lesson: { id: "lesson-locked", title: "Locked Lesson", isDraft: false },
+                      },
+                    ],
+                  },
+                ],
+              },
+              {
+                id: "module-locked",
+                classId,
+                title: "Locked Module",
+                order: 2,
+                progressPercent: 100,
+                isLocked: true,
+                sections: [
+                  {
+                    id: "section-locked",
+                    title: "Locked Lessons",
+                    order: 1,
+                    items: [
+                      {
+                        id: "item-locked-lesson",
+                        itemType: "lesson",
+                        order: 1,
+                        lessonId: "lesson-locked",
+                        lesson: {
+                          id: "lesson-locked",
+                          title: "Locked Lesson",
+                          isDraft: false,
                         },
-                      ],
-                    },
-                  ],
-                },
-              ]
-            : [],
-        )) as ReturnType<typeof useClassModules>,
-    );
-    mockedUseLessons.mockImplementation(
-      ((classId?: string) =>
-        createQueryState(
-          classId
-            ? [
-                {
-                  id: "lesson-locked",
-                  classId,
-                  title: "Locked Lesson",
-                  description: "Should stay hidden behind the locked module.",
-                  order: 1,
-                  isDraft: false,
-                },
-                {
-                  id: "lesson-visible",
-                  classId,
-                  title: "Visible Lesson",
-                  description: "The first student-visible lesson.",
-                  order: 2,
-                  isDraft: false,
-                },
-              ]
-            : [],
-        )) as ReturnType<typeof useLessons>,
-    );
+                      },
+                    ],
+                  },
+                ],
+              },
+            ]
+          : [],
+      )) as ReturnType<typeof useClassModules>);
+    mockedUseLessons.mockImplementation(((classId?: string) =>
+      createQueryState(
+        classId
+          ? [
+              {
+                id: "lesson-locked",
+                classId,
+                title: "Locked Lesson",
+                description: "Should stay hidden behind the locked module.",
+                order: 1,
+                isDraft: false,
+              },
+              {
+                id: "lesson-visible",
+                classId,
+                title: "Visible Lesson",
+                description: "The first student-visible lesson.",
+                order: 2,
+                isDraft: false,
+              },
+            ]
+          : [],
+      )) as ReturnType<typeof useLessons>);
     mockedUseLessonCompletions.mockReturnValue(
-      createQueryState([{ lessonId: "lesson-locked", completed: true }]) as ReturnType<typeof useLessonCompletions>,
+      createQueryState([
+        { lessonId: "lesson-locked", completed: true },
+      ]) as ReturnType<typeof useLessonCompletions>,
     );
 
     let testRenderer: TestRenderer.ReactTestRenderer;
@@ -3285,7 +3967,11 @@ describe("mobile rendered screen flows", () => {
       testRenderer = TestRenderer.create(
         React.createElement(ClassDetailScreen, {
           navigation: { goBack: jest.fn(), navigate } as never,
-          route: { key: "ClassDetail", name: "ClassDetail", params: { classId: "class-1" } } as never,
+          route: {
+            key: "ClassDetail",
+            name: "ClassDetail",
+            params: { classId: "class-1" },
+          } as never,
         }),
       );
     });
@@ -3299,18 +3985,26 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).not.toContain("1/2 lessons completed");
 
     const toggleModule = testRenderer!.root.find(
-      (node) => node.type === "Pressable" && node.props.accessibilityLabel === "Toggle Open Module",
+      (node) =>
+        node.type === "Pressable" &&
+        node.props.accessibilityLabel === "Toggle Open Module",
     );
     act(() => {
       toggleModule.props.onPress();
     });
 
-    const visibleLesson = findPressableByText(testRenderer!.root, "Visible Lesson");
+    const visibleLesson = findPressableByText(
+      testRenderer!.root,
+      "Visible Lesson",
+    );
     act(() => {
       visibleLesson.props.onPress();
     });
 
-    expect(navigate).toHaveBeenCalledWith("LessonDetail", { lessonId: "lesson-visible", classId: "class-1" });
+    expect(navigate).toHaveBeenCalledWith("LessonDetail", {
+      lessonId: "lesson-visible",
+      classId: "class-1",
+    });
   });
 
   it("renders the standalone calendar screen and opens assessment items", async () => {
@@ -3318,43 +4012,53 @@ describe("mobile rendered screen flows", () => {
     const navigate = jest.fn();
     const todayIso = new Date().toISOString();
 
-    mockedUseSchoolEvents.mockReturnValue(createQueryState([]) as ReturnType<typeof useSchoolEvents>);
-    mockedUseQueries.mockImplementation(({ queries }: { queries: Array<{ queryKey?: unknown[] }> }) => {
-      const firstQueryKey = Array.isArray(queries[0]?.queryKey) ? String(queries[0]?.queryKey?.[0] ?? "") : "";
+    mockedUseSchoolEvents.mockReturnValue(
+      createQueryState([]) as ReturnType<typeof useSchoolEvents>,
+    );
+    mockedUseQueries.mockImplementation(
+      ({ queries }: { queries: Array<{ queryKey?: unknown[] }> }) => {
+        const firstQueryKey = Array.isArray(queries[0]?.queryKey)
+          ? String(queries[0]?.queryKey?.[0] ?? "")
+          : "";
 
-      if (firstQueryKey === "assessments") {
+        if (firstQueryKey === "assessments") {
+          return queries.map(() => ({
+            data: [
+              {
+                id: "assessment-1",
+                classId: "class-1",
+                title: "Calendar Quiz",
+                description: "Review the chapter notes.",
+                type: "quiz",
+                isPublished: true,
+                dueDate: todayIso,
+              },
+            ],
+            error: null,
+            isRefetching: false,
+            refetch: jest.fn().mockResolvedValue(undefined),
+          }));
+        }
+
         return queries.map(() => ({
-          data: [
-            {
-              id: "assessment-1",
-              classId: "class-1",
-              title: "Calendar Quiz",
-              description: "Review the chapter notes.",
-              type: "quiz",
-              isPublished: true,
-              dueDate: todayIso,
-            },
-          ],
+          data: [],
           error: null,
           isRefetching: false,
           refetch: jest.fn().mockResolvedValue(undefined),
         }));
-      }
-
-      return queries.map(() => ({
-        data: [],
-        error: null,
-        isRefetching: false,
-        refetch: jest.fn().mockResolvedValue(undefined),
-      }));
-    });
+      },
+    );
 
     let testRenderer: TestRenderer.ReactTestRenderer;
     act(() => {
       testRenderer = TestRenderer.create(
         React.createElement(CalendarScreen, {
           navigation: { goBack: jest.fn(), navigate } as never,
-          route: { key: "Calendar", name: "Calendar", params: { classId: "class-1" } } as never,
+          route: {
+            key: "Calendar",
+            name: "Calendar",
+            params: { classId: "class-1" },
+          } as never,
         }),
       );
     });
@@ -3363,7 +4067,10 @@ describe("mobile rendered screen flows", () => {
     });
 
     expect(
-      testRenderer!.root.find((node) => node.type === "Text" && flattenText(node).includes("Calendar Quiz")),
+      testRenderer!.root.find(
+        (node) =>
+          node.type === "Text" && flattenText(node).includes("Calendar Quiz"),
+      ),
     ).toBeTruthy();
 
     act(() => {
@@ -3398,7 +4105,11 @@ describe("mobile rendered screen flows", () => {
       testRenderer = TestRenderer.create(
         React.createElement(ClassDetailScreen, {
           navigation: { goBack: jest.fn(), navigate: jest.fn() } as never,
-          route: { key: "ClassDetail", name: "ClassDetail", params: { classId: "class-1" } } as never,
+          route: {
+            key: "ClassDetail",
+            name: "ClassDetail",
+            params: { classId: "class-1" },
+          } as never,
         }),
       );
     });
@@ -3415,24 +4126,46 @@ describe("mobile rendered screen flows", () => {
 
   it("keeps the latest submitted score visible when a newer attempt is still in progress", () => {
     const { ClassDetailScreen } = require("../ClassDetailScreen");
-    mockedUseAssessments.mockImplementation(
-      ((classId?: string) =>
-        createQueryState(
-          classId
-            ? [
-                {
-                  id: "assessment-1",
-                  classId,
-                  title: "Assessment 1",
-                  type: "quiz",
-                  totalPoints: 100,
-                  isPublished: true,
-                  dueDate: "2026-04-20T09:00:00.000Z",
-                },
-              ]
-            : [],
-        )) as ReturnType<typeof useAssessments>,
+    mockedUsePerformanceSummary.mockReturnValue(
+      createQueryState({
+        threshold: 75,
+        classes: [
+          {
+            classId: "class-1",
+            assessmentAverage: 92,
+            classRecordAverage: 80,
+            blendedScore: 80,
+            assessmentSampleSize: 1,
+            classRecordSampleSize: 1,
+            hasData: true,
+            isAtRisk: false,
+            thresholdApplied: 75,
+          },
+        ],
+        overall: {
+          totalClasses: 1,
+          classesWithData: 1,
+          atRiskClasses: 0,
+          averageBlendedScore: 80,
+        },
+      }) as ReturnType<typeof usePerformanceSummary>,
     );
+    mockedUseAssessments.mockImplementation(((classId?: string) =>
+      createQueryState(
+        classId
+          ? [
+              {
+                id: "assessment-1",
+                classId,
+                title: "Assessment 1",
+                type: "quiz",
+                totalPoints: 100,
+                isPublished: true,
+                dueDate: "2026-04-20T09:00:00.000Z",
+              },
+            ]
+          : [],
+      )) as ReturnType<typeof useAssessments>);
     mockedUseQueries.mockImplementation(({ queries }: { queries: unknown[] }) =>
       queries.map(() => ({
         data: [
@@ -3450,6 +4183,17 @@ describe("mobile rendered screen flows", () => {
             assessmentId: "assessment-1",
             studentId: "student-1",
             score: 92,
+            scorePercent: 92,
+            scoreBreakdown: {
+              basePoints: 92,
+              bonusPoints: 0,
+              awardedPoints: 92,
+              possiblePoints: 100,
+              effectivePoints: 92,
+              scorePercent: 92,
+              wasCapped: false,
+              bonusReason: null,
+            },
             totalPoints: 100,
             isSubmitted: true,
             submittedAt: "2026-04-18T11:00:00.000Z",
@@ -3474,13 +4218,19 @@ describe("mobile rendered screen flows", () => {
       testRenderer = TestRenderer.create(
         React.createElement(ClassDetailScreen, {
           navigation: { goBack: jest.fn(), navigate: jest.fn() } as never,
-          route: { key: "ClassDetail", name: "ClassDetail", params: { classId: "class-1" } } as never,
+          route: {
+            key: "ClassDetail",
+            name: "ClassDetail",
+            params: { classId: "class-1" },
+          } as never,
         }),
       );
     });
 
     const moreTabsButton = testRenderer!.root.find(
-      (node) => node.type === "Pressable" && node.props.accessibilityLabel === "Open more class tabs",
+      (node) =>
+        node.type === "Pressable" &&
+        node.props.accessibilityLabel === "Open more class tabs",
     );
     act(() => {
       moreTabsButton.props.onPress();
@@ -3497,29 +4247,96 @@ describe("mobile rendered screen flows", () => {
       .join(" ");
 
     expect(renderedText).toContain("92/100");
+    expect(renderedText).toContain("92%");
+    expect(renderedText).toContain("Class record standing");
+    expect(renderedText).toContain("80.0%");
+    expect(renderedText).toContain("Assessment average (reference)");
+    expect(renderedText).toContain("is not added again");
+    expect(renderedText).not.toContain("Running Average");
+    expect(renderedText).not.toContain("Grading Breakdown");
     expect(renderedText).not.toContain("Pending");
+  });
+
+  it("caps a malformed canonical class standing at 100 percent", () => {
+    const { ClassDetailScreen } = require("../ClassDetailScreen");
+    mockedUsePerformanceSummary.mockReturnValue(
+      createQueryState({
+        threshold: 75,
+        classes: [
+          {
+            classId: "class-1",
+            assessmentAverage: 331,
+            classRecordAverage: 331,
+            blendedScore: 331,
+            assessmentSampleSize: 1,
+            classRecordSampleSize: 1,
+            hasData: true,
+            isAtRisk: false,
+            thresholdApplied: 75,
+          },
+        ],
+        overall: {
+          totalClasses: 1,
+          classesWithData: 1,
+          atRiskClasses: 0,
+          averageBlendedScore: 331,
+        },
+      }) as ReturnType<typeof usePerformanceSummary>,
+    );
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(ClassDetailScreen, {
+          navigation: { goBack: jest.fn(), navigate: jest.fn() } as never,
+          route: {
+            key: "ClassDetail",
+            name: "ClassDetail",
+            params: { classId: "class-1" },
+          } as never,
+        }),
+      );
+    });
+
+    act(() => {
+      testRenderer!.root
+        .find(
+          (node) =>
+            node.type === "Pressable" &&
+            node.props.accessibilityLabel === "Open more class tabs",
+        )
+        .props.onPress();
+    });
+    act(() => {
+      findPressableByText(testRenderer!.root, "Grades").props.onPress();
+    });
+
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+    expect(renderedText).toContain("100.0%");
+    expect(renderedText).not.toContain("331");
   });
 
   it("does not collapse unresolved attempt queries into a false pending grade", () => {
     const { ClassDetailScreen } = require("../ClassDetailScreen");
-    mockedUseAssessments.mockImplementation(
-      ((classId?: string) =>
-        createQueryState(
-          classId
-            ? [
-                {
-                  id: "assessment-1",
-                  classId,
-                  title: "Assessment 1",
-                  type: "quiz",
-                  totalPoints: 100,
-                  isPublished: true,
-                  dueDate: "2026-04-20T09:00:00.000Z",
-                },
-              ]
-            : [],
-        )) as ReturnType<typeof useAssessments>,
-    );
+    mockedUseAssessments.mockImplementation(((classId?: string) =>
+      createQueryState(
+        classId
+          ? [
+              {
+                id: "assessment-1",
+                classId,
+                title: "Assessment 1",
+                type: "quiz",
+                totalPoints: 100,
+                isPublished: true,
+                dueDate: "2026-04-20T09:00:00.000Z",
+              },
+            ]
+          : [],
+      )) as ReturnType<typeof useAssessments>);
     mockedUseQueries.mockImplementation(({ queries }: { queries: unknown[] }) =>
       queries.map(() => ({
         data: undefined,
@@ -3534,13 +4351,19 @@ describe("mobile rendered screen flows", () => {
       testRenderer = TestRenderer.create(
         React.createElement(ClassDetailScreen, {
           navigation: { goBack: jest.fn(), navigate: jest.fn() } as never,
-          route: { key: "ClassDetail", name: "ClassDetail", params: { classId: "class-1" } } as never,
+          route: {
+            key: "ClassDetail",
+            name: "ClassDetail",
+            params: { classId: "class-1" },
+          } as never,
         }),
       );
     });
 
     const moreTabsButton = testRenderer!.root.find(
-      (node) => node.type === "Pressable" && node.props.accessibilityLabel === "Open more class tabs",
+      (node) =>
+        node.type === "Pressable" &&
+        node.props.accessibilityLabel === "Open more class tabs",
     );
     act(() => {
       moreTabsButton.props.onPress();
@@ -3562,24 +4385,22 @@ describe("mobile rendered screen flows", () => {
 
   it("does not collapse failed attempt queries into a false pending grade", () => {
     const { ClassDetailScreen } = require("../ClassDetailScreen");
-    mockedUseAssessments.mockImplementation(
-      ((classId?: string) =>
-        createQueryState(
-          classId
-            ? [
-                {
-                  id: "assessment-1",
-                  classId,
-                  title: "Assessment 1",
-                  type: "quiz",
-                  totalPoints: 100,
-                  isPublished: true,
-                  dueDate: "2026-04-20T09:00:00.000Z",
-                },
-              ]
-            : [],
-        )) as ReturnType<typeof useAssessments>,
-    );
+    mockedUseAssessments.mockImplementation(((classId?: string) =>
+      createQueryState(
+        classId
+          ? [
+              {
+                id: "assessment-1",
+                classId,
+                title: "Assessment 1",
+                type: "quiz",
+                totalPoints: 100,
+                isPublished: true,
+                dueDate: "2026-04-20T09:00:00.000Z",
+              },
+            ]
+          : [],
+      )) as ReturnType<typeof useAssessments>);
     mockedUseQueries.mockImplementation(({ queries }: { queries: unknown[] }) =>
       queries.map(() => ({
         data: undefined,
@@ -3603,13 +4424,19 @@ describe("mobile rendered screen flows", () => {
       testRenderer = TestRenderer.create(
         React.createElement(ClassDetailScreen, {
           navigation: { goBack: jest.fn(), navigate: jest.fn() } as never,
-          route: { key: "ClassDetail", name: "ClassDetail", params: { classId: "class-1" } } as never,
+          route: {
+            key: "ClassDetail",
+            name: "ClassDetail",
+            params: { classId: "class-1" },
+          } as never,
         }),
       );
     });
 
     const moreTabsButton = testRenderer!.root.find(
-      (node) => node.type === "Pressable" && node.props.accessibilityLabel === "Open more class tabs",
+      (node) =>
+        node.type === "Pressable" &&
+        node.props.accessibilityLabel === "Open more class tabs",
     );
     act(() => {
       moreTabsButton.props.onPress();
@@ -3631,19 +4458,28 @@ describe("mobile rendered screen flows", () => {
 
   it("renders an explicit empty state when the announcements tab has no class announcements", () => {
     const { ClassDetailScreen } = require("../ClassDetailScreen");
-    mockedUseAnnouncements.mockReturnValue(createQueryState([]) as ReturnType<typeof useAnnouncements>);
+    mockedUseAnnouncements.mockReturnValue(
+      createQueryState([]) as ReturnType<typeof useAnnouncements>,
+    );
 
     let testRenderer: TestRenderer.ReactTestRenderer;
     act(() => {
       testRenderer = TestRenderer.create(
         React.createElement(ClassDetailScreen, {
           navigation: { goBack: jest.fn(), navigate: jest.fn() } as never,
-          route: { key: "ClassDetail", name: "ClassDetail", params: { classId: "class-1" } } as never,
+          route: {
+            key: "ClassDetail",
+            name: "ClassDetail",
+            params: { classId: "class-1" },
+          } as never,
         }),
       );
     });
 
-    const announcementsTab = findPressableByText(testRenderer!.root, "Announcements");
+    const announcementsTab = findPressableByText(
+      testRenderer!.root,
+      "Announcements",
+    );
     act(() => {
       announcementsTab.props.onPress();
     });
@@ -3654,7 +4490,9 @@ describe("mobile rendered screen flows", () => {
       .join(" ");
 
     expect(renderedText).toContain("No announcements yet");
-    expect(renderedText).toContain("Your teacher has not posted any class announcements yet.");
+    expect(renderedText).toContain(
+      "Your teacher has not posted any class announcements yet.",
+    );
   });
 
   it("renders legacy class workspace and routes expanded lesson previews to lesson detail", () => {
@@ -3666,13 +4504,19 @@ describe("mobile rendered screen flows", () => {
       testRenderer = TestRenderer.create(
         React.createElement(SubjectLessonsScreen, {
           navigation: { goBack: jest.fn(), navigate } as never,
-          route: { key: "ClassWorkspace", name: "ClassWorkspace", params: { classId: "class-1" } } as never,
+          route: {
+            key: "ClassWorkspace",
+            name: "ClassWorkspace",
+            params: { classId: "class-1" },
+          } as never,
         }),
       );
     });
 
     const toggleModule = testRenderer!.root.find(
-      (node) => node.type === "Pressable" && node.props.accessibilityLabel === "Toggle Number Sense Module",
+      (node) =>
+        node.type === "Pressable" &&
+        node.props.accessibilityLabel === "Toggle Number Sense Module",
     );
     act(() => {
       toggleModule.props.onPress();
@@ -3683,7 +4527,10 @@ describe("mobile rendered screen flows", () => {
       lessonAction.props.onPress();
     });
 
-    expect(navigate).toHaveBeenCalledWith("LessonDetail", { lessonId: "lesson-1", classId: "class-1" });
+    expect(navigate).toHaveBeenCalledWith("LessonDetail", {
+      lessonId: "lesson-1",
+      classId: "class-1",
+    });
   });
 
   it("renders Module detail screen and opens lesson detail", () => {
@@ -3695,7 +4542,11 @@ describe("mobile rendered screen flows", () => {
       testRenderer = TestRenderer.create(
         React.createElement(ModuleDetailScreen, {
           navigation: { goBack: jest.fn(), navigate } as never,
-          route: { key: "ModuleDetail", name: "ModuleDetail", params: { classId: "class-1", moduleId: "module-1" } } as never,
+          route: {
+            key: "ModuleDetail",
+            name: "ModuleDetail",
+            params: { classId: "class-1", moduleId: "module-1" },
+          } as never,
         }),
       );
     });
@@ -3705,7 +4556,10 @@ describe("mobile rendered screen flows", () => {
       lessonCard.props.onPress();
     });
 
-    expect(navigate).toHaveBeenCalledWith("LessonDetail", { lessonId: "lesson-1", classId: "class-1" });
+    expect(navigate).toHaveBeenCalledWith("LessonDetail", {
+      lessonId: "lesson-1",
+      classId: "class-1",
+    });
   });
 
   it("filters locked, draft, and unpublished module content from the student module detail view", () => {
@@ -3732,28 +4586,48 @@ describe("mobile rendered screen flows", () => {
                 itemType: "lesson",
                 order: 1,
                 lessonId: "lesson-visible",
-                lesson: { id: "lesson-visible", title: "Visible Lesson", isDraft: false },
+                lesson: {
+                  id: "lesson-visible",
+                  title: "Visible Lesson",
+                  isDraft: false,
+                },
               },
               {
                 id: "item-draft-lesson",
                 itemType: "lesson",
                 order: 2,
                 lessonId: "lesson-draft",
-                lesson: { id: "lesson-draft", title: "Draft Lesson", isDraft: true },
+                lesson: {
+                  id: "lesson-draft",
+                  title: "Draft Lesson",
+                  isDraft: true,
+                },
               },
               {
                 id: "item-published-assessment",
                 itemType: "assessment",
                 order: 3,
                 assessmentId: "assessment-visible",
-                assessment: { id: "assessment-visible", title: "Visible Task", totalPoints: 100, dueDate: "2026-04-20T09:00:00.000Z", isPublished: true },
+                assessment: {
+                  id: "assessment-visible",
+                  title: "Visible Task",
+                  totalPoints: 100,
+                  dueDate: "2026-04-20T09:00:00.000Z",
+                  isPublished: true,
+                },
               },
               {
                 id: "item-hidden-assessment",
                 itemType: "assessment",
                 order: 4,
                 assessmentId: "assessment-hidden",
-                assessment: { id: "assessment-hidden", title: "Hidden Task", totalPoints: 100, dueDate: "2026-04-20T09:00:00.000Z", isPublished: false },
+                assessment: {
+                  id: "assessment-hidden",
+                  title: "Hidden Task",
+                  totalPoints: 100,
+                  dueDate: "2026-04-20T09:00:00.000Z",
+                  isPublished: false,
+                },
               },
             ],
           },
@@ -3766,7 +4640,11 @@ describe("mobile rendered screen flows", () => {
       testRenderer = TestRenderer.create(
         React.createElement(ModuleDetailScreen, {
           navigation: { goBack: jest.fn(), navigate } as never,
-          route: { key: "ModuleDetail", name: "ModuleDetail", params: { classId: "class-1", moduleId: "module-1" } } as never,
+          route: {
+            key: "ModuleDetail",
+            name: "ModuleDetail",
+            params: { classId: "class-1", moduleId: "module-1" },
+          } as never,
         }),
       );
     });
@@ -3781,12 +4659,18 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).not.toContain("Draft Lesson");
     expect(renderedText).not.toContain("Hidden Task");
 
-    const lessonCard = findPressableByText(testRenderer!.root, "Visible Lesson");
+    const lessonCard = findPressableByText(
+      testRenderer!.root,
+      "Visible Lesson",
+    );
     act(() => {
       lessonCard.props.onPress();
     });
 
-    expect(navigate).toHaveBeenCalledWith("LessonDetail", { lessonId: "lesson-visible", classId: "class-1" });
+    expect(navigate).toHaveBeenCalledWith("LessonDetail", {
+      lessonId: "lesson-visible",
+      classId: "class-1",
+    });
   });
 
   it("does not leak locked module items into the student module detail view", () => {
@@ -3811,7 +4695,11 @@ describe("mobile rendered screen flows", () => {
                 itemType: "lesson",
                 order: 1,
                 lessonId: "lesson-locked",
-                lesson: { id: "lesson-locked", title: "Locked Lesson", isDraft: false },
+                lesson: {
+                  id: "lesson-locked",
+                  title: "Locked Lesson",
+                  isDraft: false,
+                },
               },
             ],
           },
@@ -3824,7 +4712,11 @@ describe("mobile rendered screen flows", () => {
       testRenderer = TestRenderer.create(
         React.createElement(ModuleDetailScreen, {
           navigation: { goBack: jest.fn(), navigate: jest.fn() } as never,
-          route: { key: "ModuleDetail", name: "ModuleDetail", params: { classId: "class-1", moduleId: "module-1" } } as never,
+          route: {
+            key: "ModuleDetail",
+            name: "ModuleDetail",
+            params: { classId: "class-1", moduleId: "module-1" },
+          } as never,
         }),
       );
     });
@@ -3880,7 +4772,11 @@ describe("mobile rendered screen flows", () => {
       testRenderer = TestRenderer.create(
         React.createElement(ModuleDetailScreen, {
           navigation: { goBack: jest.fn(), navigate: jest.fn() } as never,
-          route: { key: "ModuleDetail", name: "ModuleDetail", params: { classId: "class-1", moduleId: "module-1" } } as never,
+          route: {
+            key: "ModuleDetail",
+            name: "ModuleDetail",
+            params: { classId: "class-1", moduleId: "module-1" },
+          } as never,
         }),
       );
     });
@@ -3901,8 +4797,14 @@ describe("mobile rendered screen flows", () => {
       await Promise.resolve();
     });
 
-    expect(mockedModulesApi.openAttachedFile).toHaveBeenCalledWith("item-file-1", "module-guide.pdf");
-    expect(mockedModulesApi.downloadAttachedFile).toHaveBeenCalledWith("item-file-1", "module-guide.pdf");
+    expect(mockedModulesApi.openAttachedFile).toHaveBeenCalledWith(
+      "item-file-1",
+      "module-guide.pdf",
+    );
+    expect(mockedModulesApi.downloadAttachedFile).toHaveBeenCalledWith(
+      "item-file-1",
+      "module-guide.pdf",
+    );
   });
 
   it("renders Module detail fetch errors without collapsing into not-found copy", () => {
@@ -3927,7 +4829,11 @@ describe("mobile rendered screen flows", () => {
       testRenderer = TestRenderer.create(
         React.createElement(ModuleDetailScreen, {
           navigation: { goBack: jest.fn(), navigate: jest.fn() } as never,
-          route: { key: "ModuleDetail", name: "ModuleDetail", params: { classId: "class-1", moduleId: "module-1" } } as never,
+          route: {
+            key: "ModuleDetail",
+            name: "ModuleDetail",
+            params: { classId: "class-1", moduleId: "module-1" },
+          } as never,
         }),
       );
     });
@@ -3964,7 +4870,11 @@ describe("mobile rendered screen flows", () => {
       testRenderer = TestRenderer.create(
         React.createElement(ClassDetailScreen, {
           navigation: { goBack: jest.fn(), navigate: jest.fn() } as never,
-          route: { key: "ClassDetail", name: "ClassDetail", params: { classId: "class-1" } } as never,
+          route: {
+            key: "ClassDetail",
+            name: "ClassDetail",
+            params: { classId: "class-1" },
+          } as never,
         }),
       );
     });
@@ -4000,7 +4910,11 @@ describe("mobile rendered screen flows", () => {
       testRenderer = TestRenderer.create(
         React.createElement(ModuleDetailScreen, {
           navigation: { goBack: jest.fn(), navigate: jest.fn() } as never,
-          route: { key: "ModuleDetail", name: "ModuleDetail", params: { classId: "class-1", moduleId: "module-1" } } as never,
+          route: {
+            key: "ModuleDetail",
+            name: "ModuleDetail",
+            params: { classId: "class-1", moduleId: "module-1" },
+          } as never,
         }),
       );
     });
@@ -4022,16 +4936,27 @@ describe("mobile rendered screen flows", () => {
       testRenderer = TestRenderer.create(
         React.createElement(LessonDetailScreen, {
           navigation: { goBack: jest.fn(), navigate: jest.fn() } as never,
-          route: { key: "LessonDetail", name: "LessonDetail", params: { lessonId: "lesson-1", classId: "class-1" } } as never,
+          route: {
+            key: "LessonDetail",
+            name: "LessonDetail",
+            params: { lessonId: "lesson-1", classId: "class-1" },
+          } as never,
         }),
       );
     });
 
     expect(
-      testRenderer!.root.find((node) => node.type === "Text" && flattenText(node).includes("Understand equivalent fractions.")),
+      testRenderer!.root.find(
+        (node) =>
+          node.type === "Text" &&
+          flattenText(node).includes("Understand equivalent fractions."),
+      ),
     ).toBeTruthy();
 
-    const completeButton = findPressableByText(testRenderer!.root, "Mark Complete");
+    const completeButton = findPressableByText(
+      testRenderer!.root,
+      "Mark Complete",
+    );
     await act(async () => {
       await completeButton.props.onPress();
     });
@@ -4061,7 +4986,11 @@ describe("mobile rendered screen flows", () => {
       testRenderer = TestRenderer.create(
         React.createElement(LessonDetailScreen, {
           navigation: { goBack: jest.fn(), navigate: jest.fn() } as never,
-          route: { key: "LessonDetail", name: "LessonDetail", params: { lessonId: "lesson-1", classId: "class-1" } } as never,
+          route: {
+            key: "LessonDetail",
+            name: "LessonDetail",
+            params: { lessonId: "lesson-1", classId: "class-1" },
+          } as never,
         }),
       );
     });
@@ -4098,7 +5027,11 @@ describe("mobile rendered screen flows", () => {
       testRenderer = TestRenderer.create(
         React.createElement(LessonDetailScreen, {
           navigation: { goBack: jest.fn(), navigate: jest.fn() } as never,
-          route: { key: "LessonDetail", name: "LessonDetail", params: { lessonId: "lesson-1", classId: "class-1" } } as never,
+          route: {
+            key: "LessonDetail",
+            name: "LessonDetail",
+            params: { lessonId: "lesson-1", classId: "class-1" },
+          } as never,
         }),
       );
     });
@@ -4130,26 +5063,38 @@ describe("mobile rendered screen flows", () => {
       testRenderer = TestRenderer.create(
         React.createElement(LessonDetailScreen, {
           navigation: { goBack: jest.fn(), navigate: jest.fn() } as never,
-          route: { key: "LessonDetail", name: "LessonDetail", params: { lessonId: "lesson-1", classId: "class-1" } } as never,
+          route: {
+            key: "LessonDetail",
+            name: "LessonDetail",
+            params: { lessonId: "lesson-1", classId: "class-1" },
+          } as never,
         }),
       );
     });
 
-    const completeButton = findPressableByText(testRenderer!.root, "Mark Complete");
+    const completeButton = findPressableByText(
+      testRenderer!.root,
+      "Mark Complete",
+    );
     await act(async () => {
       await completeButton.props.onPress();
     });
 
     expect(
       testRenderer!.root.find(
-        (node) => node.type === "Text" && flattenText(node).includes("Unable to mark lesson complete right now"),
+        (node) =>
+          node.type === "Text" &&
+          flattenText(node).includes(
+            "Unable to mark lesson complete right now",
+          ),
       ),
     ).toBeTruthy();
   });
 
   it("excludes submitted assessments from dashboard pending work", () => {
     const { DashboardScreen } = require("../DashboardScreen");
-    const toAssessmentCard = require("../../data/mappers").toAssessmentCard as jest.Mock;
+    const toAssessmentCard = require("../../data/mappers")
+      .toAssessmentCard as jest.Mock;
     toAssessmentCard.mockImplementation(
       (
         assessment: { id: string; classId?: string; title?: string },
@@ -4163,29 +5108,29 @@ describe("mobile rendered screen flows", () => {
         title: assessment.title || `Assessment ${assessment.id}`,
         subject: subject.name,
         dueDate: "Tomorrow",
-        status: attempts.some((attempt) => attempt.isSubmitted) ? "completed" : "pending",
+        status: attempts.some((attempt) => attempt.isSubmitted)
+          ? "completed"
+          : "pending",
         emoji: subject.emoji || "Note",
         totalScore: 100,
         attempts,
       }),
     );
-    mockedUseAssessmentAttempts.mockImplementation(
-      ((assessmentId?: string) =>
-        createQueryState(
-          assessmentId
-            ? [
-                {
-                  id: "attempt-1",
-                  assessmentId,
-                  studentId: "student-1",
-                  isSubmitted: true,
-                  submittedAt: "2026-04-18T09:30:00.000Z",
-                  score: 95,
-                },
-              ]
-            : [],
-        )) as ReturnType<typeof useAssessmentAttempts>,
-    );
+    mockedUseAssessmentAttempts.mockImplementation(((assessmentId?: string) =>
+      createQueryState(
+        assessmentId
+          ? [
+              {
+                id: "attempt-1",
+                assessmentId,
+                studentId: "student-1",
+                isSubmitted: true,
+                submittedAt: "2026-04-18T09:30:00.000Z",
+                score: 95,
+              },
+            ]
+          : [],
+      )) as ReturnType<typeof useAssessmentAttempts>);
 
     let testRenderer: TestRenderer.ReactTestRenderer;
     act(() => {
@@ -4209,17 +5154,15 @@ describe("mobile rendered screen flows", () => {
 
   it("does not count assessments as pending until attempt data resolves", () => {
     const { DashboardScreen } = require("../DashboardScreen");
-    mockedUseAssessmentAttempts.mockImplementation(
-      ((assessmentId?: string) =>
-        createQueryState(
-          undefined,
-          assessmentId
-            ? {
-                isRefetching: true,
-              }
-            : undefined,
-        )) as ReturnType<typeof useAssessmentAttempts>,
-    );
+    mockedUseAssessmentAttempts.mockImplementation(((assessmentId?: string) =>
+      createQueryState(
+        undefined,
+        assessmentId
+          ? {
+              isRefetching: true,
+            }
+          : undefined,
+      )) as ReturnType<typeof useAssessmentAttempts>);
 
     let testRenderer: TestRenderer.ReactTestRenderer;
     act(() => {
@@ -4242,26 +5185,24 @@ describe("mobile rendered screen flows", () => {
 
   it("does not count assessments as pending when attempt loading fails", () => {
     const { DashboardScreen } = require("../DashboardScreen");
-    mockedUseAssessmentAttempts.mockImplementation(
-      ((assessmentId?: string) =>
-        createQueryState(
-          undefined,
-          assessmentId
-            ? {
-                error: {
-                  isAxiosError: true,
-                  response: {
-                    status: 503,
-                    data: {
-                      message: "Assessment attempts unavailable",
-                    },
+    mockedUseAssessmentAttempts.mockImplementation(((assessmentId?: string) =>
+      createQueryState(
+        undefined,
+        assessmentId
+          ? {
+              error: {
+                isAxiosError: true,
+                response: {
+                  status: 503,
+                  data: {
+                    message: "Assessment attempts unavailable",
                   },
-                  message: "Request failed",
                 },
-              }
-            : undefined,
-        )) as ReturnType<typeof useAssessmentAttempts>,
-    );
+                message: "Request failed",
+              },
+            }
+          : undefined,
+      )) as ReturnType<typeof useAssessmentAttempts>);
 
     let testRenderer: TestRenderer.ReactTestRenderer;
     act(() => {
@@ -4327,7 +5268,9 @@ describe("mobile rendered screen flows", () => {
   it("does not query school events until a concrete school year is available", () => {
     const { DashboardScreen } = require("../DashboardScreen");
     mockedUseStudentClasses.mockReturnValue(
-      createQueryState(undefined, { isRefetching: true }) as ReturnType<typeof useStudentClasses>,
+      createQueryState(undefined, { isRefetching: true }) as ReturnType<
+        typeof useStudentClasses
+      >,
     );
 
     let testRenderer: TestRenderer.ReactTestRenderer;
@@ -4400,7 +5343,9 @@ describe("mobile rendered screen flows", () => {
 
     expect(mockedUseLessons).toHaveBeenCalledWith("class-active");
     expect(mockedUseAssessments).toHaveBeenCalledWith("class-active");
-    expect(mockedUseSchoolEvents).toHaveBeenCalledWith({ schoolYear: "2025-2026" });
+    expect(mockedUseSchoolEvents).toHaveBeenCalledWith({
+      schoolYear: "2025-2026",
+    });
   });
 
   it("renders the student bottom bar in student order and keeps JA prominently elevated", () => {
@@ -4459,7 +5404,9 @@ describe("mobile rendered screen flows", () => {
     expect(assessmentsIndex).toBeGreaterThan(jaIndex);
     expect(profileIndex).toBeGreaterThan(assessmentsIndex);
 
-    const jaOrb = testRenderer!.root.findAll((node) => node.type === "LinearGradient")[0];
+    const jaOrb = testRenderer!.root.findAll(
+      (node) => node.type === "LinearGradient",
+    )[0];
     expect(jaOrb.props.style.width).toBe(72);
     expect(jaOrb.props.style.marginTop).toBe(-28);
 
@@ -4471,7 +5418,9 @@ describe("mobile rendered screen flows", () => {
       createQueryState([]) as ReturnType<typeof useStudentClasses>,
     );
     mockedUseLxpEligibility.mockReturnValue(
-      createQueryState({ eligibleClasses: [] }) as ReturnType<typeof useLxpEligibility>,
+      createQueryState({ eligibleClasses: [] }) as ReturnType<
+        typeof useLxpEligibility
+      >,
     );
     mockedUseTutorBootstrap.mockReturnValue(
       createQueryState({
@@ -4505,7 +5454,10 @@ describe("mobile rendered screen flows", () => {
       );
     });
 
-    const openTutorButton = findPressableByText(testRenderer!.root, "Open Tutor");
+    const openTutorButton = findPressableByText(
+      testRenderer!.root,
+      "Open Tutor",
+    );
     act(() => {
       openTutorButton.props.onPress();
     });
@@ -4533,7 +5485,10 @@ describe("mobile rendered screen flows", () => {
       );
     });
 
-    const completeAction = findPressableByIcon(testRenderer!.root, "chevron-right");
+    const completeAction = findPressableByIcon(
+      testRenderer!.root,
+      "chevron-right",
+    );
     await act(async () => {
       completeAction.props.onPress();
       await Promise.resolve();
@@ -4543,7 +5498,9 @@ describe("mobile rendered screen flows", () => {
     });
     jest.useRealTimers();
 
-    expect(checkpointMutateAsync).toHaveBeenCalledWith({ assignmentId: "checkpoint-1" });
+    expect(checkpointMutateAsync).toHaveBeenCalledWith({
+      assignmentId: "checkpoint-1",
+    });
   });
 
   it("surfaces checkpoint completion error when recommendation action fails", async () => {
@@ -4569,7 +5526,10 @@ describe("mobile rendered screen flows", () => {
       );
     });
 
-    const completeAction = findPressableByIcon(testRenderer!.root, "chevron-right");
+    const completeAction = findPressableByIcon(
+      testRenderer!.root,
+      "chevron-right",
+    );
     await act(async () => {
       completeAction.props.onPress();
       await Promise.resolve();
@@ -4590,13 +5550,20 @@ describe("mobile rendered screen flows", () => {
     await act(async () => {
       testRenderer = TestRenderer.create(
         React.createElement(AiTutorScreen, {
-          route: { key: "AiTutor", name: "AiTutor", params: { classId: "class-1" } } as never,
+          route: {
+            key: "AiTutor",
+            name: "AiTutor",
+            params: { classId: "class-1" },
+          } as never,
           navigation: { goBack: jest.fn() } as never,
         }),
       );
     });
 
-    const recommendationCard = findPressableByText(testRenderer!.root, "Fractions Foundation");
+    const recommendationCard = findPressableByText(
+      testRenderer!.root,
+      "Fractions Foundation",
+    );
     await act(async () => {
       await recommendationCard.props.onPress();
     });
@@ -4640,7 +5607,10 @@ describe("mobile rendered screen flows", () => {
       );
     });
 
-    const recommendationCard = findPressableByText(testRenderer!.root, "Fractions Foundation");
+    const recommendationCard = findPressableByText(
+      testRenderer!.root,
+      "Fractions Foundation",
+    );
     await act(async () => {
       await recommendationCard.props.onPress();
     });
@@ -4650,7 +5620,9 @@ describe("mobile rendered screen flows", () => {
       testRenderer!.root.find(
         (node) =>
           node.type === "Text" &&
-          flattenText(node).includes("Select a class before starting a tutor session"),
+          flattenText(node).includes(
+            "Select a class before starting a tutor session",
+          ),
       ),
     ).toBeTruthy();
   });
@@ -4672,20 +5644,29 @@ describe("mobile rendered screen flows", () => {
     await act(async () => {
       testRenderer = TestRenderer.create(
         React.createElement(AiTutorScreen, {
-          route: { key: "AiTutor", name: "AiTutor", params: { classId: "class-1" } } as never,
+          route: {
+            key: "AiTutor",
+            name: "AiTutor",
+            params: { classId: "class-1" },
+          } as never,
           navigation: { goBack: jest.fn() } as never,
         }),
       );
     });
 
-    const recommendationCard = findPressableByText(testRenderer!.root, "Fractions Foundation");
+    const recommendationCard = findPressableByText(
+      testRenderer!.root,
+      "Fractions Foundation",
+    );
     await act(async () => {
       await recommendationCard.props.onPress();
     });
 
     expect(
       testRenderer!.root.find(
-        (node) => node.type === "Text" && flattenText(node).includes("Tutor service unavailable"),
+        (node) =>
+          node.type === "Text" &&
+          flattenText(node).includes("Tutor service unavailable"),
       ),
     ).toBeTruthy();
   });
@@ -4696,7 +5677,9 @@ describe("mobile rendered screen flows", () => {
 
     mockedUseTutorBootstrap.mockReturnValue(
       createQueryState({
-        classes: [{ id: "class-1", subjectName: "Mathematics", subjectCode: "MATH-1" }],
+        classes: [
+          { id: "class-1", subjectName: "Mathematics", subjectCode: "MATH-1" },
+        ],
         selectedClassId: "class-1",
         recommendations: [
           {
@@ -4717,7 +5700,9 @@ describe("mobile rendered screen flows", () => {
     );
     mockedUseTutorSession.mockImplementation((sessionId?: string) => {
       if (!sessionId) {
-        return createQueryState(undefined, { data: undefined }) as ReturnType<typeof useTutorSession>;
+        return createQueryState(undefined, { data: undefined }) as ReturnType<
+          typeof useTutorSession
+        >;
       }
 
       return createQueryState(
@@ -4738,13 +5723,20 @@ describe("mobile rendered screen flows", () => {
     await act(async () => {
       testRenderer = TestRenderer.create(
         React.createElement(AiTutorScreen, {
-          route: { key: "AiTutor", name: "AiTutor", params: { classId: "class-1" } } as never,
+          route: {
+            key: "AiTutor",
+            name: "AiTutor",
+            params: { classId: "class-1" },
+          } as never,
           navigation: { goBack: jest.fn() } as never,
         }),
       );
     });
 
-    const historyEntry = findPressableByText(testRenderer!.root, "Recent tutor session");
+    const historyEntry = findPressableByText(
+      testRenderer!.root,
+      "Recent tutor session",
+    );
     await act(async () => {
       historyEntry.props.onPress();
     });
@@ -4778,7 +5770,9 @@ describe("mobile rendered screen flows", () => {
 
     mockedUseTutorBootstrap.mockReturnValue(
       createQueryState({
-        classes: [{ id: "class-1", subjectName: "Mathematics", subjectCode: "MATH-1" }],
+        classes: [
+          { id: "class-1", subjectName: "Mathematics", subjectCode: "MATH-1" },
+        ],
         selectedClassId: "class-1",
         recommendations: [],
         history: [
@@ -4792,7 +5786,9 @@ describe("mobile rendered screen flows", () => {
     );
     mockedUseTutorSession.mockImplementation((sessionId?: string) => {
       if (!sessionId) {
-        return createQueryState(undefined, { data: undefined }) as ReturnType<typeof useTutorSession>;
+        return createQueryState(undefined, { data: undefined }) as ReturnType<
+          typeof useTutorSession
+        >;
       }
 
       return createQueryState({
@@ -4820,13 +5816,20 @@ describe("mobile rendered screen flows", () => {
     await act(async () => {
       testRenderer = TestRenderer.create(
         React.createElement(AiTutorScreen, {
-          route: { key: "AiTutor", name: "AiTutor", params: { classId: "class-1" } } as never,
+          route: {
+            key: "AiTutor",
+            name: "AiTutor",
+            params: { classId: "class-1" },
+          } as never,
           navigation: { goBack: jest.fn() } as never,
         }),
       );
     });
 
-    const historyEntry = findPressableByText(testRenderer!.root, "Recent tutor session");
+    const historyEntry = findPressableByText(
+      testRenderer!.root,
+      "Recent tutor session",
+    );
     await act(async () => {
       historyEntry.props.onPress();
     });
@@ -4858,7 +5861,9 @@ describe("mobile rendered screen flows", () => {
 
     mockedUseTutorBootstrap.mockReturnValue(
       createQueryState({
-        classes: [{ id: "class-1", subjectName: "Mathematics", subjectCode: "MATH-1" }],
+        classes: [
+          { id: "class-1", subjectName: "Mathematics", subjectCode: "MATH-1" },
+        ],
         selectedClassId: "class-1",
         recommendations: [],
         history: [
@@ -4872,7 +5877,9 @@ describe("mobile rendered screen flows", () => {
     );
     mockedUseTutorSession.mockImplementation((sessionId?: string) => {
       if (!sessionId) {
-        return createQueryState(undefined, { data: undefined }) as ReturnType<typeof useTutorSession>;
+        return createQueryState(undefined, { data: undefined }) as ReturnType<
+          typeof useTutorSession
+        >;
       }
 
       return createQueryState({
@@ -4906,13 +5913,20 @@ describe("mobile rendered screen flows", () => {
     await act(async () => {
       testRenderer = TestRenderer.create(
         React.createElement(AiTutorScreen, {
-          route: { key: "AiTutor", name: "AiTutor", params: { classId: "class-1" } } as never,
+          route: {
+            key: "AiTutor",
+            name: "AiTutor",
+            params: { classId: "class-1" },
+          } as never,
           navigation: { goBack: jest.fn() } as never,
         }),
       );
     });
 
-    const historyEntry = findPressableByText(testRenderer!.root, "Recent tutor session");
+    const historyEntry = findPressableByText(
+      testRenderer!.root,
+      "Recent tutor session",
+    );
     await act(async () => {
       historyEntry.props.onPress();
     });
@@ -4925,7 +5939,10 @@ describe("mobile rendered screen flows", () => {
       answerInput.props.onChangeText("3/4");
     });
 
-    const checkAnswersButton = findPressableByText(testRenderer!.root, "Check Answers");
+    const checkAnswersButton = findPressableByText(
+      testRenderer!.root,
+      "Check Answers",
+    );
     await act(async () => {
       await checkAnswersButton.props.onPress();
     });
@@ -4934,7 +5951,9 @@ describe("mobile rendered screen flows", () => {
       testRenderer!.root.find(
         (node) =>
           node.type === "Text" &&
-          flattenText(node).includes("Answer checking is unavailable right now"),
+          flattenText(node).includes(
+            "Answer checking is unavailable right now",
+          ),
       ),
     ).toBeTruthy();
   });
@@ -4944,7 +5963,9 @@ describe("mobile rendered screen flows", () => {
 
     mockedUseTutorBootstrap.mockReturnValue(
       createQueryState({
-        classes: [{ id: "class-1", subjectName: "Mathematics", subjectCode: "MATH-1" }],
+        classes: [
+          { id: "class-1", subjectName: "Mathematics", subjectCode: "MATH-1" },
+        ],
         selectedClassId: "class-1",
         recommendations: [],
         history: [
@@ -4958,7 +5979,9 @@ describe("mobile rendered screen flows", () => {
     );
     mockedUseTutorSession.mockImplementation((sessionId?: string) => {
       if (!sessionId) {
-        return createQueryState(undefined, { data: undefined }) as ReturnType<typeof useTutorSession>;
+        return createQueryState(undefined, { data: undefined }) as ReturnType<
+          typeof useTutorSession
+        >;
       }
 
       return createQueryState({
@@ -4982,18 +6005,28 @@ describe("mobile rendered screen flows", () => {
     await act(async () => {
       testRenderer = TestRenderer.create(
         React.createElement(AiTutorScreen, {
-          route: { key: "AiTutor", name: "AiTutor", params: { classId: "class-1" } } as never,
+          route: {
+            key: "AiTutor",
+            name: "AiTutor",
+            params: { classId: "class-1" },
+          } as never,
           navigation: { goBack: jest.fn() } as never,
         }),
       );
     });
 
-    const historyEntry = findPressableByText(testRenderer!.root, "Recent tutor session");
+    const historyEntry = findPressableByText(
+      testRenderer!.root,
+      "Recent tutor session",
+    );
     await act(async () => {
       historyEntry.props.onPress();
     });
 
-    const checkAnswersButton = findPressableByText(testRenderer!.root, "Check Answers");
+    const checkAnswersButton = findPressableByText(
+      testRenderer!.root,
+      "Check Answers",
+    );
     await act(async () => {
       await checkAnswersButton.props.onPress();
     });
@@ -5003,7 +6036,9 @@ describe("mobile rendered screen flows", () => {
       testRenderer!.root.find(
         (node) =>
           node.type === "Text" &&
-          flattenText(node).includes("Provide at least one answer before checking"),
+          flattenText(node).includes(
+            "Provide at least one answer before checking",
+          ),
       ),
     ).toBeTruthy();
   });
@@ -5030,7 +6065,9 @@ describe("mobile rendered screen flows", () => {
     );
     mockedUseTutorSession.mockImplementation((sessionId?: string) => {
       if (!sessionId) {
-        return createQueryState(undefined, { data: undefined }) as ReturnType<typeof useTutorSession>;
+        return createQueryState(undefined, { data: undefined }) as ReturnType<
+          typeof useTutorSession
+        >;
       }
 
       return createQueryState({
@@ -5048,20 +6085,28 @@ describe("mobile rendered screen flows", () => {
     await act(async () => {
       testRenderer = TestRenderer.create(
         React.createElement(AiTutorScreen, {
-          route: { key: "AiTutor", name: "AiTutor", params: { classId: "class-1" } } as never,
+          route: {
+            key: "AiTutor",
+            name: "AiTutor",
+            params: { classId: "class-1" },
+          } as never,
           navigation: { goBack: jest.fn() } as never,
         }),
       );
     });
 
-    const historyEntry = findPressableByText(testRenderer!.root, "Recent tutor session");
+    const historyEntry = findPressableByText(
+      testRenderer!.root,
+      "Recent tutor session",
+    );
     await act(async () => {
       historyEntry.props.onPress();
     });
 
     expect(
       testRenderer!.root.find(
-        (node) => node.type === "Text" && flattenText(node).includes("Lesson packet"),
+        (node) =>
+          node.type === "Text" && flattenText(node).includes("Lesson packet"),
       ),
     ).toBeTruthy();
 
@@ -5072,7 +6117,8 @@ describe("mobile rendered screen flows", () => {
 
     expect(
       testRenderer!.root.findAll(
-        (node) => node.type === "Text" && flattenText(node).includes("Lesson packet"),
+        (node) =>
+          node.type === "Text" && flattenText(node).includes("Lesson packet"),
       ),
     ).toHaveLength(0);
   });
@@ -5089,16 +6135,29 @@ describe("mobile rendered screen flows", () => {
       );
     });
     expect(
-      testRenderer!.root.find((node) => node.type === "Text" && flattenText(node).includes("Alex Reyes")),
+      testRenderer!.root.find(
+        (node) =>
+          node.type === "Text" && flattenText(node).includes("Alex Reyes"),
+      ),
     ).toBeTruthy();
     expect(
-      testRenderer!.root.find((node) => node.type === "Text" && flattenText(node).includes("Student Identity")),
+      testRenderer!.root.find(
+        (node) =>
+          node.type === "Text" &&
+          flattenText(node).includes("Student Identity"),
+      ),
     ).toBeTruthy();
     expect(
-      testRenderer!.root.find((node) => node.type === "Text" && flattenText(node).includes("Profile Status")),
+      testRenderer!.root.find(
+        (node) =>
+          node.type === "Text" && flattenText(node).includes("Profile Status"),
+      ),
     ).toBeTruthy();
 
-    const saveButton = findPressableByText(testRenderer!.root, "Save Profile Changes");
+    const saveButton = findPressableByText(
+      testRenderer!.root,
+      "Save Profile Changes",
+    );
     await act(async () => {
       await saveButton.props.onPress();
     });
@@ -5129,7 +6188,10 @@ describe("mobile rendered screen flows", () => {
       );
     });
 
-    const openTranscript = findPressableByText(testRenderer!.root, "View Transcript");
+    const openTranscript = findPressableByText(
+      testRenderer!.root,
+      "View Transcript",
+    );
     await act(async () => {
       openTranscript.props.onPress();
     });
@@ -5160,7 +6222,10 @@ describe("mobile rendered screen flows", () => {
       );
     });
 
-    const saveButton = findPressableByText(testRenderer!.root, "Save Profile Changes");
+    const saveButton = findPressableByText(
+      testRenderer!.root,
+      "Save Profile Changes",
+    );
     await act(async () => {
       await saveButton.props.onPress();
     });
@@ -5194,7 +6259,9 @@ describe("mobile rendered screen flows", () => {
 
     expect(renderedText).toContain("Student Records");
     expect(renderedText).toContain("Subject Enrollment Transcript");
-    expect(renderedText).toContain("Every class you have enrolled in, grouped by school year.");
+    expect(renderedText).toContain(
+      "Every class you have enrolled in, grouped by school year.",
+    );
     expect(renderedText).toContain("1 enrollment");
     expect(renderedText).toContain("Mathematics (MATH-1)");
     expect(renderedText).toContain("2025-2026");
@@ -5259,51 +6326,53 @@ describe("mobile rendered screen flows", () => {
     assessmentError?: unknown;
     attemptsError?: unknown;
   }) {
-    const assessments =
-      options?.assessments ??
-      [
-        {
-          id: "assessment-1",
-          classId: "class-1",
-          title: "Assessment 1",
-          type: "quiz",
-          totalPoints: 100,
-          isPublished: true,
-          dueDate: "2026-04-20T09:00:00.000Z",
-        },
-      ];
+    const assessments = options?.assessments ?? [
+      {
+        id: "assessment-1",
+        classId: "class-1",
+        title: "Assessment 1",
+        type: "quiz",
+        totalPoints: 100,
+        isPublished: true,
+        dueDate: "2026-04-20T09:00:00.000Z",
+      },
+    ];
 
-    mockedUseQueries.mockImplementation(({ queries }: { queries: Array<{ queryKey?: unknown[] }> }) => {
-      const firstQueryKey = Array.isArray(queries[0]?.queryKey) ? String(queries[0]?.queryKey?.[0] ?? "") : "";
+    mockedUseQueries.mockImplementation(
+      ({ queries }: { queries: Array<{ queryKey?: unknown[] }> }) => {
+        const firstQueryKey = Array.isArray(queries[0]?.queryKey)
+          ? String(queries[0]?.queryKey?.[0] ?? "")
+          : "";
 
-      if (firstQueryKey === "assessments") {
+        if (firstQueryKey === "assessments") {
+          return queries.map(() => ({
+            data: options?.assessmentError ? [] : assessments,
+            error: options?.assessmentError ?? null,
+            isRefetching: false,
+            refetch: jest.fn().mockResolvedValue(undefined),
+          }));
+        }
+
+        if (firstQueryKey === "assessment-attempts") {
+          return queries.map((_, index) => {
+            const assessmentId = String(assessments[index]?.id ?? "");
+            return {
+              data: options?.attemptsByAssessmentId?.[assessmentId] ?? [],
+              error: options?.attemptsError ?? null,
+              isRefetching: false,
+              refetch: jest.fn().mockResolvedValue(undefined),
+            };
+          });
+        }
+
         return queries.map(() => ({
-          data: options?.assessmentError ? [] : assessments,
-          error: options?.assessmentError ?? null,
+          data: [],
+          error: null,
           isRefetching: false,
           refetch: jest.fn().mockResolvedValue(undefined),
         }));
-      }
-
-      if (firstQueryKey === "assessment-attempts") {
-        return queries.map((_, index) => {
-          const assessmentId = String(assessments[index]?.id ?? "");
-          return {
-            data: options?.attemptsByAssessmentId?.[assessmentId] ?? [],
-            error: options?.attemptsError ?? null,
-            isRefetching: false,
-            refetch: jest.fn().mockResolvedValue(undefined),
-          };
-        });
-      }
-
-      return queries.map(() => ({
-        data: [],
-        error: null,
-        isRefetching: false,
-        refetch: jest.fn().mockResolvedValue(undefined),
-      }));
-    });
+      },
+    );
   }
 
   it("renders Assessments screen as an accordion and routes expanded actions", () => {
@@ -5322,16 +6391,24 @@ describe("mobile rendered screen flows", () => {
 
     expect(
       testRenderer!.root.find(
-        (node) => node.type === "Text" && flattenText(node).includes("Assessments & Actions"),
+        (node) =>
+          node.type === "Text" &&
+          flattenText(node).includes("Assessments & Actions"),
       ),
     ).toBeTruthy();
 
-    const assessmentCard = findPressableByText(testRenderer!.root, "Assessment 1");
+    const assessmentCard = findPressableByText(
+      testRenderer!.root,
+      "Assessment 1",
+    );
     act(() => {
       assessmentCard.props.onPress();
     });
 
-    const detailAction = findPressableByText(testRenderer!.root, "Open Assessment");
+    const detailAction = findPressableByText(
+      testRenderer!.root,
+      "Open Assessment",
+    );
     act(() => {
       detailAction.props.onPress();
     });
@@ -5411,7 +6488,10 @@ describe("mobile rendered screen flows", () => {
       );
     });
 
-    const resultButton = findPressableByText(testRenderer!.root, "View Results");
+    const resultButton = findPressableByText(
+      testRenderer!.root,
+      "View Results",
+    );
     act(() => {
       resultButton.props.onPress();
     });
@@ -5500,10 +6580,20 @@ describe("mobile rendered screen flows", () => {
     expect(texts).toContain("group-photo.jpg");
     expect(texts).toContain("Unsubmit");
     expect(texts).not.toContain("Attempt history");
-    expect(() => findPressableByText(testRenderer!.root, "Retake Assessment")).toThrow();
-    expect(() => findPressableByText(testRenderer!.root, "Start Assessment")).toThrow();
-    expect(() => findPressableByText(testRenderer!.root, "Open History")).toThrow();
-    expect(testRenderer!.root.findAll((node) => node.type === "Pressable" && flattenText(node) === "Open")).toHaveLength(1);
+    expect(() =>
+      findPressableByText(testRenderer!.root, "Retake Assessment"),
+    ).toThrow();
+    expect(() =>
+      findPressableByText(testRenderer!.root, "Start Assessment"),
+    ).toThrow();
+    expect(() =>
+      findPressableByText(testRenderer!.root, "Open History"),
+    ).toThrow();
+    expect(
+      testRenderer!.root.findAll(
+        (node) => node.type === "Pressable" && flattenText(node) === "Open",
+      ),
+    ).toHaveLength(1);
   });
 
   it("keeps normal assessment attempt history collapsed until expanded", () => {
@@ -5537,14 +6627,21 @@ describe("mobile rendered screen flows", () => {
       );
     });
 
-    expect(() => findPressableByText(testRenderer!.root, "Open Attempt")).toThrow();
+    expect(() =>
+      findPressableByText(testRenderer!.root, "Open Attempt"),
+    ).toThrow();
 
-    const historyToggle = findPressableByText(testRenderer!.root, "Attempt history");
+    const historyToggle = findPressableByText(
+      testRenderer!.root,
+      "Attempt history",
+    );
     act(() => {
       historyToggle.props.onPress();
     });
 
-    expect(findPressableByText(testRenderer!.root, "Open Attempt")).toBeTruthy();
+    expect(
+      findPressableByText(testRenderer!.root, "Open Attempt"),
+    ).toBeTruthy();
   });
 
   it("renders assessment history actions for submitted and in-progress attempts", () => {
@@ -5556,18 +6653,26 @@ describe("mobile rendered screen flows", () => {
       testRenderer = TestRenderer.create(
         React.createElement(AssessmentHistoryScreen, {
           navigation: { navigate, goBack: jest.fn() } as never,
-          route: { key: "AssessmentHistory", name: "AssessmentHistory" } as never,
+          route: {
+            key: "AssessmentHistory",
+            name: "AssessmentHistory",
+          } as never,
         }),
       );
     });
 
     expect(
       testRenderer!.root.find(
-        (node) => node.type === "Text" && flattenText(node).includes("Assessment History"),
+        (node) =>
+          node.type === "Text" &&
+          flattenText(node).includes("Assessment History"),
       ),
     ).toBeTruthy();
 
-    const resultAction = findPressableByText(testRenderer!.root, "View Results");
+    const resultAction = findPressableByText(
+      testRenderer!.root,
+      "View Results",
+    );
     act(() => {
       resultAction.props.onPress();
     });
@@ -5577,7 +6682,10 @@ describe("mobile rendered screen flows", () => {
       assessmentId: "assessment-1",
     });
 
-    const continueAction = findPressableByText(testRenderer!.root, "Continue Attempt");
+    const continueAction = findPressableByText(
+      testRenderer!.root,
+      "Continue Attempt",
+    );
     act(() => {
       continueAction.props.onPress();
     });
@@ -5646,13 +6754,19 @@ describe("mobile rendered screen flows", () => {
           route: {
             key: "AssessmentResults",
             name: "AssessmentResults",
-            params: { attemptId: "attempt-returned", assessmentId: "assessment-1" },
+            params: {
+              attemptId: "attempt-returned",
+              assessmentId: "assessment-1",
+            },
           } as never,
         }),
       );
     });
 
-    const backToAssessment = findPressableByText(testRenderer!.root, "Back to Assessment");
+    const backToAssessment = findPressableByText(
+      testRenderer!.root,
+      "Back to Assessment",
+    );
     act(() => {
       backToAssessment.props.onPress();
     });
@@ -5700,7 +6814,9 @@ describe("mobile rendered screen flows", () => {
 
     expect(renderedText).toContain("Unable to prepare this attempt");
     expect(renderedText).toContain("Attempt history unavailable");
-    expect(() => findPressableByText(testRenderer!.root, "Submit Assessment")).toThrow();
+    expect(() =>
+      findPressableByText(testRenderer!.root, "Submit Assessment"),
+    ).toThrow();
   });
 
   it("renders taker questions with stripped html, images, and dropdown options", async () => {
@@ -5729,8 +6845,18 @@ describe("mobile rendered screen flows", () => {
             points: 5,
             order: 1,
             options: [
-              { id: "option-1", text: "<p>Blue</p>", isCorrect: true, order: 1 },
-              { id: "option-2", text: "<p>Red</p>", isCorrect: false, order: 2 },
+              {
+                id: "option-1",
+                text: "<p>Blue</p>",
+                isCorrect: true,
+                order: 1,
+              },
+              {
+                id: "option-2",
+                text: "<p>Red</p>",
+                isCorrect: false,
+                order: 2,
+              },
             ],
           },
         ],
@@ -5741,7 +6867,11 @@ describe("mobile rendered screen flows", () => {
     await act(async () => {
       testRenderer = TestRenderer.create(
         React.createElement(AssessmentTakeScreen, {
-          navigation: { replace: jest.fn(), goBack: jest.fn(), addListener: jest.fn(() => jest.fn()) } as never,
+          navigation: {
+            replace: jest.fn(),
+            goBack: jest.fn(),
+            addListener: jest.fn(() => jest.fn()),
+          } as never,
           route: {
             key: "AssessmentTake",
             name: "AssessmentTake",
@@ -5759,14 +6889,21 @@ describe("mobile rendered screen flows", () => {
 
     expect(renderedText).toContain("Pick the correct color");
     expect(renderedText).not.toContain("<p>");
-    const questionImages = testRenderer!.root.findAll((node) => node.props.testID === "assessment-question-image");
+    const questionImages = testRenderer!.root.findAll(
+      (node) => node.props.testID === "assessment-question-image",
+    );
     expect(
       questionImages.some((node) =>
-        String(node.props.source?.uri || "").includes("/api/assessments/questions/images/question.png"),
+        String(node.props.source?.uri || "").includes(
+          "/api/assessments/questions/images/question.png",
+        ),
       ),
     ).toBe(true);
 
-    const dropdownPressable = findPressableByText(testRenderer!.root, "Select an answer");
+    const dropdownPressable = findPressableByText(
+      testRenderer!.root,
+      "Select an answer",
+    );
     act(() => {
       dropdownPressable.props.onPress();
     });
@@ -5783,33 +6920,92 @@ describe("mobile rendered screen flows", () => {
   it("resumes the server-randomized question position and keeps strict back navigation locked", async () => {
     const { AssessmentTakeScreen } = require("../AssessmentTakeScreen");
     const future = new Date(Date.now() + 120_000).toISOString();
-    mockedUseAssessmentDetail.mockReturnValue(createQueryState({
-      id: "assessment-1", classId: "class-1", title: "Ordered assessment", type: "quiz", isPublished: true,
-      totalPoints: 10, passingScore: 75, maxAttempts: 1, timeLimitMinutes: 30, strictMode: true,
-      questions: [
-        { id: "question-1", assessmentId: "assessment-1", type: "short_answer", content: "Source question one", points: 5, order: 1, options: [] },
-        { id: "question-2", assessmentId: "assessment-1", type: "short_answer", content: "Source question two", points: 5, order: 2, options: [] },
-      ],
-    }) as ReturnType<typeof useAssessmentDetail>);
+    mockedUseAssessmentDetail.mockReturnValue(
+      createQueryState({
+        id: "assessment-1",
+        classId: "class-1",
+        title: "Ordered assessment",
+        type: "quiz",
+        isPublished: true,
+        totalPoints: 10,
+        passingScore: 75,
+        maxAttempts: 1,
+        timeLimitMinutes: 30,
+        strictMode: true,
+        questions: [
+          {
+            id: "question-1",
+            assessmentId: "assessment-1",
+            type: "short_answer",
+            content: "Source question one",
+            points: 5,
+            order: 1,
+            options: [],
+          },
+          {
+            id: "question-2",
+            assessmentId: "assessment-1",
+            type: "short_answer",
+            content: "Source question two",
+            points: 5,
+            order: 2,
+            options: [],
+          },
+        ],
+      }) as ReturnType<typeof useAssessmentDetail>,
+    );
     mockedAssessmentsApi.getOngoingAttempt.mockResolvedValueOnce({
-      attempt: { id: "attempt-1", assessmentId: "assessment-1", startedAt: new Date().toISOString(), expiresAt: future, lastQuestionIndex: 1, questionOrder: ["question-2", "question-1"], draftResponses: [] },
-      timeLimitMinutes: 30, expiresAt: future, strictMode: true,
+      attempt: {
+        id: "attempt-1",
+        assessmentId: "assessment-1",
+        startedAt: new Date().toISOString(),
+        expiresAt: future,
+        lastQuestionIndex: 1,
+        questionOrder: ["question-2", "question-1"],
+        draftResponses: [],
+      },
+      timeLimitMinutes: 30,
+      expiresAt: future,
+      strictMode: true,
     });
 
     let testRenderer: TestRenderer.ReactTestRenderer;
     await act(async () => {
-      testRenderer = TestRenderer.create(React.createElement(AssessmentTakeScreen, {
-        navigation: { replace: jest.fn(), goBack: jest.fn(), addListener: jest.fn(() => jest.fn()), dispatch: jest.fn() } as never,
-        route: { key: "AssessmentTake", name: "AssessmentTake", params: { assessmentId: "assessment-1" } } as never,
-      }));
+      testRenderer = TestRenderer.create(
+        React.createElement(AssessmentTakeScreen, {
+          navigation: {
+            replace: jest.fn(),
+            goBack: jest.fn(),
+            addListener: jest.fn(() => jest.fn()),
+            dispatch: jest.fn(),
+          } as never,
+          route: {
+            key: "AssessmentTake",
+            name: "AssessmentTake",
+            params: { assessmentId: "assessment-1" },
+          } as never,
+        }),
+      );
       await Promise.resolve();
       await Promise.resolve();
     });
 
-    const text = testRenderer!.root.findAll((node) => node.type === "Text").map((node) => flattenText(node)).join(" ");
+    const text = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
     expect(text).toContain("Source question one");
     expect(text).not.toContain("Source question two");
-    const lockedPreviousButtons = testRenderer!.root.findAll((node) => node.type === "Pressable" && node.props.disabled === true && node.findAll((child) => child.type === "MaterialCommunityIcons" && child.props.name === "chevron-left").length > 0);
+    const lockedPreviousButtons = testRenderer!.root.findAll(
+      (node) =>
+        node.type === "Pressable" &&
+        node.props.disabled === true &&
+        node.findAll(
+          (child) =>
+            child.type === "MaterialCommunityIcons" &&
+            child.props.name === "chevron-left",
+        ).length > 0,
+    );
     expect(lockedPreviousButtons).toHaveLength(1);
   });
 
@@ -5817,18 +7013,51 @@ describe("mobile rendered screen flows", () => {
     const { AssessmentTakeScreen } = require("../AssessmentTakeScreen");
     const submit = jest.fn().mockResolvedValue(undefined);
     const future = new Date(Date.now() + 120_000).toISOString();
-    mockedUseAssessmentSubmitMutation.mockReturnValue({ mutateAsync: submit, isPending: false, error: null } as ReturnType<typeof useAssessmentSubmitMutation>);
+    mockedUseAssessmentSubmitMutation.mockReturnValue({
+      mutateAsync: submit,
+      isPending: false,
+      error: null,
+    } as ReturnType<typeof useAssessmentSubmitMutation>);
     mockedAssessmentsApi.getOngoingAttempt.mockResolvedValueOnce({
-      attempt: { id: "attempt-expired-question", assessmentId: "assessment-1", startedAt: new Date().toISOString(), expiresAt: future, lastQuestionIndex: 0, currentQuestionDeadlineAt: new Date(Date.now() - 1_000).toISOString(), questionOrder: ["question-1"], draftResponses: [] },
-      timeLimitMinutes: 30, expiresAt: future, timedQuestionsEnabled: true, questionTimeLimitSeconds: 30,
+      attempt: {
+        id: "attempt-expired-question",
+        assessmentId: "assessment-1",
+        startedAt: new Date().toISOString(),
+        expiresAt: future,
+        lastQuestionIndex: 0,
+        currentQuestionDeadlineAt: new Date(Date.now() - 1_000).toISOString(),
+        questionOrder: ["question-1"],
+        draftResponses: [],
+      },
+      timeLimitMinutes: 30,
+      expiresAt: future,
+      timedQuestionsEnabled: true,
+      questionTimeLimitSeconds: 30,
     });
-    mockedAssessmentsApi.updateAttemptProgress.mockResolvedValue({ id: "attempt-expired-question", assessmentId: "assessment-1", lastQuestionIndex: 0, isSubmitted: false, expiresAt: future });
+    mockedAssessmentsApi.updateAttemptProgress.mockResolvedValue({
+      id: "attempt-expired-question",
+      assessmentId: "assessment-1",
+      lastQuestionIndex: 0,
+      isSubmitted: false,
+      expiresAt: future,
+    });
 
     await act(async () => {
-      TestRenderer.create(React.createElement(AssessmentTakeScreen, {
-        navigation: { replace: jest.fn(), goBack: jest.fn(), addListener: jest.fn(() => jest.fn()), dispatch: jest.fn() } as never,
-        route: { key: "AssessmentTake", name: "AssessmentTake", params: { assessmentId: "assessment-1" } } as never,
-      }));
+      TestRenderer.create(
+        React.createElement(AssessmentTakeScreen, {
+          navigation: {
+            replace: jest.fn(),
+            goBack: jest.fn(),
+            addListener: jest.fn(() => jest.fn()),
+            dispatch: jest.fn(),
+          } as never,
+          route: {
+            key: "AssessmentTake",
+            name: "AssessmentTake",
+            params: { assessmentId: "assessment-1" },
+          } as never,
+        }),
+      );
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
@@ -5841,35 +7070,67 @@ describe("mobile rendered screen flows", () => {
 
   it("surfaces foreground resynchronization failure and pauses the attempt", async () => {
     const { AssessmentTakeScreen } = require("../AssessmentTakeScreen");
-    const { AppState } = require("react-native") as { AppState: { addEventListener: jest.Mock } };
+    const { AppState } = require("react-native") as {
+      AppState: { addEventListener: jest.Mock };
+    };
     let appStateListener: ((state: string) => void) | undefined;
-    AppState.addEventListener.mockImplementationOnce((_event: string, listener: (state: string) => void) => {
-      appStateListener = listener;
-      return { remove: jest.fn() };
-    });
+    AppState.addEventListener.mockImplementationOnce(
+      (_event: string, listener: (state: string) => void) => {
+        appStateListener = listener;
+        return { remove: jest.fn() };
+      },
+    );
     const future = new Date(Date.now() + 120_000).toISOString();
     mockedAssessmentsApi.getOngoingAttempt.mockResolvedValueOnce({
-      attempt: { id: "attempt-online", assessmentId: "assessment-1", startedAt: new Date().toISOString(), expiresAt: future, lastQuestionIndex: 0 },
-      timeLimitMinutes: 30, expiresAt: future,
+      attempt: {
+        id: "attempt-online",
+        assessmentId: "assessment-1",
+        startedAt: new Date().toISOString(),
+        expiresAt: future,
+        lastQuestionIndex: 0,
+      },
+      timeLimitMinutes: 30,
+      expiresAt: future,
     });
 
     let testRenderer: TestRenderer.ReactTestRenderer;
     await act(async () => {
-      testRenderer = TestRenderer.create(React.createElement(AssessmentTakeScreen, {
-        navigation: { replace: jest.fn(), goBack: jest.fn(), addListener: jest.fn(() => jest.fn()), dispatch: jest.fn() } as never,
-        route: { key: "AssessmentTake", name: "AssessmentTake", params: { assessmentId: "assessment-1" } } as never,
-      }));
+      testRenderer = TestRenderer.create(
+        React.createElement(AssessmentTakeScreen, {
+          navigation: {
+            replace: jest.fn(),
+            goBack: jest.fn(),
+            addListener: jest.fn(() => jest.fn()),
+            dispatch: jest.fn(),
+          } as never,
+          route: {
+            key: "AssessmentTake",
+            name: "AssessmentTake",
+            params: { assessmentId: "assessment-1" },
+          } as never,
+        }),
+      );
       await Promise.resolve();
       await Promise.resolve();
     });
-    mockedAssessmentsApi.getOngoingAttempt.mockRejectedValueOnce({ isAxiosError: true, response: { status: 503, data: { message: "Network unavailable during resume" } }, message: "Request failed" });
+    mockedAssessmentsApi.getOngoingAttempt.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: {
+        status: 503,
+        data: { message: "Network unavailable during resume" },
+      },
+      message: "Request failed",
+    });
     await act(async () => {
       appStateListener?.("active");
       await Promise.resolve();
       await Promise.resolve();
     });
 
-    const text = testRenderer!.root.findAll((node) => node.type === "Text").map((node) => flattenText(node)).join(" ");
+    const text = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
     expect(text).toContain("Network sync paused");
     expect(text).toContain("The app hit an unexpected state");
   });
@@ -5917,7 +7178,8 @@ describe("mobile rendered screen flows", () => {
 
   it("updates assessments empty-state subtitle when filter changes", () => {
     const { AssessmentsScreen } = require("../AssessmentsScreen");
-    const toAssessmentCard = require("../../data/mappers").toAssessmentCard as jest.Mock;
+    const toAssessmentCard = require("../../data/mappers")
+      .toAssessmentCard as jest.Mock;
     toAssessmentCard.mockImplementation((assessment: { id: string }) => ({
       id: assessment.id,
       raw: assessment,
@@ -5941,7 +7203,10 @@ describe("mobile rendered screen flows", () => {
       );
     });
 
-    const completedFilter = findPressableByText(testRenderer!.root, "Completed");
+    const completedFilter = findPressableByText(
+      testRenderer!.root,
+      "Completed",
+    );
     act(() => {
       completedFilter.props.onPress();
     });
@@ -5950,7 +7215,9 @@ describe("mobile rendered screen flows", () => {
       testRenderer!.root.find(
         (node) =>
           node.type === "Text" &&
-          flattenText(node).includes("No completed assessments match this view."),
+          flattenText(node).includes(
+            "No completed assessments match this view.",
+          ),
       ),
     ).toBeTruthy();
   });

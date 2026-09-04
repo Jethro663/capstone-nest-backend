@@ -13,13 +13,22 @@ import { queryKeys, useStudentClasses } from "../api/hooks";
 import { assessmentsApi } from "../api/services/assessments";
 import { useAuth } from "../providers/AuthProvider";
 import type { MainTabParamList } from "../navigation/types";
-import type { Assessment, AssessmentAttempt, AssessmentType } from "../types/assessment";
+import type {
+  Assessment,
+  AssessmentAttempt,
+  AssessmentType,
+} from "../types/assessment";
 import type { ClassItem } from "../types/class";
 import { studentDarkTheme } from "../theme/studentDark";
 import { shadow } from "../theme/tokens";
+import { presentAcademicScore } from "../lib/academicScore";
 
 type Props = BottomTabScreenProps<MainTabParamList, "Assessments">;
-type AssessmentFilterKey = "allAssessments" | "pending" | "completed" | "past_due";
+type AssessmentFilterKey =
+  | "allAssessments"
+  | "pending"
+  | "completed"
+  | "past_due";
 type AssessmentStatus = Exclude<AssessmentRecord["status"], never>;
 type AssessmentActionKey = "details" | "history" | "results" | "class";
 
@@ -112,7 +121,9 @@ function pluralize(count: number, singular: string, plural: string) {
 }
 
 function resolveSubjectName(classItem?: ClassItem) {
-  return classItem?.subjectName || classItem?.className || classItem?.name || "Class";
+  return (
+    classItem?.subjectName || classItem?.className || classItem?.name || "Class"
+  );
 }
 
 function resolveSubjectCode(classItem?: ClassItem) {
@@ -157,7 +168,11 @@ function resolveStatusLabel(status: AssessmentRecord["status"]) {
   }
 }
 
-function resolveUserInitials(firstName?: string, lastName?: string, email?: string) {
+function resolveUserInitials(
+  firstName?: string,
+  lastName?: string,
+  email?: string,
+) {
   const fromNames = [firstName, lastName]
     .filter(Boolean)
     .map((value) => value?.trim()?.[0] ?? "")
@@ -192,13 +207,22 @@ function formatDueDate(value?: string | null) {
 }
 
 function getAttemptTimestamp(attempt: AssessmentAttempt) {
-  return new Date(attempt.submittedAt || attempt.startedAt || attempt.createdAt || 0).getTime();
+  return new Date(
+    attempt.submittedAt || attempt.startedAt || attempt.createdAt || 0,
+  ).getTime();
 }
 
-function resolveAssessmentStatus(assessment: Assessment, attempts: AssessmentAttempt[]) {
+function resolveAssessmentStatus(
+  assessment: Assessment,
+  attempts: AssessmentAttempt[],
+) {
   const latestAttempt =
-    [...attempts].sort((left, right) => getAttemptTimestamp(right) - getAttemptTimestamp(left))[0] || null;
-  const dueTime = assessment.dueDate ? new Date(assessment.dueDate).getTime() : null;
+    [...attempts].sort(
+      (left, right) => getAttemptTimestamp(right) - getAttemptTimestamp(left),
+    )[0] || null;
+  const dueTime = assessment.dueDate
+    ? new Date(assessment.dueDate).getTime()
+    : null;
   let status: AssessmentRecord["status"] = "pending";
 
   if (latestAttempt?.isSubmitted) {
@@ -214,7 +238,10 @@ function buildAssessmentSubtitle(item: AssessmentRecord) {
   return `${item.subjectCode} - ${item.typeLabel} - Due ${item.dueLabel}`;
 }
 
-function buildEmptyStateSubtitle(activeFilter: AssessmentFilterKey, searchQuery: string) {
+function buildEmptyStateSubtitle(
+  activeFilter: AssessmentFilterKey,
+  searchQuery: string,
+) {
   if (searchQuery.trim()) {
     return "Try another search term or switch the current filter.";
   }
@@ -223,8 +250,12 @@ function buildEmptyStateSubtitle(activeFilter: AssessmentFilterKey, searchQuery:
     return "No published assessments are available right now.";
   }
 
-  const filterLabel = filterTabs.find((tab) => tab.key === activeFilter)?.label.toLowerCase() || "assessments";
-  const normalizedLabel = filterLabel.includes("assessment") ? filterLabel : `${filterLabel} assessments`;
+  const filterLabel =
+    filterTabs.find((tab) => tab.key === activeFilter)?.label.toLowerCase() ||
+    "assessments";
+  const normalizedLabel = filterLabel.includes("assessment")
+    ? filterLabel
+    : `${filterLabel} assessments`;
   return `No ${normalizedLabel} match this view.`;
 }
 
@@ -253,8 +284,12 @@ function buildActionBadge(item: AssessmentRecord, action: AssessmentActionKey) {
     case "history":
       return `${item.attemptCount} ${pluralize(item.attemptCount, "attempt", "attempts")}`;
     case "results":
-      if (item.latestAttempt?.isSubmitted && item.latestAttempt.isReturned && item.latestAttempt.score !== undefined) {
-        return `${Math.round(item.latestAttempt.score)}/${item.totalPoints}`;
+      if (
+        item.latestAttempt?.isSubmitted &&
+        item.latestAttempt.isReturned &&
+        item.latestAttempt.score !== undefined
+      ) {
+        return presentAcademicScore(item.latestAttempt).compactLabel;
       }
 
       if (item.latestAttempt?.isSubmitted) {
@@ -331,8 +366,17 @@ function DarkNotice({ title, subtitle }: { title: string; subtitle: string }) {
         padding: 16,
       }}
     >
-      <Text style={{ color: darkTheme.text, fontSize: 14, fontWeight: "800" }}>{title}</Text>
-      <Text style={{ color: darkTheme.muted, fontSize: 12, lineHeight: 18, marginTop: 6 }}>
+      <Text style={{ color: darkTheme.text, fontSize: 14, fontWeight: "800" }}>
+        {title}
+      </Text>
+      <Text
+        style={{
+          color: darkTheme.muted,
+          fontSize: 12,
+          lineHeight: 18,
+          marginTop: 6,
+        }}
+      >
         {subtitle}
       </Text>
     </View>
@@ -343,8 +387,11 @@ export function AssessmentsScreen({ navigation }: Props) {
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<AssessmentFilterKey>("allAssessments");
-  const [expandedAssessmentId, setExpandedAssessmentId] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] =
+    useState<AssessmentFilterKey>("allAssessments");
+  const [expandedAssessmentId, setExpandedAssessmentId] = useState<
+    string | null
+  >(null);
   const classesQuery = useStudentClasses(user?.userId || user?.id);
 
   const publishedAssessmentQueries = useQueries({
@@ -379,8 +426,12 @@ export function AssessmentsScreen({ navigation }: Props) {
   const derivedAssessments = useMemo<AssessmentRecord[]>(() => {
     return baseAssessments
       .map(({ assessment, classItem }, index) => {
-        const attempts = (attemptQueries[index]?.data ?? []) as AssessmentAttempt[];
-        const { latestAttempt, dueTime, status } = resolveAssessmentStatus(assessment, attempts);
+        const attempts = (attemptQueries[index]?.data ??
+          []) as AssessmentAttempt[];
+        const { latestAttempt, dueTime, status } = resolveAssessmentStatus(
+          assessment,
+          attempts,
+        );
 
         return {
           id: assessment.id,
@@ -401,12 +452,15 @@ export function AssessmentsScreen({ navigation }: Props) {
         };
       })
       .sort((left, right) => {
-        const statusGap = statusPriority[left.status] - statusPriority[right.status];
+        const statusGap =
+          statusPriority[left.status] - statusPriority[right.status];
         if (statusGap !== 0) {
           return statusGap;
         }
 
-        const dueGap = (left.dueTime ?? Number.MAX_SAFE_INTEGER) - (right.dueTime ?? Number.MAX_SAFE_INTEGER);
+        const dueGap =
+          (left.dueTime ?? Number.MAX_SAFE_INTEGER) -
+          (right.dueTime ?? Number.MAX_SAFE_INTEGER);
         if (dueGap !== 0) {
           return dueGap;
         }
@@ -420,12 +474,20 @@ export function AssessmentsScreen({ navigation }: Props) {
 
     return derivedAssessments.filter((assessment) => {
       const matchesFilter =
-        activeFilter === "allAssessments" ? true : assessment.status === activeFilter;
+        activeFilter === "allAssessments"
+          ? true
+          : assessment.status === activeFilter;
 
       const matchesSearch =
         normalizedQuery.length === 0
           ? true
-          : [assessment.title, assessment.subjectName, assessment.subjectCode, assessment.typeLabel, assessment.statusLabel]
+          : [
+              assessment.title,
+              assessment.subjectName,
+              assessment.subjectCode,
+              assessment.typeLabel,
+              assessment.statusLabel,
+            ]
               .join(" ")
               .toLowerCase()
               .includes(normalizedQuery);
@@ -452,12 +514,18 @@ export function AssessmentsScreen({ navigation }: Props) {
     ]);
   };
 
-  const userInitials = resolveUserInitials(user?.firstName, user?.lastName, user?.email);
+  const userInitials = resolveUserInitials(
+    user?.firstName,
+    user?.lastName,
+    user?.email,
+  );
 
   return (
     <ScreenScroll
       backgroundColor={darkTheme.bg}
-      refreshControl={<Refreshable refreshing={refreshing} onRefresh={handleRefresh} />}
+      refreshControl={
+        <Refreshable refreshing={refreshing} onRefresh={handleRefresh} />
+      }
     >
       <View style={{ backgroundColor: darkTheme.bg }}>
         <View
@@ -477,7 +545,9 @@ export function AssessmentsScreen({ navigation }: Props) {
               marginBottom: 12,
             }}
           >
-            <View style={{ alignItems: "center", flexDirection: "row", gap: 9 }}>
+            <View
+              style={{ alignItems: "center", flexDirection: "row", gap: 9 }}
+            >
               <View
                 style={{
                   alignItems: "center",
@@ -488,12 +558,26 @@ export function AssessmentsScreen({ navigation }: Props) {
                   width: 28,
                 }}
               >
-                <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "700" }}>N</Text>
+                <Text
+                  style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "700" }}
+                >
+                  N
+                </Text>
               </View>
-              <Text style={{ color: darkTheme.text, fontSize: 17, fontWeight: "600" }}>Assessments</Text>
+              <Text
+                style={{
+                  color: darkTheme.text,
+                  fontSize: 17,
+                  fontWeight: "600",
+                }}
+              >
+                Assessments
+              </Text>
             </View>
 
-            <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
+            <View
+              style={{ alignItems: "center", flexDirection: "row", gap: 10 }}
+            >
               <Pressable
                 accessibilityLabel="Open assessment search"
                 onPress={() => setSearchOpen((current) => !current)}
@@ -508,12 +592,18 @@ export function AssessmentsScreen({ navigation }: Props) {
                   width: 44,
                 }}
               >
-                <MaterialCommunityIcons color={darkTheme.text} name="magnify" size={18} />
+                <MaterialCommunityIcons
+                  color={darkTheme.text}
+                  name="magnify"
+                  size={18}
+                />
               </Pressable>
 
               <Pressable
                 accessibilityLabel="Open assessment history"
-                onPress={() => (navigation as any).navigate("AssessmentHistory")}
+                onPress={() =>
+                  (navigation as any).navigate("AssessmentHistory")
+                }
                 style={{
                   alignItems: "center",
                   backgroundColor: darkTheme.surface,
@@ -525,7 +615,11 @@ export function AssessmentsScreen({ navigation }: Props) {
                   width: 44,
                 }}
               >
-                <MaterialCommunityIcons color={darkTheme.text} name="history" size={18} />
+                <MaterialCommunityIcons
+                  color={darkTheme.text}
+                  name="history"
+                  size={18}
+                />
               </Pressable>
 
               <View
@@ -538,13 +632,26 @@ export function AssessmentsScreen({ navigation }: Props) {
                   width: 44,
                 }}
               >
-                <Text style={{ color: "#FFFFFF", fontSize: 11, fontWeight: "700" }}>{userInitials}</Text>
+                <Text
+                  style={{ color: "#FFFFFF", fontSize: 11, fontWeight: "700" }}
+                >
+                  {userInitials}
+                </Text>
               </View>
             </View>
           </View>
 
-          <Text style={{ color: darkTheme.subtext, fontSize: 11, paddingBottom: 10 }}>
-            Stay on top, <Text style={{ color: darkTheme.text, fontWeight: "600" }}>{user?.firstName || "Student"}</Text>
+          <Text
+            style={{
+              color: darkTheme.subtext,
+              fontSize: 11,
+              paddingBottom: 10,
+            }}
+          >
+            Stay on top,{" "}
+            <Text style={{ color: darkTheme.text, fontWeight: "600" }}>
+              {user?.firstName || "Student"}
+            </Text>
           </Text>
 
           {searchOpen || searchQuery ? (
@@ -562,12 +669,21 @@ export function AssessmentsScreen({ navigation }: Props) {
                 paddingVertical: 10,
               }}
             >
-              <MaterialCommunityIcons color={darkTheme.muted} name="magnify" size={16} />
+              <MaterialCommunityIcons
+                color={darkTheme.muted}
+                name="magnify"
+                size={16}
+              />
               <TextInput
                 onChangeText={setSearchQuery}
                 placeholder="Search assessments"
                 placeholderTextColor={darkTheme.muted}
-                style={{ color: darkTheme.text, flex: 1, fontSize: 13, padding: 0 }}
+                style={{
+                  color: darkTheme.text,
+                  flex: 1,
+                  fontSize: 13,
+                  padding: 0,
+                }}
                 value={searchQuery}
               />
             </View>
@@ -627,21 +743,34 @@ export function AssessmentsScreen({ navigation }: Props) {
             >
               Assessments & Actions
             </Text>
-            <Text style={{ color: darkTheme.red, fontSize: 10, fontWeight: "600" }}>
-              {filteredAssessments.length} {pluralize(filteredAssessments.length, "assessment", "assessments")}
+            <Text
+              style={{ color: darkTheme.red, fontSize: 10, fontWeight: "600" }}
+            >
+              {filteredAssessments.length}{" "}
+              {pluralize(
+                filteredAssessments.length,
+                "assessment",
+                "assessments",
+              )}
             </Text>
           </View>
 
           <View style={{ gap: 0 }}>
             {primaryError ? (
               <View style={{ paddingBottom: 14, paddingHorizontal: 16 }}>
-                <DarkNotice title="Some assessment data could not load" subtitle={peekAppError(primaryError).message} />
+                <DarkNotice
+                  title="Some assessment data could not load"
+                  subtitle={peekAppError(primaryError).message}
+                />
               </View>
             ) : null}
 
             {classesQuery.isLoading && derivedAssessments.length === 0 ? (
               <View style={{ paddingHorizontal: 16 }}>
-                <DarkNotice title="Loading assessments" subtitle="Pulling your published work now." />
+                <DarkNotice
+                  title="Loading assessments"
+                  subtitle="Pulling your published work now."
+                />
               </View>
             ) : filteredAssessments.length === 0 ? (
               <View style={{ paddingHorizontal: 16 }}>
@@ -653,7 +782,8 @@ export function AssessmentsScreen({ navigation }: Props) {
             ) : (
               filteredAssessments.map((assessment, index) => {
                 const expanded = expandedAssessmentId === assessment.id;
-                const attemptBadge = assessment.attemptCount > 0 ? assessment.attemptCount : null;
+                const attemptBadge =
+                  assessment.attemptCount > 0 ? assessment.attemptCount : null;
 
                 return (
                   <AnimatedEntrance key={assessment.id} delay={index * 50}>
@@ -666,7 +796,9 @@ export function AssessmentsScreen({ navigation }: Props) {
                         }
                         style={{
                           alignItems: "center",
-                          backgroundColor: expanded ? darkTheme.surface : darkTheme.bg,
+                          backgroundColor: expanded
+                            ? darkTheme.surface
+                            : darkTheme.bg,
                           borderColor: darkTheme.border,
                           borderRadius: 16,
                           borderWidth: 1,
@@ -690,7 +822,13 @@ export function AssessmentsScreen({ navigation }: Props) {
                             width: 48,
                           }}
                         >
-                          <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "700" }}>
+                          <Text
+                            style={{
+                              color: "#FFFFFF",
+                              fontSize: 13,
+                              fontWeight: "700",
+                            }}
+                          >
                             {assessment.badgeText}
                           </Text>
                         </View>
@@ -698,19 +836,33 @@ export function AssessmentsScreen({ navigation }: Props) {
                         <View style={{ flex: 1, minWidth: 0 }}>
                           <Text
                             numberOfLines={1}
-                            style={{ color: darkTheme.text, fontSize: 14, fontWeight: "500" }}
+                            style={{
+                              color: darkTheme.text,
+                              fontSize: 14,
+                              fontWeight: "500",
+                            }}
                           >
                             {assessment.title}
                           </Text>
                           <Text
                             numberOfLines={1}
-                            style={{ color: darkTheme.muted, fontSize: 11, marginTop: 2 }}
+                            style={{
+                              color: darkTheme.muted,
+                              fontSize: 11,
+                              marginTop: 2,
+                            }}
                           >
                             {buildAssessmentSubtitle(assessment)}
                           </Text>
                         </View>
 
-                        <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
+                        <View
+                          style={{
+                            alignItems: "center",
+                            flexDirection: "row",
+                            gap: 8,
+                          }}
+                        >
                           <View
                             style={{
                               backgroundColor: darkTheme.active,
@@ -741,7 +893,13 @@ export function AssessmentsScreen({ navigation }: Props) {
                                 width: 18,
                               }}
                             >
-                              <Text style={{ color: "#FFFFFF", fontSize: 10, fontWeight: "700" }}>
+                              <Text
+                                style={{
+                                  color: "#FFFFFF",
+                                  fontSize: 10,
+                                  fontWeight: "700",
+                                }}
+                              >
                                 {attemptBadge}
                               </Text>
                             </View>
@@ -775,60 +933,78 @@ export function AssessmentsScreen({ navigation }: Props) {
                             overflow: "hidden",
                           }}
                         >
-                          {(["details", "history", "results", "class"] as AssessmentActionKey[]).map(
-                            (action, actionIndex, actions) => {
-                              const config = actionConfig[action];
+                          {(
+                            [
+                              "details",
+                              "history",
+                              "results",
+                              "class",
+                            ] as AssessmentActionKey[]
+                          ).map((action, actionIndex, actions) => {
+                            const config = actionConfig[action];
 
-                              return (
-                                <Pressable
-                                  key={action}
-                                  onPress={() => navigateToAction(navigation, assessment, action)}
+                            return (
+                              <Pressable
+                                key={action}
+                                onPress={() =>
+                                  navigateToAction(
+                                    navigation,
+                                    assessment,
+                                    action,
+                                  )
+                                }
+                                style={{
+                                  alignItems: "center",
+                                  borderBottomColor:
+                                    actionIndex === actions.length - 1
+                                      ? "transparent"
+                                      : darkTheme.border,
+                                  borderBottomWidth:
+                                    actionIndex === actions.length - 1 ? 0 : 1,
+                                  flexDirection: "row",
+                                  gap: 10,
+                                  paddingBottom: 10,
+                                  paddingLeft: 58,
+                                  paddingRight: 16,
+                                  paddingTop: 10,
+                                }}
+                              >
+                                <MaterialCommunityIcons
+                                  color={darkTheme.text}
+                                  name={config.icon}
+                                  size={15}
+                                  style={{ opacity: 0.55 }}
+                                />
+                                <Text
                                   style={{
-                                    alignItems: "center",
-                                    borderBottomColor:
-                                      actionIndex === actions.length - 1
-                                        ? "transparent"
-                                        : darkTheme.border,
-                                    borderBottomWidth: actionIndex === actions.length - 1 ? 0 : 1,
-                                    flexDirection: "row",
-                                    gap: 10,
-                                    paddingBottom: 10,
-                                    paddingLeft: 58,
-                                    paddingRight: 16,
-                                    paddingTop: 10,
+                                    color: darkTheme.subtext,
+                                    flex: 1,
+                                    fontSize: 13,
                                   }}
                                 >
-                                  <MaterialCommunityIcons
-                                    color={darkTheme.text}
-                                    name={config.icon}
-                                    size={15}
-                                    style={{ opacity: 0.55 }}
-                                  />
+                                  {buildActionLabel(assessment, action)}
+                                </Text>
+                                <View
+                                  style={{
+                                    backgroundColor: config.background,
+                                    borderRadius: 4,
+                                    paddingHorizontal: 8,
+                                    paddingVertical: 2,
+                                  }}
+                                >
                                   <Text
                                     style={{
-                                      color: darkTheme.subtext,
-                                      flex: 1,
-                                      fontSize: 13,
+                                      color: config.color,
+                                      fontSize: 10,
+                                      fontWeight: "500",
                                     }}
                                   >
-                                    {buildActionLabel(assessment, action)}
+                                    {buildActionBadge(assessment, action)}
                                   </Text>
-                                  <View
-                                    style={{
-                                      backgroundColor: config.background,
-                                      borderRadius: 4,
-                                      paddingHorizontal: 8,
-                                      paddingVertical: 2,
-                                    }}
-                                  >
-                                    <Text style={{ color: config.color, fontSize: 10, fontWeight: "500" }}>
-                                      {buildActionBadge(assessment, action)}
-                                    </Text>
-                                  </View>
-                                </Pressable>
-                              );
-                            },
-                          )}
+                                </View>
+                              </Pressable>
+                            );
+                          })}
                         </View>
                       ) : null}
                     </View>

@@ -1,12 +1,12 @@
 {
   "platform": "android",
-  "versionCode": 18,
+  "versionCode": 19,
   "minSupportedVersionCode": 1,
-  "nativeVersion": "0.1.17",
-  "otaRuntimeVersion": "0.1.17",
+  "nativeVersion": "0.1.18",
+  "otaRuntimeVersion": "0.1.18",
   "apkDownloadUrl": "https://next-frontend-v2-production.up.railway.app/downloads/nexora-student-mobile-release.apk",
   "requiresFullApk": true,
-  "releaseNotes": "Web-aligned Campus Front Door login with server and APK status diagnostics.",
-  "apkSha256": "fb36c4236b9591e4f28960e3d12a5f681812cc180035c636a47e1e2a4d994060",
-  "apkSizeBytes": 40940191
+  "releaseNotes": "Capped academic grades at 100%, preserved documented bonus-point evidence, and aligned teacher, student, and admin grade displays across mobile and web.",
+  "apkSha256": "47ce8cfe8c45da9c462f984846e1d67d3ab872ce51d144326a69841711f14e66",
+  "apkSizeBytes": 40942159
 }

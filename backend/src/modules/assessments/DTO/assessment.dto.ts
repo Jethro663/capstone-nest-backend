@@ -13,6 +13,7 @@ import {
   ValidateIf,
   Max,
   MinLength,
+  IsNumber,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -568,6 +569,17 @@ export class ReturnGradeDto {
   @ValidateNested({ each: true })
   @Type(() => ManualResponseScoreDto)
   manualResponseScores?: ManualResponseScoreDto[];
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  bonusPoints?: number;
+
+  @ValidateIf((dto: ReturnGradeDto) => (dto.bonusPoints ?? 0) > 0)
+  @IsString()
+  @MinLength(1)
+  bonusReason?: string;
 }
 
 export class BulkReturnGradesDto {

@@ -15,7 +15,12 @@ export interface ClassItem {
   sectionId: string;
   section?: { id: string; name: string; gradeLevel: string } | null;
   teacherId?: string | null;
-  teacher?: { id: string; firstName?: string; lastName?: string; email?: string } | null;
+  teacher?: {
+    id: string;
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+  } | null;
   schoolYear: string;
   room?: string;
   isActive: boolean;
@@ -79,7 +84,11 @@ export interface CreateClassDto {
   schoolYear: string;
   room: string;
   schedules: Array<{ days: ScheduleDay[]; startTime: string; endTime: string }>;
-  gradingProfile: { writtenWork: number; performanceTask: number; quarterlyAssessment: number };
+  gradingProfile: {
+    writtenWork: number;
+    performanceTask: number;
+    quarterlyAssessment: number;
+  };
   academicWeightProfile?: "academic" | "practical";
   templateId?: string;
 }
@@ -92,7 +101,11 @@ export interface UpdateClassDto {
   teacherId?: string;
   schoolYear?: string;
   room?: string;
-  schedules?: Array<{ days: ScheduleDay[]; startTime: string; endTime: string }>;
+  schedules?: Array<{
+    days: ScheduleDay[];
+    startTime: string;
+    endTime: string;
+  }>;
   isActive?: boolean;
   cardPreset?: string;
   cardBannerUrl?: string | null;
@@ -106,6 +119,8 @@ export interface TeacherStudentAssessmentHistoryItem {
   statusLabel: string;
   submittedAt?: string | null;
   score?: number | null;
+  scorePercent?: number | null;
+  scoreBreakdown?: import("./assessment").AcademicScoreBreakdown | null;
   totalPoints?: number | null;
 }
 
@@ -146,9 +161,10 @@ export interface TeacherClassStudentOverview {
   };
 }
 
-export type TeacherClassStudentProfile = TeacherClassStudentOverview["student"] & {
-  profile?: TeacherClassStudentOverview["student"]["profile"];
-};
+export type TeacherClassStudentProfile =
+  TeacherClassStudentOverview["student"] & {
+    profile?: TeacherClassStudentOverview["student"]["profile"];
+  };
 
 export interface StudentMasterlistSection {
   id: string;
@@ -177,7 +193,13 @@ export interface StudentMasterlistQuery {
   sectionId?: string;
   search?: string;
   eligibility?: "all" | "eligible" | "mismatch";
-  sortBy?: "lastName" | "firstName" | "email" | "gradeLevel" | "lrn" | "eligibility";
+  sortBy?:
+    | "lastName"
+    | "firstName"
+    | "email"
+    | "gradeLevel"
+    | "lrn"
+    | "eligibility";
   sortDirection?: "asc" | "desc";
   prioritizeEligible?: boolean;
   page?: number;

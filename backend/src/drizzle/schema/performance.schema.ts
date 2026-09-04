@@ -8,8 +8,9 @@ import {
   text,
   unique,
   index,
+  check,
 } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 import { classes, users } from './base.schema';
 
 export const performanceSnapshots = pgTable(
@@ -50,6 +51,10 @@ export const performanceSnapshots = pgTable(
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
   (table) => ({
+    scoreRangeCheck: check(
+      'performance_snapshots_score_range_valid',
+      sql`(${table.assessmentAverage} IS NULL OR (${table.assessmentAverage} >= 0 AND ${table.assessmentAverage} <= 100)) AND (${table.classRecordAverage} IS NULL OR (${table.classRecordAverage} >= 0 AND ${table.classRecordAverage} <= 100)) AND (${table.blendedScore} IS NULL OR (${table.blendedScore} >= 0 AND ${table.blendedScore} <= 100)) AND (${table.thresholdApplied} >= 0 AND ${table.thresholdApplied} <= 100)`,
+    ),
     classStudentUnique: unique('performance_snapshots_class_student_unique').on(
       table.classId,
       table.studentId,
@@ -96,6 +101,10 @@ export const performanceLogs = pgTable(
     createdAt: timestamp('created_at').notNull().defaultNow(),
   },
   (table) => ({
+    scoreRangeCheck: check(
+      'performance_logs_score_range_valid',
+      sql`(${table.assessmentAverage} IS NULL OR (${table.assessmentAverage} >= 0 AND ${table.assessmentAverage} <= 100)) AND (${table.classRecordAverage} IS NULL OR (${table.classRecordAverage} >= 0 AND ${table.classRecordAverage} <= 100)) AND (${table.blendedScore} IS NULL OR (${table.blendedScore} >= 0 AND ${table.blendedScore} <= 100)) AND (${table.thresholdApplied} >= 0 AND ${table.thresholdApplied} <= 100)`,
+    ),
     classCreatedAtIdx: index('performance_logs_class_created_at_idx').on(
       table.classId,
       table.createdAt,

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { and, eq, inArray } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { performanceSnapshots } from '../../drizzle/schema';
+import { boundPercentage } from '../academic-state/academic-score';
 
 export type PerformanceSnapshotSummary = {
   id: string;
@@ -56,9 +57,9 @@ export class PerformanceSnapshotReadService {
         row.classId,
         {
           ...row,
-          assessmentAverage: this.toNumber(row.assessmentAverage),
-          classRecordAverage: this.toNumber(row.classRecordAverage),
-          blendedScore: this.toNumber(row.blendedScore),
+          assessmentAverage: this.toPercentage(row.assessmentAverage),
+          classRecordAverage: this.toPercentage(row.classRecordAverage),
+          blendedScore: this.toPercentage(row.blendedScore),
           thresholdApplied: this.toNumber(row.thresholdApplied) ?? 74,
         },
       ]),
@@ -70,5 +71,10 @@ export class PerformanceSnapshotReadService {
     if (typeof value === 'number') return Number.isFinite(value) ? value : null;
     const parsed = Number.parseFloat(value);
     return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  private toPercentage(value: string | number | null): number | null {
+    const number = this.toNumber(value);
+    return number === null ? null : boundPercentage(number);
   }
 }

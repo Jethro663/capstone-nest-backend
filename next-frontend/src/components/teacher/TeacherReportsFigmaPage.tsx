@@ -1,32 +1,38 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useMemo, useState, type ElementType } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ElementType,
+} from "react";
 import {
   ClipboardList,
   Download,
   Filter,
   ListChecks,
   TrendingUp,
-} from 'lucide-react';
-import { classRecordService } from '@/services/class-record-service';
-import { dashboardService } from '@/services/dashboard-service';
-import { reportService } from '@/services/report-service';
+} from "lucide-react";
+import { classRecordService } from "@/services/class-record-service";
+import { dashboardService } from "@/services/dashboard-service";
+import { reportService } from "@/services/report-service";
 import type {
   ClassAverageReport,
   ClassRecord,
   GradeDistributionReport,
   InterventionReportRow,
-} from '@/types/class-record';
-import type { ClassItem } from '@/types/class';
+} from "@/types/class-record";
+import type { ClassItem } from "@/types/class";
 import type {
   ReportQuery,
   StudentMasterListRow,
   StudentPerformanceReportRow,
-} from '@/types/report';
-import { downloadReportPdf } from '@/utils/report-pdf';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Skeleton } from '@/components/ui/skeleton';
+} from "@/types/report";
+import { downloadReportPdf } from "@/utils/report-pdf";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -34,27 +40,37 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
+} from "@/components/ui/table";
 import {
   TeacherEmptyState,
   TeacherHeaderMetric,
   TeacherPageShell,
   TeacherSectionCard,
-} from '@/components/teacher/TeacherPageShell';
-import { cn } from '@/utils/cn';
-import { toast } from 'sonner';
+} from "@/components/teacher/TeacherPageShell";
+import { cn } from "@/utils/cn";
+import { boundAcademicPercentage } from "@/lib/academic-score";
+import { toast } from "sonner";
 
-type TeacherReportView = 'studentMasterList' | 'studentPerformance' | 'classRecord';
+type TeacherReportView =
+  "studentMasterList" | "studentPerformance" | "classRecord";
 
-const teacherViews: Array<{ value: TeacherReportView; label: string; icon: ElementType }> = [
-  { value: 'studentMasterList', label: 'Master List', icon: ListChecks },
-  { value: 'studentPerformance', label: 'Student Performance', icon: TrendingUp },
-  { value: 'classRecord', label: 'Class Record', icon: ClipboardList },
+const teacherViews: Array<{
+  value: TeacherReportView;
+  label: string;
+  icon: ElementType;
+}> = [
+  { value: "studentMasterList", label: "Master List", icon: ListChecks },
+  {
+    value: "studentPerformance",
+    label: "Student Performance",
+    icon: TrendingUp,
+  },
+  { value: "classRecord", label: "Class Record", icon: ClipboardList },
 ];
 
 function formatStudentName(row: InterventionReportRow): string {
-  const first = row.student?.firstName?.trim() ?? '';
-  const last = row.student?.lastName?.trim() ?? '';
+  const first = row.student?.firstName?.trim() ?? "";
+  const last = row.student?.lastName?.trim() ?? "";
   if (first && last) return `${last}, ${first}`;
   if (last) return last;
   if (first) return first;
@@ -62,18 +78,26 @@ function formatStudentName(row: InterventionReportRow): string {
 }
 
 export function TeacherReportsFigmaPage() {
-  const [activeView, setActiveView] = useState<TeacherReportView>('studentMasterList');
+  const [activeView, setActiveView] =
+    useState<TeacherReportView>("studentMasterList");
   const [classes, setClasses] = useState<ClassItem[]>([]);
-  const [selectedClassId, setSelectedClassId] = useState('');
+  const [selectedClassId, setSelectedClassId] = useState("");
   const [records, setRecords] = useState<ClassRecord[]>([]);
-  const [selectedRecordId, setSelectedRecordId] = useState('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const [studentMasterList, setStudentMasterList] = useState<StudentMasterListRow[]>([]);
-  const [studentPerformance, setStudentPerformance] = useState<StudentPerformanceReportRow[]>([]);
+  const [selectedRecordId, setSelectedRecordId] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [studentMasterList, setStudentMasterList] = useState<
+    StudentMasterListRow[]
+  >([]);
+  const [studentPerformance, setStudentPerformance] = useState<
+    StudentPerformanceReportRow[]
+  >([]);
   const [average, setAverage] = useState<ClassAverageReport | null>(null);
-  const [distribution, setDistribution] = useState<GradeDistributionReport | null>(null);
-  const [interventions, setInterventions] = useState<InterventionReportRow[]>([]);
+  const [distribution, setDistribution] =
+    useState<GradeDistributionReport | null>(null);
+  const [interventions, setInterventions] = useState<InterventionReportRow[]>(
+    [],
+  );
   const [loadingClasses, setLoadingClasses] = useState(true);
   const [loadingRecords, setLoadingRecords] = useState(false);
   const [loadingData, setLoadingData] = useState(false);
@@ -103,11 +127,12 @@ export function TeacherReportsFigmaPage() {
   const fetchClasses = useCallback(async () => {
     try {
       setLoadingClasses(true);
-      const nextClasses = (await dashboardService.getTeacherClasses()).data ?? [];
+      const nextClasses =
+        (await dashboardService.getTeacherClasses()).data ?? [];
       setClasses(nextClasses);
-      setSelectedClassId((current) => current || nextClasses[0]?.id || '');
+      setSelectedClassId((current) => current || nextClasses[0]?.id || "");
     } catch {
-      toast.error('Failed to load classes');
+      toast.error("Failed to load classes");
     } finally {
       setLoadingClasses(false);
     }
@@ -116,7 +141,7 @@ export function TeacherReportsFigmaPage() {
   const fetchClassRecords = useCallback(async () => {
     if (!selectedClassId) {
       setRecords([]);
-      setSelectedRecordId('');
+      setSelectedRecordId("");
       return;
     }
 
@@ -126,13 +151,14 @@ export function TeacherReportsFigmaPage() {
       const nextRecords = Array.isArray(response.data) ? response.data : [];
       setRecords(nextRecords);
       setSelectedRecordId((current) => {
-        if (current && nextRecords.some((entry) => entry.id === current)) return current;
-        return nextRecords[0]?.id ?? '';
+        if (current && nextRecords.some((entry) => entry.id === current))
+          return current;
+        return nextRecords[0]?.id ?? "";
       });
     } catch {
-      toast.error('Failed to load grading periods');
+      toast.error("Failed to load grading periods");
       setRecords([]);
-      setSelectedRecordId('');
+      setSelectedRecordId("");
     } finally {
       setLoadingRecords(false);
     }
@@ -168,7 +194,7 @@ export function TeacherReportsFigmaPage() {
       setStudentMasterList(masterListRes.data ?? []);
       setStudentPerformance(studentPerformanceRes.data ?? []);
     } catch {
-      toast.error('Failed to load reports');
+      toast.error("Failed to load reports");
       setStudentMasterList([]);
       setStudentPerformance([]);
       setAverage(null);
@@ -194,19 +220,20 @@ export function TeacherReportsFigmaPage() {
   const handleExportCsv = async () => {
     try {
       setExportingCsv(true);
-      const tab = activeView === 'classRecord' ? 'interventionParticipation' : activeView;
+      const tab =
+        activeView === "classRecord" ? "interventionParticipation" : activeView;
       const blob = await reportService.exportCsv(tab, reportQuery);
       const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
+      const anchor = document.createElement("a");
       anchor.href = url;
       anchor.download = `${activeView}-report.csv`;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(url);
-      toast.success('CSV report downloaded');
+      toast.success("CSV report downloaded");
     } catch {
-      toast.error('Unable to export report');
+      toast.error("Unable to export report");
     } finally {
       setExportingCsv(false);
     }
@@ -217,8 +244,8 @@ export function TeacherReportsFigmaPage() {
       setExportingPdf(true);
       await downloadReportPdf({
         tab: activeView,
-        heading: 'Reports',
-        scopeLabel: 'Teacher Reports Hub',
+        heading: "Reports",
+        scopeLabel: "Teacher Reports Hub",
         filters: reportQuery,
         classLabel: selectedClass
           ? `${selectedClass.subjectName} (${selectedClass.subjectCode})`
@@ -240,9 +267,9 @@ export function TeacherReportsFigmaPage() {
           systemUsage: null,
         },
       });
-      toast.success('PDF report downloaded');
+      toast.success("PDF report downloaded");
     } catch {
-      toast.error('Unable to export PDF report');
+      toast.error("Unable to export PDF report");
     } finally {
       setExportingPdf(false);
     }
@@ -267,8 +294,16 @@ export function TeacherReportsFigmaPage() {
         <>
           <TeacherHeaderMetric
             label="Avg Class Grade"
-            value={average ? `${average.average.toFixed(1)}%` : '--'}
-            caption={selectedClass?.subjectCode ? `${selectedClass.subjectCode} snapshot` : 'Select a class'}
+            value={
+              average
+                ? `${boundAcademicPercentage(average.average).toFixed(1)}%`
+                : "--"
+            }
+            caption={
+              selectedClass?.subjectCode
+                ? `${selectedClass.subjectCode} snapshot`
+                : "Select a class"
+            }
             accent="teal"
           />
           <TeacherHeaderMetric
@@ -276,7 +311,7 @@ export function TeacherReportsFigmaPage() {
             value={
               average && average.count > 0
                 ? `${(((average.count - average.interventionCount) / average.count) * 100).toFixed(0)}%`
-                : '--'
+                : "--"
             }
             caption="Learners above intervention threshold"
             accent="sky"
@@ -285,8 +320,14 @@ export function TeacherReportsFigmaPage() {
             label="Highest Grade"
             value={
               interventions.length > 0
-                ? Math.max(...interventions.map((row) => Number(row.finalPercentage))).toFixed(1)
-                : '--'
+                ? boundAcademicPercentage(
+                    Math.max(
+                      ...interventions.map((row) =>
+                        Number(row.finalPercentage),
+                      ),
+                    ),
+                  ).toFixed(1)
+                : "--"
             }
             caption="Highest finalized grade"
             accent="amber"
@@ -308,7 +349,7 @@ export function TeacherReportsFigmaPage() {
             disabled={exportingCsv || exportingPdf}
           >
             <Download className="h-4 w-4" />
-            {exportingCsv ? 'Exporting CSV...' : 'Download CSV'}
+            {exportingCsv ? "Exporting CSV..." : "Download CSV"}
           </Button>
           <Button
             variant="teacher"
@@ -317,7 +358,7 @@ export function TeacherReportsFigmaPage() {
             disabled={exportingCsv || exportingPdf}
           >
             <Download className="h-4 w-4" />
-            {exportingPdf ? 'Exporting PDF...' : 'Download PDF'}
+            {exportingPdf ? "Exporting PDF..." : "Download PDF"}
           </Button>
         </div>
       }
@@ -349,7 +390,9 @@ export function TeacherReportsFigmaPage() {
               value={selectedRecordId}
               onChange={(event) => setSelectedRecordId(event.target.value)}
               className="teacher-select min-w-[190px] text-sm"
-              disabled={!selectedClassId || loadingRecords || records.length === 0}
+              disabled={
+                !selectedClassId || loadingRecords || records.length === 0
+              }
             >
               <option value="">Select quarter...</option>
               {records.map((record) => (
@@ -384,7 +427,10 @@ export function TeacherReportsFigmaPage() {
             <button
               key={view.value}
               type="button"
-              className={cn('teacher-figma-segment__item', isActive && 'is-active')}
+              className={cn(
+                "teacher-figma-segment__item",
+                isActive && "is-active",
+              )}
               onClick={() => setActiveView(view.value)}
             >
               <Icon className="h-4 w-4" />
@@ -401,7 +447,7 @@ export function TeacherReportsFigmaPage() {
         </div>
       ) : null}
 
-      {!loadingData && activeView === 'studentMasterList' ? (
+      {!loadingData && activeView === "studentMasterList" ? (
         <TeacherSectionCard
           title="Student Master List"
           description="Comprehensive class roster for the selected class and date range."
@@ -426,14 +472,25 @@ export function TeacherReportsFigmaPage() {
                 </TableHeader>
                 <TableBody className="[&_tr:last-child]:border-0">
                   {studentMasterList.map((row) => (
-                    <TableRow key={row.enrollmentId} className="teacher-table-row border-white/10">
+                    <TableRow
+                      key={row.enrollmentId}
+                      className="teacher-table-row border-white/10"
+                    >
                       <TableCell className="font-medium text-[var(--teacher-text-strong)]">
                         {row.lastName}, {row.firstName}
                       </TableCell>
-                      <TableCell className="text-[var(--teacher-text-strong)]">{row.email}</TableCell>
-                      <TableCell className="text-[var(--teacher-text-strong)]">{row.lrn ?? '--'}</TableCell>
-                      <TableCell className="text-[var(--teacher-text-strong)]">{row.subjectCode ?? '--'}</TableCell>
-                      <TableCell className="text-[var(--teacher-text-strong)]">{row.sectionName ?? '--'}</TableCell>
+                      <TableCell className="text-[var(--teacher-text-strong)]">
+                        {row.email}
+                      </TableCell>
+                      <TableCell className="text-[var(--teacher-text-strong)]">
+                        {row.lrn ?? "--"}
+                      </TableCell>
+                      <TableCell className="text-[var(--teacher-text-strong)]">
+                        {row.subjectCode ?? "--"}
+                      </TableCell>
+                      <TableCell className="text-[var(--teacher-text-strong)]">
+                        {row.sectionName ?? "--"}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -443,10 +500,10 @@ export function TeacherReportsFigmaPage() {
         </TeacherSectionCard>
       ) : null}
 
-      {!loadingData && activeView === 'studentPerformance' ? (
+      {!loadingData && activeView === "studentPerformance" ? (
         <TeacherSectionCard
           title="Student Performance"
-          description="Blended and risk-aware class performance snapshot."
+          description="Canonical class standing and risk-aware performance snapshot."
           className="teacher-figma-stagger"
         >
           {studentPerformance.length === 0 ? (
@@ -463,25 +520,46 @@ export function TeacherReportsFigmaPage() {
                     <TableHead>Class</TableHead>
                     <TableHead>Assessment</TableHead>
                     <TableHead>Class Record</TableHead>
-                    <TableHead>Blended</TableHead>
+                    <TableHead>Current Standing</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody className="[&_tr:last-child]:border-0">
                   {studentPerformance.map((row) => (
-                    <TableRow key={`${row.classId}-${row.studentId}`} className="teacher-table-row border-white/10">
+                    <TableRow
+                      key={`${row.classId}-${row.studentId}`}
+                      className="teacher-table-row border-white/10"
+                    >
                       <TableCell className="font-medium text-[var(--teacher-text-strong)]">
                         {row.lastName}, {row.firstName}
                       </TableCell>
-                      <TableCell className="text-[var(--teacher-text-strong)]">{row.subjectCode}</TableCell>
-                      <TableCell className="text-[var(--teacher-text-strong)]">{row.assessmentAverage?.toFixed(1) ?? '--'}</TableCell>
-                      <TableCell className="text-[var(--teacher-text-strong)]">{row.classRecordAverage?.toFixed(1) ?? '--'}</TableCell>
-                      <TableCell className="font-semibold text-[var(--teacher-text-strong)]">{row.blendedScore?.toFixed(1) ?? '--'}</TableCell>
+                      <TableCell className="text-[var(--teacher-text-strong)]">
+                        {row.subjectCode}
+                      </TableCell>
+                      <TableCell className="text-[var(--teacher-text-strong)]">
+                        {row.assessmentAverage === null
+                          ? "--"
+                          : `${boundAcademicPercentage(row.assessmentAverage).toFixed(1)}%`}
+                      </TableCell>
+                      <TableCell className="text-[var(--teacher-text-strong)]">
+                        {row.classRecordAverage === null
+                          ? "--"
+                          : `${boundAcademicPercentage(row.classRecordAverage).toFixed(1)}%`}
+                      </TableCell>
+                      <TableCell className="font-semibold text-[var(--teacher-text-strong)]">
+                        {row.blendedScore === null
+                          ? "--"
+                          : `${boundAcademicPercentage(row.blendedScore).toFixed(1)}%`}
+                      </TableCell>
                       <TableCell className="text-[var(--teacher-text-strong)]">
                         {row.isAtRisk ? (
-                          <span className="teacher-badge-danger border-0 px-2 py-1">At Risk</span>
+                          <span className="teacher-badge-danger border-0 px-2 py-1">
+                            At Risk
+                          </span>
                         ) : (
-                          <span className="teacher-badge-success border-0 px-2 py-1">Stable</span>
+                          <span className="teacher-badge-success border-0 px-2 py-1">
+                            Stable
+                          </span>
                         )}
                       </TableCell>
                     </TableRow>
@@ -493,7 +571,7 @@ export function TeacherReportsFigmaPage() {
         </TeacherSectionCard>
       ) : null}
 
-      {!loadingData && activeView === 'classRecord' ? (
+      {!loadingData && activeView === "classRecord" ? (
         <div className="space-y-4 teacher-figma-stagger">
           <TeacherSectionCard
             title="Grade Distribution"
@@ -506,20 +584,28 @@ export function TeacherReportsFigmaPage() {
               />
             ) : (
               <div className="space-y-3">
-                {Object.entries(distribution.distribution).map(([band, count]) => {
-                  const ratio = distribution.total > 0 ? (count / distribution.total) * 100 : 0;
-                  return (
-                    <div key={band} className="teacher-figma-distribution">
-                      <div className="teacher-figma-distribution__meta">
-                        <span>{band}</span>
-                        <strong>{count}</strong>
+                {Object.entries(distribution.distribution).map(
+                  ([band, count]) => {
+                    const ratio =
+                      distribution.total > 0
+                        ? (count / distribution.total) * 100
+                        : 0;
+                    return (
+                      <div key={band} className="teacher-figma-distribution">
+                        <div className="teacher-figma-distribution__meta">
+                          <span>{band}</span>
+                          <strong>{count}</strong>
+                        </div>
+                        <div className="teacher-figma-distribution__track">
+                          <div
+                            className="teacher-figma-distribution__fill"
+                            style={{ width: `${ratio}%` }}
+                          />
+                        </div>
                       </div>
-                      <div className="teacher-figma-distribution__track">
-                        <div className="teacher-figma-distribution__fill" style={{ width: `${ratio}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  },
+                )}
               </div>
             )}
           </TeacherSectionCard>
@@ -546,11 +632,25 @@ export function TeacherReportsFigmaPage() {
                   </TableHeader>
                   <TableBody className="[&_tr:last-child]:border-0">
                     {interventions.map((row) => (
-                      <TableRow key={row.id} className="teacher-table-row border-white/10">
-                        <TableCell className="font-medium text-[var(--teacher-text-strong)]">{formatStudentName(row)}</TableCell>
-                        <TableCell className="text-[var(--teacher-text-strong)]">{Number(row.finalPercentage).toFixed(1)}%</TableCell>
-                        <TableCell className="text-[var(--teacher-text-strong)]">{row.remarks}</TableCell>
-                        <TableCell className="text-[var(--teacher-text-strong)]">{new Date(row.computedAt).toLocaleDateString('en-US')}</TableCell>
+                      <TableRow
+                        key={row.id}
+                        className="teacher-table-row border-white/10"
+                      >
+                        <TableCell className="font-medium text-[var(--teacher-text-strong)]">
+                          {formatStudentName(row)}
+                        </TableCell>
+                        <TableCell className="text-[var(--teacher-text-strong)]">
+                          {boundAcademicPercentage(
+                            Number(row.finalPercentage),
+                          ).toFixed(1)}
+                          %
+                        </TableCell>
+                        <TableCell className="text-[var(--teacher-text-strong)]">
+                          {row.remarks}
+                        </TableCell>
+                        <TableCell className="text-[var(--teacher-text-strong)]">
+                          {new Date(row.computedAt).toLocaleDateString("en-US")}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

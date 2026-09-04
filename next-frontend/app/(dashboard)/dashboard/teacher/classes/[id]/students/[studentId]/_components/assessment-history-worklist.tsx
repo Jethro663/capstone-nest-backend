@@ -1,21 +1,22 @@
-'use client';
+"use client";
 
-import { useEffect, useMemo, type KeyboardEvent } from 'react';
-import Link from 'next/link';
-import { ArrowUpRight, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useEffect, useMemo, type KeyboardEvent } from "react";
+import Link from "next/link";
+import { ArrowUpRight, ChevronLeft, ChevronRight } from "lucide-react";
 import type {
   TeacherClassStudentOverview,
   TeacherStudentAssessmentHistoryItem,
-} from '@/types/class';
+} from "@/types/class";
+import { presentAcademicScore } from "@/lib/academic-score";
 
 const PAGE_SIZE = 10;
 
-export type AssessmentHistoryView = 'attention' | 'finished' | 'all';
-type HistoryTone = 'finished' | 'late' | 'pending' | 'overdue';
-type PageChangeMode = 'push' | 'replace';
+export type AssessmentHistoryView = "attention" | "finished" | "all";
+type HistoryTone = "finished" | "late" | "pending" | "overdue";
+type PageChangeMode = "push" | "replace";
 
 interface AssessmentHistoryWorklistProps {
-  history: TeacherClassStudentOverview['history'];
+  history: TeacherClassStudentOverview["history"];
   activeView: AssessmentHistoryView;
   requestedPage: number;
   onViewChange: (view: AssessmentHistoryView) => void;
@@ -28,9 +29,9 @@ interface HistoryRow {
 }
 
 const EMPTY_MESSAGES: Record<AssessmentHistoryView, string> = {
-  attention: 'No assessments need attention.',
-  finished: 'No finished assessments yet.',
-  all: 'No assessments found.',
+  attention: "No assessments need attention.",
+  finished: "No finished assessments yet.",
+  all: "No assessments found.",
 };
 
 function timestamp(value?: string | null) {
@@ -41,30 +42,30 @@ function timestamp(value?: string | null) {
 
 function formatDate(value?: string | null) {
   const parsed = timestamp(value);
-  if (parsed === null) return '--';
-  return new Date(parsed).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
+  if (parsed === null) return "--";
+  return new Date(parsed).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
   });
 }
 
 function prettifyType(value: string) {
   return value
-    .replace(/_/g, ' ')
+    .replace(/_/g, " ")
     .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
 function getTone(item: TeacherStudentAssessmentHistoryItem): HistoryTone {
-  if (item.status === 'finished') return 'finished';
-  if (item.status === 'late' || item.isLate) return 'late';
+  if (item.status === "finished") return "finished";
+  if (item.status === "late" || item.isLate) return "late";
 
   const dueAt = timestamp(item.dueDate);
   if (!item.submittedAt && dueAt !== null && dueAt < Date.now()) {
-    return 'overdue';
+    return "overdue";
   }
 
-  return 'pending';
+  return "pending";
 }
 
 function dueTime(row: HistoryRow) {
@@ -106,9 +107,8 @@ function pageNumbers(currentPage: number, totalPages: number) {
 }
 
 function scoreLabel(item: TeacherStudentAssessmentHistoryItem) {
-  const score = item.score ?? item.directScore;
-  if (score === null || score === undefined) return '--';
-  return `${score}/${item.totalPoints ?? '--'}`;
+  const score = presentAcademicScore(item);
+  return score.scorePercent === null ? "--" : score.compactLabel;
 }
 
 export function AssessmentHistoryWorklist({
@@ -140,7 +140,7 @@ export function AssessmentHistoryWorklist({
 
   useEffect(() => {
     if (requestedPage !== safePage) {
-      onPageChange(safePage, 'replace');
+      onPageChange(safePage, "replace");
     }
   }, [onPageChange, requestedPage, safePage]);
 
@@ -149,9 +149,17 @@ export function AssessmentHistoryWorklist({
     label: string;
     count: number;
   }> = [
-    { value: 'attention', label: 'Needs attention', count: collections.attention.length },
-    { value: 'finished', label: 'Finished', count: collections.finished.length },
-    { value: 'all', label: 'All', count: collections.all.length },
+    {
+      value: "attention",
+      label: "Needs attention",
+      count: collections.attention.length,
+    },
+    {
+      value: "finished",
+      label: "Finished",
+      count: collections.finished.length,
+    },
+    { value: "all", label: "All", count: collections.all.length },
   ];
 
   function handleTabKeyDown(
@@ -160,12 +168,13 @@ export function AssessmentHistoryWorklist({
   ) {
     let nextIndex: number | null = null;
 
-    if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % tabs.length;
-    if (event.key === 'ArrowLeft') {
+    if (event.key === "ArrowRight")
+      nextIndex = (currentIndex + 1) % tabs.length;
+    if (event.key === "ArrowLeft") {
       nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
     }
-    if (event.key === 'Home') nextIndex = 0;
-    if (event.key === 'End') nextIndex = tabs.length - 1;
+    if (event.key === "Home") nextIndex = 0;
+    if (event.key === "End") nextIndex = tabs.length - 1;
     if (nextIndex === null) return;
 
     event.preventDefault();
@@ -221,7 +230,9 @@ export function AssessmentHistoryWorklist({
         {rows.length === 0 ? (
           <div className="teacher-student-overview__empty-state">
             <p>{EMPTY_MESSAGES[activeView]}</p>
-            <span>Choose another history view to review this student&apos;s work.</span>
+            <span>
+              Choose another history view to review this student&apos;s work.
+            </span>
           </div>
         ) : (
           <>
@@ -234,7 +245,9 @@ export function AssessmentHistoryWorklist({
                     <th scope="col">Submission</th>
                     <th scope="col">Status</th>
                     <th scope="col">Score</th>
-                    <th scope="col"><span className="sr-only">Action</span></th>
+                    <th scope="col">
+                      <span className="sr-only">Action</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -246,11 +259,16 @@ export function AssessmentHistoryWorklist({
                       </td>
                       <td data-label="Due">{formatDate(item.dueDate)}</td>
                       <td data-label="Submission">
-                        {item.submittedAt ? formatDate(item.submittedAt) : 'Not submitted'}
+                        {item.submittedAt
+                          ? formatDate(item.submittedAt)
+                          : "Not submitted"}
                       </td>
                       <td data-label="Status">
-                        <span className="teacher-student-overview__history-status" data-tone={tone}>
-                          {tone === 'overdue' ? 'Overdue' : item.statusLabel}
+                        <span
+                          className="teacher-student-overview__history-status"
+                          data-tone={tone}
+                        >
+                          {tone === "overdue" ? "Overdue" : item.statusLabel}
                         </span>
                       </td>
                       <td data-label="Score">
@@ -281,20 +299,23 @@ export function AssessmentHistoryWorklist({
                   type="button"
                   aria-label="Previous page"
                   disabled={safePage <= 1}
-                  onClick={() => onPageChange(safePage - 1, 'push')}
+                  onClick={() => onPageChange(safePage - 1, "push")}
                 >
                   <ChevronLeft aria-hidden="true" />
                   <span>Previous</span>
                 </button>
 
-                <div className="teacher-student-overview__page-numbers" aria-label="Pages">
+                <div
+                  className="teacher-student-overview__page-numbers"
+                  aria-label="Pages"
+                >
                   {pageNumbers(safePage, totalPages).map((page) => (
                     <button
                       key={page}
                       type="button"
                       aria-label={`Page ${page}`}
-                      aria-current={page === safePage ? 'page' : undefined}
-                      onClick={() => onPageChange(page, 'push')}
+                      aria-current={page === safePage ? "page" : undefined}
+                      onClick={() => onPageChange(page, "push")}
                     >
                       {page}
                     </button>
@@ -309,7 +330,7 @@ export function AssessmentHistoryWorklist({
                   type="button"
                   aria-label="Next page"
                   disabled={safePage >= totalPages}
-                  onClick={() => onPageChange(safePage + 1, 'push')}
+                  onClick={() => onPageChange(safePage + 1, "push")}
                 >
                   <span>Next</span>
                   <ChevronRight aria-hidden="true" />

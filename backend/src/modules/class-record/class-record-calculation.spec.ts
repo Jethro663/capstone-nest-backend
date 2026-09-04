@@ -159,4 +159,51 @@ describe('complete class record calculation', () => {
         .quarterlyGrade,
     ).toBeNull();
   });
+
+  it('caps each reasoned bonus before category aggregation', () => {
+    const result = calculateStudentRecord(
+      's',
+      legacy,
+      [category],
+      [
+        {
+          id: 'bonus-item',
+          categoryId: category.id,
+          maxScore: '10',
+          scores: [
+            {
+              studentId: 's',
+              score: '5',
+              bonusPoints: '15',
+              bonusReason: 'Teacher-approved correction',
+              status: 'recorded',
+            },
+          ],
+        },
+        {
+          id: 'zero-item',
+          categoryId: category.id,
+          maxScore: '10',
+          scores: [
+            {
+              studentId: 's',
+              score: '0',
+              bonusPoints: '0',
+              bonusReason: null,
+              status: 'recorded',
+            },
+          ],
+        },
+      ],
+    );
+
+    expect(result.blockers).toEqual([]);
+    expect(result.categoryBreakdown[0]).toMatchObject({
+      totalRaw: 10,
+      totalHPS: 20,
+      percentageScore: 50,
+      weightedScore: 50,
+    });
+    expect(result.initialGrade).toBe(50);
+  });
 });

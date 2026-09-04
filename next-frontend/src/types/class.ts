@@ -199,6 +199,8 @@ export interface TeacherStudentAssessmentHistoryItem {
   isLate: boolean;
   lateByMinutes: number;
   score?: number | null;
+  scorePercent?: number | null;
+  scoreBreakdown?: import("@/lib/academic-score").AcademicScoreBreakdown | null;
   directScore?: number | null;
   totalPoints?: number | null;
   passed?: boolean | null;

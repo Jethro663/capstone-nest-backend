@@ -1,23 +1,29 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   BarChart3,
   Download,
   FileBarChart2,
   GraduationCap,
   Layers3,
-} from 'lucide-react';
-import { classRecordService } from '@/services/class-record-service';
-import { classService } from '@/services/class-service';
-import { dashboardService } from '@/services/dashboard-service';
-import { reportService } from '@/services/report-service';
+} from "lucide-react";
+import { classRecordService } from "@/services/class-record-service";
+import { classService } from "@/services/class-service";
+import { dashboardService } from "@/services/dashboard-service";
+import { reportService } from "@/services/report-service";
 import type {
   ClassAverageReport,
   ClassRecord,
   GradeDistributionReport,
   InterventionReportRow,
-} from '@/types/class-record';
+} from "@/types/class-record";
 import type {
   AssessmentSummaryRow,
   ClassEnrollmentRow,
@@ -27,12 +33,12 @@ import type {
   StudentMasterListRow,
   StudentPerformanceReportRow,
   SystemUsageReport,
-} from '@/types/report';
-import { downloadReportPdf } from '@/utils/report-pdf';
-import type { ClassItem } from '@/types/class';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Skeleton } from '@/components/ui/skeleton';
+} from "@/types/report";
+import { downloadReportPdf } from "@/utils/report-pdf";
+import type { ClassItem } from "@/types/class";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -40,26 +46,27 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+} from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { boundAcademicPercentage } from "@/lib/academic-score";
 import {
   AdminEmptyState,
   AdminPageShell,
   AdminSectionCard,
   AdminStatCard,
-} from '@/components/admin/AdminPageShell';
+} from "@/components/admin/AdminPageShell";
 import {
   TeacherEmptyState,
   TeacherPageShell,
   TeacherSectionCard,
   TeacherStatCard,
-} from '@/components/teacher/TeacherPageShell';
-import { cn } from '@/utils/cn';
-import { toast } from 'sonner';
+} from "@/components/teacher/TeacherPageShell";
+import { cn } from "@/utils/cn";
+import { toast } from "sonner";
 
 function formatStudentName(row: InterventionReportRow): string {
-  const first = row.student?.firstName?.trim() ?? '';
-  const last = row.student?.lastName?.trim() ?? '';
+  const first = row.student?.firstName?.trim() ?? "";
+  const last = row.student?.lastName?.trim() ?? "";
   if (first && last) return `${last}, ${first}`;
   if (last) return last;
   if (first) return first;
@@ -69,17 +76,17 @@ function formatStudentName(row: InterventionReportRow): string {
 interface ClassRecordReportsPageProps {
   heading: string;
   description: string;
-  scope: 'teacher' | 'admin';
+  scope: "teacher" | "admin";
 }
 
 const reportTabs: { value: ReportTab; label: string }[] = [
-  { value: 'classRecord', label: 'Class Record' },
-  { value: 'studentMasterList', label: 'Master List' },
-  { value: 'classEnrollment', label: 'Enrollment' },
-  { value: 'studentPerformance', label: 'Performance' },
-  { value: 'interventionParticipation', label: 'Interventions' },
-  { value: 'assessmentSummary', label: 'Assessments' },
-  { value: 'systemUsage', label: 'Usage' },
+  { value: "classRecord", label: "Class Record" },
+  { value: "studentMasterList", label: "Master List" },
+  { value: "classEnrollment", label: "Enrollment" },
+  { value: "studentPerformance", label: "Performance" },
+  { value: "interventionParticipation", label: "Interventions" },
+  { value: "assessmentSummary", label: "Assessments" },
+  { value: "systemUsage", label: "Usage" },
 ];
 
 type SharedCardProps = {
@@ -95,7 +102,7 @@ type SummaryCardProps = {
   label: string;
   value: string | number;
   caption?: string;
-  tone?: 'default' | 'accent' | 'danger';
+  tone?: "default" | "accent" | "danger";
   adminMode: boolean;
 };
 
@@ -113,28 +120,43 @@ export function ClassRecordReportsPage({
   description,
   scope,
 }: ClassRecordReportsPageProps) {
-  const isAdmin = scope === 'admin';
-  const [activeTab, setActiveTab] = useState<ReportTab>('classRecord');
+  const isAdmin = scope === "admin";
+  const [activeTab, setActiveTab] = useState<ReportTab>("classRecord");
   const [classes, setClasses] = useState<ClassItem[]>([]);
-  const [selectedClassId, setSelectedClassId] = useState('');
+  const [selectedClassId, setSelectedClassId] = useState("");
   const [records, setRecords] = useState<ClassRecord[]>([]);
-  const [selectedRecordId, setSelectedRecordId] = useState('');
+  const [selectedRecordId, setSelectedRecordId] = useState("");
   const [average, setAverage] = useState<ClassAverageReport | null>(null);
-  const [distribution, setDistribution] = useState<GradeDistributionReport | null>(null);
-  const [interventions, setInterventions] = useState<InterventionReportRow[]>([]);
+  const [distribution, setDistribution] =
+    useState<GradeDistributionReport | null>(null);
+  const [interventions, setInterventions] = useState<InterventionReportRow[]>(
+    [],
+  );
   const [loadingClasses, setLoadingClasses] = useState(true);
   const [loadingRecords, setLoadingRecords] = useState(false);
   const [loadingReports, setLoadingReports] = useState(false);
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [exportingCsv, setExportingCsv] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
-  const [studentMasterList, setStudentMasterList] = useState<StudentMasterListRow[]>([]);
-  const [classEnrollment, setClassEnrollment] = useState<ClassEnrollmentRow[]>([]);
-  const [studentPerformance, setStudentPerformance] = useState<StudentPerformanceReportRow[]>([]);
-  const [interventionParticipation, setInterventionParticipation] = useState<InterventionParticipationRow[]>([]);
-  const [assessmentSummary, setAssessmentSummary] = useState<AssessmentSummaryRow[]>([]);
-  const [systemUsage, setSystemUsage] = useState<SystemUsageReport | null>(null);
+  const [studentMasterList, setStudentMasterList] = useState<
+    StudentMasterListRow[]
+  >([]);
+  const [classEnrollment, setClassEnrollment] = useState<ClassEnrollmentRow[]>(
+    [],
+  );
+  const [studentPerformance, setStudentPerformance] = useState<
+    StudentPerformanceReportRow[]
+  >([]);
+  const [interventionParticipation, setInterventionParticipation] = useState<
+    InterventionParticipationRow[]
+  >([]);
+  const [assessmentSummary, setAssessmentSummary] = useState<
+    AssessmentSummaryRow[]
+  >([]);
+  const [systemUsage, setSystemUsage] = useState<SystemUsageReport | null>(
+    null,
+  );
 
   const selectedClass = useMemo(
     () => classes.find((item) => item.id === selectedClassId) ?? null,
@@ -156,13 +178,14 @@ export function ClassRecordReportsPage({
     try {
       setLoadingClasses(true);
       const nextClasses =
-        scope === 'admin'
-          ? (await classService.getAll({ page: 1, limit: 200 })).data.data ?? []
-          : (await dashboardService.getTeacherClasses()).data ?? [];
+        scope === "admin"
+          ? ((await classService.getAll({ page: 1, limit: 200 })).data.data ??
+            [])
+          : ((await dashboardService.getTeacherClasses()).data ?? []);
       setClasses(nextClasses);
-      setSelectedClassId((current) => current || nextClasses[0]?.id || '');
+      setSelectedClassId((current) => current || nextClasses[0]?.id || "");
     } catch {
-      toast.error('Failed to load classes');
+      toast.error("Failed to load classes");
     } finally {
       setLoadingClasses(false);
     }
@@ -171,7 +194,7 @@ export function ClassRecordReportsPage({
   const fetchClassRecords = useCallback(async () => {
     if (!selectedClassId) {
       setRecords([]);
-      setSelectedRecordId('');
+      setSelectedRecordId("");
       return;
     }
 
@@ -184,12 +207,12 @@ export function ClassRecordReportsPage({
         if (current && nextRecords.some((record) => record.id === current)) {
           return current;
         }
-        return nextRecords[0]?.id ?? '';
+        return nextRecords[0]?.id ?? "";
       });
     } catch {
-      toast.error('Failed to load class records');
+      toast.error("Failed to load class records");
       setRecords([]);
-      setSelectedRecordId('');
+      setSelectedRecordId("");
     } finally {
       setLoadingRecords(false);
     }
@@ -245,7 +268,7 @@ export function ClassRecordReportsPage({
       setAssessmentSummary(assessmentSummaryRes.data ?? []);
       setSystemUsage(systemUsageRes.data ?? null);
     } catch {
-      toast.error('Failed to load reports');
+      toast.error("Failed to load reports");
       setStudentMasterList([]);
       setClassEnrollment([]);
       setStudentPerformance([]);
@@ -274,16 +297,16 @@ export function ClassRecordReportsPage({
       setExportingCsv(true);
       const blob = await reportService.exportCsv(activeTab, reportQuery);
       const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
+      const anchor = document.createElement("a");
       anchor.href = url;
       anchor.download = `${activeTab}-report.csv`;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(url);
-      toast.success('CSV report downloaded');
+      toast.success("CSV report downloaded");
     } catch {
-      toast.error('Unable to export report');
+      toast.error("Unable to export report");
     } finally {
       setExportingCsv(false);
     }
@@ -297,10 +320,10 @@ export function ClassRecordReportsPage({
       await downloadReportPdf({
         tab: activeTab,
         heading,
-        scopeLabel: isAdmin ? 'Admin Reports Hub' : 'Teacher Reports Hub',
+        scopeLabel: isAdmin ? "Admin Reports Hub" : "Teacher Reports Hub",
         filters: reportQuery,
         classLabel: selectedClass
-          ? `${selectedClass.subjectName} (${selectedClass.subjectCode}) - ${selectedClass.section?.name ?? '--'}`
+          ? `${selectedClass.subjectName} (${selectedClass.subjectCode}) - ${selectedClass.section?.name ?? "--"}`
           : null,
         recordLabel: selectedRecord
           ? `${selectedRecord.gradingPeriod} - ${selectedRecord.status}`
@@ -319,9 +342,9 @@ export function ClassRecordReportsPage({
           systemUsage,
         },
       });
-      toast.success('PDF report downloaded');
+      toast.success("PDF report downloaded");
     } catch {
-      toast.error('Unable to export PDF report');
+      toast.error("Unable to export PDF report");
     } finally {
       setExportingPdf(false);
     }
@@ -342,53 +365,141 @@ export function ClassRecordReportsPage({
     );
   }
 
-  const shellBadge = isAdmin ? 'Admin Reports Hub' : 'Teacher Reports Hub';
+  const shellBadge = isAdmin ? "Admin Reports Hub" : "Teacher Reports Hub";
   const shellActions = (
     <div className="flex flex-wrap items-center gap-2">
       <Button
-        variant={isAdmin ? 'outline' : 'teacherOutline'}
+        variant={isAdmin ? "outline" : "teacherOutline"}
         onClick={() => void handleExportCsv()}
         disabled={exportingCsv || exportingPdf}
-        className={isAdmin ? 'admin-button-outline rounded-xl px-4 font-black' : 'rounded-2xl px-5'}
+        className={
+          isAdmin
+            ? "admin-button-outline rounded-xl px-4 font-black"
+            : "rounded-2xl px-5"
+        }
       >
         <Download className="h-4 w-4" />
-        {exportingCsv ? 'Exporting CSV...' : 'Download CSV'}
+        {exportingCsv ? "Exporting CSV..." : "Download CSV"}
       </Button>
       <Button
-        variant={isAdmin ? 'default' : 'teacher'}
+        variant={isAdmin ? "default" : "teacher"}
         onClick={() => void handleExportPdf()}
         disabled={exportingCsv || exportingPdf}
-        className={isAdmin ? 'admin-button rounded-xl px-4 font-black' : 'rounded-2xl px-5'}
+        className={
+          isAdmin
+            ? "admin-button rounded-xl px-4 font-black"
+            : "rounded-2xl px-5"
+        }
       >
         <Download className="h-4 w-4" />
-        {exportingPdf ? 'Exporting PDF...' : 'Download PDF'}
+        {exportingPdf ? "Exporting PDF..." : "Download PDF"}
       </Button>
     </div>
   );
 
   const statCards = isAdmin ? (
     <>
-      <AdminStatCard label="Classes Connected" value={classes.length} caption="Data sources ready for reporting" icon={Layers3} accent="sky" />
-      <AdminStatCard label="Report Windows" value={records.length} caption={loadingRecords ? 'Refreshing grading records...' : 'Available grading periods'} icon={FileBarChart2} accent="violet" />
-      <AdminStatCard label="Class Average" value={average ? `${average.average.toFixed(1)}%` : '--'} caption={selectedClass?.subjectCode ? `${selectedClass.subjectCode} snapshot` : 'Choose a class'} icon={BarChart3} accent="amber" />
-      <AdminStatCard label="Intervention Queue" value={average?.interventionCount ?? 0} caption="Students flagged from this record" icon={GraduationCap} accent="rose" />
+      <AdminStatCard
+        label="Classes Connected"
+        value={classes.length}
+        caption="Data sources ready for reporting"
+        icon={Layers3}
+        accent="sky"
+      />
+      <AdminStatCard
+        label="Report Windows"
+        value={records.length}
+        caption={
+          loadingRecords
+            ? "Refreshing grading records..."
+            : "Available grading periods"
+        }
+        icon={FileBarChart2}
+        accent="violet"
+      />
+      <AdminStatCard
+        label="Class Average"
+        value={
+          average
+            ? `${boundAcademicPercentage(average.average).toFixed(1)}%`
+            : "--"
+        }
+        caption={
+          selectedClass?.subjectCode
+            ? `${selectedClass.subjectCode} snapshot`
+            : "Choose a class"
+        }
+        icon={BarChart3}
+        accent="amber"
+      />
+      <AdminStatCard
+        label="Intervention Queue"
+        value={average?.interventionCount ?? 0}
+        caption="Students flagged from this record"
+        icon={GraduationCap}
+        accent="rose"
+      />
     </>
   ) : (
     <>
-      <TeacherStatCard label="Classes Connected" value={classes.length} caption="Data sources ready for reporting" icon={Layers3} accent="sky" />
-      <TeacherStatCard label="Report Windows" value={records.length} caption={loadingRecords ? 'Refreshing grading records...' : 'Available grading periods'} icon={FileBarChart2} accent="teal" />
-      <TeacherStatCard label="Class Average" value={average ? `${average.average.toFixed(1)}%` : '--'} caption={selectedClass?.subjectCode ? `${selectedClass.subjectCode} snapshot` : 'Choose a class'} icon={BarChart3} accent="amber" />
-      <TeacherStatCard label="Intervention Queue" value={average?.interventionCount ?? 0} caption="Students flagged from this record" icon={GraduationCap} accent="rose" />
+      <TeacherStatCard
+        label="Classes Connected"
+        value={classes.length}
+        caption="Data sources ready for reporting"
+        icon={Layers3}
+        accent="sky"
+      />
+      <TeacherStatCard
+        label="Report Windows"
+        value={records.length}
+        caption={
+          loadingRecords
+            ? "Refreshing grading records..."
+            : "Available grading periods"
+        }
+        icon={FileBarChart2}
+        accent="teal"
+      />
+      <TeacherStatCard
+        label="Class Average"
+        value={
+          average
+            ? `${boundAcademicPercentage(average.average).toFixed(1)}%`
+            : "--"
+        }
+        caption={
+          selectedClass?.subjectCode
+            ? `${selectedClass.subjectCode} snapshot`
+            : "Choose a class"
+        }
+        icon={BarChart3}
+        accent="amber"
+      />
+      <TeacherStatCard
+        label="Intervention Queue"
+        value={average?.interventionCount ?? 0}
+        caption="Students flagged from this record"
+        icon={GraduationCap}
+        accent="rose"
+      />
     </>
   );
 
   const filterCard = (
-    <SharedSectionCard adminMode={isAdmin} title="Filters & Export Controls" description="Blend grading-period data with wider reporting windows to surface cleaner trends.">
+    <SharedSectionCard
+      adminMode={isAdmin}
+      title="Filters & Export Controls"
+      description="Blend grading-period data with wider reporting windows to surface cleaner trends."
+    >
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <select
           value={selectedClassId}
           onChange={(event) => setSelectedClassId(event.target.value)}
-          className={isAdmin ? 'admin-select w-full text-sm' : 'teacher-select w-full text-sm'}
+          className={
+            isAdmin
+              ? "admin-select w-full text-sm"
+              : "teacher-select w-full text-sm"
+          }
         >
           <option value="">Select class...</option>
           {classes.map((item) => (
@@ -401,7 +512,11 @@ export function ClassRecordReportsPage({
         <select
           value={selectedRecordId}
           onChange={(event) => setSelectedRecordId(event.target.value)}
-          className={isAdmin ? 'admin-select w-full text-sm' : 'teacher-select w-full text-sm'}
+          className={
+            isAdmin
+              ? "admin-select w-full text-sm"
+              : "teacher-select w-full text-sm"
+          }
           disabled={!selectedClassId || loadingRecords || records.length === 0}
         >
           <option value="">Select quarter...</option>
@@ -412,8 +527,18 @@ export function ClassRecordReportsPage({
           ))}
         </select>
 
-        <Input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className={isAdmin ? 'admin-input h-12' : 'teacher-input h-12'} />
-        <Input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className={isAdmin ? 'admin-input h-12' : 'teacher-input h-12'} />
+        <Input
+          type="date"
+          value={dateFrom}
+          onChange={(event) => setDateFrom(event.target.value)}
+          className={isAdmin ? "admin-input h-12" : "teacher-input h-12"}
+        />
+        <Input
+          type="date"
+          value={dateTo}
+          onChange={(event) => setDateTo(event.target.value)}
+          className={isAdmin ? "admin-input h-12" : "teacher-input h-12"}
+        />
       </div>
     </SharedSectionCard>
   );
@@ -424,10 +549,27 @@ export function ClassRecordReportsPage({
       <Skeleton className="h-[32rem] rounded-[1.8rem]" />
     </div>
   ) : (
-    <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as ReportTab)}>
-      <TabsList className={isAdmin ? 'admin-tab-list h-auto flex-wrap justify-start' : 'teacher-tab-list h-auto flex-wrap justify-start'}>
+    <Tabs
+      value={activeTab}
+      onValueChange={(value) => setActiveTab(value as ReportTab)}
+    >
+      <TabsList
+        className={
+          isAdmin
+            ? "admin-tab-list h-auto flex-wrap justify-start"
+            : "teacher-tab-list h-auto flex-wrap justify-start"
+        }
+      >
         {reportTabs.map((tab) => (
-          <TabsTrigger key={tab.value} value={tab.value} className={isAdmin ? 'admin-tab px-4 py-2.5 text-sm font-bold' : 'teacher-tab px-4 py-2.5 text-sm font-bold'}>
+          <TabsTrigger
+            key={tab.value}
+            value={tab.value}
+            className={
+              isAdmin
+                ? "admin-tab px-4 py-2.5 text-sm font-bold"
+                : "teacher-tab px-4 py-2.5 text-sm font-bold"
+            }
+          >
             {tab.label}
           </TabsTrigger>
         ))}
@@ -435,40 +577,93 @@ export function ClassRecordReportsPage({
 
       <TabsContent value="classRecord" className="space-y-6">
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <SummaryCard adminMode={isAdmin} label="Class" value={selectedClass?.subjectName ?? '--'} caption={selectedClass?.section?.name ?? 'No section selected'} />
-          <SummaryCard adminMode={isAdmin} label="Average" value={average ? `${average.average.toFixed(2)}%` : '--'} caption="Latest computed class average" />
-          <SummaryCard adminMode={isAdmin} label="Student Count" value={average?.count ?? 0} caption="Students included in the record" />
-          <SummaryCard adminMode={isAdmin} label="For Intervention" value={average?.interventionCount ?? 0} caption="Students needing follow-up" tone="danger" />
+          <SummaryCard
+            adminMode={isAdmin}
+            label="Class"
+            value={selectedClass?.subjectName ?? "--"}
+            caption={selectedClass?.section?.name ?? "No section selected"}
+          />
+          <SummaryCard
+            adminMode={isAdmin}
+            label="Average"
+            value={
+              average
+                ? `${boundAcademicPercentage(average.average).toFixed(2)}%`
+                : "--"
+            }
+            caption="Latest computed class average"
+          />
+          <SummaryCard
+            adminMode={isAdmin}
+            label="Student Count"
+            value={average?.count ?? 0}
+            caption="Students included in the record"
+          />
+          <SummaryCard
+            adminMode={isAdmin}
+            label="For Intervention"
+            value={average?.interventionCount ?? 0}
+            caption="Students needing follow-up"
+            tone="danger"
+          />
         </div>
 
-        <SharedSectionCard adminMode={isAdmin} title="Grade Distribution" description="A quick visual pulse of score clusters in the selected grading period.">
+        <SharedSectionCard
+          adminMode={isAdmin}
+          title="Grade Distribution"
+          description="A quick visual pulse of score clusters in the selected grading period."
+        >
           {!distribution || distribution.total === 0 ? (
             isAdmin ? (
-              <AdminEmptyState title="No finalized distribution yet" description="Once the grading period has enough finalized scores, the distribution bands will appear here." />
+              <AdminEmptyState
+                title="No finalized distribution yet"
+                description="Once the grading period has enough finalized scores, the distribution bands will appear here."
+              />
             ) : (
-              <TeacherEmptyState title="No finalized distribution yet" description="Once the grading period has enough finalized scores, the distribution bands will appear here." />
+              <TeacherEmptyState
+                title="No finalized distribution yet"
+                description="Once the grading period has enough finalized scores, the distribution bands will appear here."
+              />
             )
           ) : (
             <div className="grid gap-3 md:grid-cols-5">
-              {Object.entries(distribution.distribution).map(([band, count], index) => (
-                <div
-                  key={band}
-                  className={cn(
-                    isAdmin
-                      ? 'rounded-[1.35rem] border border-[var(--admin-outline)] bg-white px-4 py-5 shadow-[var(--admin-shadow)]'
-                      : 'teacher-soft-panel teacher-panel-hover rounded-[1.35rem] px-4 py-5',
-                    !isAdmin && index % 2 === 0 ? 'teacher-highlight' : '',
-                    isAdmin && index % 2 === 0 ? 'bg-[linear-gradient(180deg,#fff7f7,#ffffff)]' : '',
-                  )}
-                >
-                  <p className={cn('text-[11px] font-black uppercase tracking-[0.24em]', isAdmin ? 'text-[var(--admin-text-muted)]' : 'text-[var(--teacher-text-muted)]')}>
-                    {band}
-                  </p>
-                  <p className={cn('mt-3 text-3xl font-black tracking-tight', isAdmin ? 'text-[var(--admin-text-strong)]' : 'text-[var(--teacher-text-strong)]')}>
-                    {count}
-                  </p>
-                </div>
-              ))}
+              {Object.entries(distribution.distribution).map(
+                ([band, count], index) => (
+                  <div
+                    key={band}
+                    className={cn(
+                      isAdmin
+                        ? "rounded-[1.35rem] border border-[var(--admin-outline)] bg-white px-4 py-5 shadow-[var(--admin-shadow)]"
+                        : "teacher-soft-panel teacher-panel-hover rounded-[1.35rem] px-4 py-5",
+                      !isAdmin && index % 2 === 0 ? "teacher-highlight" : "",
+                      isAdmin && index % 2 === 0
+                        ? "bg-[linear-gradient(180deg,#fff7f7,#ffffff)]"
+                        : "",
+                    )}
+                  >
+                    <p
+                      className={cn(
+                        "text-[11px] font-black uppercase tracking-[0.24em]",
+                        isAdmin
+                          ? "text-[var(--admin-text-muted)]"
+                          : "text-[var(--teacher-text-muted)]",
+                      )}
+                    >
+                      {band}
+                    </p>
+                    <p
+                      className={cn(
+                        "mt-3 text-3xl font-black tracking-tight",
+                        isAdmin
+                          ? "text-[var(--admin-text-strong)]"
+                          : "text-[var(--teacher-text-strong)]",
+                      )}
+                    >
+                      {count}
+                    </p>
+                  </div>
+                ),
+              )}
             </div>
           )}
         </SharedSectionCard>
@@ -478,58 +673,186 @@ export function ClassRecordReportsPage({
           title="Intervention List"
           description="Students who fell below the selected record’s intervention thresholds."
           empty="No students are currently marked for intervention in this record."
-          headers={['Student', 'Final Percentage', 'Remarks', 'Computed At']}
+          headers={["Student", "Final Percentage", "Remarks", "Computed At"]}
           rows={interventions.map((row) => [
             formatStudentName(row),
-            `${Number(row.finalPercentage).toFixed(2)}%`,
+            `${boundAcademicPercentage(Number(row.finalPercentage)).toFixed(2)}%`,
             row.remarks,
-            new Date(row.computedAt).toLocaleString('en-US'),
+            new Date(row.computedAt).toLocaleString("en-US"),
           ])}
         />
       </TabsContent>
 
       <TabsContent value="studentMasterList">
-        <SimpleTableCard adminMode={isAdmin} title="Student Master List" description="A clean roster snapshot across the currently selected report window." empty="No enrolled students matched the selected filters." headers={['Student', 'Email', 'LRN', 'Class', 'Section']} rows={studentMasterList.map((row) => [`${row.lastName}, ${row.firstName}`, row.email, row.lrn ?? '--', row.subjectCode ?? '--', row.sectionName ?? '--'])} />
+        <SimpleTableCard
+          adminMode={isAdmin}
+          title="Student Master List"
+          description="A clean roster snapshot across the currently selected report window."
+          empty="No enrolled students matched the selected filters."
+          headers={["Student", "Email", "LRN", "Class", "Section"]}
+          rows={studentMasterList.map((row) => [
+            `${row.lastName}, ${row.firstName}`,
+            row.email,
+            row.lrn ?? "--",
+            row.subjectCode ?? "--",
+            row.sectionName ?? "--",
+          ])}
+        />
       </TabsContent>
 
       <TabsContent value="classEnrollment">
-        <SimpleTableCard adminMode={isAdmin} title="Class Enrollment" description="Monitor class size and teacher ownership at a glance." empty="No class enrollment data matched the selected filters." headers={['Class', 'Section', 'Teacher', 'Enrollment']} rows={classEnrollment.map((row) => [`${row.subjectName} (${row.subjectCode})`, row.section?.name ?? '--', row.teacher ? `${row.teacher.lastName ?? ''}, ${row.teacher.firstName ?? ''}`.trim() : '--', row.enrollmentCount])} />
+        <SimpleTableCard
+          adminMode={isAdmin}
+          title="Class Enrollment"
+          description="Monitor class size and teacher ownership at a glance."
+          empty="No class enrollment data matched the selected filters."
+          headers={["Class", "Section", "Teacher", "Enrollment"]}
+          rows={classEnrollment.map((row) => [
+            `${row.subjectName} (${row.subjectCode})`,
+            row.section?.name ?? "--",
+            row.teacher
+              ? `${row.teacher.lastName ?? ""}, ${row.teacher.firstName ?? ""}`.trim()
+              : "--",
+            row.enrollmentCount,
+          ])}
+        />
       </TabsContent>
 
       <TabsContent value="studentPerformance">
-        <SimpleTableCard adminMode={isAdmin} title="Student Performance" description="Cross-check blended performance and active risk flags in one place." empty="No student performance data matched the selected filters." headers={['Student', 'Class', 'Blended', 'At Risk', 'Threshold']} rows={studentPerformance.map((row) => [`${row.lastName}, ${row.firstName}`, row.subjectCode, row.blendedScore ?? '--', row.isAtRisk ? 'Yes' : 'No', row.thresholdApplied ?? '--'])} />
+        <SimpleTableCard
+          adminMode={isAdmin}
+          title="Student Performance"
+          description="Cross-check canonical class standing and active risk flags in one place."
+          empty="No student performance data matched the selected filters."
+          headers={[
+            "Student",
+            "Class",
+            "Current Standing",
+            "At Risk",
+            "Threshold",
+          ]}
+          rows={studentPerformance.map((row) => [
+            `${row.lastName}, ${row.firstName}`,
+            row.subjectCode,
+            row.blendedScore === null
+              ? "--"
+              : boundAcademicPercentage(row.blendedScore),
+            row.isAtRisk ? "Yes" : "No",
+            row.thresholdApplied === null
+              ? "--"
+              : boundAcademicPercentage(row.thresholdApplied),
+          ])}
+        />
       </TabsContent>
 
       <TabsContent value="interventionParticipation">
-        <p className={cn('mb-3 text-xs', isAdmin ? 'text-[var(--admin-text-muted)]' : 'text-[var(--teacher-text-muted)]')}>
-          Advisory only: intervention outcomes are non-graded metadata and never mutate official class records.
+        <p
+          className={cn(
+            "mb-3 text-xs",
+            isAdmin
+              ? "text-[var(--admin-text-muted)]"
+              : "text-[var(--teacher-text-muted)]",
+          )}
+        >
+          Advisory only: intervention outcomes are non-graded metadata and never
+          mutate official class records.
         </p>
-        <SimpleTableCard adminMode={isAdmin} title="Intervention Participation" description="Track case status, completion rates, and earned XP for assigned learners." empty="No intervention cases matched the selected filters." headers={['Student', 'Class', 'Status', 'Completion', 'XP']} rows={interventionParticipation.map((row) => [row.studentName || row.email || row.studentId, row.subjectCode ?? '--', row.status, `${row.completionRate}%`, row.xpTotal])} />
+        <SimpleTableCard
+          adminMode={isAdmin}
+          title="Intervention Participation"
+          description="Track case status, completion rates, and earned XP for assigned learners."
+          empty="No intervention cases matched the selected filters."
+          headers={["Student", "Class", "Status", "Completion", "XP"]}
+          rows={interventionParticipation.map((row) => [
+            row.studentName || row.email || row.studentId,
+            row.subjectCode ?? "--",
+            row.status,
+            `${row.completionRate}%`,
+            row.xpTotal,
+          ])}
+        />
       </TabsContent>
 
       <TabsContent value="assessmentSummary">
-        <SimpleTableCard adminMode={isAdmin} title="Assessment Summary" description="See assessment throughput and score health without leaving the reports flow." empty="No assessments matched the selected filters." headers={['Title', 'Class', 'Quarter', 'Submissions', 'Average']} rows={assessmentSummary.map((row) => [row.title, row.subjectCode ?? '--', row.quarter ?? '--', row.submittedAttempts, row.averageScore ?? '--'])} />
+        <SimpleTableCard
+          adminMode={isAdmin}
+          title="Assessment Summary"
+          description="See assessment throughput and score health without leaving the reports flow."
+          empty="No assessments matched the selected filters."
+          headers={["Title", "Class", "Quarter", "Submissions", "Average"]}
+          rows={assessmentSummary.map((row) => [
+            row.title,
+            row.subjectCode ?? "--",
+            row.quarter ?? "--",
+            row.submittedAttempts,
+            row.averageScore ?? "--",
+          ])}
+        />
       </TabsContent>
 
       <TabsContent value="systemUsage" className="space-y-6">
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <SummaryCard adminMode={isAdmin} label="Lesson Completions" value={systemUsage?.lessonCompletions ?? 0} caption="Learning progress events" />
-          <SummaryCard adminMode={isAdmin} label="Assessment Submissions" value={systemUsage?.assessmentSubmissions ?? 0} caption="Submitted attempts" />
-          <SummaryCard adminMode={isAdmin} label="Intervention Opens" value={systemUsage?.interventionOpens ?? 0} caption="Cases started" tone="accent" />
-          <SummaryCard adminMode={isAdmin} label="Tracked Actions" value={totalUsageActions} caption="Top activity volume" tone="accent" />
+          <SummaryCard
+            adminMode={isAdmin}
+            label="Lesson Completions"
+            value={systemUsage?.lessonCompletions ?? 0}
+            caption="Learning progress events"
+          />
+          <SummaryCard
+            adminMode={isAdmin}
+            label="Assessment Submissions"
+            value={systemUsage?.assessmentSubmissions ?? 0}
+            caption="Submitted attempts"
+          />
+          <SummaryCard
+            adminMode={isAdmin}
+            label="Intervention Opens"
+            value={systemUsage?.interventionOpens ?? 0}
+            caption="Cases started"
+            tone="accent"
+          />
+          <SummaryCard
+            adminMode={isAdmin}
+            label="Tracked Actions"
+            value={totalUsageActions}
+            caption="Top activity volume"
+            tone="accent"
+          />
         </div>
-        <SimpleTableCard adminMode={isAdmin} title="Top Actions" description="The most frequent user actions captured inside the selected date range." empty="No usage activity matched the selected filters." headers={['Action', 'Count']} rows={(systemUsage?.topActions ?? []).map((row) => [row.action, row.total])} />
+        <SimpleTableCard
+          adminMode={isAdmin}
+          title="Top Actions"
+          description="The most frequent user actions captured inside the selected date range."
+          empty="No usage activity matched the selected filters."
+          headers={["Action", "Count"]}
+          rows={(systemUsage?.topActions ?? []).map((row) => [
+            row.action,
+            row.total,
+          ])}
+        />
       </TabsContent>
     </Tabs>
   );
 
   return isAdmin ? (
-    <AdminPageShell badge={shellBadge} title={heading} description={description} actions={shellActions} stats={statCards}>
+    <AdminPageShell
+      badge={shellBadge}
+      title={heading}
+      description={description}
+      actions={shellActions}
+      stats={statCards}
+    >
       {filterCard}
       {loadingState}
     </AdminPageShell>
   ) : (
-    <TeacherPageShell badge={shellBadge} title={heading} description={description} actions={shellActions} stats={statCards}>
+    <TeacherPageShell
+      badge={shellBadge}
+      title={heading}
+      description={description}
+      actions={shellActions}
+      stats={statCards}
+    >
       {filterCard}
       {loadingState}
     </TeacherPageShell>
@@ -545,11 +868,21 @@ function SharedSectionCard({
   className,
 }: SharedCardProps) {
   return adminMode ? (
-    <AdminSectionCard title={title} description={description} action={action} className={className}>
+    <AdminSectionCard
+      title={title}
+      description={description}
+      action={action}
+      className={className}
+    >
       {children}
     </AdminSectionCard>
   ) : (
-    <TeacherSectionCard title={title} description={description} action={action} className={className}>
+    <TeacherSectionCard
+      title={title}
+      description={description}
+      action={action}
+      className={className}
+    >
       {children}
     </TeacherSectionCard>
   );
@@ -559,21 +892,35 @@ function SummaryCard({
   label,
   value,
   caption,
-  tone = 'default',
+  tone = "default",
   adminMode,
 }: SummaryCardProps) {
   if (adminMode) {
     return (
       <div
         className={cn(
-          'rounded-[1.5rem] border border-[var(--admin-outline)] bg-white px-5 py-5 shadow-[var(--admin-shadow)]',
-          tone === 'accent' && 'bg-[linear-gradient(180deg,#f8fbff,#ffffff)]',
-          tone === 'danger' && 'bg-[linear-gradient(180deg,#fff2f2,#ffffff)]',
+          "rounded-[1.5rem] border border-[var(--admin-outline)] bg-white px-5 py-5 shadow-[var(--admin-shadow)]",
+          tone === "accent" && "bg-[linear-gradient(180deg,#f8fbff,#ffffff)]",
+          tone === "danger" && "bg-[linear-gradient(180deg,#fff2f2,#ffffff)]",
         )}
       >
-        <p className="text-[11px] font-black uppercase tracking-[0.24em] text-[var(--admin-text-muted)]">{label}</p>
-        <p className={cn('mt-3 text-3xl font-black tracking-tight text-[var(--admin-text-strong)]', tone === 'danger' && 'text-rose-600', tone === 'accent' && 'text-[#2563eb]')}>{value}</p>
-        {caption ? <p className="mt-2 text-xs font-medium text-[var(--admin-text-muted)]">{caption}</p> : null}
+        <p className="text-[11px] font-black uppercase tracking-[0.24em] text-[var(--admin-text-muted)]">
+          {label}
+        </p>
+        <p
+          className={cn(
+            "mt-3 text-3xl font-black tracking-tight text-[var(--admin-text-strong)]",
+            tone === "danger" && "text-rose-600",
+            tone === "accent" && "text-[#2563eb]",
+          )}
+        >
+          {value}
+        </p>
+        {caption ? (
+          <p className="mt-2 text-xs font-medium text-[var(--admin-text-muted)]">
+            {caption}
+          </p>
+        ) : null}
       </div>
     );
   }
@@ -581,14 +928,27 @@ function SummaryCard({
   return (
     <div
       className={cn(
-        'teacher-soft-panel teacher-panel-hover rounded-[1.5rem] px-5 py-5',
-        tone === 'accent' && 'teacher-highlight',
-        tone === 'danger' && 'bg-rose-50/75 dark:bg-rose-950/20',
+        "teacher-soft-panel teacher-panel-hover rounded-[1.5rem] px-5 py-5",
+        tone === "accent" && "teacher-highlight",
+        tone === "danger" && "bg-rose-50/75 dark:bg-rose-950/20",
       )}
     >
-      <p className="text-[11px] font-black uppercase tracking-[0.24em] text-[var(--teacher-text-muted)]">{label}</p>
-      <p className={cn('mt-3 text-3xl font-black tracking-tight text-[var(--teacher-text-strong)]', tone === 'danger' && 'text-rose-600 dark:text-rose-300')}>{value}</p>
-      {caption ? <p className="mt-2 text-xs font-medium text-[var(--teacher-text-muted)]">{caption}</p> : null}
+      <p className="text-[11px] font-black uppercase tracking-[0.24em] text-[var(--teacher-text-muted)]">
+        {label}
+      </p>
+      <p
+        className={cn(
+          "mt-3 text-3xl font-black tracking-tight text-[var(--teacher-text-strong)]",
+          tone === "danger" && "text-rose-600 dark:text-rose-300",
+        )}
+      >
+        {value}
+      </p>
+      {caption ? (
+        <p className="mt-2 text-xs font-medium text-[var(--teacher-text-muted)]">
+          {caption}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -602,24 +962,50 @@ function SimpleTableCard({
   adminMode,
 }: SimpleTableCardProps) {
   return (
-    <SharedSectionCard adminMode={adminMode} title={title} description={description}>
+    <SharedSectionCard
+      adminMode={adminMode}
+      title={title}
+      description={description}
+    >
       {rows.length === 0 ? (
         adminMode ? (
-          <AdminEmptyState title={`No data for ${title.toLowerCase()}`} description={empty} />
+          <AdminEmptyState
+            title={`No data for ${title.toLowerCase()}`}
+            description={empty}
+          />
         ) : (
-          <TeacherEmptyState title={`No data for ${title.toLowerCase()}`} description={empty} />
+          <TeacherEmptyState
+            title={`No data for ${title.toLowerCase()}`}
+            description={empty}
+          />
         )
       ) : (
-        <div className={adminMode ? 'admin-table-shell' : 'teacher-table-shell'}>
+        <div
+          className={adminMode ? "admin-table-shell" : "teacher-table-shell"}
+        >
           <Table>
-            <TableHeader className={adminMode ? 'admin-table-head' : 'teacher-table-head [&_tr]:border-white/15'}>
-              <TableRow className={adminMode ? 'hover:bg-transparent' : 'border-white/10 hover:bg-transparent'}>
+            <TableHeader
+              className={
+                adminMode
+                  ? "admin-table-head"
+                  : "teacher-table-head [&_tr]:border-white/15"
+              }
+            >
+              <TableRow
+                className={
+                  adminMode
+                    ? "hover:bg-transparent"
+                    : "border-white/10 hover:bg-transparent"
+                }
+              >
                 {headers.map((header) => (
                   <TableHead
                     key={header}
                     className={cn(
-                      'h-12 text-[11px] font-black uppercase tracking-[0.22em]',
-                      adminMode ? 'text-[var(--admin-text-muted)]' : 'text-[var(--teacher-text-muted)]',
+                      "h-12 text-[11px] font-black uppercase tracking-[0.22em]",
+                      adminMode
+                        ? "text-[var(--admin-text-muted)]"
+                        : "text-[var(--teacher-text-muted)]",
                     )}
                   >
                     {header}
@@ -629,13 +1015,25 @@ function SimpleTableCard({
             </TableHeader>
             <TableBody className="[&_tr:last-child]:border-0">
               {rows.map((row, rowIndex) => (
-                <TableRow key={`${title}-${rowIndex}`} className={adminMode ? 'admin-table-row' : 'teacher-table-row border-white/10'}>
+                <TableRow
+                  key={`${title}-${rowIndex}`}
+                  className={
+                    adminMode
+                      ? "admin-table-row"
+                      : "teacher-table-row border-white/10"
+                  }
+                >
                   {row.map((cell, cellIndex) => (
                     <TableCell
                       key={`${title}-${rowIndex}-${cellIndex}`}
-                      className={cn('text-[13px]', adminMode ? 'text-[var(--admin-text-strong)]' : 'text-[var(--teacher-text-strong)]')}
+                      className={cn(
+                        "text-[13px]",
+                        adminMode
+                          ? "text-[var(--admin-text-strong)]"
+                          : "text-[var(--teacher-text-strong)]",
+                      )}
                     >
-                      {cell ?? '--'}
+                      {cell ?? "--"}
                     </TableCell>
                   ))}
                 </TableRow>
