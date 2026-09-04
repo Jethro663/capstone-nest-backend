@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createHash } = require("node:crypto");
-const { appendFile, mkdtemp, rm, writeFile } = require("node:fs/promises");
+const { appendFile, mkdtemp, readFile, rm, writeFile } = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 const {
@@ -128,4 +128,19 @@ test("verifyManifest rejects a changed APK", async () => {
     verifyManifest(payload, options),
     /apkSizeBytes|apkSha256/,
   );
+});
+
+test("Campus Front Door release keeps Expo and Gradle at 0.1.17 build 18", async () => {
+  const appJson = JSON.parse(
+    await readFile(path.join(__dirname, "..", "app.json"), "utf8"),
+  );
+  const buildGradle = await readFile(
+    path.join(__dirname, "..", "android", "app", "build.gradle"),
+    "utf8",
+  );
+
+  assert.equal(appJson.expo.version, "0.1.17");
+  assert.equal(appJson.expo.android.versionCode, 18);
+  assert.match(buildGradle, /\bversionCode\s+18\b/);
+  assert.match(buildGradle, /\bversionName\s+["']0\.1\.17["']/);
 });

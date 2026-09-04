@@ -55,9 +55,16 @@ jest.mock("react-native", () => {
 
   class AnimatedValue {
     constructor(public value: number) {}
+    setValue(next: number) {
+      this.value = next;
+    }
   }
 
   return {
+    AccessibilityInfo: {
+      isReduceMotionEnabled: jest.fn().mockResolvedValue(true),
+    },
+    ActivityIndicator: component("ActivityIndicator"),
     View: component("View"),
     Text: component("Text"),
     Pressable: component("Pressable"),
@@ -93,6 +100,9 @@ jest.mock("react-native", () => {
     }),
     TextInput: component("TextInput"),
     Image: component("Image"),
+    Keyboard: {
+      addListener: jest.fn(() => ({ remove: jest.fn() })),
+    },
     Modal: component("Modal"),
     RefreshControl: component("RefreshControl"),
     Alert: { alert: jest.fn() },
@@ -247,6 +257,38 @@ jest.mock("../../components/ui/primitives", () => {
 
 jest.mock("../../providers/AuthProvider", () => ({
   useAuth: jest.fn(),
+}));
+
+jest.mock("../../providers/UpdateProvider", () => ({
+  useUpdate: () => ({
+    state: {
+      status: "idle",
+      decision: null,
+      downloadProgress: 0,
+      downloadedBytes: 0,
+      totalBytes: 0,
+      errorMessage: null,
+      failureStage: null,
+      verifiedApkUri: null,
+    },
+    checkForUpdates: jest.fn().mockResolvedValue(undefined),
+  }),
+}));
+
+jest.mock("../../services/update/update.service", () => ({
+  getClientVersionInfo: () => ({
+    currentNativeVersion: "0.1.17",
+    currentVersionCode: 18,
+    platform: "android",
+  }),
+}));
+
+jest.mock("../../services/system-status/login-server-status", () => ({
+  describeApiTarget: () => ({
+    label: "Hosted server",
+    address: "nexora.example.edu",
+  }),
+  checkLoginServerStatus: jest.fn(() => new Promise(() => undefined)),
 }));
 
 jest.mock("../../api/services/ai", () => ({
@@ -1436,7 +1478,7 @@ describe("mobile rendered screen flows", () => {
 
     expect(
       testRenderer!.root.find(
-        (node) => node.type === "Text" && flattenText(node).includes("Welcome back"),
+        (node) => node.type === "Text" && flattenText(node).includes("Welcome to Nexora"),
       ),
     ).toBeTruthy();
 

@@ -263,12 +263,14 @@ export function AuthFieldLabel({ children }: PropsWithChildren) {
 
 export function AuthInputField({
   icon,
+  iconColor,
   rightAccessory,
   containerStyle,
   inputStyle,
   ...props
 }: React.ComponentProps<typeof TextInput> & {
   icon: string;
+  iconColor?: string;
   rightAccessory?: ReactNode;
   containerStyle?: React.ComponentProps<typeof View>["style"];
   inputStyle?: React.ComponentProps<typeof TextInput>["style"];
@@ -288,7 +290,7 @@ export function AuthInputField({
         containerStyle,
       ]}
     >
-      <MaterialCommunityIcons color={authTheme.textLight} name={icon as never} size={16} />
+      <MaterialCommunityIcons color={iconColor ?? authTheme.textLight} name={icon as never} size={16} />
       <TextInput
         keyboardAppearance="light"
         placeholderTextColor={authTheme.textLight}
@@ -335,17 +337,19 @@ export function AuthPrimaryButton({
   loading,
   onPress,
   disabled,
+  gradientColors,
 }: {
   label: string;
   loadingLabel?: string;
   loading?: boolean;
   onPress: () => void;
   disabled?: boolean;
+  gradientColors?: readonly [string, string, ...string[]];
 }) {
   return (
     <Pressable disabled={disabled || loading} onPress={onPress} style={{ marginTop: 18, minHeight: 48 }}>
       <LinearGradient
-        colors={loading ? loadingGradient : cardGradient}
+        colors={loading ? loadingGradient : gradientColors ?? cardGradient}
         end={{ x: 1, y: 0 }}
         start={{ x: 0, y: 0 }}
         style={{
@@ -397,10 +401,18 @@ export function AuthSecondaryButton({
   );
 }
 
-export function AuthFooterLink({ label, onPress }: { label: string; onPress: () => void }) {
+export function AuthFooterLink({
+  color,
+  label,
+  onPress,
+}: {
+  color?: string;
+  label: string;
+  onPress: () => void;
+}) {
   return (
     <Pressable onPress={onPress} style={{ minHeight: 44, justifyContent: "center" }}>
-      <Text style={{ color: authTheme.textMid, fontSize: 11, textAlign: "center" }}>{label}</Text>
+      <Text style={{ color: color ?? authTheme.textMid, fontSize: 11, textAlign: "center" }}>{label}</Text>
     </Pressable>
   );
 }

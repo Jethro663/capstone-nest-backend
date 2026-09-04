@@ -16,13 +16,35 @@ jest.mock("react-native", () => {
       return ReactRuntime.createElement(name, props, props.children);
     };
 
+  class AnimatedValue {
+    constructor(public value: number) {}
+    setValue(next: number) {
+      this.value = next;
+    }
+  }
+
   return {
+    AccessibilityInfo: {
+      isReduceMotionEnabled: jest.fn().mockResolvedValue(true),
+    },
+    ActivityIndicator: component("ActivityIndicator"),
+    Animated: {
+      Value: AnimatedValue,
+      View: component("AnimatedView"),
+      timing: () => ({ start: (callback?: () => void) => callback?.() }),
+    },
+    Image: component("Image"),
+    Keyboard: {
+      addListener: jest.fn(() => ({ remove: jest.fn() })),
+    },
+    Modal: component("Modal"),
     View: component("View"),
     Text: component("Text"),
     Pressable: component("Pressable"),
     KeyboardAvoidingView: component("KeyboardAvoidingView"),
     ScrollView: component("ScrollView"),
     TextInput: component("TextInput"),
+    useWindowDimensions: () => ({ width: 390, height: 844 }),
     Platform: {
       OS: "ios",
       select: (options: Record<string, unknown>) =>
@@ -36,6 +58,7 @@ jest.mock("react-native-safe-area-context", () => {
   return {
     SafeAreaView: (props: Record<string, unknown>) =>
       ReactRuntime.createElement("SafeAreaView", props, props.children),
+    useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
   };
 });
 
@@ -63,6 +86,38 @@ jest.mock("expo-constants", () => ({
 
 jest.mock("../../providers/AuthProvider", () => ({
   useAuth: jest.fn(),
+}));
+
+jest.mock("../../providers/UpdateProvider", () => ({
+  useUpdate: () => ({
+    state: {
+      status: "idle",
+      decision: null,
+      downloadProgress: 0,
+      downloadedBytes: 0,
+      totalBytes: 0,
+      errorMessage: null,
+      failureStage: null,
+      verifiedApkUri: null,
+    },
+    checkForUpdates: jest.fn().mockResolvedValue(undefined),
+  }),
+}));
+
+jest.mock("../../services/update/update.service", () => ({
+  getClientVersionInfo: () => ({
+    currentNativeVersion: "0.1.17",
+    currentVersionCode: 18,
+    platform: "android",
+  }),
+}));
+
+jest.mock("../../services/system-status/login-server-status", () => ({
+  describeApiTarget: () => ({
+    label: "Hosted server",
+    address: "nexora.example.edu",
+  }),
+  checkLoginServerStatus: jest.fn(() => new Promise(() => undefined)),
 }));
 
 const presentError = jest.fn();
