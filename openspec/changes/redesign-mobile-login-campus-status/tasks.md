@@ -35,7 +35,7 @@
 
 ## 6. Exact Delivery and Production Proof
 
-- [ ] 6.1 Review and stage only the approved OpenSpec, plan, mobile source/test/asset/version, and embedded APK/manifest paths; commit on `developement`.
-- [ ] 6.2 Push `developement`, record the exact commit SHA, and watch the matching GitHub CI and Railway deployments to terminal success.
-- [ ] 6.3 Download the live APK and manifest with cache-busting, prove exact byte size/SHA-256 and APK metadata equality, then register the manifest through the existing secret-backed path if available.
-- [ ] 6.4 Read back previous-build and new-build app-version decisions, fetch the remote branch, and require a clean worktree, local/remote SHA equality, divergence `0 0`, and every OpenSpec task checked.
+- [x] 6.1 Review and stage only the approved OpenSpec, plan, mobile source/test/asset/version, and embedded APK/manifest paths; commit on `developement`.
+- [x] 6.2 Push `developement`, record the exact commit SHA, and watch the matching GitHub CI and Railway deployments to terminal success.
+- [x] 6.3 Download the live APK and manifest with cache-busting, prove exact byte size/SHA-256 and APK metadata equality, then register the manifest through the existing secret-backed path if available.
+- [x] 6.4 Read back previous-build and new-build app-version decisions, fetch the remote branch, and require a clean worktree, local/remote SHA equality, divergence `0 0`, and every OpenSpec task checked.
