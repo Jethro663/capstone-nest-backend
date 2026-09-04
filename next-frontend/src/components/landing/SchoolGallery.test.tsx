@@ -3,6 +3,24 @@ import { SchoolGallery } from './SchoolGallery';
 import { schoolPhotos } from './school-content';
 
 describe('SchoolGallery', () => {
+  it('keys the active transition frame to the selected photograph', () => {
+    const { container } = render(<SchoolGallery photos={schoolPhotos} />);
+
+    expect(
+      container.querySelector(`[data-gallery-photo="${schoolPhotos[0].src}"]`),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: `View photograph 2: ${schoolPhotos[1].alt}`,
+      }),
+    );
+
+    expect(
+      container.querySelector(`[data-gallery-photo="${schoolPhotos[1].src}"]`),
+    ).toBeInTheDocument();
+  });
+
   it('selects photographs from the thumbnail explorer and advances the stage', () => {
     render(<SchoolGallery photos={schoolPhotos} />);
 

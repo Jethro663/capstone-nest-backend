@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import * as React from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Expand } from 'lucide-react';
 import {
   Dialog,
@@ -18,6 +19,7 @@ type SchoolGalleryProps = {
 
 export function SchoolGallery({ photos }: SchoolGalleryProps) {
   const [selectedIndex, setSelectedIndex] = React.useState(0);
+  const shouldReduceMotion = useReducedMotion();
 
   if (photos.length === 0) {
     return null;
@@ -41,13 +43,28 @@ export function SchoolGallery({ photos }: SchoolGalleryProps) {
               className="landing-gallery__enlarge"
               aria-label="Enlarge selected photograph"
             >
-              <Image
-                src={selectedPhoto.src}
-                alt={selectedPhoto.alt}
-                fill
-                sizes="(min-width: 1280px) 76rem, (min-width: 768px) calc(100vw - 6rem), calc(100vw - 2rem)"
-                className="landing-gallery__stage-image"
-              />
+              <AnimatePresence initial={false}>
+                <motion.span
+                  key={selectedPhoto.src}
+                  className="landing-gallery__stage-frame"
+                  data-gallery-photo={selectedPhoto.src}
+                  initial={shouldReduceMotion ? false : { opacity: 0, scale: 1.012 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={shouldReduceMotion ? undefined : { opacity: 0, scale: 0.996 }}
+                  transition={{
+                    duration: shouldReduceMotion ? 0 : 0.36,
+                    ease: [0.22, 1, 0.36, 1],
+                  }}
+                >
+                  <Image
+                    src={selectedPhoto.src}
+                    alt={selectedPhoto.alt}
+                    fill
+                    sizes="(min-width: 1280px) 76rem, (min-width: 768px) calc(100vw - 6rem), calc(100vw - 2rem)"
+                    className="landing-gallery__stage-image"
+                  />
+                </motion.span>
+              </AnimatePresence>
               <span className="landing-gallery__expand-label" aria-hidden="true">
                 <Expand className="h-4 w-4" />
                 View larger

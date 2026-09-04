@@ -239,14 +239,31 @@ export function SchoolLandingPage() {
         </section>
 
         <section id="nexora" className="landing-nexora" aria-labelledby="nexora-title">
-          <div className="landing-nexora__art" aria-hidden="true">
-            <Image
-              src="/NexoraHome.png"
-              alt=""
-              fill
-              sizes="(min-width: 1024px) 42vw, 100vw"
-              className="object-cover object-center"
-            />
+          <div
+            className="landing-nexora__bridge"
+            aria-label="GABHS to Nexora digital campus connection"
+          >
+            <p className="landing-nexora__bridge-kicker">One school community</p>
+            <div className="landing-nexora__route" aria-hidden="true">
+              <span>GABHS</span>
+              <i />
+              <span>Nexora</span>
+            </div>
+            <h3>Learning continues beyond the classroom.</h3>
+            <p className="landing-nexora__bridge-copy">
+              School guidance, class activity, and learner support stay connected in one digital
+              campus.
+            </p>
+            <dl className="landing-nexora__endpoints">
+              <div>
+                <dt>On campus</dt>
+                <dd>People and classrooms</dd>
+              </div>
+              <div>
+                <dt>Online</dt>
+                <dd>Lessons and schoolwork</dd>
+              </div>
+            </dl>
           </div>
           <div className="landing-nexora__copy">
             <p className="landing-kicker">GABHS digital campus</p>

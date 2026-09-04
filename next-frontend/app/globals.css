@@ -5681,6 +5681,14 @@ body {
   cursor: zoom-in;
 }
 
+.landing-gallery__stage-frame {
+  position: absolute;
+  inset: 0;
+  display: block;
+  transform-origin: center;
+  will-change: opacity, transform;
+}
+
 .landing-gallery__stage-image {
   object-fit: cover;
   object-position: center;
@@ -5918,10 +5926,116 @@ body {
   color: white;
 }
 
-.landing-nexora__art {
+.landing-nexora__bridge {
   position: relative;
+  display: flex;
   min-height: 44rem;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
   border-right: 1px solid rgba(255, 255, 255, 0.14);
+  background: #6f1221;
+  padding: clamp(2.5rem, 5vw, 4.75rem);
+}
+
+.landing-nexora__bridge::after {
+  position: absolute;
+  right: -8rem;
+  bottom: -8rem;
+  width: 20rem;
+  height: 20rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 50%;
+  content: '';
+}
+
+.landing-nexora__bridge-kicker {
+  color: #e9b8bf;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.landing-nexora__route {
+  display: grid;
+  margin-top: 4rem;
+  grid-template-columns: auto minmax(3rem, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+}
+
+.landing-nexora__route span {
+  font-family: ui-serif, Georgia, Cambria, "Times New Roman", serif;
+  font-size: clamp(1.15rem, 2vw, 1.6rem);
+  font-weight: 650;
+}
+
+.landing-nexora__route i {
+  position: relative;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.landing-nexora__route i::after {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: white;
+  content: '';
+  transform: translateY(-50%);
+}
+
+.landing-nexora__bridge h3 {
+  max-width: 11ch;
+  margin-top: 3rem;
+  font-family: ui-serif, Georgia, Cambria, "Times New Roman", serif;
+  font-size: clamp(2.5rem, 4.7vw, 4.8rem);
+  font-weight: 650;
+  letter-spacing: -0.045em;
+  line-height: 0.98;
+}
+
+.landing-nexora__bridge-copy {
+  max-width: 32rem;
+  margin-top: 1.6rem;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 0.95rem;
+  line-height: 1.75;
+}
+
+.landing-nexora__endpoints {
+  display: grid;
+  margin-top: 3.5rem;
+  grid-template-columns: 1fr 1fr;
+  border-block: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.landing-nexora__endpoints div {
+  padding-block: 1.1rem;
+}
+
+.landing-nexora__endpoints div + div {
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+  padding-left: 1.25rem;
+}
+
+.landing-nexora__endpoints dt {
+  color: #e9b8bf;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.landing-nexora__endpoints dd {
+  margin-top: 0.35rem;
+  color: white;
+  font-size: 0.88rem;
+  line-height: 1.45;
 }
 
 .landing-nexora__copy {
@@ -6155,10 +6269,11 @@ body {
     padding-block: 0;
   }
 
-  .landing-nexora__art {
-    min-height: 30rem;
+  .landing-nexora__bridge {
+    min-height: 34rem;
     border-right: 0;
     border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+    padding: 4rem max(3rem, calc((100vw - 46rem) / 2));
   }
 
   .landing-footer__inner {
@@ -6272,8 +6387,21 @@ body {
     border-left: 0;
   }
 
-  .landing-nexora__art {
-    min-height: 22rem;
+  .landing-nexora__bridge {
+    min-height: 0;
+    padding: 3.5rem 1rem;
+  }
+
+  .landing-nexora__route {
+    margin-top: 2.75rem;
+  }
+
+  .landing-nexora__bridge h3 {
+    margin-top: 2.5rem;
+  }
+
+  .landing-nexora__endpoints {
+    margin-top: 2.75rem;
   }
 
   .landing-nexora__copy {

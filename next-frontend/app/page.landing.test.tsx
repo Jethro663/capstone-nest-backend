@@ -67,6 +67,10 @@ describe('School-first public landing page', () => {
     );
     expect(screen.queryByText(/hosted mobile api url/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /demo/i })).not.toBeInTheDocument();
+    expect(document.querySelector('img[src*="NexoraHome.png"]')).not.toBeInTheDocument();
+    expect(
+      screen.getByLabelText(/gabhs to nexora digital campus connection/i),
+    ).toBeInTheDocument();
   });
 
   it('publishes school-first page metadata', () => {
