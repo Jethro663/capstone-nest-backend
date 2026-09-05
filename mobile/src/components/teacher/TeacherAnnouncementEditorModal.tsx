@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { DatePickerModal } from "../ui/DatePickerModal";
 import { teacherTheme as theme } from "./TeacherMobilePrimitives";
 
-type IconName = React.ComponentProps<typeof MaterialCommunityIcons>["name"];
+import { AssessmentRichTextEditor } from "../ui/AssessmentRichTextEditor";
+import { announcementPreview, normalizeAnnouncementContent } from "../../utils/announcementContent";
 
 export interface AnnouncementFormPayload {
   title: string;
@@ -39,17 +40,16 @@ export function TeacherAnnouncementEditorModal({
   onClose,
 }: Props) {
   const [title, setTitle] = useState(initialTitle);
-  const [content, setContent] = useState(initialContent);
+  const [content, setContent] = useState(() => normalizeAnnouncementContent(initialContent));
   const [isPinned, setIsPinned] = useState(initialPinned);
   const [scheduledAt, setScheduledAt] = useState(initialScheduledAt);
   const [attachments, setAttachments] = useState<Array<{ name: string; uri: string; size?: number }>>([]);
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [selection, setSelection] = useState<{ start: number; end: number }>({ start: 0, end: 0 });
 
   useEffect(() => {
     if (visible) {
       setTitle(initialTitle);
-      setContent(initialContent);
+      setContent(normalizeAnnouncementContent(initialContent));
       setIsPinned(initialPinned);
       setScheduledAt(initialScheduledAt);
       setAttachments([]);
@@ -58,28 +58,8 @@ export function TeacherAnnouncementEditorModal({
 
   if (!visible) return null;
 
-  const insertFormatting = (prefix: string, suffix: string = "", defaultPlaceholder: string = "") => {
-    const start = selection.start;
-    const end = selection.end;
-    const selectedText = content.substring(start, end) || defaultPlaceholder;
-    const replacement = `${prefix}${selectedText}${suffix}`;
-    const newContent = content.substring(0, start) + replacement + content.substring(end);
-    setContent(newContent);
-  };
-
-  const formattingTools: Array<{ label: string; icon: IconName; prefix: string; suffix: string; placeholder: string }> = [
-    { label: "Bold", icon: "format-bold", prefix: "<b>", suffix: "</b>", placeholder: "bold text" },
-    { label: "Italic", icon: "format-italic", prefix: "<i>", suffix: "</i>", placeholder: "italic text" },
-    { label: "Heading", icon: "format-header-2", prefix: "<h2>", suffix: "</h2>", placeholder: "Heading text" },
-    { label: "Bullet", icon: "format-list-bulleted", prefix: "<ul>\n  <li>", suffix: "</li>\n</ul>", placeholder: "List item" },
-    { label: "Numbered", icon: "format-list-numbered", prefix: "<ol>\n  <li>", suffix: "</li>\n</ol>", placeholder: "List item" },
-    { label: "Quote", icon: "format-quote-close", prefix: "<blockquote>", suffix: "</blockquote>", placeholder: "Quote text" },
-    { label: "Code", icon: "code-tags", prefix: "<code>", suffix: "</code>", placeholder: "code" },
-    { label: "Link", icon: "link-variant", prefix: '<a href="https://">', suffix: "</a>", placeholder: "Link description" },
-  ];
-
   const handleSavePress = () => {
-    if (!title.trim() || !content.trim()) return;
+    if (!title.trim() || !announcementPreview(content)) return;
     void onSave({
       title: title.trim(),
       content: content.trim(),
@@ -154,62 +134,15 @@ export function TeacherAnnouncementEditorModal({
               }}
             />
 
-            {/* Rich Text Formatting Bar */}
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-              <Text style={{ fontSize: 11, fontWeight: "700", color: theme.muted, textTransform: "uppercase", letterSpacing: 0.6 }}>
-                Content & Formatting *
-              </Text>
-              <Text style={{ fontSize: 10, color: theme.muted }}>Tap tools to format text</Text>
+            <View style={{ marginBottom: 14 }}>
+              <AssessmentRichTextEditor
+                label="Announcement content"
+                value={content}
+                onChange={setContent}
+                disabled={saving}
+                extendedFormatting
+              />
             </View>
-
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8, flexDirection: "row" }}>
-              <View style={{ flexDirection: "row", gap: 4 }}>
-                {formattingTools.map((tool) => (
-                  <Pressable
-                    key={tool.label}
-                    onPress={() => insertFormatting(tool.prefix, tool.suffix, tool.placeholder)}
-                    style={{
-                      borderRadius: 8,
-                      borderWidth: 1,
-                      borderColor: theme.border,
-                      backgroundColor: theme.surface2,
-                      paddingHorizontal: 10,
-                      paddingVertical: 6,
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 4,
-                    }}
-                  >
-                    <MaterialCommunityIcons name={tool.icon} size={15} color={theme.red} />
-                    <Text style={{ fontSize: 11, fontWeight: "700", color: theme.text }}>{tool.label}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            </ScrollView>
-
-            {/* Content Multi-line TextInput */}
-            <TextInput
-              value={content}
-              onChangeText={setContent}
-              onSelectionChange={(e) => setSelection(e.nativeEvent.selection)}
-              placeholder="Write announcement details here... You can use standard HTML formatting tags like <b>bold</b>, <i>italic</i>, or lists."
-              placeholderTextColor={theme.dim}
-              multiline
-              textAlignVertical="top"
-              style={{
-                minHeight: 130,
-                borderRadius: 10,
-                borderWidth: 1,
-                borderColor: theme.border,
-                backgroundColor: theme.active,
-                color: theme.text,
-                paddingHorizontal: 12,
-                paddingVertical: 12,
-                fontSize: 13,
-                lineHeight: 19,
-                marginBottom: 14,
-              }}
-            />
 
             {/* Post Settings: Pin & Schedule */}
             <View style={{ flexDirection: "row", gap: 10, marginBottom: 14 }}>
@@ -369,9 +302,9 @@ export function TeacherAnnouncementEditorModal({
 
             <Pressable
               onPress={handleSavePress}
-              disabled={saving || !title.trim() || !content.trim()}
+              disabled={saving || !title.trim() || !announcementPreview(content)}
               style={{
-                opacity: saving || !title.trim() || !content.trim() ? 0.45 : 1,
+                opacity: saving || !title.trim() || !announcementPreview(content) ? 0.45 : 1,
                 borderRadius: 8,
                 borderWidth: 1,
                 borderColor: theme.redLine,

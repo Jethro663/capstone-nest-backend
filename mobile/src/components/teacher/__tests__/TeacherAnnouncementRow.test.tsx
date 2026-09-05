@@ -64,6 +64,21 @@ function findPressable(root: TestRenderer.ReactTestInstance, label: string) {
 }
 
 describe("TeacherAnnouncementRow", () => {
+  it("preserves emphasis and list structure in announcement details", () => {
+    let renderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(<TeacherAnnouncementRow
+        announcement={{ ...protectedAnnouncement, content: '<p>Bring <strong>a notebook</strong>.</p><ol><li>Read first</li></ol>' }}
+        onEdit={jest.fn()} onDelete={jest.fn()}
+      />);
+    });
+    act(() => findPressable(renderer!.root, "View Administrator notice announcement").props.onPress());
+    const texts = renderer!.root.findByType("Modal").findAllByType("Text");
+    expect(texts.some(node => node.props.style?.fontWeight === "800")).toBe(true);
+    expect(texts.some(node => node.children.join("") === "1.")).toBe(true);
+    expect(JSON.stringify(renderer!.toJSON())).not.toContain("<strong>");
+  });
+
   it("opens protected announcements in a read-only detail modal", () => {
     const onEdit = jest.fn();
     let renderer: TestRenderer.ReactTestRenderer;

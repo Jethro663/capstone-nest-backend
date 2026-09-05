@@ -188,8 +188,7 @@ function parseBlocks(source: string): Block[] {
 }
 
 function cleanTextSegment(value: string) {
-  return decodeEntities(value)
-    .replace(/<[^>]+>/g, "")
+  return decodeEntities(value.replace(/<[^>]+>/g, ""))
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n");
 }
@@ -216,7 +215,7 @@ function renderInline(
     const cleaned = cleanTextSegment(text);
     if (!cleaned) return;
     nodes.push(
-      <Text key={`${keyPrefix}-text-${index += 1}`} style={{ color: baseColor, fontSize: 13, lineHeight: 20 }}>
+      <Text key={`${keyPrefix}-text-${index += 1}`} style={{ color: baseColor }}>
         {cleaned}
       </Text>,
     );
@@ -228,7 +227,7 @@ function renderInline(
 
     if (match[0].startsWith("<br")) {
       nodes.push(
-        <Text key={`${keyPrefix}-br-${index += 1}`} style={{ color: baseColor, fontSize: 13, lineHeight: 20 }}>
+        <Text key={`${keyPrefix}-br-${index += 1}`} style={{ color: baseColor }}>
           {"\n"}
         </Text>,
       );
@@ -240,11 +239,11 @@ function renderInline(
     const href = tag === "a" ? readAnchorHref(match[0]) : null;
     const style =
       tag === "strong" || tag === "b"
-        ? { color: baseColor, fontSize: 13, lineHeight: 20, fontWeight: "800" as const }
+        ? { color: baseColor, fontWeight: "800" as const }
         : tag === "em" || tag === "i"
-          ? { color: baseColor, fontSize: 13, lineHeight: 20, fontStyle: "italic" as const }
+          ? { color: baseColor, fontStyle: "italic" as const }
           : tag === "u"
-            ? { color: accentColor, fontSize: 13, lineHeight: 20, textDecorationLine: "underline" as const }
+            ? { color: accentColor, textDecorationLine: "underline" as const }
             : tag === "code"
               ? {
                   color: baseColor,
@@ -254,8 +253,8 @@ function renderInline(
                   backgroundColor: colors.containerLow,
                 }
               : tag === "a"
-                ? { color: accentColor, fontSize: 13, lineHeight: 20, textDecorationLine: "underline" as const }
-                : { color: baseColor, fontSize: 13, lineHeight: 20 };
+                ? { color: accentColor, textDecorationLine: "underline" as const }
+                : { color: baseColor };
 
     nodes.push(
       <Text
@@ -309,8 +308,8 @@ export function RichTextContent({ html, color, mutedColor, accentColor }: Props)
           );
         }
 
-        const headingScale = Math.max(0, 3 - ("level" in block ? block.level : 3));
-        const headingSize = 17 - headingScale;
+        const headingLevel = "level" in block ? block.level : 3;
+        const headingSize = Math.max(15, 23 - headingLevel * 2);
         const textStyle =
           block.type === "heading"
             ? { color, fontSize: headingSize, lineHeight: headingSize + 8, fontWeight: "900" as const }

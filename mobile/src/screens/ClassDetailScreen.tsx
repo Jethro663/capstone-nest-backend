@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { RichTextContent } from "../components/ui/RichTextContent";
+import { normalizeAnnouncementContent } from "../utils/announcementContent";
 import { useQueries } from "@tanstack/react-query";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type {
@@ -1684,16 +1686,14 @@ export function StudentClassDetailContent({
                   >
                     {entry.title}
                   </Text>
-                  <Text
-                    style={{
-                      marginTop: 5,
-                      fontSize: 12,
-                      lineHeight: 19,
-                      color: theme.muted,
-                    }}
-                  >
-                    {entry.content}
-                  </Text>
+                  <View style={{ marginTop: 8 }}>
+                    <RichTextContent
+                      html={normalizeAnnouncementContent(entry.content)}
+                      color={theme.text}
+                      mutedColor={theme.muted}
+                      accentColor={theme.red}
+                    />
+                  </View>
                 </View>
               ))
             )}

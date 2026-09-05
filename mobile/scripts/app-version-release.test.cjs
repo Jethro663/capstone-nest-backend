@@ -130,7 +130,7 @@ test("verifyManifest rejects a changed APK", async () => {
   );
 });
 
-test("grade cap release keeps Expo and Gradle at 0.1.18 build 19", async () => {
+test("announcement and student UI release keeps Expo and Gradle at 0.1.19 build 20", async () => {
   const appJson = JSON.parse(
     await readFile(path.join(__dirname, "..", "app.json"), "utf8"),
   );
@@ -139,8 +139,8 @@ test("grade cap release keeps Expo and Gradle at 0.1.18 build 19", async () => {
     "utf8",
   );
 
-  assert.equal(appJson.expo.version, "0.1.18");
-  assert.equal(appJson.expo.android.versionCode, 19);
-  assert.match(buildGradle, /\bversionCode\s+19\b/);
-  assert.match(buildGradle, /\bversionName\s+["']0\.1\.18["']/);
+  assert.equal(appJson.expo.version, "0.1.19");
+  assert.equal(appJson.expo.android.versionCode, 20);
+  assert.match(buildGradle, /\bversionCode\s+20\b/);
+  assert.match(buildGradle, /\bversionName\s+["']0\.1\.19["']/);
 });

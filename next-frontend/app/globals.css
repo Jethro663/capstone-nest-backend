@@ -13777,18 +13777,6 @@ body {
   gap: 0.56rem;
 }
 
-.student-class-student-cell span {
-  width: 2.05rem;
-  height: 2.05rem;
-  border-radius: 999px;
-  background: var(--student-white);
-  color: var(--student-white);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.83rem;
-  font-weight: 700;
-}
 
 .student-class-student-cell strong {
   color: var(--student-navy);

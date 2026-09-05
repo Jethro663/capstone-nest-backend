@@ -4456,6 +4456,44 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).not.toContain("Pending");
   });
 
+  it("preserves rich formatting when opening the student announcement feed details", () => {
+    const { AnnouncementsScreen } = require("../AnnouncementsScreen");
+    mockedUseQueries.mockImplementation(({ queries }) => queries.map(() => createQueryState([{
+      id: "rich-notice", title: "Rich notice", content: '<p>Bring <strong>a notebook</strong>.</p><ul><li>Read first</li></ul>',
+    }])));
+    let renderer: TestRenderer.ReactTestRenderer;
+    act(() => { renderer = TestRenderer.create(React.createElement(AnnouncementsScreen, {})); });
+    act(() => findPressableByText(renderer!.root, "Rich notice").props.onPress());
+    const details = renderer!.root.findByType("Modal");
+    expect(details.props.visible).toBe(true);
+    const texts = details.findAllByType("Text");
+    expect(texts.some(node => node.props.style?.fontWeight === "800" && flattenText(node) === "a notebook")).toBe(true);
+    expect(texts.map(flattenText).join(" ")).toContain("•");
+  });
+
+  it("renders class announcement paragraphs, emphasis and lists without exposing HTML", () => {
+    const { ClassDetailScreen } = require("../ClassDetailScreen");
+    mockedUseAnnouncements.mockReturnValue(createQueryState([{
+      id: "formatted-notice", classId: "class-1", title: "Formatted notice",
+      content: '<p>Bring <strong>your notebook</strong>.</p><ul><li>Read chapter one</li></ul>',
+      isPinned: false, createdAt: "2026-04-18T08:00:00.000Z",
+    }]));
+    let renderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(React.createElement(ClassDetailScreen, {
+        navigation: { goBack: jest.fn(), navigate: jest.fn() },
+        route: { params: { classId: "class-1", initialTab: "announcements" } },
+      }));
+    });
+    const text = renderer!.root.findAllByType("Text").map(flattenText).join(" ");
+    expect(text).toContain("Read chapter one");
+    expect(text).not.toMatch(/<\/?(?:p|strong|ul|li)>/);
+    expect(renderer!.root.findAllByType("Text").some(node =>
+      node.props.style?.fontWeight === "800" && flattenText(node) === "your notebook",
+    )).toBe(true);
+    expect(text).toContain("•");
+  });
+
   it("renders an explicit empty state when the announcements tab has no class announcements", () => {
     const { ClassDetailScreen } = require("../ClassDetailScreen");
     mockedUseAnnouncements.mockReturnValue(
@@ -6334,7 +6372,7 @@ describe("mobile rendered screen flows", () => {
         type: "quiz",
         totalPoints: 100,
         isPublished: true,
-        dueDate: "2026-04-20T09:00:00.000Z",
+        dueDate: new Date(Date.now() + 86_400_000).toISOString(),
       },
     ];
 
@@ -6374,6 +6412,37 @@ describe("mobile rendered screen flows", () => {
       },
     );
   }
+
+  it("orders assessment filters by student action and opens Pending by default", () => {
+    const { AssessmentsScreen } = require("../AssessmentsScreen");
+    mockAssessmentsAccordionQueries({
+      assessments: [
+        { id: "pending-one", classId: "class-1", title: "Upcoming task", type: "quiz", isPublished: true, dueDate: "2099-01-01T00:00:00Z" },
+        { id: "late-one", classId: "class-1", title: "Overdue task", type: "quiz", isPublished: true, dueDate: "2000-01-01T00:00:00Z" },
+        { id: "done-one", classId: "class-1", title: "Finished task", type: "quiz", isPublished: true },
+      ],
+      attemptsByAssessmentId: { "done-one": [{ id: "attempt-done", isSubmitted: true, submittedAt: "2026-04-18T08:00:00Z" }] },
+    });
+    let renderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(React.createElement(AssessmentsScreen, {
+        navigation: { navigate: jest.fn() }, route: { name: "Assessments" },
+      }));
+    });
+    const labels = ["Pending", "Past Due", "Completed", "All Assessments"];
+    const filters = renderer!.root.findAllByType("Pressable").filter(node => labels.includes(flattenText(node)));
+    expect(filters.map(flattenText)).toEqual(labels);
+    const rendered = () => renderer!.root.findAllByType("Text").map(flattenText).join(" ");
+    expect(rendered()).toContain("Upcoming task");
+    expect(rendered()).not.toContain("Overdue task");
+    expect(rendered()).not.toContain("Finished task");
+    for (const [label, title] of [["Past Due", "Overdue task"], ["Completed", "Finished task"], ["All Assessments", "Upcoming task"]]) {
+      act(() => findPressableByText(renderer!.root, label).props.onPress());
+      expect(rendered()).toContain(title);
+    }
+    expect(rendered()).toContain("Overdue task");
+    expect(rendered()).toContain("Finished task");
+  });
 
   it("renders Assessments screen as an accordion and routes expanded actions", () => {
     const { AssessmentsScreen } = require("../AssessmentsScreen");

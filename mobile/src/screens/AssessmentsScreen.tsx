@@ -53,10 +53,10 @@ type AssessmentRecord = {
 const darkTheme = studentDarkTheme;
 
 const filterTabs: Array<{ key: AssessmentFilterKey; label: string }> = [
-  { key: "allAssessments", label: "All Assessments" },
   { key: "pending", label: "Pending" },
-  { key: "completed", label: "Completed" },
   { key: "past_due", label: "Past Due" },
+  { key: "completed", label: "Completed" },
+  { key: "allAssessments", label: "All Assessments" },
 ];
 
 const assessmentTypeBadge: Record<AssessmentType, string> = {
@@ -388,7 +388,7 @@ export function AssessmentsScreen({ navigation }: Props) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [activeFilter, setActiveFilter] =
-    useState<AssessmentFilterKey>("allAssessments");
+    useState<AssessmentFilterKey>("pending");
   const [expandedAssessmentId, setExpandedAssessmentId] = useState<
     string | null
   >(null);
@@ -696,6 +696,8 @@ export function AssessmentsScreen({ navigation }: Props) {
               return (
                 <Pressable
                   key={tab.key}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: focused }}
                   onPress={() => setActiveFilter(tab.key)}
                   style={{
                     borderBottomColor: focused ? darkTheme.red : "transparent",

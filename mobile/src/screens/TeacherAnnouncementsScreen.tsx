@@ -1,3 +1,4 @@
+import { announcementPreview } from "../utils/announcementContent";
 import { useEffect, useMemo, useState } from "react";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Alert, View } from "react-native";
@@ -16,7 +17,6 @@ import {
   TeacherScreen,
   TeacherSearch,
   TeacherStats,
-  stripRichText,
 } from "../components/teacher/TeacherMobilePrimitives";
 
 type Props = NativeStackScreenProps<RootStackParamList, "TeacherAnnouncements">;
@@ -69,7 +69,7 @@ export function TeacherAnnouncementsScreen({ navigation }: Props) {
       if (feedFilter === "scheduled" && !entry.scheduledAt) return false;
       if (!search.trim()) return true;
       const query = search.trim().toLowerCase();
-      const text = `${entry.title} ${stripRichText(entry.content)}`.toLowerCase();
+      const text = `${entry.title} ${announcementPreview(entry.content)}`.toLowerCase();
       return text.includes(query);
     });
   }, [announcements, feedFilter, search]);

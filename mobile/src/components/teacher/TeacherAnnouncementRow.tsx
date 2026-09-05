@@ -2,10 +2,13 @@ import { useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Alert, Modal, Pressable, ScrollView, Text, View } from "react-native";
 import type { Announcement } from "../../types/announcement";
-import { stripRichText, teacherTheme as theme } from "./TeacherMobilePrimitives";
+import { teacherTheme as theme } from "./TeacherMobilePrimitives";
+import { RichTextContent } from "../ui/RichTextContent";
+import { announcementPreview, normalizeAnnouncementContent } from "../../utils/announcementContent";
 
 interface Props {
   announcement: Announcement;
+  contextLabel?: string;
   onEdit: (announcement: Announcement) => void;
   onDelete: (announcement: Announcement) => void;
 }
@@ -31,9 +34,9 @@ function restrictionMessage(
   return `This announcement was created by another account and cannot be ${action} by you.`;
 }
 
-export function TeacherAnnouncementRow({ announcement, onEdit, onDelete }: Props) {
+export function TeacherAnnouncementRow({ announcement, contextLabel, onEdit, onDelete }: Props) {
   const [showDetails, setShowDetails] = useState(false);
-  const summary = stripRichText(announcement.content);
+  const summary = announcementPreview(announcement.content);
 
   return (
     <>
@@ -63,6 +66,7 @@ export function TeacherAnnouncementRow({ announcement, onEdit, onDelete }: Props
             style={{ marginTop: 3, fontSize: 11, lineHeight: 17, color: theme.subtext }}
           >
             {announcement.isPinned ? "Pinned · " : ""}
+            {contextLabel ? `${contextLabel} · ` : ""}
             {formatDate(announcement.scheduledAt || announcement.createdAt)} · {summary.slice(0, 90)}
           </Text>
         </Pressable>
@@ -159,7 +163,12 @@ export function TeacherAnnouncementRow({ announcement, onEdit, onDelete }: Props
                 </Pressable>
               </View>
               <ScrollView style={{ marginTop: 18 }}>
-                <Text style={{ fontSize: 14, lineHeight: 22, color: theme.text }}>{summary}</Text>
+                <RichTextContent
+                  html={normalizeAnnouncementContent(announcement.content)}
+                  color={theme.text}
+                  mutedColor={theme.subtext}
+                  accentColor={theme.red}
+                />
               </ScrollView>
             </View>
           </View>

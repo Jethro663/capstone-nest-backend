@@ -19,11 +19,13 @@ export function AssessmentRichTextEditor({
   value,
   onChange,
   disabled = false,
+  extendedFormatting = false,
 }: {
   label: string;
   value: string;
   onChange(value: string): void;
   disabled?: boolean;
+  extendedFormatting?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [link, setLink] = useState<string | null>(null);
@@ -110,6 +112,12 @@ export function AssessmentRichTextEditor({
               {[
                 ["bold", "Bold"],
                 ["italic", "Italic"],
+                ...(extendedFormatting ? [
+                  ["underline", "Underline"],
+                  ["heading", "Heading"],
+                  ["blockquote", "Quote"],
+                  ["code", "Code"],
+                ] : []),
                 ["bulletList", "Bullets"],
                 ["orderedList", "Numbered"],
                 ["undo", "Undo"],

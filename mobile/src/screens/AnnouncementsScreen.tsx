@@ -9,7 +9,9 @@ import { announcementsApi } from "../api/services/announcements";
 import { toAnnouncementPreview, toSubjectCard } from "../data/mappers";
 import { useAuth } from "../providers/AuthProvider";
 import type { MainTabParamList } from "../navigation/types";
-import { studentDarkTheme as theme, stripRichText } from "../theme/studentDark";
+import { studentDarkTheme as theme } from "../theme/studentDark";
+import { RichTextContent } from "../components/ui/RichTextContent";
+import { announcementPreview, normalizeAnnouncementContent } from "../utils/announcementContent";
 
 type Props = BottomTabScreenProps<MainTabParamList, "Announcements">;
 type FilterMode = "all" | "pinned";
@@ -294,7 +296,7 @@ export function AnnouncementsScreen(_: Props) {
                 </View>
               </View>
               <Text numberOfLines={3} style={{ marginTop: 9, fontSize: 12, lineHeight: 19, color: theme.subtext }}>
-                {stripRichText(announcement.content)}
+                {announcementPreview(announcement.content)}
               </Text>
             </Pressable>
           ))}
@@ -326,9 +328,12 @@ export function AnnouncementsScreen(_: Props) {
 
             <ScrollView showsVerticalScrollIndicator style={{ marginBottom: 16 }}>
               <View style={{ borderRadius: 12, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.bg, padding: 14 }}>
-                <Text style={{ fontSize: 13, lineHeight: 22, color: theme.text }}>
-                  {stripRichText(selectedAnnouncement?.content || "")}
-                </Text>
+                <RichTextContent
+                  html={normalizeAnnouncementContent(selectedAnnouncement?.content)}
+                  color={theme.text}
+                  mutedColor={theme.muted}
+                  accentColor={theme.red}
+                />
               </View>
             </ScrollView>
 

@@ -1,3 +1,4 @@
+import { TeacherAnnouncementRow } from "../components/teacher/TeacherAnnouncementRow";
 import { useMemo, useRef, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -36,7 +37,6 @@ import {
   TeacherRow,
   TeacherScreen,
   TeacherStats,
-  stripRichText,
   teacherTheme as theme,
 } from "../components/teacher/TeacherMobilePrimitives";
 
@@ -557,56 +557,20 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
         >
           {announcementsQuery.data?.length ? (
             announcementsQuery.data.map((announcement) => (
-              <TeacherRow
+              <TeacherAnnouncementRow
                 key={announcement.id}
-                title={announcement.title}
-                subtitle={`${announcement.isPinned ? "Pinned · " : ""}${stripRichText(announcement.content).slice(0, 100) || "No content preview available."}`}
-                left={
-                  announcement.isPinned ? (
-                    <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: theme.amberSoft, alignItems: "center", justifyContent: "center" }}>
-                      <MaterialCommunityIcons name="pin" size={16} color={theme.amber} />
-                    </View>
-                  ) : undefined
-                }
-                right={
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    <Pressable
-                      onPress={() => {
-                        setEditingAnnouncement({
-                          id: announcement.id,
-                          title: announcement.title,
-                          content: announcement.content,
-                          isPinned: Boolean(announcement.isPinned),
-                          scheduledAt: announcement.scheduledAt || "",
-                        });
-                        setShowAnnouncementModal(true);
-                      }}
-                      style={{
-                        borderRadius: 8,
-                        borderWidth: 1,
-                        borderColor: theme.border,
-                        backgroundColor: theme.active,
-                        paddingHorizontal: 10,
-                        paddingVertical: 6,
-                      }}
-                    >
-                      <Text style={{ fontSize: 10, fontWeight: "700", color: theme.text }}>Edit</Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={() => setDeletingAnnouncementModal({ id: announcement.id, title: announcement.title })}
-                      style={{
-                        borderRadius: 8,
-                        borderWidth: 1,
-                        borderColor: theme.redLine,
-                        backgroundColor: theme.redSoft,
-                        paddingHorizontal: 8,
-                        paddingVertical: 6,
-                      }}
-                    >
-                      <MaterialCommunityIcons name="trash-can-outline" size={14} color={theme.red} />
-                    </Pressable>
-                  </View>
-                }
+                announcement={announcement}
+                onEdit={(entry) => {
+                  setEditingAnnouncement({
+                    id: entry.id,
+                    title: entry.title,
+                    content: entry.content,
+                    isPinned: Boolean(entry.isPinned),
+                    scheduledAt: entry.scheduledAt || "",
+                  });
+                  setShowAnnouncementModal(true);
+                }}
+                onDelete={(entry) => setDeletingAnnouncementModal({ id: entry.id, title: entry.title })}
               />
             ))
           ) : (

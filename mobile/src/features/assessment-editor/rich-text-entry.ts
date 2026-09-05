@@ -37,6 +37,10 @@ window.assessmentCommand = (name, value) => {
   const chain = editor.chain().focus();
   if (name === "bold") chain.toggleBold().run();
   if (name === "italic") chain.toggleItalic().run();
+  if (name === "underline") chain.toggleUnderline().run();
+  if (name === "heading") chain.toggleHeading({ level: 2 }).run();
+  if (name === "blockquote") chain.toggleBlockquote().run();
+  if (name === "code") chain.toggleCode().run();
   if (name === "bulletList") chain.toggleBulletList().run();
   if (name === "orderedList") chain.toggleOrderedList().run();
   if (name === "undo") chain.undo().run();
