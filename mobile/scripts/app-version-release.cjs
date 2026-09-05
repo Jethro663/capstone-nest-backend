@@ -151,11 +151,15 @@ async function buildReleasePayload(options) {
   if (!hasConfiguredInstallPermission) {
     throw new Error(`app.json must declare ${REQUIRED_INSTALL_PERMISSION}.`);
   }
-  if (
-    !Number.isInteger(options.minSupportedVersionCode) ||
-    options.minSupportedVersionCode < 1
-  ) {
+  const minSupportedVersionCode = options.minSupportedVersionCode ?? configuredVersionCode;
+  if (!Number.isInteger(minSupportedVersionCode) || minSupportedVersionCode < 1) {
     throw new Error("minSupportedVersionCode must be a positive integer.");
+  }
+  if (minSupportedVersionCode > configuredVersionCode) {
+    throw new Error("The minimum supported build cannot exceed the packaged build.");
+  }
+  if (minSupportedVersionCode < configuredVersionCode && options.allowSupportedOlderBuilds !== true) {
+    throw new Error("A lower supported build requires an explicit recovery override (--allow-supported-older-builds true).");
   }
   if (!options.releaseNotes || !options.releaseNotes.trim()) {
     throw new Error("releaseNotes must not be empty.");
@@ -211,7 +215,7 @@ async function buildReleasePayload(options) {
   return {
     platform: "android",
     versionCode: configuredVersionCode,
-    minSupportedVersionCode: options.minSupportedVersionCode,
+    minSupportedVersionCode,
     nativeVersion: configuredVersionName,
     otaRuntimeVersion: configuredVersionName,
     apkDownloadUrl: options.apkDownloadUrl,
@@ -283,6 +287,7 @@ function defaultPaths(args) {
         "next-frontend/public/downloads/nexora-student-mobile-release.json",
       ),
     appJsonPath: args["app-json"] || path.join(repoRoot, "mobile/app.json"),
+    allowSupportedOlderBuilds: args["allow-supported-older-builds"] === "true",
     buildGradlePath:
       args["build-gradle"] ||
       path.join(repoRoot, "mobile/android/app/build.gradle"),
@@ -303,15 +308,15 @@ async function main() {
   const paths = defaultPaths(args);
 
   if (mode === "prepare") {
-    if (!args["release-notes"] || !args["min-supported-version-code"]) {
+    if (!args["release-notes"]) {
       throw new Error(
-        "prepare requires --release-notes and --min-supported-version-code.",
+        "prepare requires --release-notes; the minimum supported build defaults to the packaged build.",
       );
     }
     const payload = await buildReleasePayload({
       ...paths,
       releaseNotes: args["release-notes"],
-      minSupportedVersionCode: Number(args["min-supported-version-code"]),
+      minSupportedVersionCode: args["min-supported-version-code"] === undefined ? undefined : Number(args["min-supported-version-code"]),
     });
     await writeFile(
       paths.manifestPath,

@@ -61,7 +61,6 @@ async function fixtureOptions({
     apkBadging,
     apkDownloadUrl:
       "https://next-frontend-v2-production.up.railway.app/downloads/nexora-student-mobile-release.apk",
-    minSupportedVersionCode: 1,
     releaseNotes: "Navigation stability and JAHUB mobile updates.",
   };
 }
@@ -78,6 +77,21 @@ test("buildReleasePayload derives exact APK size and SHA-256", async () => {
     payload.apkSha256,
     createHash("sha256").update(fixtureApk).digest("hex"),
   );
+});
+
+test("normal releases require their exact published Android build by default", async () => {
+  const payload = await buildReleasePayload(await fixtureOptions());
+  assert.equal(payload.minSupportedVersionCode, payload.versionCode);
+});
+
+test("a lower release floor requires an explicit recovery override", async () => {
+  const options = { ...(await fixtureOptions()), minSupportedVersionCode: 1 };
+  await assert.rejects(buildReleasePayload(options), /recovery/i);
+  assert.equal((await buildReleasePayload({ ...options, allowSupportedOlderBuilds: true })).minSupportedVersionCode, 1);
+});
+
+test("the minimum supported build can never exceed the packaged build", async () => {
+  await assert.rejects(buildReleasePayload({ ...(await fixtureOptions()), minSupportedVersionCode: 15 }), /exceed/i);
 });
 
 test("rejects app.json and Gradle version drift", async () => {
@@ -130,7 +144,7 @@ test("verifyManifest rejects a changed APK", async () => {
   );
 });
 
-test("announcement and student UI release keeps Expo and Gradle at 0.1.19 build 20", async () => {
+test("mandatory Android update release keeps Expo and Gradle at 0.1.20 build 21", async () => {
   const appJson = JSON.parse(
     await readFile(path.join(__dirname, "..", "app.json"), "utf8"),
   );
@@ -139,8 +153,8 @@ test("announcement and student UI release keeps Expo and Gradle at 0.1.19 build 
     "utf8",
   );
 
-  assert.equal(appJson.expo.version, "0.1.19");
-  assert.equal(appJson.expo.android.versionCode, 20);
-  assert.match(buildGradle, /\bversionCode\s+20\b/);
-  assert.match(buildGradle, /\bversionName\s+["']0\.1\.19["']/);
+  assert.equal(appJson.expo.version, "0.1.20");
+  assert.equal(appJson.expo.android.versionCode, 21);
+  assert.match(buildGradle, /\bversionCode\s+21\b/);
+  assert.match(buildGradle, /\bversionName\s+["']0\.1\.20["']/);
 });

@@ -1,4 +1,14 @@
-import axios, { type AxiosInstance, type InternalAxiosRequestConfig } from "axios";
+import axios, {
+  type AxiosInstance,
+  type InternalAxiosRequestConfig,
+} from "axios";
+import { Platform } from "react-native";
+import { getInstalledNativeVersionInfo } from "../services/update/version-identity";
+import {
+  getAndroidAdmission,
+  isAppUpdateError,
+  reportUpdatePolicyFailure,
+} from "../services/update/update-admission";
 import { API_BASE_URL } from "./config";
 import {
   clearSecureSession,
@@ -10,7 +20,10 @@ import {
 
 let accessToken: string | null = null;
 let refreshToken: string | null = null;
-let refreshPromise: Promise<{ accessToken: string; refreshToken: string } | null> | null = null;
+let refreshPromise: Promise<{
+  accessToken: string;
+  refreshToken: string;
+} | null> | null = null;
 
 export function getAccessToken() {
   return accessToken;
@@ -30,16 +43,51 @@ async function hydrateTokens() {
   }
 }
 
-export async function persistAuthTokens(tokens: { accessToken: string | null; refreshToken: string | null }) {
+export async function persistAuthTokens(tokens: {
+  accessToken: string | null;
+  refreshToken: string | null;
+}) {
   accessToken = tokens.accessToken;
   refreshToken = tokens.refreshToken;
-  await Promise.all([persistAccessToken(tokens.accessToken), persistRefreshToken(tokens.refreshToken)]);
+  await Promise.all([
+    persistAccessToken(tokens.accessToken),
+    persistRefreshToken(tokens.refreshToken),
+  ]);
 }
 
 export const publicClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000,
 });
+publicClient.interceptors.request.use(addVersionHeaders);
+publicClient.interceptors.response.use(
+  (response) => response,
+  reportPolicyError,
+);
+
+function reportPolicyError(error: unknown): Promise<never> {
+  if (
+    Platform.OS === "android" &&
+    axios.isAxiosError(error) &&
+    ["APP_UPDATE_REQUIRED", "APP_UPDATE_CHECK_FAILED"].includes(
+      error.response?.data?.code,
+    )
+  ) {
+    reportUpdatePolicyFailure();
+  }
+  return Promise.reject(error);
+}
+
+function addVersionHeaders(config: InternalAxiosRequestConfig) {
+  if (Platform.OS === "android" || Platform.OS === "ios") {
+    config.headers.set("X-App-Platform", Platform.OS);
+    config.headers.set(
+      "X-App-Version-Code",
+      String(getInstalledNativeVersionInfo().currentVersionCode),
+    );
+  }
+  return config;
+}
 
 export const apiClient = createApiClient();
 
@@ -49,18 +97,43 @@ function createApiClient(): AxiosInstance {
     timeout: 30000,
   });
 
-  client.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
-    await hydrateTokens();
-    if (accessToken) {
-      config.headers.Authorization = `Bearer ${accessToken}`;
-    }
-    return config;
-  });
+  client.interceptors.request.use(
+    async (config: InternalAxiosRequestConfig) => {
+      addVersionHeaders(config);
+      if (
+        Platform.OS === "android" &&
+        getAndroidAdmission() !== "allowed" &&
+        !String(config.url).includes("/auth/mobile/logout")
+      ) {
+        throw new axios.AxiosError(
+          "Verify your app version before continuing.",
+          "APP_UPDATE_CHECK_PENDING",
+          config,
+        );
+      }
+      await hydrateTokens();
+      if (accessToken) {
+        config.headers.Authorization = `Bearer ${accessToken}`;
+      }
+      return config;
+    },
+  );
 
   client.interceptors.response.use(
     (response) => response,
     async (error) => {
-      const originalRequest = error.config as (InternalAxiosRequestConfig & { _retry?: boolean }) | null;
+      const originalRequest = error.config as
+        | (InternalAxiosRequestConfig & { _retry?: boolean })
+        | null;
+
+      if (
+        Platform.OS === "android" &&
+        ["APP_UPDATE_REQUIRED", "APP_UPDATE_CHECK_FAILED"].includes(
+          error.response?.data?.code,
+        )
+      ) {
+        return reportPolicyError(error);
+      }
 
       if (
         error.response?.status === 401 &&
@@ -89,7 +162,8 @@ function createApiClient(): AxiosInstance {
           if (!accessToken || accessToken === failedToken) {
             await clearAuthSession();
           }
-        } catch {
+        } catch (error) {
+          if (isAppUpdateError(error)) throw error;
           if (!accessToken || accessToken === failedToken) {
             await clearAuthSession();
           }
@@ -130,6 +204,7 @@ export async function refreshSession() {
       refreshToken: nextRefreshToken,
     };
   } catch (err: any) {
+    if (isAppUpdateError(err)) throw err;
     // Only wipe session on definitive auth rejection, not transient errors
     if (err?.response?.status === 401 || err?.response?.status === 403) {
       await clearAuthSession();

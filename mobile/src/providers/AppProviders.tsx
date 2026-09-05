@@ -15,13 +15,15 @@ export function AppProviders({ children }: PropsWithChildren) {
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
           <ErrorModalProvider>
-            <AuthProvider>
-              <StudentInterventionAlertProvider>
-                <UpdateProvider>
-                  <LiveNotificationProvider>{children}</LiveNotificationProvider>
-                </UpdateProvider>
-              </StudentInterventionAlertProvider>
-            </AuthProvider>
+            <UpdateProvider>
+              <AuthProvider>
+                <StudentInterventionAlertProvider>
+                  <LiveNotificationProvider>
+                    {children}
+                  </LiveNotificationProvider>
+                </StudentInterventionAlertProvider>
+              </AuthProvider>
+            </UpdateProvider>
           </ErrorModalProvider>
         </QueryClientProvider>
       </SafeAreaProvider>

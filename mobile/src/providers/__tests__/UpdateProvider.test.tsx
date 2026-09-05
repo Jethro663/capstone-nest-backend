@@ -1,7 +1,8 @@
 import React from "react";
-import { Text } from "react-native";
+import { AppState, Platform, Text } from "react-native";
 import type { AppVersionDecision } from "../../services/update/update.types";
 import { UpdateProvider } from "../UpdateProvider";
+import { reportUpdatePolicyFailure } from "../../services/update/update-admission";
 
 jest.mock("react-native", () => {
   const ReactRuntime = require("react");
@@ -10,12 +11,17 @@ jest.mock("react-native", () => {
 
   return {
     ActivityIndicator: component("ActivityIndicator"),
-    Modal: ({ visible, children }: Record<string, unknown>) =>
-      visible ? ReactRuntime.createElement("Modal", null, children) : null,
+    Modal: ({ visible, children, ...props }: Record<string, unknown>) =>
+      visible ? ReactRuntime.createElement("Modal", props, children) : null,
     Pressable: component("Pressable"),
     ScrollView: component("ScrollView"),
     Text: component("Text"),
     View: component("View"),
+    Platform: { OS: "android" },
+    AppState: {
+      currentState: "active",
+      addEventListener: jest.fn(() => ({ remove: jest.fn() })),
+    },
   };
 });
 
@@ -76,6 +82,9 @@ const policy14: AppVersionDecision = {
 
 const policy17: AppVersionDecision = {
   ...policy14,
+  minSupportedVersionCode: 17,
+  isForceUpdate: true,
+  updateType: "apk_forced",
   latestVersionCode: 17,
   latestNativeVersion: "0.1.16",
   otaRuntimeVersion: "0.1.16",
@@ -86,10 +95,13 @@ const policy17: AppVersionDecision = {
 
 const noUpdatePolicy: AppVersionDecision = {
   ...policy17,
+  latestVersionCode: 16,
+  minSupportedVersionCode: 16,
   isForceUpdate: false,
   requiresFullApk: false,
   updateType: "none",
 };
+const renderers: any[] = [];
 
 function flattenText(node: any): string {
   if (!node) return "";
@@ -121,6 +133,7 @@ async function renderProvider() {
     );
   });
   await flushPromises();
+  renderers.push(renderer);
   return renderer;
 }
 
@@ -158,6 +171,8 @@ function deferred<T>() {
 describe("UpdateProvider", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    Object.values(mockedUpdateService).forEach((mock) => mock.mockReset());
+    (Platform as { OS: string }).OS = "android";
     mockCheckUpdatePolicy.mockResolvedValue(policy17);
     mockCleanOldApkFiles.mockResolvedValue(undefined);
     mockDownloadApk.mockResolvedValue("file:///cache/update-17.apk");
@@ -171,6 +186,174 @@ describe("UpdateProvider", () => {
     mockOpenUnknownSourcesSettings.mockResolvedValue(undefined);
     mockTriggerOtaUpdate.mockResolvedValue(false);
     mockVerifyApkIntegrity.mockResolvedValue(undefined);
+  });
+
+  afterEach(async () => {
+    await act(async () => {
+      renderers.splice(0).forEach((renderer) => renderer.unmount());
+    });
+  });
+
+  it("does not mount app content before the first policy check finishes", async () => {
+    mockCheckUpdatePolicy.mockReturnValue(new Promise(() => {}));
+    const renderer = await renderProvider();
+    expect(flattenText(renderer.toJSON())).not.toContain("Child content");
+    expect(flattenText(renderer.toJSON())).toContain("Checking app version");
+  });
+
+  it("keeps a failed startup check blocked and permits a fresh retry", async () => {
+    mockCheckUpdatePolicy
+      .mockRejectedValueOnce(new Error("Network offline"))
+      .mockResolvedValueOnce(noUpdatePolicy);
+    const renderer = await renderProvider();
+    expect(flattenText(renderer.toJSON())).not.toContain("Child content");
+    expect(flattenText(renderer.toJSON())).toContain(
+      "Connect to verify your app version",
+    );
+    await press(renderer, "Retry Check");
+    expect(flattenText(renderer.toJSON())).toContain("Child content");
+  });
+
+  it("keeps mandatory access blocked through a failed policy retry", async () => {
+    mockCheckUpdatePolicy
+      .mockResolvedValueOnce({
+        ...policy17,
+        minSupportedVersionCode: 17,
+        isForceUpdate: true,
+        updateType: "apk_forced",
+      })
+      .mockRejectedValueOnce(new Error("Network offline"));
+    mockDownloadApk.mockRejectedValueOnce(new Error("Download interrupted"));
+    const renderer = await renderProvider();
+    await press(renderer, "Download & Install Update");
+    await press(renderer, "Retry Download");
+    expect(flattenText(renderer.toJSON())).not.toContain("Child content");
+    expect(findButton(renderer, "Later")).toBeUndefined();
+  });
+
+  it("does not dismiss the mandatory gate with Android Back", async () => {
+    const renderer = await renderProvider();
+    await act(async () => {
+      renderer.root.findByType("Modal").props.onRequestClose();
+    });
+    expect(flattenText(renderer.toJSON())).not.toContain("Child content");
+    expect(flattenText(renderer.toJSON())).toContain("Mandatory App Update");
+  });
+
+  it("admits the app only after the installed build and fresh policy confirm the upgrade", async () => {
+    const renderer = await renderProvider();
+    await press(renderer, "Download & Install Update");
+    mockInstallApk.mockImplementation(async () => {
+      mockGetClientVersionInfo.mockReturnValue({
+        platform: "android",
+        currentNativeVersion: "0.1.16",
+        currentVersionCode: 17,
+      });
+      mockCheckUpdatePolicy.mockResolvedValue({
+        ...noUpdatePolicy,
+        latestVersionCode: 17,
+        minSupportedVersionCode: 17,
+      });
+    });
+    await press(renderer, "Install Now");
+    expect(mockCleanOldApkFiles).toHaveBeenLastCalledWith(17);
+    expect(flattenText(renderer.toJSON())).toContain("Child content");
+    expect(renderer.root.findAllByType("Modal")).toHaveLength(0);
+  });
+
+  it("bypasses all APK work on iOS even when Android would be forced", async () => {
+    (Platform as { OS: string }).OS = "ios";
+    mockGetClientVersionInfo.mockReturnValue({
+      platform: "ios",
+      currentVersionCode: 3,
+      currentNativeVersion: "0.1.0",
+    });
+    mockCheckUpdatePolicy.mockResolvedValue({
+      ...policy17,
+      isForceUpdate: true,
+      updateType: "apk_forced",
+    });
+    const renderer = await renderProvider();
+    expect(flattenText(renderer.toJSON())).toContain("Child content");
+    expect(mockCheckUpdatePolicy).not.toHaveBeenCalled();
+    expect(mockCleanOldApkFiles).not.toHaveBeenCalled();
+    expect(mockTriggerOtaUpdate).not.toHaveBeenCalled();
+  });
+
+  it("rechecks on foreground and keeps existing content mounted but inaccessible", async () => {
+    mockCheckUpdatePolicy
+      .mockResolvedValueOnce(noUpdatePolicy)
+      .mockResolvedValueOnce({
+        ...policy17,
+        minSupportedVersionCode: 17,
+        isForceUpdate: true,
+        updateType: "apk_forced",
+      });
+    const renderer = await renderProvider();
+    const onChange = (AppState.addEventListener as jest.Mock).mock
+      .calls[0]?.[1];
+    expect(onChange).toEqual(expect.any(Function));
+    await act(async () => {
+      onChange("background");
+      onChange("active");
+    });
+    await flushPromises();
+    expect(mockCheckUpdatePolicy).toHaveBeenCalledTimes(2);
+    expect(
+      renderer.root.findByProps({ testID: "update-gated-content" }).props
+        .pointerEvents,
+    ).toBe("none");
+    expect(flattenText(renderer.toJSON())).toContain("Child content");
+  });
+
+  it("locks admitted content after an API policy rejection and failed refresh", async () => {
+    mockCheckUpdatePolicy
+      .mockResolvedValueOnce(noUpdatePolicy)
+      .mockRejectedValueOnce(new Error("Policy unavailable"));
+    const renderer = await renderProvider();
+    await act(async () => {
+      reportUpdatePolicyFailure();
+    });
+    await flushPromises();
+    expect(
+      renderer.root.findByProps({ testID: "update-gated-content" }).props
+        .pointerEvents,
+    ).toBe("none");
+    expect(flattenText(renderer.toJSON())).toContain("Retry Check");
+  });
+
+  it("deduplicates concurrent foreground checks", async () => {
+    const policy = deferred<AppVersionDecision>();
+    mockCheckUpdatePolicy.mockReturnValue(policy.promise);
+    await renderProvider();
+    const onChange = (AppState.addEventListener as jest.Mock).mock.calls[0][1];
+    await act(async () => {
+      onChange("background");
+      onChange("active");
+      onChange("background");
+      onChange("active");
+    });
+    expect(mockCheckUpdatePolicy).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      policy.resolve(noUpdatePolicy);
+    });
+  });
+
+  it("retains a verified APK and installation controls after returning from settings", async () => {
+    mockInstallApk.mockRejectedValue(
+      new Error("Security exception: unknown source blocked."),
+    );
+    const renderer = await renderProvider();
+    await press(renderer, "Download & Install Update");
+    await press(renderer, "Install Now");
+    const onChange = (AppState.addEventListener as jest.Mock).mock.calls[0][1];
+    await act(async () => {
+      onChange("background");
+      onChange("active");
+    });
+    await flushPromises();
+    expect(findButton(renderer, "Retry Installation")).toBeDefined();
+    expect(mockDownloadApk).toHaveBeenCalledTimes(1);
   });
 
   it("shows installed and available version identities for an APK update", async () => {
@@ -228,7 +411,7 @@ describe("UpdateProvider", () => {
     expect(flattenText(renderer.toJSON())).toContain("Ready to Install");
   });
 
-  it("hides duplicate install actions and closes the modal after Android reports success", async () => {
+  it("hides duplicate install actions but remains blocked if installer return did not upgrade the app", async () => {
     const installer = deferred<void>();
     mockInstallApk.mockReturnValue(installer.promise);
 
@@ -252,8 +435,10 @@ describe("UpdateProvider", () => {
     });
     await flushPromises();
 
-    expect(flattenText(renderer.toJSON())).not.toContain("Ready to Install");
-    expect(flattenText(renderer.toJSON())).not.toContain("Install Now");
+    expect(flattenText(renderer.toJSON())).toContain("Ready to Install");
+    expect(flattenText(renderer.toJSON())).toContain("Install Now");
+    expect(flattenText(renderer.toJSON())).not.toContain("Child content");
+    expect(mockCheckUpdatePolicy).toHaveBeenCalledTimes(2);
   });
 
   it("offers settings and retry when Android cancels or blocks installation", async () => {

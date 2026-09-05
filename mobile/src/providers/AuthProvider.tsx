@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { authApi } from "../api/services/auth";
@@ -20,6 +21,8 @@ import type { AuthSession } from "../types/auth";
 import type { UpdateProfileDto } from "../types/profile";
 import type { User } from "../types/user";
 import { isProfileIncomplete as resolveProfileIncomplete } from "../utils/accountSecurity";
+import { isAppUpdateError } from "../services/update/update-admission";
+import { useUpdate } from "./UpdateProvider";
 
 type AuthContextValue = {
   session: AuthSession | null;
@@ -40,6 +43,9 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [loading, setLoading] = useState(true);
+  const { state: updateState } = useUpdate();
+  const bootstrapStarted = useRef(false);
+  const bootstrapInterrupted = useRef(false);
 
   const persistSession = useCallback(async (next: AuthSession | null) => {
     if (
@@ -93,7 +99,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
         refreshToken: refreshed.refreshToken,
         user: currentUser,
       });
-    } catch {
+    } catch (error) {
+      if (isAppUpdateError(error)) {
+        bootstrapInterrupted.current = true;
+        return;
+      }
       await clearAuthSession();
       await persistSession(null);
     } finally {
@@ -102,8 +112,15 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, [persistSession]);
 
   useEffect(() => {
-    void bootstrap();
-  }, [bootstrap]);
+    if (
+      updateState.access === "allowed" &&
+      (!bootstrapStarted.current || (!loading && bootstrapInterrupted.current))
+    ) {
+      bootstrapStarted.current = true;
+      bootstrapInterrupted.current = false;
+      void bootstrap();
+    }
+  }, [bootstrap, loading, updateState.access]);
 
   const login = useCallback(
     async (email: string, password: string) => {

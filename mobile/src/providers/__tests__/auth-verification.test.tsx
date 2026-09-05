@@ -8,6 +8,9 @@ import { readSessionSnapshot, writeSessionSnapshot } from "../../api/storage";
 import type { AuthSession } from "../../types/auth";
 
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
+jest.mock("../UpdateProvider", () => ({
+  useUpdate: () => ({ state: { access: "allowed" } }),
+}));
 jest.mock("../../api/services/auth", () => ({
   authApi: { login: jest.fn(), getCurrentUser: jest.fn() },
 }));

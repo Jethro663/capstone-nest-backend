@@ -30,6 +30,10 @@ jest.mock('../services/reports', () => ({
   },
 }));
 jest.mock('../services/school-events', () => ({ schoolEventsApi: {} }));
+jest.mock('expo-application', () => ({
+  nativeApplicationVersion: '0.1.20',
+  nativeBuildVersion: '21',
+}));
 jest.mock('expo-constants', () => ({
   expoConfig: {
     hostUri: 'localhost:3000',

@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   Headers,
   HttpCode,
   Post,
@@ -25,6 +26,7 @@ export class AppVersionController {
 
   @Public()
   @Get('check')
+  @Header('Cache-Control', 'no-store')
   @ApiOperation({
     summary: 'Check if mobile app requires an OTA or APK update',
   })

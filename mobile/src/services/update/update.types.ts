@@ -34,6 +34,7 @@ export type UpdateFailureStage =
   | "installation";
 
 export interface UpdateState {
+  access: "checking" | "allowed" | "blocked";
   status: UpdateStatus;
   decision: AppVersionDecision | null;
   downloadProgress: number;

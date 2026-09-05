@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { and, desc, eq } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { appVersions } from '../../drizzle/schema';
@@ -37,6 +42,11 @@ export class AppVersionService {
    * Prevents version code regressions and upserts by platform + versionCode.
    */
   async registerVersion(dto: CreateAppVersionDto) {
+    if (dto.minSupportedVersionCode > dto.versionCode) {
+      throw new BadRequestException(
+        'Minimum supported build cannot exceed the released build.',
+      );
+    }
     // Guard against version regression: new versionCode must be >= existing latest
     const existing = await this.db.query.appVersions.findFirst({
       where: eq(appVersions.platform, dto.platform),
@@ -110,18 +120,18 @@ export class AppVersionService {
     const clientVersionCode = query.currentVersionCode ?? 0;
     const clientOtaVersion = query.currentOtaVersion ?? '';
 
-    const policy = await this.db.query.appVersions.findFirst({
-      where: eq(appVersions.platform, platform),
-      orderBy: [desc(appVersions.versionCode)],
-    });
-
-    if (!policy) {
+    // iOS releases have an independent distribution lifecycle. Never return an
+    // Android package action, even if a legacy iOS row contains APK metadata.
+    if (platform === 'ios') {
       return {
-        platform,
-        latestVersionCode: 1,
+        platform: 'ios',
+        latestVersionCode:
+          Number.isSafeInteger(clientVersionCode) && clientVersionCode > 0
+            ? clientVersionCode
+            : 1,
         minSupportedVersionCode: 1,
-        latestNativeVersion: '0.1.0',
-        otaRuntimeVersion: '1',
+        latestNativeVersion: query.currentNativeVersion ?? '0.1.0',
+        otaRuntimeVersion: clientOtaVersion,
         apkDownloadUrl: '',
         apkSha256: null,
         apkSizeBytes: null,
@@ -130,6 +140,34 @@ export class AppVersionService {
         releaseNotes: null,
         updateType: 'none',
       };
+    }
+
+    if (!Number.isSafeInteger(clientVersionCode) || clientVersionCode < 1) {
+      throw new BadRequestException(
+        'A valid installed Android build is required to check for updates.',
+      );
+    }
+
+    const policy = await this.db.query.appVersions.findFirst({
+      where: eq(appVersions.platform, platform),
+      orderBy: [desc(appVersions.versionCode)],
+    });
+
+    if (!policy) {
+      throw new ServiceUnavailableException(
+        'The Android release policy is not available. Please retry.',
+      );
+    }
+    if (
+      !Number.isSafeInteger(policy.versionCode) ||
+      policy.versionCode < 1 ||
+      !Number.isSafeInteger(policy.minSupportedVersionCode) ||
+      policy.minSupportedVersionCode < 1 ||
+      policy.minSupportedVersionCode > policy.versionCode
+    ) {
+      throw new ServiceUnavailableException(
+        'The Android release policy could not be verified. Please retry.',
+      );
     }
 
     let updateType: UpdateType = 'none';

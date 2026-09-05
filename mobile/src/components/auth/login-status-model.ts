@@ -44,6 +44,14 @@ export function resolveLoginVersionStatus(
   }
 
   const decision = state.decision;
+  if (!decision && state.access === "allowed") {
+    return {
+      kind: "supported",
+      headline: "App ready",
+      detail: "Your installed app is ready to use.",
+      installedLabel,
+    };
+  }
   if (decision?.updateType === "apk_forced") {
     return {
       kind: "required",

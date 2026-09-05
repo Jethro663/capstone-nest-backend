@@ -23,6 +23,7 @@ const decision: AppVersionDecision = {
 };
 
 const baseState: UpdateState = {
+  access: "allowed",
   status: "idle",
   decision,
   downloadProgress: 0,
@@ -39,6 +40,14 @@ const current = {
 };
 
 describe("login version status", () => {
+  it("describes an exempt platform as ready without claiming an APK check", () => {
+    expect(
+      resolveLoginVersionStatus(
+        { ...baseState, decision: null, access: "allowed" },
+        current,
+      ),
+    ).toMatchObject({ kind: "supported", headline: "App ready" });
+  });
   it("reports checking while the update provider is checking", () => {
     expect(
       resolveLoginVersionStatus({ ...baseState, status: "checking" }, current),
