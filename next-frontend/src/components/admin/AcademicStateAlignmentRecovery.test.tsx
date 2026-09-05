@@ -105,6 +105,16 @@ describe("AcademicStateAlignmentRecovery", () => {
       />,
     );
 
+    expect(service.previewStateAlignment).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole("checkbox", {
+        name: /AP-7.*Araling Panlipunan/i,
+      }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /preview alignment candidates/i }),
+    );
     const checkbox = await screen.findByRole("checkbox", {
       name: /AP-7.*Araling Panlipunan/i,
     });

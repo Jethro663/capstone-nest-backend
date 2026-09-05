@@ -12,19 +12,23 @@ jest.mock("@/services/academic-state-service", () => ({
     notifyTeachers: jest.fn(),
   },
 }));
+
 jest.mock("@/components/admin/AcademicBackSubjectsPanel", () => ({
-  AcademicBackSubjectsPanel: () => null,
+  AcademicBackSubjectsPanel: () => <p>Learner completion panel</p>,
 }));
+
 jest.mock("@/components/admin/AcademicRecoveryPanel", () => ({
-  AcademicRecoveryPanel: () => null,
+  AcademicRecoveryPanel: () => <p>Recovery panel</p>,
 }));
+
 jest.mock("sonner", () => ({
   toast: { success: jest.fn(), error: jest.fn() },
 }));
+
 const current = {
   id: "state",
   schoolYear: "2026-2027",
-  quarter: "Q1",
+  quarter: "Q3",
   version: 4,
   periods: [
     { key: "Q1", label: "Quarter 1" },
@@ -32,102 +36,71 @@ const current = {
     { key: "Q3", label: "Quarter 3" },
     { key: "Q4", label: "Quarter 4" },
   ],
-  policy: { id: "deped-2026-q4-v2", gradeMethod: "adjusted_2026" },
-  updatedAt: "2026-08-31T00:00:00Z",
+  policy: {
+    id: "deped-2026-q4-v2",
+    gradeMethod: "adjusted_2026",
+    periods: [
+      { key: "Q1", label: "Quarter 1" },
+      { key: "Q2", label: "Quarter 2" },
+      { key: "Q3", label: "Quarter 3" },
+      { key: "Q4", label: "Quarter 4" },
+    ],
+  },
+  updatedAt: "2026-09-05T00:00:00Z",
   transitionConfirmationText: "TRANSITION",
 };
-beforeEach(() => {
-  jest.clearAllMocks();
-  (academicStateService.getCurrent as jest.Mock).mockResolvedValue({
-    data: current,
+
+describe("Admin system settings overview", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (academicStateService.getCurrent as jest.Mock).mockResolvedValue({
+      data: current,
+    });
   });
-  (academicStateService.getImpactPreview as jest.Mock).mockResolvedValue({
-    data: {
-      current,
-      target: { schoolYear: "2027-2028", quarter: "Q1" },
-      transitionConfirmationText: "TRANSITION",
-      impact: {
-        classesToArchive: 1,
-        sectionsToArchive: 1,
-        enrollmentsToComplete: 1,
-        reusableClassesToCreate: 1,
-        reusableSectionsToCreate: 1,
-        promotionReadiness: {
-          transitionBlocked: true,
-          message: "Resolve missing grades",
-          expectedPeriodRecords: 4,
-          finalizedPeriodRecords: 1,
-          expectedAnnualGrades: 1,
-          blockers: [
-            {
-              code: "missing_period_record",
-              message: "Mathematics: Quarter 2 requires one class record.",
-              classId: "class-1",
-            },
-          ],
-          classReadiness: [{ classId: "class-1", subjectName: "Mathematics" }],
-        },
-      },
-    },
+
+  it("makes the active state and current-period assessment rule explicit without loading advanced panels", async () => {
+    render(<Page />);
+
+    expect(await screen.findByText("Active school year")).toBeInTheDocument();
+    expect(screen.getByText("2026–2027")).toBeInTheDocument();
+    expect(screen.getByText("Active grading period")).toBeInTheDocument();
+    expect(screen.getByText("Quarter 3")).toBeInTheDocument();
+    expect(
+      screen.getByText(/new student attempts must use quarter 3/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Review assessment rules" }),
+    ).toHaveAttribute(
+      "href",
+      "/dashboard/admin/system-settings/assessments-grading",
+    );
+    expect(academicStateService.getImpactPreview).not.toHaveBeenCalled();
+    expect(screen.queryByText("Learner completion panel")).not.toBeInTheDocument();
+    expect(screen.queryByText("Recovery panel")).not.toBeInTheDocument();
   });
-  (academicStateService.previewActivation as jest.Mock).mockResolvedValue({
-    data: {
-      state: current,
-      target: current.periods[1],
-      overrideRequired: false,
-      alreadyActive: false,
-      currentOpenRecords: 1,
-      targetMissingRecords: 1,
-      ongoingAttempts: 2,
-      details: [],
-      message: "No record is automatically finalized.",
-    },
+
+  it("ends loading after a current-state failure and retries only that request", async () => {
+    (academicStateService.getCurrent as jest.Mock)
+      .mockRejectedValueOnce(new Error("Academic state unavailable"))
+      .mockResolvedValueOnce({ data: current });
+
+    render(<Page />);
+
+    expect(
+      await screen.findByRole("alert", { name: "Academic state unavailable" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Loading the academic state…"),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Retry current state" }),
+    );
+
+    expect(await screen.findByText("Active school year")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(academicStateService.getCurrent).toHaveBeenCalledTimes(2);
+    });
+    expect(academicStateService.getImpactPreview).not.toHaveBeenCalled();
   });
-});
-it("shows Quarter 1-4 and keeps a blocked transition unavailable with an actionable destination", async () => {
-  render(<Page />);
-  expect(await screen.findByLabelText("Target period")).toBeInTheDocument();
-  expect(screen.getByRole("option", { name: "Quarter 4" })).toBeInTheDocument();
-  await screen.findByText("Mathematics: Quarter 2 requires one class record.");
-  expect(
-    screen.getByRole("button", { name: "Review year transition" }),
-  ).toBeDisabled();
-  expect(screen.getByRole("link", { name: "Open workbook" })).toHaveAttribute(
-    "href",
-    "/dashboard/admin/academic-records/class-1",
-  );
-  expect(academicStateService.getImpactPreview).toHaveBeenCalledWith({
-    schoolYear: "2027-2028",
-  });
-  expect(academicStateService.activatePeriod).not.toHaveBeenCalled();
-});
-it("requires preview and password, then submits the exact observed activation version", async () => {
-  (academicStateService.activatePeriod as jest.Mock).mockResolvedValue({
-    data: { ...current, quarter: "Q2", version: 5 },
-  });
-  render(<Page />);
-  await screen.findByLabelText("Target period");
-  fireEvent.click(
-    screen.getByRole("button", { name: "Preview period change" }),
-  );
-  await screen.findByText("No record is automatically finalized.");
-  expect(
-    screen.getByRole("button", { name: "Activate Quarter 2" }),
-  ).toBeDisabled();
-  fireEvent.change(screen.getByLabelText("Password for period activation"), {
-    target: { value: "invented-test-password" },
-  });
-  fireEvent.click(screen.getByRole("button", { name: "Activate Quarter 2" }));
-  await waitFor(() =>
-    expect(academicStateService.activatePeriod).toHaveBeenCalledWith(
-      expect.objectContaining({
-        expectedSchoolYear: "2026-2027",
-        expectedQuarter: "Q1",
-        expectedVersion: 4,
-        targetQuarter: "Q2",
-        requestId: expect.any(String),
-      }),
-    ),
-  );
-  expect(academicStateService.transition).not.toHaveBeenCalled();
 });

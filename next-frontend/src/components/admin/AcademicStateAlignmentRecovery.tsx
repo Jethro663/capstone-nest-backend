@@ -82,11 +82,6 @@ export function AcademicStateAlignmentRecovery({
     [sourceSchoolYear, targetQuarter, targetSchoolYear],
   );
 
-  useEffect(() => {
-    if (sourceSchoolYear && targetSchoolYear)
-      void requestPreview([], false);
-  }, [requestPreview, sourceSchoolYear, targetSchoolYear]);
-
   const candidates = candidatePreview?.candidates ?? [];
   const allSelected =
     candidates.length > 0 && selected.length === candidates.length;
@@ -157,6 +152,12 @@ export function AcademicStateAlignmentRecovery({
           classes and complete source-year sections, installs the four-quarter
           policies, and records one parent audit receipt.
         </p>
+        {!candidatePreview && (
+          <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            Candidate data is not loaded automatically. Confirm the source and
+            target years, then request a read-only preview.
+          </p>
+        )}
         <div className="grid gap-3 md:grid-cols-3">
           <div>
             <Label htmlFor="alignment-source-year">Source school year</Label>
@@ -207,7 +208,7 @@ export function AcademicStateAlignmentRecovery({
           disabled={busy}
           onClick={() => void requestPreview([], false)}
         >
-          Reload candidate classes
+          Preview alignment candidates
         </Button>
 
         {candidatePreview && (
