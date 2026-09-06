@@ -1,189 +1,114 @@
 .toastCard {
-  position: relative;
-  width: min(28rem, calc(100vw - 1.5rem));
-  overflow: hidden;
-  border-radius: 1.1rem;
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  background: linear-gradient(136deg, #ffffff 0%, #eef4ff 100%);
-  box-shadow:
-    0 18px 46px rgba(15, 23, 42, 0.2),
-    0 2px 8px rgba(15, 23, 42, 0.14);
-  color: #0f172a;
-  animation: toastEnter 360ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.toastCardIntervention {
-  border-color: rgba(214, 64, 69, 0.4);
-  background: linear-gradient(140deg, #fff8f5 0%, #ffe5e8 70%);
-}
-
-.shimmer {
-  pointer-events: none;
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(110deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.52), rgba(255, 255, 255, 0));
-  transform: translateX(-100%);
-  animation: shimmer 2.4s linear infinite;
-}
-
-.content {
-  position: relative;
-  display: grid;
-  gap: 0.72rem;
-  padding: 0.92rem 0.96rem 0.96rem;
-}
-
-.headerRow {
   display: flex;
+  width: min(24rem, calc(100vw - 1.5rem));
+  min-height: 3.25rem;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.6rem;
-}
-
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.32);
-  background: rgba(255, 255, 255, 0.82);
-  padding: 0.24rem 0.6rem;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #334155;
-}
-
-.interventionChip {
-  border-color: rgba(214, 64, 69, 0.44);
-  background: rgba(255, 255, 255, 0.95);
-  color: #9f1239;
-}
-
-.title {
-  margin: 0;
-  font-size: 0.98rem;
-  font-weight: 800;
-  line-height: 1.3;
+  gap: 0.7rem;
+  border: 1px solid rgba(148, 163, 184, 0.42);
+  border-radius: 0.75rem;
+  background: #ffffff;
+  padding: 0.55rem 0.6rem 0.55rem 0.7rem;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.14);
   color: #0f172a;
+  animation: toastEnter 180ms ease-out;
 }
 
-.body {
+.icon {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.55rem;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.message {
+  min-width: 0;
+  flex: 1;
   margin: 0;
-  max-width: calc(100% - 5.8rem);
   font-size: 0.84rem;
-  line-height: 1.45;
-  color: #334155;
+  font-weight: 650;
+  line-height: 1.35;
+  color: #0f172a;
 }
 
 .actions {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
-  gap: 0.54rem;
+  gap: 0.25rem;
 }
 
-.openButton,
+.viewButton,
 .dismissButton {
-  border-radius: 0.7rem;
-  font-size: 0.74rem;
-  font-weight: 700;
-  line-height: 1;
-  transition: transform 180ms ease, box-shadow 180ms ease, background-color 180ms ease, color 180ms ease;
+  min-height: 2rem;
+  border-radius: 0.5rem;
+  transition: background-color 140ms ease, color 140ms ease;
 }
 
-.openButton {
+.viewButton {
   border: 0;
-  background: #0f172a;
-  color: #f8fafc;
-  padding: 0.52rem 0.68rem;
+  background: transparent;
+  padding: 0.4rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #334155;
 }
 
-.openButton:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.28);
+.viewButton:hover {
+  background: #f1f5f9;
+  color: #0f172a;
 }
 
 .dismissButton {
-  border: 1px solid rgba(100, 116, 139, 0.34);
-  background: rgba(255, 255, 255, 0.72);
-  color: #1e293b;
-  padding: 0.48rem 0.65rem;
+  display: inline-flex;
+  width: 2rem;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  padding: 0;
 }
 
 .dismissButton:hover {
-  background: rgba(255, 255, 255, 0.98);
+  background: #f1f5f9;
+  color: #334155;
 }
 
-.notificationCharacter {
-  pointer-events: none;
-  position: absolute;
-  right: -0.34rem;
-  bottom: -0.1rem;
-  width: 98px;
-  height: auto;
-  opacity: 0.94;
-  animation: avatarFloat 2.4s ease-in-out infinite;
-}
-
-.standardCharacter {
-  filter: drop-shadow(0 8px 16px rgba(37, 99, 235, 0.22));
-}
-
-.interventionCharacter {
-  filter: drop-shadow(0 8px 16px rgba(148, 27, 49, 0.25));
-}
-
-.progressLine {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  height: 2px;
-  width: 100%;
-  transform-origin: left center;
-  background: linear-gradient(90deg, rgba(241, 245, 249, 0.12) 0%, rgba(15, 23, 42, 0.75) 100%);
-  animation: progress 8.8s linear forwards;
-}
-
-.toastCardIntervention .progressLine {
-  background: linear-gradient(90deg, rgba(255, 241, 242, 0.12) 0%, rgba(190, 24, 93, 0.82) 100%);
+.viewButton:focus-visible,
+.dismissButton:focus-visible {
+  outline: 2px solid #334155;
+  outline-offset: 2px;
 }
 
 @keyframes toastEnter {
   from {
     opacity: 0;
-    transform: translateY(-16px) scale(0.97);
+    transform: translateY(-6px);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes avatarFloat {
-  0%,
-  100% {
     transform: translateY(0);
   }
-  50% {
-    transform: translateY(-6px);
+}
+
+@media (max-width: 34rem) {
+  .toastCard {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .actions {
+    margin-left: 2.7rem;
   }
 }
 
-@keyframes shimmer {
-  from {
-    transform: translateX(-120%);
-  }
-  to {
-    transform: translateX(120%);
-  }
-}
-
-@keyframes progress {
-  from {
-    transform: scaleX(1);
-  }
-  to {
-    transform: scaleX(0);
+@media (prefers-reduced-motion: reduce) {
+  .toastCard {
+    animation: none;
   }
 }

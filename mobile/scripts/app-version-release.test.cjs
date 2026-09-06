@@ -144,7 +144,7 @@ test("verifyManifest rejects a changed APK", async () => {
   );
 });
 
-test("mandatory Android update release keeps Expo and Gradle at 0.1.20 build 21", async () => {
+test("quiet notification release keeps Expo and Gradle at 0.1.21 build 22", async () => {
   const appJson = JSON.parse(
     await readFile(path.join(__dirname, "..", "app.json"), "utf8"),
   );
@@ -153,8 +153,8 @@ test("mandatory Android update release keeps Expo and Gradle at 0.1.20 build 21"
     "utf8",
   );
 
-  assert.equal(appJson.expo.version, "0.1.20");
-  assert.equal(appJson.expo.android.versionCode, 21);
-  assert.match(buildGradle, /\bversionCode\s+21\b/);
-  assert.match(buildGradle, /\bversionName\s+["']0\.1\.20["']/);
+  assert.equal(appJson.expo.version, "0.1.21");
+  assert.equal(appJson.expo.android.versionCode, 22);
+  assert.match(buildGradle, /\bversionCode\s+22\b/);
+  assert.match(buildGradle, /\bversionName\s+["']0\.1\.21["']/);
 });

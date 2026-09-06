@@ -297,7 +297,7 @@ describe('NotificationProvider', () => {
     await waitFor(() => expect(toast.custom).toHaveBeenCalledTimes(1));
     const [renderToast] = (toast.custom as jest.Mock).mock.calls[0] as [() => React.ReactNode];
     render(renderToast());
-    expect(screen.getByText('3 unread updates')).toBeInTheDocument();
+    expect(screen.getByText('You have 3 unread notifications')).toBeInTheDocument();
     expect(window.localStorage.getItem(getNotificationSurfaceStorageKey('user-1'))).not.toBeNull();
 
     firstMount.unmount();
@@ -460,7 +460,7 @@ describe('NotificationProvider', () => {
     );
     const [renderToast] = (toast.custom as jest.Mock).mock.calls[0] as [() => React.ReactNode];
     render(renderToast());
-    expect(screen.getByText('2 new updates')).toBeInTheDocument();
+    expect(screen.getByText('You have 2 unread notifications')).toBeInTheDocument();
   });
 
   it('cancels a queued live presentation when the provider unmounts', async () => {
@@ -511,7 +511,7 @@ describe('NotificationProvider', () => {
     expect(toast.dismiss).toHaveBeenCalledWith(NOTIFICATION_TOAST_LANE_ID);
   });
 
-  it('marks an individual live notification read when its Open action is used', async () => {
+  it('keeps a live notification unread when its quiet summary View action is used', async () => {
     markReadMock.mockReturnValue(new Promise(() => undefined));
     render(
       <NotificationProvider>
@@ -537,7 +537,7 @@ describe('NotificationProvider', () => {
 
     act(() => renderToast().props.onOpen());
 
-    expect(markReadMock).toHaveBeenCalledWith('live-open-1');
+    expect(markReadMock).not.toHaveBeenCalled();
   });
 
   it('does not show top live-notification cards for students', async () => {
@@ -588,7 +588,7 @@ describe('NotificationProvider', () => {
     expect(toast.custom).toHaveBeenCalledTimes(1);
     expect(toast.custom).toHaveBeenCalledWith(
       expect.any(Function),
-      expect.objectContaining({ id: NOTIFICATION_TOAST_LANE_ID, position: 'top-center' }),
+      expect.objectContaining({ id: NOTIFICATION_TOAST_LANE_ID, position: 'top-right' }),
     );
   });
 
@@ -625,7 +625,7 @@ describe('NotificationProvider', () => {
     expect(toast.custom).toHaveBeenCalledTimes(1);
     const [renderToast] = (toast.custom as jest.Mock).mock.calls[0] as [() => React.ReactNode];
     render(renderToast());
-    expect(screen.getByText('1 update while you were away')).toBeInTheDocument();
+    expect(screen.getByText('You have 1 unread notification')).toBeInTheDocument();
   });
 
   it('does not add a backlog digest after a slow refocus reconciliation already showed catch-up', async () => {
@@ -679,7 +679,7 @@ describe('NotificationProvider', () => {
     expect(toast.custom).toHaveBeenCalledTimes(1);
   });
 
-  it('shows a teacher completion notification when a tracked extraction finishes', async () => {
+  it('summarizes a teacher completion notification without exposing file details', async () => {
     window.localStorage.setItem(
       getTrackedExtractionNotificationStorageKey('class-1'),
       JSON.stringify([
@@ -727,12 +727,11 @@ describe('NotificationProvider', () => {
       );
     });
 
-    const [renderToast] = (toast.custom as jest.Mock).mock.calls[0] as [
-      () => { props: { title: string; body: string } },
-    ];
-    const toastElement = renderToast();
-    expect(toastElement.props.title).toBe('Extraction ready');
-    expect(toastElement.props.body).toContain('Quarter 1 Module.pdf');
+    const [renderToast] = (toast.custom as jest.Mock).mock.calls[0] as [() => React.ReactNode];
+    render(renderToast());
+    expect(screen.getByText('You have 1 unread notification')).toBeInTheDocument();
+    expect(screen.queryByText('Extraction ready')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Quarter 1 Module\.pdf/)).not.toBeInTheDocument();
   });
 
   it('ignores tracked extraction completion from an account that has signed out', async () => {

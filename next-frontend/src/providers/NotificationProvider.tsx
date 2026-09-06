@@ -14,7 +14,6 @@ import { getAccessToken } from '@/lib/api-client';
 import { getBrowserSocketOrigin } from '@/lib/api-origin';
 import {
   dismissNotificationToastLane,
-  showLiveNotificationToast,
   showNotificationDigestToast,
 } from '@/components/notifications/LiveNotificationToast';
 import {
@@ -22,10 +21,7 @@ import {
   readAllTrackedExtractionNotifications,
   upsertTrackedExtractionNotification,
 } from '@/lib/extraction-notification-tracker';
-import {
-  isInterventionAlertNotification,
-  resolveNotificationDestination,
-} from '@/lib/notification-routing';
+import { isInterventionAlertNotification } from '@/lib/notification-routing';
 import {
   evaluateNotificationBacklogPresentation,
   getNotificationSurfaceStorageKey,
@@ -381,16 +377,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     };
   }, [resetLiveNotificationLane]);
 
-  const openIndividualNotification = useCallback(
-    (notification: Notification) => {
-      const destination = resolveNotificationDestination(notification, role);
-      void markAsRead(notification.id).finally(() => {
-        window.location.assign(destination);
-      });
-    },
-    [markAsRead, role],
-  );
-
   const flushLiveNotificationLane = useCallback(
     (preferredKind?: 'live' | 'catch-up') => {
       if (liveNotificationTimerRef.current !== null) {
@@ -408,21 +394,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       const onClose = () => resetLiveNotificationLane(generation);
       const containsUrgent = rows.some(isInterventionAlertNotification);
 
-      if (rows.length === 1 && preferredKind !== 'catch-up') {
-        showLiveNotificationToast(rows[0], role, {
-          onOpen: () => openIndividualNotification(rows[0]),
-          onClose,
-        });
-        return;
-      }
-
       showNotificationDigestToast({
         kind: containsUrgent ? 'urgent' : preferredKind ?? 'live',
         count: rows.length,
         onClose,
       });
     },
-    [openIndividualNotification, recordSurfacedUrgentNotifications, resetLiveNotificationLane, role],
+    [recordSurfacedUrgentNotifications, resetLiveNotificationLane, role],
   );
 
   const enqueueLiveNotification = useCallback(
@@ -459,20 +437,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         return;
       }
 
-      if (presentation.notifications.length === 1) {
-        const notification = presentation.notifications[0];
-        showLiveNotificationToast(notification, role, {
-          onOpen: () => openIndividualNotification(notification),
-        });
-        return;
-      }
-
       showNotificationDigestToast({
         kind: 'urgent',
         count: presentation.notifications.length,
       });
     },
-    [openIndividualNotification, role],
+    [role],
   );
 
   const syncNotifications = useCallback(

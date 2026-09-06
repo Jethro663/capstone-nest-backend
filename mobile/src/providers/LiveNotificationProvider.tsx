@@ -2,7 +2,7 @@ import type { PropsWithChildren } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Notifications from "expo-notifications";
 import { io, type Socket } from "socket.io-client";
-import { Animated, AppState, Easing, Image, Platform, Pressable, Text, View } from "react-native";
+import { Animated, AppState, Easing, Platform, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getAccessToken } from "../api/client";
 import { SOCKET_ORIGIN } from "../api/config";
@@ -10,13 +10,18 @@ import { assessmentsApi } from "../api/services/assessments";
 import { classesApi } from "../api/services/classes";
 import { lxpApi } from "../api/services/lxp";
 import { notificationsApi } from "../api/services/notifications";
+import { QuietNotificationBanner } from "../components/notifications/QuietNotificationBanner";
 import { rootNavigationRef } from "../navigation/navigation-ref";
 import { resolveMobileRole } from "../navigation/role-resolver";
-import { colors, hexToRgba, radii, shadow } from "../theme/tokens";
 import type { Assessment, AssessmentAttempt } from "../types/assessment";
 import type { ClassItem } from "../types/class";
 import type { LxpPathSummary } from "../types/lxp";
 import type { MobileNotification } from "../types/notification";
+import {
+  addQuietNotifications,
+  dismissQuietNotifications,
+  EMPTY_QUIET_NOTIFICATION_PRESENTATION,
+} from "../utils/quiet-notification-presentation";
 import { useAuth } from "./AuthProvider";
 import { LiveNotificationContext } from "./LiveNotificationContext";
 
@@ -36,7 +41,7 @@ const TEACHER_REMINDER_POLL_MS = 90_000;
 const LOCAL_REMINDER_BUCKET_MS = 5 * 60 * 1000;
 const STUDENT_REMINDER_CLASS_LIMIT = 6;
 const STUDENT_REMINDER_ASSESSMENT_LIMIT = 16;
-const AUTO_DISMISS_MS = 7800;
+const AUTO_DISMISS_MS = 6000;
 const NATIVE_NOTIFICATION_CHANNEL_ID = "nexora-live";
 const NATIVE_NOTIFICATION_PREFIX = "nexora-notification";
 const NOTIFICATION_TAP_RETRY_MS = 320;
@@ -454,19 +459,14 @@ function navigateToNotification(notification: MobileNotification, role: string |
   return true;
 }
 
-const interventionCharacterSource = () => require("../../assets/ja/ja_live_notify.png");
-const notificationCharacterSource = () => require("../../assets/ja/ja_wave.png");
-
 export function LiveNotificationProvider({ children }: PropsWithChildren) {
   const { isAuthenticated, user } = useAuth();
   const insets = useSafeAreaInsets();
-  const [activeNotification, setActiveNotification] = useState<MobileNotification | null>(null);
+  const [quietPresentation, setQuietPresentation] = useState(EMPTY_QUIET_NOTIFICATION_PRESENTATION);
   const [unreadCount, setUnreadCount] = useState(0);
 
   const seenIdsRef = useRef<Set<string>>(new Set());
-  const queueRef = useRef<MobileNotification[]>([]);
   const hydratedRef = useRef(false);
-  const activeRef = useRef<MobileNotification | null>(null);
   const mountedRef = useRef(true);
   const pollInFlightRef = useRef(false);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -482,7 +482,6 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
 
   const slide = useRef(new Animated.Value(-140)).current;
   const opacity = useRef(new Animated.Value(0)).current;
-  const pulse = useRef(new Animated.Value(0)).current;
   const role = resolveMobileRole(user?.roles);
 
   useEffect(() => {
@@ -593,14 +592,6 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
     [role],
   );
 
-  const tryShowNext = useCallback(() => {
-    if (activeRef.current || queueRef.current.length === 0) return;
-    const next = queueRef.current.shift() ?? null;
-    if (!next) return;
-    activeRef.current = next;
-    setActiveNotification(next);
-  }, []);
-
   const clearLocalReminderSeenKeys = useCallback(() => {
     seenIdsRef.current.forEach((key) => {
       if (isLocalReminderId(key)) {
@@ -613,11 +604,10 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
     (notification: MobileNotification) => {
       if (!notification.id || hasSeenNotification(seenIdsRef.current, notification)) return false;
       markNotificationSeen(seenIdsRef.current, notification);
-      queueRef.current.push(notification);
-      tryShowNext();
+      setQuietPresentation((current) => addQuietNotifications(current, 1));
       return true;
     },
-    [tryShowNext],
+    [],
   );
 
   const dismissActive = useCallback(() => {
@@ -626,106 +616,39 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
       autoDismissTimerRef.current = null;
     }
 
-    Animated.parallel([
-      Animated.timing(opacity, {
-        toValue: 0,
-        duration: 180,
-        easing: Easing.in(Easing.quad),
-        useNativeDriver: true,
-      }),
-      Animated.timing(slide, {
-        toValue: -120,
-        duration: 220,
-        easing: Easing.in(Easing.cubic),
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      if (!mountedRef.current) return;
-      activeRef.current = null;
-      setActiveNotification(null);
-    });
+    setQuietPresentation(dismissQuietNotifications());
+    opacity.setValue(0);
+    slide.setValue(-12);
   }, [opacity, slide]);
 
-  const openNotification = useCallback(
-    (notification: MobileNotification) => {
-      if (!rootNavigationRef.isReady()) {
-        pendingNativeOpenRef.current = notification;
-        dismissActive();
-        return;
-      }
-
-      if (!isLocalReminderNotification(notification)) {
-        setUnreadCount((current) => (notification.isRead ? current : Math.max(0, current - 1)));
-        void notificationsApi.markRead(notification.id).catch(() => {
-          // Navigation matters more than a transient read-state failure.
-        });
-      }
-
-      dismissActive();
-      setTimeout(() => {
-        navigateToNotification(notification, role);
-      }, 230);
-    },
-    [dismissActive, role],
-  );
+  const openNotificationCenter = useCallback(() => {
+    if (!rootNavigationRef.isReady()) return;
+    dismissActive();
+    setTimeout(() => {
+      rootNavigationRef.navigate("Notifications");
+    }, 180);
+  }, [dismissActive]);
 
   useEffect(() => {
-    if (!activeNotification) {
-      tryShowNext();
-      return;
-    }
+    if (!quietPresentation.visible) return;
 
-    const interventionAlert = isInterventionAlertNotification(activeNotification);
-    slide.setValue(-120);
+    slide.setValue(-8);
     opacity.setValue(0);
 
     Animated.parallel([
       Animated.timing(opacity, {
         toValue: 1,
-        duration: 260,
+        duration: 160,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
       Animated.timing(slide, {
         toValue: 0,
-        duration: 300,
-        easing: Easing.out(Easing.back(0.8)),
+        duration: 180,
+        easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
     ]).start();
-
-    if (interventionAlert) {
-      pulse.setValue(0);
-      const loop = Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulse, {
-            toValue: 1,
-            duration: 1250,
-            easing: Easing.inOut(Easing.sin),
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulse, {
-            toValue: 0,
-            duration: 1250,
-            easing: Easing.inOut(Easing.sin),
-            useNativeDriver: true,
-          }),
-        ]),
-      );
-      loop.start();
-      autoDismissTimerRef.current = setTimeout(() => {
-        dismissActive();
-      }, AUTO_DISMISS_MS + 2600);
-
-      return () => {
-        loop.stop();
-        pulse.stopAnimation(() => pulse.setValue(0));
-        if (autoDismissTimerRef.current) {
-          clearTimeout(autoDismissTimerRef.current);
-          autoDismissTimerRef.current = null;
-        }
-      };
-    }
 
     autoDismissTimerRef.current = setTimeout(() => {
       dismissActive();
@@ -737,7 +660,7 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
         autoDismissTimerRef.current = null;
       }
     };
-  }, [activeNotification, dismissActive, opacity, pulse, slide, tryShowNext]);
+  }, [dismissActive, opacity, quietPresentation.count, quietPresentation.visible, slide]);
 
   const syncStudentReminderNotifications = useCallback(async () => {
     if (!isAuthenticated || role !== "student" || studentReminderInFlightRef.current) return;
@@ -789,58 +712,47 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
       ]);
 
       if (!mountedRef.current) return;
-      setUnreadCount(Math.max(0, Number(unread?.count ?? 0)));
+      const nextUnreadCount = Math.max(0, Number(unread?.count ?? 0));
+      setUnreadCount(nextUnreadCount);
 
       const rows = Array.isArray(listResponse.data) ? listResponse.data : [];
       if (!hydratedRef.current) {
-        const urgentUnread = rows
-          .filter(shouldSurfaceNotificationOnHydration)
-          .sort((left, right) => {
-            const leftTs = Date.parse(left.createdAt);
-            const rightTs = Date.parse(right.createdAt);
-            return leftTs - rightTs;
-          })
-          .slice(-3);
+        const unreadRows = rows.filter(shouldSurfaceNotificationOnHydration);
+        const hydrationCount = Math.max(nextUnreadCount, unreadRows.length);
 
         rows.forEach((row) => {
           markNotificationSeen(seenIdsRef.current, row);
         });
         hydratedRef.current = true;
-        queueRef.current.push(...urgentUnread);
-        tryShowNext();
+        if (hydrationCount > 0) {
+          setQuietPresentation((current) =>
+            addQuietNotifications(current, hydrationCount),
+          );
+        }
         return;
       }
 
       const fresh = rows.filter((row) => !row.isRead && !hasSeenNotification(seenIdsRef.current, row));
       if (fresh.length === 0) return;
 
-      const orderedFresh = [...fresh].sort((left, right) => {
-        const leftTs = Date.parse(left.createdAt);
-        const rightTs = Date.parse(right.createdAt);
-        return leftTs - rightTs;
-      });
-
-      orderedFresh.forEach((row) => {
+      fresh.forEach((row) => {
         markNotificationSeen(seenIdsRef.current, row);
-        queueRef.current.push(row);
       });
-      tryShowNext();
+      setQuietPresentation((current) => addQuietNotifications(current, fresh.length));
     } catch {
       // Keep UI resilient and skip transient notification failures.
     } finally {
       pollInFlightRef.current = false;
     }
-  }, [isAuthenticated, tryShowNext, user?.id]);
+  }, [isAuthenticated, user?.id]);
 
   useEffect(() => {
     if (!isAuthenticated || !user?.id) {
       seenIdsRef.current = new Set();
-      queueRef.current = [];
       hydratedRef.current = false;
-      activeRef.current = null;
       scheduledNativeIdsRef.current = new Set();
       pendingNativeOpenRef.current = null;
-      setActiveNotification(null);
+      setQuietPresentation(dismissQuietNotifications());
       setUnreadCount(0);
       if (pollTimerRef.current) {
         clearInterval(pollTimerRef.current);
@@ -993,20 +905,13 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
   }, [isAuthenticated, unreadCount]);
 
   useEffect(() => {
-    if (!activeNotification) {
+    if (!quietPresentation.visible) {
       const pending = pendingNativeOpenRef.current;
       if (pending && navigateToNotification(pending, role)) {
         pendingNativeOpenRef.current = null;
       }
     }
-  }, [activeNotification, role]);
-
-  const interventionAlert = activeNotification ? isInterventionAlertNotification(activeNotification) : false;
-  const message = activeNotification ? messageFromNotification(activeNotification) : "";
-  const pulseTranslate = pulse.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -4],
-  });
+  }, [quietPresentation.visible, role]);
 
   const value = useMemo(
     () => ({
@@ -1020,7 +925,7 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
     <LiveNotificationContext.Provider value={value}>
       <View style={{ flex: 1 }}>
         {children}
-        {activeNotification ? (
+        {quietPresentation.visible ? (
           <View
             pointerEvents="box-none"
             style={{
@@ -1033,102 +938,14 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
             }}
           >
             <Animated.View
-              style={[
-                {
-                  borderRadius: radii.xxl,
-                  borderWidth: 1,
-                  borderColor: interventionAlert ? hexToRgba("#BE123C", 0.44) : hexToRgba("#2563EB", 0.34),
-                  backgroundColor: interventionAlert ? "#FFF4F4" : "#EFF6FF",
-                  paddingHorizontal: 14,
-                  paddingVertical: 12,
-                  opacity,
-                  elevation: 22,
-                  transform: [{ translateY: slide }],
-                },
-                shadow.card,
-              ]}
+              style={{ opacity, transform: [{ translateY: slide }] }}
             >
-              <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
-                <View style={{ flex: 1, paddingRight: 78 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    <View
-                      style={{
-                        borderRadius: 999,
-                        backgroundColor: interventionAlert ? hexToRgba("#BE123C", 0.13) : hexToRgba("#4A8CF5", 0.12),
-                        paddingHorizontal: 10,
-                        paddingVertical: 4,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontSize: 10,
-                          fontWeight: "900",
-                          letterSpacing: 0.4,
-                          textTransform: "uppercase",
-                          color: interventionAlert ? "#9F1239" : colors.blueDeep,
-                        }}
-                      >
-                        {interventionAlert ? "Intervention alert" : "Nexora push"}
-                      </Text>
-                    </View>
-                    {unreadCount > 0 ? (
-                      <Text style={{ fontSize: 11, fontWeight: "800", color: colors.textSecondary }}>
-                        {unreadCount > 99 ? "99+" : unreadCount} unread
-                      </Text>
-                    ) : null}
-                  </View>
-
-                  <Text style={{ marginTop: 8, fontSize: 14, fontWeight: "900", color: colors.text }}>
-                    {activeNotification.title}
-                  </Text>
-                  <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>{message}</Text>
-
-                  <View style={{ marginTop: 11, flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    <Pressable
-                      onPress={dismissActive}
-                      style={{
-                        borderRadius: 14,
-                        borderWidth: 1,
-                        borderColor: hexToRgba("#0F172A", 0.16),
-                        backgroundColor: colors.white,
-                        paddingHorizontal: 10,
-                        paddingVertical: 8,
-                      }}
-                    >
-                      <Text style={{ fontSize: 11, fontWeight: "800", color: colors.text }}>Dismiss</Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={() => openNotification(activeNotification)}
-                      style={{
-                        borderRadius: 14,
-                        backgroundColor: interventionAlert ? "#BE123C" : "#2563EB",
-                        paddingHorizontal: 10,
-                        paddingVertical: 8,
-                      }}
-                    >
-                      <Text style={{ fontSize: 11, fontWeight: "800", color: colors.white }}>
-                        View now
-                      </Text>
-                    </Pressable>
-                  </View>
-                </View>
-
-                <Animated.View
-                  pointerEvents="none"
-                  style={{
-                    position: "absolute",
-                    right: 4,
-                    bottom: -3,
-                    transform: [{ translateY: pulseTranslate }],
-                  }}
-                >
-                  <Image
-                    source={interventionAlert ? interventionCharacterSource() : notificationCharacterSource()}
-                    resizeMode="contain"
-                    style={{ width: 84, height: 84, opacity: interventionAlert ? 0.95 : 0.9 }}
-                  />
-                </Animated.View>
-              </View>
+              <QuietNotificationBanner
+                count={Math.max(unreadCount, quietPresentation.count)}
+                hasUnread={unreadCount > 0}
+                onDismiss={dismissActive}
+                onView={openNotificationCenter}
+              />
             </Animated.View>
           </View>
         ) : null}

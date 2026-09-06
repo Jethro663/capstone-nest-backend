@@ -1,12 +1,12 @@
 {
   "platform": "android",
-  "versionCode": 21,
-  "minSupportedVersionCode": 21,
-  "nativeVersion": "0.1.20",
-  "otaRuntimeVersion": "0.1.20",
+  "versionCode": 22,
+  "minSupportedVersionCode": 22,
+  "nativeVersion": "0.1.21",
+  "otaRuntimeVersion": "0.1.21",
   "apkDownloadUrl": "https://next-frontend-v2-production.up.railway.app/downloads/nexora-student-mobile-release.apk",
   "requiresFullApk": true,
-  "releaseNotes": "Android now requires the latest published app before sign-in or use. Update checks, download verification, and installation recovery keep access blocked until the installed build is supported. iOS remains exempt from Android APK updates.",
-  "apkSha256": "8f885bc041b60e136d75fc30e42a2619518ed19e58fdf0a00845f34cee05dd3c",
-  "apkSizeBytes": 40963903
+  "releaseNotes": "Quiet notification summaries now keep web and mobile updates compact and uncluttered.",
+  "apkSha256": "572ccabb1641ac7dd17699cebf67e34b67d34519c45cc812a7107b8c6c033e03",
+  "apkSizeBytes": 40962827
 }
