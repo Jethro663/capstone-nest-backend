@@ -35,4 +35,4 @@ The execution record must capture the pushed development revision, exact CI run,
 
 - [x] 6.1 Run focused and full backend, web and mobile checks plus native flow evidence.
 - [x] 6.2 Build the next production Android APK, validate package/version/ABI/signature/alignment/API target, prepare and verify its delivery manifest.
-- [ ] 6.3 Review the complete scoped diff, commit and push `developement`, observe exact CI/Railway success, verify live health/APK bytes and register/read back the Android update contract.
+- [x] 6.3 Review the complete scoped diff, commit and push `developement`, observe exact CI/Railway success, verify live health/APK bytes and register/read back the Android update contract.
