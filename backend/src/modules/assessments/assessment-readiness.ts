@@ -21,6 +21,9 @@ export type PublishableAssessment = {
   allowedUploadExtensions?: string[] | null;
   allowedUploadMimeTypes?: string[] | null;
   maxUploadSizeBytes?: number | null;
+  quarter?: string | null;
+  classRecordCategory?: string | null;
+  classRecordPlacement?: unknown;
 };
 
 export function hasRichTextContent(value?: string | null): boolean {
@@ -39,6 +42,26 @@ export function assessmentPublicationIssues(
   const issues: PublicationIssue[] = [];
   const add = (field: string, message: string) =>
     issues.push({ field, message });
+  if (!assessment.quarter) add('quarter', 'Choose an academic period');
+  if (!assessment.classRecordCategory)
+    add('classRecordCategory', 'Choose a class-record category');
+  const placement = assessment.classRecordPlacement as
+    | {
+        itemId?: string | null;
+        gradingPeriod?: string;
+        category?: string;
+      }
+    | null
+    | undefined;
+  if (
+    !placement?.itemId ||
+    placement.gradingPeriod !== assessment.quarter ||
+    placement.category !== assessment.classRecordCategory
+  )
+    add(
+      'classRecordItemId',
+      'Place this assignment in a class-record slot before publishing',
+    );
   if (
     !assessment.title?.trim() ||
     assessment.title.trim() === 'Untitled assessment'

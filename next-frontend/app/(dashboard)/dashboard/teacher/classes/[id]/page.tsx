@@ -85,6 +85,7 @@ import { AiDraftJobsPanel } from "@/components/teacher/assessment/AiDraftJobsPan
 import { useTeacherClassRecord } from "@/hooks/use-teacher-class-record";
 import { useAiAvailability } from "@/hooks/use-ai-availability";
 import { useAuth } from "@/providers/AuthProvider";
+import { NewAssignmentWizard } from '@/components/teacher/assessment/NewAssignmentWizard';
 import { normalizeRichText } from "@/lib/rich-text";
 import { upsertTrackedExtractionNotification } from "@/lib/extraction-notification-tracker";
 import {
@@ -1443,7 +1444,7 @@ export default function TeacherClassDetailPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const aiAvailability = useAiAvailability();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const classIdParam = params.id;
   const classId = Array.isArray(classIdParam)
     ? classIdParam[0]
@@ -1517,10 +1518,8 @@ export default function TeacherClassDetailPage() {
   const [assignmentFilter, setAssignmentFilter] =
     useState<AssignmentFilter>("all");
   const [busyAssessmentId, setBusyAssessmentId] = useState<string | null>(null);
-  const [creatingAssessment, setCreatingAssessment] = useState(false);
-  const [newAssessmentPeriod, setNewAssessmentPeriod] = useState<
-    import("@/utils/constants").GradingPeriod | ""
-  >("");
+  const [showAssignmentWizard, setShowAssignmentWizard] = useState(false);
+  const newAssignmentButtonRef = useRef<HTMLButtonElement>(null);
   const [selectedAssessmentIds, setSelectedAssessmentIds] = useState<string[]>(
     [],
   );
@@ -2385,23 +2384,6 @@ export default function TeacherClassDetailPage() {
       toast.error(message);
     } finally {
       setSavingModuleDesign(false);
-    }
-  };
-
-  const handleCreateAssessment = async () => {
-    if (creatingAssessment) return;
-    try {
-      setCreatingAssessment(true);
-      const response = await assessmentService.createDraft({
-        classId,
-        quarter: newAssessmentPeriod || undefined,
-      });
-      toast.success("Assessment created");
-      router.push(`/dashboard/teacher/assessments/${response.data.id}/edit`);
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, "Failed to create assessment"));
-    } finally {
-      setCreatingAssessment(false);
     }
   };
 
@@ -3381,30 +3363,14 @@ export default function TeacherClassDetailPage() {
                   href={`/dashboard/teacher/classes/${classId}/ai-draft`}
                   className="teacher-class-workspace__outline"
                 >
-                  AI Draft
+                  Create with AI
                 </Link>
-                <select
-                  aria-label="New assessment grading period"
-                  className="h-10 rounded-md border bg-white px-3 text-sm"
-                  value={newAssessmentPeriod}
-                  onChange={(e) =>
-                    setNewAssessmentPeriod(
-                      e.target.value as typeof newAssessmentPeriod,
-                    )
-                  }
-                >
-                  <option value="">Active period (server default)</option>
-                  {classRecordState.policy?.periods.map((period) => (
-                    <option key={period.key} value={period.key}>
-                      {period.label}
-                    </option>
-                  ))}
-                </select>
                 <Button
                   type="button"
                   className="teacher-class-workspace__solid"
-                  onClick={() => void handleCreateAssessment()}
-                  disabled={creatingAssessment}
+                  onClick={() => setShowAssignmentWizard(true)}
+                  ref={newAssignmentButtonRef}
+                  disabled={!user?.id}
                 >
                   <Plus className="h-4 w-4" />
                   New Assignment
@@ -3413,6 +3379,17 @@ export default function TeacherClassDetailPage() {
             </div>
 
             <AiDraftJobsPanel classId={classId} />
+            {showAssignmentWizard && user?.id && <NewAssignmentWizard
+              classId={classId} actorId={user.id}
+              onClose={() => {
+                setShowAssignmentWizard(false);
+                requestAnimationFrame(() => newAssignmentButtonRef.current?.focus());
+              }}
+              onCreated={(id) => {
+                setShowAssignmentWizard(false);
+                router.push(`/dashboard/teacher/assessments/${id}/edit?created=1`);
+              }}
+            />}
 
             <div className="teacher-class-workspace__chips">
               {ASSIGNMENT_FILTERS.map((filter) => (

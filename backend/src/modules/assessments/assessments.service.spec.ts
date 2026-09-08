@@ -794,8 +794,18 @@ describe('AssessmentsService', () => {
     });
 
     it('should allow publish when assessment has valid questions', async () => {
+      db.query.classRecordItems.findFirst.mockResolvedValue({
+        id: 'slot',
+        itemOrder: 1,
+        title: 'Test Quiz',
+        maxScore: '5',
+        scores: [],
+        category: { name: 'Written Works' },
+        classRecord: { id: 'record', classId: CLASS_ID, gradingPeriod: 'Q1' },
+      });
       const publishableDraft = {
         ...MOCK_PUBLISHED_ASSESSMENT,
+        classRecordCategory: 'written_work',
         isPublished: false,
       };
       db.query.assessments.findFirst
@@ -1091,7 +1101,11 @@ describe('AssessmentsService', () => {
           } as any,
           { userId: 'teacher-1', roles: ['teacher'] },
         ),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toMatchObject({
+        response: expect.objectContaining({
+          code: 'ASSESSMENT_SLOT_UNAVAILABLE',
+        }),
+      });
     });
   });
 

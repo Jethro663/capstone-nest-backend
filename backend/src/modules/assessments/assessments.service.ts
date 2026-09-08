@@ -22,6 +22,7 @@ import {
 } from '../academic-state/academic-policy.service';
 import { ClassRecordService } from '../class-record/class-record.service';
 import { assessmentAcademicCapabilities } from '../academic-state/assessment-academic-capabilities';
+import { getDefaultAcademicPolicy } from '../academic-state/academic-policy';
 import {
   assessments,
   assessmentQuestions,
@@ -37,6 +38,8 @@ import {
   users,
   enrollments,
   uploadedFiles,
+  academicYearPolicies,
+  academicSystemStates,
 } from '../../drizzle/schema';
 import {
   CreateAssessmentDto,
@@ -257,6 +260,93 @@ export class AssessmentsService {
 
   private get db() {
     return this.databaseService.db;
+  }
+
+  async getCreationContext(classId: string, currentUser: CurrentUserLike) {
+    const { userId, role } = this.assertTeacherClassOwnership(
+      null,
+      currentUser,
+      'You can only create assessments for your own classes',
+    );
+    if (role !== 'teacher' && role !== 'admin')
+      throw new ForbiddenException(
+        'Only teachers and administrators can create assignments',
+      );
+    const cls = await this.db.query.classes.findFirst({
+      where: eq(classes.id, classId),
+    });
+    if (!cls) throw new NotFoundException('Class not found');
+    if (role === 'teacher' && cls.teacherId !== userId)
+      throw new ForbiddenException(
+        'You can only create assessments for your own classes',
+      );
+    // Do not use initializing policy helpers: opening setup must perform no writes.
+    const [snapshot, state, records] = await Promise.all([
+      this.db.query.academicYearPolicies.findFirst({
+        where: eq(academicYearPolicies.schoolYear, cls.schoolYear),
+      }),
+      this.db.query.academicSystemStates.findFirst({
+        orderBy: [desc(academicSystemStates.updatedAt)],
+      }),
+      this.db.query.classRecords.findMany({
+        where: eq(classRecords.classId, classId),
+      }),
+    ]);
+    const policy = snapshot?.policy ?? getDefaultAcademicPolicy(cls.schoolYear);
+    const now = new Date();
+    const start =
+      now.getMonth() >= 5 ? now.getFullYear() : now.getFullYear() - 1;
+    const activeSchoolYear = state?.schoolYear ?? `${start}-${start + 1}`;
+    const activeQuarter = state?.quarter ?? 'Q1';
+    const periods = await Promise.all(
+      policy.periods.map(async (period) => {
+        const record = records.find(
+          (entry) => entry.gradingPeriod === period.key,
+        );
+        const capabilities = assessmentAcademicCapabilities({
+          policy,
+          schoolYear: cls.schoolYear,
+          activeSchoolYear,
+          quarter: period.key,
+          activeQuarter,
+          classActive: cls.isActive,
+          workbookStatus: record?.status,
+          published: false,
+        });
+        return {
+          ...period,
+          canPrepare: capabilities.canPrepare,
+          canRelease: capabilities.canRelease,
+          readOnlyReason: capabilities.readOnlyReason,
+          workbook: record
+            ? await this.classRecordService.getSlotOverview(
+                classId,
+                period.key,
+                userId,
+                [role],
+              )
+            : null,
+        };
+      }),
+    );
+    return {
+      classId,
+      schoolYear: cls.schoolYear,
+      defaultPeriod:
+        (periods.find((p) => p.canRelease) ?? periods.find((p) => p.canPrepare))
+          ?.key ?? null,
+      periods,
+      categories: [
+        { key: 'written_work', label: 'Written Work' },
+        { key: 'performance_task', label: 'Performance Task' },
+        {
+          key: 'quarterly_assessment',
+          label: policy.examComponents.length
+            ? 'Examination'
+            : 'Quarterly Assessment',
+        },
+      ],
+    };
   }
 
   private scoreContract(
@@ -882,33 +972,38 @@ export class AssessmentsService {
             );
 
     if (params.classRecordItemId && !targetItem) {
-      throw new BadRequestException(
-        'The selected class record slot is not available in this category',
-      );
+      throw new ConflictException({
+        code: 'ASSESSMENT_SLOT_UNAVAILABLE',
+        message:
+          'The selected class record slot is not available in this category',
+      });
     }
 
     if (!targetItem) {
-      throw new BadRequestException(
-        `Recording ${categoryName} is already full for ${params.quarter}.`,
-      );
+      throw new ConflictException({
+        code: 'ASSESSMENT_SLOT_UNAVAILABLE',
+        message: `Recording ${categoryName} is already full for ${params.quarter}.`,
+      });
     }
 
     if (
       targetItem.assessmentId &&
       targetItem.assessmentId !== params.assessmentId
     ) {
-      throw new BadRequestException(
-        'The selected slot is already occupied by another assessment',
-      );
+      throw new ConflictException({
+        code: 'ASSESSMENT_SLOT_UNAVAILABLE',
+        message: 'The selected slot is already occupied by another assessment',
+      });
     }
 
     if (
       !targetItem.assessmentId &&
       (targetItem.scores.length > 0 || Number(targetItem.maxScore) > 0)
     ) {
-      throw new BadRequestException(
-        'The selected slot already contains manual class record data',
-      );
+      throw new ConflictException({
+        code: 'ASSESSMENT_SLOT_UNAVAILABLE',
+        message: 'The selected slot already contains manual class record data',
+      });
     }
 
     const displacedLinkedItems = linkedItems.filter(
@@ -2300,7 +2395,24 @@ export class AssessmentsService {
           quarter: updateAssessmentDto.quarter ?? existingAssessment.quarter,
         });
       } else {
-        await this.validateForPublish(assessmentId);
+        // Validate the proposed content now. Placement is validated after the
+        // atomic synchronization below, allowing setup and publication together.
+        const errors = assessmentPublicationIssues({
+          ...existingAssessment,
+          ...updateAssessmentDto,
+        })
+          .filter(
+            (issue) =>
+              !['quarter', 'classRecordCategory', 'classRecordItemId'].includes(
+                issue.field,
+              ),
+          )
+          .map((issue) => issue.message);
+        if (errors.length)
+          throw new BadRequestException({
+            message: 'Assessment cannot be published',
+            errors,
+          });
       }
     }
 
@@ -2461,6 +2573,16 @@ export class AssessmentsService {
         quarter: updated.quarter ?? undefined,
         classRecordItemId: updateAssessmentDto.classRecordItemId,
       });
+    }
+
+    if (
+      !existingAssessment.isCoreTemplateAsset &&
+      (updateAssessmentDto.isPublished === true ||
+        (wasPublished &&
+          placementChanged &&
+          updateAssessmentDto.isPublished !== false))
+    ) {
+      await this.validateForPublish(updated.id);
     }
 
     const assessment = await this.getAssessmentById(updated.id);
@@ -4901,8 +5023,9 @@ export class AssessmentsService {
     const scores = gradedAttempts.map((attempt) =>
       boundPercentage(attempt.score),
     );
-    const passedCount = gradedAttempts.filter((attempt) => attempt.passed)
-      .length;
+    const passedCount = gradedAttempts.filter(
+      (attempt) => attempt.passed,
+    ).length;
     const timesWithValues = submittedAttempts
       .map((a) => a.timeSpentSeconds)
       .filter((t): t is number => t != null && t > 0);

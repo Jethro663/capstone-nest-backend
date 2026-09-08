@@ -3,6 +3,8 @@ import {
   aiGenerationJobs,
   aiGenerationOutputs,
   classRecords,
+  classRecordCategories,
+  classRecordItems,
 } from '../src/drizzle/schema';
 import {
   AssessmentType,
@@ -324,8 +326,32 @@ describe('assessment editor PostgreSQL transactions', () => {
   });
 
   it('requires explicitly moving published work to draft before unfinished edits', async () => {
+    const [record] = await database.db
+      .insert(classRecords)
+      .values({
+        classId,
+        teacherId: actor.userId,
+        gradingPeriod: 'Q1',
+      })
+      .returning();
+    const [category] = await database.db
+      .insert(classRecordCategories)
+      .values({
+        classRecordId: record.id,
+        name: 'Written Works',
+        weightPercentage: '40',
+      })
+      .returning();
+    await database.db.insert(classRecordItems).values({
+      classRecordId: record.id,
+      categoryId: category.id,
+      title: 'WW1',
+      maxScore: '0',
+      itemOrder: 1,
+    });
     const dto = create();
     dto.action = 'publish';
+    dto.settings.classRecordCategory = 'written_work';
     dto.questions![0].content = '<p>Choose one</p>';
     dto.questions![0].options = [
       { text: 'Yes', isCorrect: true, order: 1 },

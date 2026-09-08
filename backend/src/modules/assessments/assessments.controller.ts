@@ -112,6 +112,19 @@ export class AssessmentsController {
     };
   }
 
+  @Get('class/:classId/creation-context')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  async getCreationContext(
+    @Param('classId') classId: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    return {
+      success: true,
+      message: 'Assignment setup retrieved',
+      data: await this.assessmentsService.getCreationContext(classId, user),
+    };
+  }
+
   @Put(':id/editor')
   @Roles(RoleName.Admin, RoleName.Teacher)
   async saveEditor(

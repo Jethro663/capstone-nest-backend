@@ -3859,6 +3859,21 @@ export default function AssessmentEditorPage() {
           </div>
         </div>
       </header>
+      {searchParams.get('created') === '1' && !assessment.isPublished && (
+        <section role="status" aria-label="Assignment created" className="border-b border-border bg-muted px-6 py-4 text-sm">
+          <p className="font-semibold">{assessment.type === 'file_upload' ? 'File upload assignment' : 'Question assignment'} draft created</p>
+          <p className="mt-1">
+            {assessment.classRecordPlacement?.itemId
+              ? `${assessment.academicCapabilities?.periodLabel ?? assessment.quarter} → ${assessment.classRecordPlacement.category.replaceAll('_', ' ')} → Slot ${assessment.classRecordPlacement.order}`
+              : 'Class-record placement is still needed before publishing.'}
+            {' '}Students cannot see this draft.
+          </p>
+          <p className="mt-1 text-muted-foreground">{assessment.dueDate ? `Due ${new Date(assessment.dueDate).toLocaleString('en-PH', { timeZone: 'Asia/Manila' })} · Asia/Manila` : 'No due date'}{assessment.type === 'quiz' ? ` · ${assessment.maxAttempts ?? 1} attempt(s)` : ' · Latest submission is graded'}</p>
+          <button type="button" className="mt-2 font-medium text-primary underline underline-offset-4" onClick={() => sectionRefs.current.content?.focus()}>
+            {assessment.type === 'file_upload' ? 'Add upload instructions' : 'Start adding questions'}
+          </button>
+        </section>
+      )}
       {releaseBlockReason && (
         <p id="assessment-release-status" role="status" aria-label="Assessment release status" className="border-b px-6 py-3 text-sm">
           {releaseBlockReason}

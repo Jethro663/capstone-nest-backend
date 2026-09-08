@@ -3,6 +3,7 @@ import type {
   AssessmentEditorResult,
 } from "@/types/assessment";
 import { api } from "@/lib/api-client";
+import type { AssignmentCreationContext } from '@/types/assignment-creation';
 import type {
   Assessment,
   AssessmentsByClassResponse,
@@ -65,6 +66,36 @@ function openBlobInNewTab(blob: Blob) {
 }
 
 export const assessmentService = {
+  async getCreationContext(classId: string): Promise<AssignmentCreationContext> {
+    const { data } = await api.get(`/assessments/class/${classId}/creation-context`);
+    return data.data;
+  },
+  getPendingCreation(actorId: string, classId: string): SaveAssessmentEditorInput | null {
+    const raw = window.localStorage.getItem(`assignment-creation:v1:${actorId}:${classId}`);
+    if (!raw) return null;
+    const request = JSON.parse(raw) as SaveAssessmentEditorInput;
+    if (request.classId !== classId || request.action !== 'save' || !request.mutationId || !request.settings)
+      throw new Error('Saved assignment setup could not be read. Please contact support before creating another draft.');
+    return request;
+  },
+  async createFromSetup(actorId: string, request: SaveAssessmentEditorInput): Promise<AssessmentEditorResult> {
+    if (!request.classId) throw new Error('Class is required');
+    const key = `assignment-creation:v1:${actorId}:${request.classId}`;
+    const pending = assessmentService.getPendingCreation(actorId, request.classId);
+    if (pending && JSON.stringify(pending) !== JSON.stringify(request))
+      throw new Error('Resolve the previous creation request before starting another assignment.');
+    // Save before sending: if storage fails, no server request is made.
+    window.localStorage.setItem(key, JSON.stringify(request));
+    try {
+      const response = await assessmentService.saveEditor(undefined, request);
+      window.localStorage.removeItem(key);
+      return response.data;
+    } catch (error) {
+      const status = (error as { response?: { status?: number } }).response?.status;
+      if (status && status >= 400 && status < 500) window.localStorage.removeItem(key);
+      throw error;
+    }
+  },
   async saveEditor(
     id: string | undefined,
     input: SaveAssessmentEditorInput,

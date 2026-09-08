@@ -15,6 +15,13 @@ describe('assessment publication content validation', () => {
       title: 'Draft',
       type: 'quiz',
       passingScore: 60,
+      quarter: 'Q1',
+      classRecordCategory: 'written_work',
+      classRecordPlacement: {
+        itemId: 'slot',
+        gradingPeriod: 'Q1',
+        category: 'written_work',
+      },
       questions: [{ type: 'multiple_choice', content, points: 1, options }],
     });
     return (
