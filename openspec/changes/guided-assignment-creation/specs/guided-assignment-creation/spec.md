@@ -46,3 +46,29 @@ Question assignments SHALL expose max attempts. File-upload assignments SHALL ex
 #### Scenario: File-upload creation
 - **WHEN** a file-upload draft is created
 - **THEN** it opens with saved settings and access to upload instructions, and students cannot see it until publication
+
+### Requirement: Immutable format after creation
+The selected assessment format SHALL be fixed by the first durable creation. Web and mobile editors SHALL expose no format-changing control, and the backend SHALL reject a different type from every update path while accepting unchanged legacy submissions.
+
+#### Scenario: Attempt to change an existing format
+- **WHEN** any client submits a different type for an existing assessment
+- **THEN** the backend rejects the mutation with an actionable immutable-format error and preserves the assessment
+
+#### Scenario: Edit an existing assessment
+- **WHEN** a teacher opens Settings after creation
+- **THEN** no assessment-format selector is available and ordinary settings remain editable
+
+### Requirement: Native mobile creation parity
+Every mobile New Assessment entry point SHALL open a native three-step modal matching the web decisions: question or file-upload format, authoritative class-record placement, then name and schedule. It SHALL support Back, Skip, no-write dismissal, question-only attempts, exact-slot creation, reduced motion and small screens.
+
+#### Scenario: Complete mobile setup
+- **WHEN** a teacher completes the native wizard
+- **THEN** one unpublished assessment is created atomically and the editor opens with backend-derived confirmation
+
+#### Scenario: Resume an uncertain mobile creation
+- **WHEN** the app loses or cannot classify the creation response
+- **THEN** reopening presents only a retry of the exact actor-and-class-scoped request and cannot create a different draft
+
+#### Scenario: Mobile slot race
+- **WHEN** another assessment takes the proposed slot before mobile submission
+- **THEN** mobile refreshes context, retains other inputs, returns to placement and does not create a partial assessment

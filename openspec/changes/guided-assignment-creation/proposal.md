@@ -9,6 +9,8 @@ New Assignment currently saves an empty quiz before teachers choose its format o
 - Provide read-only creation context and use the existing atomic editor save with exact retry identity.
 - Require valid class-record placement for publication; preserve incomplete draft saves.
 - Explain file-upload revisions without offering an ineffective attempt limit.
+- Make an assessment's selected format immutable after its first durable save.
+- Bring the same guided creation, exact-slot selection, skip and retry behavior to the native mobile app.
 
 ## Capabilities
 
@@ -20,4 +22,4 @@ None.
 
 ## Impact
 
-Backend assessments context, readiness and placement errors; frontend class assignments, service, wizard and editor confirmation. Verify mobile compatibility with shared readiness errors. No planned schema or dependency changes. Package Android only if mobile build inputs change.
+Backend assessment mutation rules; web and mobile class/assessment entry points, services, guided creation and editor confirmation. No schema or dependency changes. Mobile source changes require a new verified Android package and release manifest.
