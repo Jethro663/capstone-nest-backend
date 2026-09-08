@@ -11,6 +11,7 @@ import {
   modernAcademic,
   skillStream,
 } from "../../theme/tokens";
+import { teacherTheme } from "../../theme/teacher";
 
 type IconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
 
@@ -140,6 +141,7 @@ export function BottomTabBar({
   const insets = useSafeAreaInsets();
   const activeRouteKey = state.routes[state.index]?.key;
   const tabOrder = roleTabOrder[role];
+  const activeColor = role === "teacher" ? teacherTheme.red : colors.primary;
 
   const visibleRoutes = state.routes.filter((route) => {
     const routeName = route.name as keyof MainTabParamList;
@@ -271,7 +273,7 @@ export function BottomTabBar({
               <MaterialCommunityIcons
                 name={focused ? config.activeIcon : config.inactiveIcon}
                 size={20}
-                color={focused ? colors.primary : colors.textSecondary}
+                color={focused ? activeColor : colors.textSecondary}
               />
               <Text
                 numberOfLines={1}
@@ -279,7 +281,7 @@ export function BottomTabBar({
                 style={{
                   fontSize: 9,
                   fontWeight: focused ? "800" : "600",
-                  color: focused ? colors.primary : colors.textSecondary,
+                  color: focused ? activeColor : colors.textSecondary,
                 }}
               >
                 {config.label}

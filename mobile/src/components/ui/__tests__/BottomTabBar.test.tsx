@@ -144,4 +144,13 @@ describe("BottomTabBar role layouts", () => {
     expect(navigate).toHaveBeenCalledTimes(1);
     expect(navigate).toHaveBeenCalledWith("Assessments");
   });
+
+  it("uses GABHS red for the active teacher destination", () => {
+    const { renderer } = renderBar("teacher", 1);
+    const activeIcon = renderer.root
+      .findAll((node) => node.type === "MaterialCommunityIcons")
+      .find((node) => node.props.name === "clipboard-text");
+
+    expect(activeIcon?.props.color).toBe("#DC2626");
+  });
 });

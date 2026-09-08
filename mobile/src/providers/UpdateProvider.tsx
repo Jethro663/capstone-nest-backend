@@ -449,6 +449,8 @@ function AndroidUpdateProvider({ children }: PropsWithChildren) {
     state.status === "checking" ||
     state.status === "idle" ||
     state.failureStage === "check";
+  const isAdmittedRecheck =
+    hasAdmitted && state.status === "checking" && state.failureStage !== "check";
   const clientVersionInfo = getClientVersionInfo();
   const installedVersionLabel = `Installed v${clientVersionInfo.currentNativeVersion} (build ${clientVersionInfo.currentVersionCode})`;
   const availableVersionLabel = state.decision
@@ -457,23 +459,65 @@ function AndroidUpdateProvider({ children }: PropsWithChildren) {
 
   return (
     <UpdateContext.Provider value={value}>
-      {hasAdmitted && (
-        <View
-          testID="update-gated-content"
-          style={{ flex: 1 }}
-          pointerEvents={state.access === "allowed" ? "auto" : "none"}
-          accessibilityElementsHidden={state.access !== "allowed"}
-          importantForAccessibility={
-            state.access === "allowed" ? "auto" : "no-hide-descendants"
-          }
-        >
-          {children}
-        </View>
-      )}
+      <View style={{ flex: 1 }}>
+        {hasAdmitted && (
+          <View
+            testID="update-gated-content"
+            style={{ flex: 1 }}
+            pointerEvents={state.access === "allowed" ? "auto" : "none"}
+            accessibilityElementsHidden={state.access !== "allowed"}
+            importantForAccessibility={
+              state.access === "allowed" ? "auto" : "no-hide-descendants"
+            }
+          >
+            {children}
+          </View>
+        )}
+        {isAdmittedRecheck ? (
+          <View
+            testID="admitted-update-recheck"
+            accessibilityViewIsModal
+            accessibilityLiveRegion="polite"
+            style={{
+              position: "absolute",
+              top: 0,
+              right: 0,
+              bottom: 0,
+              left: 0,
+              backgroundColor: "rgba(15,23,42,0.16)",
+              alignItems: "center",
+              paddingHorizontal: 16,
+              paddingTop: 16,
+            }}
+          >
+            <View
+              style={{
+                width: "100%",
+                maxWidth: 380,
+                minHeight: 48,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: "rgba(220,38,38,0.24)",
+                backgroundColor: colors.white,
+                paddingHorizontal: 14,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                ...shadow.card,
+              }}
+            >
+              <ActivityIndicator size="small" color="#DC2626" />
+              <Text style={{ flex: 1, fontSize: 13, fontWeight: "700", color: colors.text }}>
+                Verifying app version…
+              </Text>
+            </View>
+          </View>
+        ) : null}
+      </View>
       <Modal
         animationType="fade"
         presentationStyle="fullScreen"
-        visible={shouldShowModal}
+        visible={shouldShowModal && !isAdmittedRecheck}
         onRequestClose={() => {
           if (!isForce) {
             dismissOptionalUpdate();

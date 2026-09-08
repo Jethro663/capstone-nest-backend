@@ -14,11 +14,10 @@ import { normalizePhilippinePhone } from "../utils/studentIdentity";
 import type { MainTabParamList } from "../navigation/types";
 import { useAuth } from "../providers/AuthProvider";
 import {
+  TeacherAccordionSection,
   TeacherActionButton,
   TeacherInlineField,
-  TeacherPanel,
   TeacherScreen,
-  TeacherStats,
   teacherTheme as theme,
 } from "../components/teacher/TeacherMobilePrimitives";
 import { PasswordChangeForm } from "../components/account/PasswordChangeForm";
@@ -45,6 +44,9 @@ export function TeacherProfileScreen(_: Props) {
   const [department, setDepartment] = useState("");
   const [specialization, setSpecialization] = useState("");
   const [employeeId, setEmployeeId] = useState("");
+  const [expandedSection, setExpandedSection] = useState<
+    "contact" | "professional" | "security" | null
+  >("contact");
 
   useEffect(() => {
     setPhone(profile?.phone ?? profile?.contactNumber ?? "");
@@ -121,16 +123,20 @@ export function TeacherProfileScreen(_: Props) {
         void profileQuery.refetch();
       }}
     >
-      <TeacherStats
-        items={[
-          { label: "Role", value: "Teacher", tone: "red" },
-          { label: "Status", value: user?.status || "ACTIVE", tone: "green" },
-          { label: "Department", value: profile?.department || "--", tone: "blue" },
-        ]}
-      />
-
-      <TeacherPanel title="Account" subtitle={user?.email || "Teacher account"}>
-        <View style={{ paddingHorizontal: 14, paddingBottom: 14, alignItems: "center" }}>
+      <View
+        style={{
+          marginHorizontal: 16,
+          marginTop: 10,
+          marginBottom: 4,
+          borderRadius: 18,
+          borderWidth: 1,
+          borderColor: theme.border,
+          backgroundColor: theme.surface,
+          overflow: "hidden",
+        }}
+      >
+        <View style={{ height: 5, backgroundColor: theme.red }} />
+        <View style={{ paddingHorizontal: 18, paddingVertical: 18, alignItems: "center" }}>
           <View
             style={{
               width: 84,
@@ -141,6 +147,8 @@ export function TeacherProfileScreen(_: Props) {
               alignItems: "center",
               justifyContent: "center",
               marginTop: 8,
+              borderWidth: 3,
+              borderColor: theme.redSoft,
             }}
           >
             {avatarUri ? (
@@ -152,36 +160,103 @@ export function TeacherProfileScreen(_: Props) {
           <Text style={{ marginTop: 12, fontSize: 16, fontWeight: "800", color: theme.text }}>{fullName}</Text>
           <Text style={{ marginTop: 4, fontSize: 12, color: theme.muted }}>{user?.email}</Text>
           <View style={{ marginTop: 12 }}>
-            <TeacherActionButton label="Change photo" icon="image-edit-outline" tone="blue" onPress={() => void uploadAvatar()} disabled={avatarMutation.isPending} />
+            <TeacherActionButton label="Change photo" icon="image-edit-outline" tone="red" onPress={() => void uploadAvatar()} disabled={avatarMutation.isPending} />
           </View>
         </View>
-      </TeacherPanel>
+      </View>
 
-      <TeacherPanel title="Teacher profile" subtitle="Stay inside the same flatter mobile form language used by the existing profile flow.">
+      <TeacherAccordionSection
+        title="Contact details"
+        subtitle="Phone number and home address."
+        icon="card-account-phone-outline"
+        expanded={expandedSection === "contact"}
+        onToggle={() =>
+          setExpandedSection((current) => (current === "contact" ? null : "contact"))
+        }
+      >
         <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
           <TeacherInlineField label="Phone" value={phone} onChangeText={setPhone} placeholder="09XXXXXXXXX" maxLength={13} />
           <TeacherInlineField label="Address" value={address} onChangeText={setAddress} placeholder="Home address" multiline />
+          <View style={{ marginTop: 12, alignItems: "flex-start" }}>
+            <TeacherActionButton label="Save contact details" icon="content-save-outline" tone="red" onPress={() => void saveProfile()} disabled={updateMutation.isPending} />
+          </View>
+        </View>
+      </TeacherAccordionSection>
+
+      <TeacherAccordionSection
+        title="Professional details"
+        subtitle="Department, specialization, and employee record."
+        icon="briefcase-account-outline"
+        expanded={expandedSection === "professional"}
+        onToggle={() =>
+          setExpandedSection((current) =>
+            current === "professional" ? null : "professional",
+          )
+        }
+      >
+        <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
           <TeacherInlineField label="Department" value={department} onChangeText={setDepartment} placeholder="Department" />
           <TeacherInlineField label="Specialization" value={specialization} onChangeText={setSpecialization} placeholder="Specialization" />
           <TeacherInlineField label="Employee ID" value={employeeId} onChangeText={setEmployeeId} placeholder="Employee ID" />
-
-          <View style={{ marginTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            <TeacherActionButton label="Save profile" icon="content-save-outline" tone="green" onPress={() => void saveProfile()} disabled={updateMutation.isPending} />
-            <TeacherActionButton label="Log out" icon="logout" tone="amber" onPress={() => void logout()} />
+          <View style={{ marginTop: 12, alignItems: "flex-start" }}>
+            <TeacherActionButton label="Save professional details" icon="content-save-outline" tone="red" onPress={() => void saveProfile()} disabled={updateMutation.isPending} />
           </View>
         </View>
-      </TeacherPanel>
+      </TeacherAccordionSection>
 
-      <TeacherPanel title="Security" subtitle="Change the password for this authenticated account.">
+      <TeacherAccordionSection
+        title="Security"
+        subtitle="Change the password for this account."
+        icon="shield-lock-outline"
+        expanded={expandedSection === "security"}
+        onToggle={() =>
+          setExpandedSection((current) => (current === "security" ? null : "security"))
+        }
+      >
         <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
           <PasswordChangeForm />
         </View>
-      </TeacherPanel>
+      </TeacherAccordionSection>
 
-      <AppVersionInfo
-        color={theme.muted}
-        style={{ marginBottom: 16, marginHorizontal: 16, marginTop: 10 }}
-      />
+      <View
+        style={{
+          marginHorizontal: 16,
+          marginTop: 20,
+          paddingTop: 16,
+          borderTopWidth: 1,
+          borderTopColor: theme.border,
+        }}
+      >
+        <Text style={{ fontSize: 13, fontWeight: "800", color: theme.text }}>
+          App information
+        </Text>
+        <AppVersionInfo color={theme.muted} style={{ marginTop: 7 }} />
+      </View>
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Log out"
+        onPress={() => void logout()}
+        style={{
+          marginHorizontal: 16,
+          marginTop: 20,
+          marginBottom: 24,
+          minHeight: 50,
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: theme.red,
+          backgroundColor: theme.surface,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 8,
+        }}
+      >
+        <MaterialCommunityIcons name="logout" size={20} color={theme.red} />
+        <Text style={{ fontSize: 14, fontWeight: "900", color: theme.red }}>
+          Log out
+        </Text>
+      </Pressable>
     </TeacherScreen>
   );
 }

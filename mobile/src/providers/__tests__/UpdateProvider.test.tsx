@@ -306,6 +306,41 @@ describe("UpdateProvider", () => {
     expect(flattenText(renderer.toJSON())).toContain("Child content");
   });
 
+  it("uses a compact verification surface for an admitted-session recheck", async () => {
+    const recheck = deferred<AppVersionDecision>();
+    mockCheckUpdatePolicy
+      .mockResolvedValueOnce(noUpdatePolicy)
+      .mockReturnValueOnce(recheck.promise);
+    const renderer = await renderProvider();
+    const onChange = (AppState.addEventListener as jest.Mock).mock.calls[0][1];
+
+    await act(async () => {
+      onChange("background");
+      onChange("active");
+    });
+    await flushPromises();
+
+    const text = flattenText(renderer.toJSON());
+    expect(text).toContain("Child content");
+    expect(text).toContain("Verifying app version…");
+    expect(text).not.toContain("Checking app version");
+    expect(
+      renderer.root.findByProps({ testID: "update-gated-content" }).props
+        .pointerEvents,
+    ).toBe("none");
+
+    await act(async () => {
+      recheck.resolve(noUpdatePolicy);
+    });
+    await flushPromises();
+
+    expect(renderer.root.findAllByType("Modal")).toHaveLength(0);
+    expect(
+      renderer.root.findByProps({ testID: "update-gated-content" }).props
+        .pointerEvents,
+    ).toBe("auto");
+  });
+
   it("locks admitted content after an API policy rejection and failed refresh", async () => {
     mockCheckUpdatePolicy
       .mockResolvedValueOnce(noUpdatePolicy)

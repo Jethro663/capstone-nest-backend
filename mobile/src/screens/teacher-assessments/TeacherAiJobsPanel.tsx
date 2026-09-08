@@ -17,6 +17,7 @@ interface TeacherAiJobsPanelProps {
   onResume: (job: TeacherAiJobSummary) => void;
   onOpenAssessment: (job: TeacherAiJobSummary) => void;
   onRequestDelete: (job: TeacherAiJobSummary) => void;
+  embedded?: boolean;
 }
 
 function JobAction({
@@ -78,20 +79,14 @@ export function TeacherAiJobsPanel({
   onResume,
   onOpenAssessment,
   onRequestDelete,
+  embedded = false,
 }: TeacherAiJobsPanelProps) {
   const activeCount = jobs.filter((job) =>
     ["queued", "pending", "running", "processing"].includes(job.status),
   ).length;
 
-  return (
-    <TeacherPanel
-      title="AI draft jobs"
-      subtitle={
-        loading
-          ? "Loading jobs created on web and mobile..."
-          : `${jobs.length} recent job${jobs.length === 1 ? "" : "s"} · ${activeCount} active`
-      }
-    >
+  const content = (
+    <>
       {error ? (
         <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
           <Text style={{ color: theme.red, fontSize: 12 }}>
@@ -214,6 +209,23 @@ export function TeacherAiJobsPanel({
           </View>
         );
       })}
+    </>
+  );
+
+  if (embedded) {
+    return <View style={{ backgroundColor: theme.amberSoft }}>{content}</View>;
+  }
+
+  return (
+    <TeacherPanel
+      title="AI draft jobs"
+      subtitle={
+        loading
+          ? "Loading jobs created on web and mobile..."
+          : `${jobs.length} recent job${jobs.length === 1 ? "" : "s"} · ${activeCount} active`
+      }
+    >
+      {content}
     </TeacherPanel>
   );
 }

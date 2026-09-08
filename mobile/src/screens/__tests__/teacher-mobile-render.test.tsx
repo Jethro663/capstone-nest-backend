@@ -82,7 +82,7 @@ jest.mock("../../components/teacher/TeacherMobilePrimitives", () => {
 
   return {
     teacherTheme: {
-      red: "#00288E",
+      red: "#DC2626",
       green: "#166534",
       amber: "#B45309",
       blue: "#1E40AF",
@@ -93,8 +93,8 @@ jest.mock("../../components/teacher/TeacherMobilePrimitives", () => {
       border2: "#C4C5D5",
       surface: "#FFFFFF",
       surface2: "#F2F4F6",
-      redSoft: "#DDE1FF",
-      redLine: "rgba(0,40,142,0.22)",
+      redSoft: "#FFF1F2",
+      redLine: "rgba(220,38,38,0.28)",
       greenSoft: "#DCFCE7",
       greenLine: "rgba(22,101,52,0.22)",
       amberSoft: "#FEF3C7",
@@ -104,14 +104,25 @@ jest.mock("../../components/teacher/TeacherMobilePrimitives", () => {
       header: "#FFFFFF",
     },
     stripRichText: (value?: string) => value || "",
-    TeacherScreen: ({ title, subtitle, children }: any) =>
-      ReactRuntime.createElement("TeacherScreen", null, ReactRuntime.createElement(Text, null, title), subtitle ? ReactRuntime.createElement(Text, null, subtitle) : null, children),
+    TeacherScreen: ({ title, children }: any) =>
+      ReactRuntime.createElement("TeacherScreen", null, ReactRuntime.createElement(Text, null, title), children),
     TeacherPanel: ({ title, subtitle, children }: any) =>
       ReactRuntime.createElement("TeacherPanel", null, title ? ReactRuntime.createElement(Text, null, title) : null, subtitle ? ReactRuntime.createElement(Text, null, subtitle) : null, children),
+    TeacherAccordionSection: ({ title, count, expanded, action, children, onToggle }: any) =>
+      ReactRuntime.createElement(
+        "TeacherAccordionSection",
+        { title, count, expanded, onToggle },
+        ReactRuntime.createElement(Text, null, `${title}${count === undefined ? "" : `:${count}`}`),
+        action,
+        expanded ? children : null,
+      ),
+    TeacherSelectMenu: ({ label, selectedValue }: any) =>
+      ReactRuntime.createElement("TeacherSelectMenu", null, ReactRuntime.createElement(Text, null, `${label}:${selectedValue}`)),
     TeacherStats: ({ items }: any) =>
       ReactRuntime.createElement("TeacherStats", null, items.map((item: any) => ReactRuntime.createElement(Text, { key: item.label }, `${item.label}:${item.value}`))),
     TeacherChip: ({ label }: any) => ReactRuntime.createElement(Text, null, label),
-    TeacherActionButton: ({ label }: any) => ReactRuntime.createElement(Text, null, label),
+    TeacherActionButton: ({ label, onPress }: any) =>
+      ReactRuntime.createElement("Pressable", { accessibilityLabel: label, onPress }, ReactRuntime.createElement(Text, null, label)),
     TeacherEmpty: ({ title, subtitle }: any) => ReactRuntime.createElement("TeacherEmpty", null, ReactRuntime.createElement(Text, null, title), ReactRuntime.createElement(Text, null, subtitle)),
     TeacherRow: ({ title, subtitle, right }: any) => ReactRuntime.createElement("TeacherRow", null, ReactRuntime.createElement(Text, null, title), subtitle ? ReactRuntime.createElement(Text, null, subtitle) : null, right),
     TeacherSearch: component("TeacherSearch"),
@@ -234,8 +245,14 @@ describe("teacher mobile screens", () => {
 
     const text = flattenText(renderer.toJSON());
     expect(text).toContain("Teacher Home");
-    expect(text).toContain("Capstone");
-    expect(text).toContain("Open Calendar");
+    expect(renderer.root.findAll((node) => node.type === "TeacherStats")).toHaveLength(0);
+    expect(text).toContain("Needs attention");
+    expect(text).toContain("My classes");
+    expect(text).toContain("Intervention focus");
+    expect(text).toContain("Upcoming assessments");
+    expect(text).toContain("Recent announcements");
+    expect(text).not.toContain("Active classes");
+    expect(text).toContain("Calendar");
   });
 
   it("renders teacher assessment detail with submissions", () => {
@@ -312,9 +329,19 @@ describe("teacher mobile screens", () => {
       );
     });
 
+    const professionalSection = renderer.root.find(
+      (node) => node.type === "TeacherAccordionSection" && node.props.title === "Professional details",
+    );
+    act(() => professionalSection.props.onToggle());
+
     const text = flattenText(renderer.toJSON());
     expect(text).toContain("Teacher One");
     expect(text).toContain("ICT");
     expect(text).toContain("Employee ID");
+    expect(renderer.root.findAll((node) => node.type === "TeacherStats")).toHaveLength(0);
+    expect(text).not.toContain("teacher profile API");
+    expect(text).toContain("Contact details");
+    expect(text).toContain("Professional details");
+    expect(text.indexOf("Nexora Mobile")).toBeLessThan(text.indexOf("Log out"));
   });
 });

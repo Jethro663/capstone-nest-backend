@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useQueries } from "@tanstack/react-query";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
@@ -15,11 +15,10 @@ import { boundAcademicPercentage } from "../lib/academicScore";
 import { useLiveNotifications } from "../providers/LiveNotificationContext";
 import {
   TeacherActionButton,
+  TeacherAccordionSection,
   TeacherEmpty,
-  TeacherPanel,
   TeacherRow,
   TeacherScreen,
-  TeacherStats,
   teacherTheme as theme,
 } from "../components/teacher/TeacherMobilePrimitives";
 
@@ -34,6 +33,13 @@ function formatDate(value?: string | null) {
   if (Number.isNaN(date.getTime())) return "No due date";
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
+
+type HomeSection =
+  | "attention"
+  | "classes"
+  | "intervention"
+  | "assessments"
+  | "announcements";
 
 export function TeacherHomeScreen({ navigation }: Props) {
   const { user } = useAuth();
@@ -151,9 +157,13 @@ export function TeacherHomeScreen({ navigation }: Props) {
   const draftCount = flattenedAssessments.filter(
     (assessment) => !assessment.isPublished,
   ).length;
-  const publishedCount = flattenedAssessments.length - draftCount;
   const attentionCount = upcomingAssessments.length + draftCount;
   const firstClassId = classesQuery.data?.[0]?.id;
+  const [expandedSection, setExpandedSection] =
+    useState<HomeSection | null>("attention");
+  const toggleSection = (section: HomeSection) => {
+    setExpandedSection((current) => (current === section ? null : section));
+  };
   const refreshing =
     classesQuery.isRefetching ||
     assessmentQueries.some((query) => query.isRefetching) ||
@@ -221,20 +231,7 @@ export function TeacherHomeScreen({ navigation }: Props) {
         ]);
       }}
     >
-      <TeacherStats
-        items={[
-          {
-            label: "Active Classes",
-            value: classesQuery.data?.length ?? 0,
-            tone: "red",
-          },
-          { label: "Needs Review", value: attentionCount, tone: "amber" },
-          { label: "Published", value: publishedCount, tone: "green" },
-          { label: "Updates", value: recentAnnouncements.length, tone: "blue" },
-        ]}
-      />
-
-      <View style={{ marginTop: 14 }}>
+      <View style={{ marginTop: 8 }}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -243,7 +240,7 @@ export function TeacherHomeScreen({ navigation }: Props) {
           <TeacherActionButton
             label="Updates"
             icon="bullhorn-outline"
-            tone="amber"
+            tone="red"
             disabled={!firstClassId}
             onPress={() => {
               if (!firstClassId) return;
@@ -261,13 +258,13 @@ export function TeacherHomeScreen({ navigation }: Props) {
           <TeacherActionButton
             label="Classes"
             icon="book-open-variant-outline"
-            tone="blue"
+            tone="red"
             onPress={() => navigation.navigate("Classes")}
           />
           <TeacherActionButton
             label="Assessments"
             icon="clipboard-text-outline"
-            tone="green"
+            tone="red"
             onPress={() => navigation.navigate("Assessments")}
           />
           <TeacherActionButton
@@ -279,15 +276,20 @@ export function TeacherHomeScreen({ navigation }: Props) {
           <TeacherActionButton
             label="More"
             icon="dots-horizontal-circle-outline"
-            tone="blue"
+            tone="red"
             onPress={() => navigation.navigate("TeacherMore")}
           />
         </ScrollView>
       </View>
 
-      <TeacherPanel
-        title="Today needs attention"
-        subtitle="Start with due work, drafts, and grading-sensitive items."
+      <TeacherAccordionSection
+        title="Needs attention"
+        subtitle="Due work and drafts that need a decision."
+        icon="alert-circle-outline"
+        count={attentionCount}
+        accent="amber"
+        expanded={expandedSection === "attention"}
+        onToggle={() => toggleSection("attention")}
       >
         <TeacherRow
           title={`${upcomingAssessments.length} upcoming assessment${upcomingAssessments.length === 1 ? "" : "s"}`}
@@ -311,11 +313,15 @@ export function TeacherHomeScreen({ navigation }: Props) {
             </Text>
           }
         />
-      </TeacherPanel>
+      </TeacherAccordionSection>
 
-      <TeacherPanel
-        title="Upcoming classes"
-        subtitle="Open the class space you are most likely to need next."
+      <TeacherAccordionSection
+        title="My classes"
+        subtitle="Open an assigned class and continue teaching work."
+        icon="book-open-variant-outline"
+        count={classesQuery.data?.length ?? 0}
+        expanded={expandedSection === "classes"}
+        onToggle={() => toggleSection("classes")}
       >
         {classesQuery.data?.length ? (
           classesQuery.data.slice(0, 3).map((classItem) => (
@@ -354,11 +360,15 @@ export function TeacherHomeScreen({ navigation }: Props) {
             subtitle="Classes assigned to this teacher account will appear here."
           />
         )}
-      </TeacherPanel>
+      </TeacherAccordionSection>
 
-      <TeacherPanel
+      <TeacherAccordionSection
         title="Intervention focus"
-        subtitle="Classes with learners currently flagged for extra support."
+        subtitle="Learners currently flagged for extra support."
+        icon="account-heart-outline"
+        count={interventionClasses.reduce((total, entry) => total + entry.count, 0)}
+        expanded={expandedSection === "intervention"}
+        onToggle={() => toggleSection("intervention")}
       >
         {interventionClasses.length ? (
           interventionClasses
@@ -406,54 +416,15 @@ export function TeacherHomeScreen({ navigation }: Props) {
             icon="account-heart-outline"
           />
         )}
-      </TeacherPanel>
+      </TeacherAccordionSection>
 
-      <TeacherPanel
-        title="Active classes"
-        subtitle="Your current class load and section count."
-      >
-        {classesQuery.data?.length ? (
-          classesQuery.data.slice(0, 4).map((classItem) => (
-            <TeacherRow
-              key={classItem.id}
-              title={`${classItem.subjectCode} · ${classItem.subjectName}`}
-              subtitle={`${classItem.section?.name || "Section pending"} · ${classItem.schoolYear}`}
-              onPress={() =>
-                navigation.navigate("TeacherClassDetail", {
-                  classId: classItem.id,
-                })
-              }
-              right={
-                <View style={{ alignItems: "flex-end" }}>
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      fontWeight: "700",
-                      color: theme.red,
-                    }}
-                  >
-                    {classItem.enrollmentCount ??
-                      classItem.enrollments?.length ??
-                      0}
-                  </Text>
-                  <Text style={{ fontSize: 10, color: theme.muted }}>
-                    students
-                  </Text>
-                </View>
-              }
-            />
-          ))
-        ) : (
-          <TeacherEmpty
-            title="No teacher classes"
-            subtitle="Classes assigned to this teacher account will appear here."
-          />
-        )}
-      </TeacherPanel>
-
-      <TeacherPanel
+      <TeacherAccordionSection
         title="Upcoming assessments"
-        subtitle="Published items that students can reach soon."
+        subtitle="Published work students can reach soon."
+        icon="clipboard-clock-outline"
+        count={upcomingAssessments.length}
+        expanded={expandedSection === "assessments"}
+        onToggle={() => toggleSection("assessments")}
       >
         {upcomingAssessments.length ? (
           upcomingAssessments.map((assessment) => (
@@ -498,11 +469,15 @@ export function TeacherHomeScreen({ navigation }: Props) {
             icon="clipboard-clock-outline"
           />
         )}
-      </TeacherPanel>
+      </TeacherAccordionSection>
 
-      <TeacherPanel
+      <TeacherAccordionSection
         title="Recent announcements"
-        subtitle="Latest class updates across your teaching load."
+        subtitle="Latest updates across your teaching load."
+        icon="bullhorn-outline"
+        count={recentAnnouncements.length}
+        expanded={expandedSection === "announcements"}
+        onToggle={() => toggleSection("announcements")}
       >
         {recentAnnouncements.length ? (
           recentAnnouncements.map((announcement) => (
@@ -527,47 +502,7 @@ export function TeacherHomeScreen({ navigation }: Props) {
             icon="bullhorn-outline"
           />
         )}
-      </TeacherPanel>
-
-      {classesQuery.data?.length ? (
-        <View style={{ marginHorizontal: 16, marginTop: 12 }}>
-          <Pressable
-            onPress={() => navigation.navigate("TeacherCalendar")}
-            style={{
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: theme.border,
-              backgroundColor: theme.surface,
-              minHeight: 64,
-              paddingHorizontal: 14,
-              paddingVertical: 14,
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <View style={{ flex: 1, paddingRight: 12 }}>
-              <Text
-                style={{ fontSize: 14, fontWeight: "800", color: theme.text }}
-              >
-                Open Calendar
-              </Text>
-              <Text
-                style={{
-                  marginTop: 4,
-                  fontSize: 12,
-                  lineHeight: 18,
-                  color: theme.subtext,
-                }}
-              >
-                Review schedules, announcements, school events, and due
-                assessments in one feed.
-              </Text>
-            </View>
-            <Text style={{ fontSize: 22, color: theme.red }}>›</Text>
-          </Pressable>
-        </View>
-      ) : null}
+      </TeacherAccordionSection>
     </TeacherScreen>
   );
 }

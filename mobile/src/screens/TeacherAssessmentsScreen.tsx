@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useQueries } from "@tanstack/react-query";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import type { CompositeScreenProps } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -9,27 +9,21 @@ import { queryKeys, useTeacherAiJobs, useTeacherClasses } from "../api/hooks";
 import { toAppError } from "../api/http";
 import { assessmentsApi } from "../api/services/assessments";
 import { aiApi } from "../api/services/ai";
-import { academicStateService } from "../api/services/academic-state";
 import { clearTeacherAiDraftJobIdIfMatches } from "../api/teacher-ai-draft-jobs";
 import type { MainTabParamList, RootStackParamList } from "../navigation/types";
 import { useAuth } from "../providers/AuthProvider";
 import { TeacherConfirmModal } from "../components/teacher/TeacherConfirmModal";
 import { TeacherAiJobsPanel } from "./teacher-assessments/TeacherAiJobsPanel";
 import type { TeacherAiJobSummary } from "../types/ai";
-import type { AcademicPeriodKey } from "../types/academic-grading";
+import { filterTeacherAssessments } from "./teacher-assessments/model";
 import {
-  filterTeacherAssessments,
-  type TeacherAssessmentStatusFilter,
-} from "./teacher-assessments/model";
-import {
+  TeacherAccordionSection,
   TeacherActionButton,
-  TeacherChip,
   TeacherEmpty,
   TeacherPanel,
   TeacherRow,
   TeacherScreen,
-  TeacherSearch,
-  TeacherStats,
+  TeacherSelectMenu,
   teacherTheme as theme,
 } from "../components/teacher/TeacherMobilePrimitives";
 
@@ -50,13 +44,9 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
   const teacherId = user?.userId || user?.id;
   const classesQuery = useTeacherClasses(teacherId);
   const aiJobsQuery = useTeacherAiJobs();
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] =
-    useState<TeacherAssessmentStatusFilter>("all");
-  const [periodFilter, setPeriodFilter] =
-    useState<"all" | AcademicPeriodKey>("all");
   const [classFilter, setClassFilter] = useState("all");
   const [expandedClassId, setExpandedClassId] = useState<string | null>(null);
+  const [aiJobsExpanded, setAiJobsExpanded] = useState(false);
   const [creatingAssessment, setCreatingAssessment] = useState(false);
   const [selectedAssessmentIds, setSelectedAssessmentIds] = useState<string[]>([]);
   const [deletingAssessment, setDeletingAssessment] = useState<{ id: string; title: string } | null>(null);
@@ -64,11 +54,7 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
   const [isDeletingAssessment, setIsDeletingAssessment] = useState(false);
   const [deletingAiJob, setDeletingAiJob] = useState<TeacherAiJobSummary | null>(null);
   const [isDeletingAiJob, setIsDeletingAiJob] = useState(false);
-  const policyQuery = useQuery({
-    queryKey: ["academic-state", "current", "teacher-assessment-filters"],
-    queryFn: async () => (await academicStateService.getCurrent()).data,
-  });
-
+  const initializedExpansion = useRef(false);
   const classIds = classesQuery.data?.map((entry) => entry.id) ?? [];
   const assessmentQueries = useQueries({
     queries: classIds.map((classId) => ({
@@ -97,22 +83,22 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
 
   const filteredRecords = useMemo(() => {
     return filterTeacherAssessments(records, {
-      period: periodFilter,
-      status: filter,
+      period: "all",
+      status: "all",
       classId: classFilter,
-      search,
+      search: "",
     });
-  }, [classFilter, filter, periodFilter, records, search]);
+  }, [classFilter, records]);
 
   const classGroups = useMemo(
     () =>
       (classesQuery.data ?? [])
+        .filter((classItem) => classFilter === "all" || classItem.id === classFilter)
         .map((classItem) => ({
           classItem,
           assessments: filteredRecords.filter((assessment) => assessment.classId === classItem.id),
-        }))
-        .filter((group) => group.assessments.length > 0),
-    [classesQuery.data, filteredRecords],
+        })),
+    [classFilter, classesQuery.data, filteredRecords],
   );
 
   const classNames = useMemo(
@@ -124,6 +110,12 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
     ),
     [classesQuery.data],
   );
+
+  useEffect(() => {
+    if (initializedExpansion.current || !classesQuery.data?.length) return;
+    initializedExpansion.current = true;
+    setExpandedClassId(classesQuery.data[0].id);
+  }, [classesQuery.data]);
 
   const toggleSelectAssessment = (id: string) => {
     setSelectedAssessmentIds((prev) =>
@@ -225,215 +217,135 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
         void Promise.all([classesQuery.refetch(), aiJobsQuery.refetch(), ...assessmentQueries.map((query) => query.refetch())]);
       }}
     >
-      {assessmentLoadFailed && <TeacherPanel title="Assessments could not fully load" subtitle="This is a loading problem, not a historical or empty class. Retry to refresh assessments and academic restrictions.">
-        <View style={{ padding: 14 }}><TeacherActionButton label="Retry assessment loading" icon="refresh" onPress={() => void refetchAllAssessments()} /></View>
-      </TeacherPanel>}
-      {policyQuery.isError && (
+      {assessmentLoadFailed ? (
         <TeacherPanel
-          title="Quarter policy could not load"
-          subtitle="Retry before filtering assessments by quarter. Existing assessments remain visible under All Quarters."
+          title="Assessments could not fully load"
+          subtitle="This is a loading problem, not an empty class. Retry to restore the list."
         >
           <View style={{ padding: 14 }}>
             <TeacherActionButton
-              label="Retry quarter policy"
+              label="Retry assessment loading"
               icon="refresh"
-              onPress={() => void policyQuery.refetch()}
+              onPress={() => void refetchAllAssessments()}
             />
           </View>
         </TeacherPanel>
-      )}
-      <TeacherStats
-        items={[
-          { label: "Assessments", value: filteredRecords.length, tone: "red" },
-          { label: "Classes", value: classGroups.length, tone: "blue" },
-          { label: "Published", value: records.filter((entry) => entry.isPublished).length, tone: "green" },
-          { label: "Drafts", value: records.filter((entry) => !entry.isPublished).length, tone: "amber" },
+      ) : null}
+
+      <TeacherSelectMenu
+        label="Class"
+        selectedValue={classFilter}
+        options={[
+          { label: "All classes", value: "all" },
+          ...(classesQuery.data ?? []).map((classItem) => ({
+            label: `${classItem.subjectCode} · ${classItem.subjectName}`,
+            value: classItem.id,
+          })),
         ]}
+        onSelect={(value) => {
+          setClassFilter(value);
+          setExpandedClassId(value === "all" ? null : value);
+          setSelectedAssessmentIds([]);
+        }}
       />
 
-      <TeacherSearch value={search} onChangeText={setSearch} placeholder="Search by class or assessment title" />
-
-      <View style={{ marginHorizontal: 16, marginTop: 10 }}>
-        <Text style={{ color: theme.muted, fontSize: 12, fontWeight: "700", marginBottom: 6 }}>
-          Quarter
-        </Text>
-        <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
-          <TeacherChip
-            label="All Quarters"
-            active={periodFilter === "all"}
-            onPress={() => {
-              setPeriodFilter("all");
-              setSelectedAssessmentIds([]);
-            }}
-          />
-          {(policyQuery.data?.policy.periods ?? []).map((period) => (
-            <TeacherChip
-              key={period.key}
-              label={period.label}
-              active={periodFilter === period.key}
-              onPress={() => {
-                setPeriodFilter(period.key);
-                setSelectedAssessmentIds([]);
-              }}
-            />
-          ))}
-        </View>
-      </View>
-
-      <View style={{ marginHorizontal: 16, marginTop: 10, flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
-        {(["all", "draft", "published", "attention", "history"] as const).map((entry) => (
-          <TeacherChip key={entry} label={entry === "published" ? "Ready to give" : entry === "attention" ? "Needs attention" : entry[0].toUpperCase() + entry.slice(1)} active={filter === entry} onPress={() => setFilter(entry)} />
-        ))}
-      </View>
-
-      <View style={{ marginHorizontal: 16, marginTop: 10 }}>
-        <Text style={{ color: theme.muted, fontSize: 12, fontWeight: "700", marginBottom: 6 }}>
-          Class
-        </Text>
-        <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
-          <TeacherChip label="All Classes" active={classFilter === "all"} onPress={() => setClassFilter("all")} />
-          {(classesQuery.data ?? []).map((classItem) => (
-            <TeacherChip
-              key={classItem.id}
-              label={classItem.subjectCode}
-              active={classFilter === classItem.id}
-              onPress={() => setClassFilter(classItem.id)}
-            />
-          ))}
-        </View>
-      </View>
-
-      <TeacherPanel
-        title="Create and edit"
-        subtitle="Create a draft in the first assigned class, or use a class accordion below to create in that class."
+      <View
+        style={{
+          marginHorizontal: 16,
+          marginTop: 20,
+          marginBottom: 6,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
       >
-        <View style={{ paddingHorizontal: 14, paddingBottom: 14, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        <View style={{ flex: 1, paddingRight: 12 }}>
+          <Text style={{ fontSize: 18, fontWeight: "900", color: theme.text }}>
+            Assessments by class
+          </Text>
+          <Text style={{ marginTop: 3, fontSize: 12, color: theme.subtext }}>
+            Open a class to review, edit, or create its work.
+          </Text>
+        </View>
+        {selectedAssessmentIds.length > 0 ? (
           <TeacherActionButton
-            label={creatingAssessment ? "Creating..." : "Create assessment"}
-            icon="file-plus-outline"
-            tone="green"
-            disabled={creatingAssessment || !classesQuery.data?.length}
-            onPress={() => void handleCreateAssessment()}
+            label={`Delete (${selectedAssessmentIds.length})`}
+            icon="trash-can-outline"
+            tone="red"
+            onPress={() => setShowBulkDeleteConfirm(true)}
           />
-        </View>
-      </TeacherPanel>
+        ) : null}
+      </View>
 
-      <TeacherAiJobsPanel
-        jobs={aiJobsQuery.data ?? []}
-        classNames={classNames}
-        loading={aiJobsQuery.isLoading}
-        error={aiJobsQuery.isError}
-        onRefresh={() => void aiJobsQuery.refetch()}
-        onResume={(job) => {
-          if (!job.classId) {
-            Alert.alert("Class unavailable", "This AI draft job is not linked to an available class.");
-            return;
-          }
-          navigation.navigate("TeacherAiDraft", {
-            classId: job.classId,
-            jobId: job.jobId,
-          });
-        }}
-        onOpenAssessment={(job) => {
-          if (!job.assessmentId) return;
-          navigation.navigate("TeacherAssessmentEditor", {
-            assessmentId: job.assessmentId,
-            classId: job.classId ?? undefined,
-          });
-        }}
-        onRequestDelete={setDeletingAiJob}
-      />
-
-      <TeacherPanel
-        title="Classes with assessments"
-        subtitle="Select assessments using checkboxes to bulk delete, or tap a class to expand."
-        action={
-          selectedAssessmentIds.length > 0 ? (
-            <TeacherActionButton
-              label={`Delete Selected (${selectedAssessmentIds.length})`}
-              icon="trash-can-outline"
-              tone="red"
-              onPress={() => setShowBulkDeleteConfirm(true)}
-            />
-          ) : undefined
-        }
-      >
-        {filteredRecords.length ? (
-          <View
-            style={{
-              paddingHorizontal: 14,
-              paddingVertical: 10,
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              backgroundColor: theme.surface2,
-              borderBottomWidth: 1,
-              borderBottomColor: theme.border,
-            }}
+      {filteredRecords.length ? (
+        <View
+          style={{
+            marginHorizontal: 16,
+            marginBottom: 4,
+            minHeight: 46,
+            borderTopWidth: 1,
+            borderBottomWidth: 1,
+            borderColor: theme.border,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <Pressable
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: selectedAssessmentIds.length === filteredRecords.length }}
+            onPress={toggleSelectAllAssessments}
+            style={{ minHeight: 44, flexDirection: "row", alignItems: "center", gap: 8 }}
           >
-            <Pressable
-              onPress={toggleSelectAllAssessments}
-              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-            >
-              <MaterialCommunityIcons
-                name={
-                  selectedAssessmentIds.length === filteredRecords.length
-                    ? "checkbox-marked"
-                    : selectedAssessmentIds.length > 0
+            <MaterialCommunityIcons
+              name={
+                selectedAssessmentIds.length === filteredRecords.length
+                  ? "checkbox-marked"
+                  : selectedAssessmentIds.length > 0
                     ? "checkbox-intermediate"
                     : "checkbox-blank-outline"
-                }
-                size={20}
-                color={selectedAssessmentIds.length > 0 ? theme.red : theme.muted}
-              />
-              <Text style={{ fontSize: 12, fontWeight: "700", color: theme.text }}>
-                {selectedAssessmentIds.length === filteredRecords.length ? "Deselect All" : "Select All"}
-              </Text>
-            </Pressable>
-            <Text style={{ fontSize: 11, color: theme.muted }}>
-              {selectedAssessmentIds.length} of {filteredRecords.length} selected
+              }
+              size={20}
+              color={selectedAssessmentIds.length > 0 ? theme.red : theme.muted}
+            />
+            <Text style={{ fontSize: 12, fontWeight: "800", color: theme.text }}>
+              {selectedAssessmentIds.length === filteredRecords.length ? "Deselect all" : "Select all"}
             </Text>
-          </View>
-        ) : null}
+          </Pressable>
+          <Text style={{ fontSize: 11, color: theme.muted }}>
+            {selectedAssessmentIds.length} of {filteredRecords.length}
+          </Text>
+        </View>
+      ) : null}
 
-        {classGroups.length ? (
-          classGroups.map(({ classItem, assessments }) => {
-            const expanded = expandedClassId === classItem.id;
-            return (
-              <View key={classItem.id}>
-                <Pressable
-                  onPress={() => setExpandedClassId((current) => (current === classItem.id ? null : classItem.id))}
-                  style={{
-                    minHeight: 68,
-                    borderTopWidth: 1,
-                    borderTopColor: theme.border,
-                    paddingHorizontal: 14,
-                    paddingVertical: 14,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 12,
-                  }}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 14, fontWeight: "900", color: theme.text }}>
-                      {classItem.subjectCode} · {classItem.subjectName}
-                    </Text>
-                    <Text style={{ marginTop: 3, fontSize: 11, lineHeight: 17, color: theme.subtext }}>
-                      {classItem.section?.name || "Section pending"} · {classItem.schoolYear} · {assessments.length} assessment{assessments.length === 1 ? "" : "s"}
-                    </Text>
-                  </View>
-                  <TeacherActionButton
-                    label="New"
-                    icon="plus"
-                    tone="green"
-                    disabled={creatingAssessment}
-                    onPress={() => void handleCreateAssessment(classItem.id)}
-                  />
-                  <Text style={{ fontSize: 18, color: theme.dim }}>{expanded ? "⌃" : "⌄"}</Text>
-                </Pressable>
-
-                {expanded
-                  ? assessments.map((assessment) => (
+      {classGroups.length ? (
+        classGroups.map(({ classItem, assessments }) => {
+          const expanded = expandedClassId === classItem.id;
+          return (
+            <TeacherAccordionSection
+              key={classItem.id}
+              title={`${classItem.subjectCode} · ${classItem.subjectName}`}
+              subtitle={`${classItem.section?.name || "Section pending"} · ${classItem.schoolYear}`}
+              icon="book-open-variant-outline"
+              count={assessments.length}
+              expanded={expanded}
+              onToggle={() =>
+                setExpandedClassId((current) =>
+                  current === classItem.id ? null : classItem.id,
+                )
+              }
+              action={
+                <TeacherActionButton
+                  label="New"
+                  icon="plus"
+                  tone="red"
+                  disabled={creatingAssessment}
+                  onPress={() => void handleCreateAssessment(classItem.id)}
+                />
+              }
+            >
+              {assessments.length ? (
+                assessments.map((assessment) => (
                       <TeacherRow
                         key={assessment.id}
                         title={assessment.title}
@@ -494,15 +406,82 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
                           </View>
                         }
                       />
-                    ))
-                  : null}
-              </View>
-            );
-          })
-        ) : (
-          <TeacherEmpty title={assessmentsLoading ? "Loading assessments…" : assessmentLoadFailed ? "Assessment list unavailable" : "No matching assessments"} subtitle={assessmentsLoading ? "Loading class content and academic restrictions." : assessmentLoadFailed ? "Use Retry assessment loading above. No records have been removed." : "Change the filter or create a draft in a class."} icon="clipboard-search-outline" />
-        )}
-      </TeacherPanel>
+                ))
+              ) : (
+                <>
+                  <TeacherEmpty
+                    title={assessmentsLoading ? "Loading assessments…" : "No assessments yet"}
+                    subtitle={
+                      assessmentsLoading
+                        ? "Loading class work."
+                        : "Use Create first assessment to begin this class record."
+                    }
+                    icon="clipboard-plus-outline"
+                  />
+                  {!assessmentsLoading ? (
+                    <View style={{ paddingHorizontal: 14, paddingBottom: 14, alignItems: "center" }}>
+                      <TeacherActionButton
+                        label="Create first assessment"
+                        icon="plus"
+                        tone="red"
+                        disabled={creatingAssessment}
+                        onPress={() => void handleCreateAssessment(classItem.id)}
+                      />
+                    </View>
+                  ) : null}
+                </>
+              )}
+            </TeacherAccordionSection>
+          );
+        })
+      ) : (
+        <TeacherEmpty
+          title={assessmentsLoading ? "Loading classes…" : "No assigned classes"}
+          subtitle={
+            assessmentsLoading
+              ? "Loading your assessment workspace."
+              : "Assigned classes will appear here without hiding empty class records."
+          }
+          icon="book-alert-outline"
+        />
+      )}
+
+      <TeacherAccordionSection
+        title="AI Draft Jobs"
+        subtitle="Generated draft activity stays separate from official class work."
+        icon="creation-outline"
+        count={aiJobsQuery.data?.length ?? 0}
+        accent="amber"
+        expanded={aiJobsExpanded}
+        onToggle={() => setAiJobsExpanded((current) => !current)}
+      >
+        <TeacherAiJobsPanel
+          embedded
+          jobs={aiJobsQuery.data ?? []}
+          classNames={classNames}
+          loading={aiJobsQuery.isLoading}
+          error={aiJobsQuery.isError}
+          onRefresh={() => void aiJobsQuery.refetch()}
+          onResume={(job) => {
+            if (!job.classId) {
+              Alert.alert("Class unavailable", "This AI draft job is not linked to an available class.");
+              return;
+            }
+            navigation.navigate("TeacherAiDraft", {
+              classId: job.classId,
+              jobId: job.jobId,
+            });
+          }}
+          onOpenAssessment={(job) => {
+            if (!job.assessmentId) return;
+            navigation.navigate("TeacherAssessmentEditor", {
+              assessmentId: job.assessmentId,
+              classId: job.classId ?? undefined,
+            });
+          }}
+          onRequestDelete={setDeletingAiJob}
+        />
+      </TeacherAccordionSection>
 
       <TeacherConfirmModal
         visible={Boolean(deletingAssessment)}

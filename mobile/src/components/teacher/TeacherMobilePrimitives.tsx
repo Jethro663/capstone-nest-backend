@@ -1,8 +1,10 @@
-import type { PropsWithChildren, ReactNode } from "react";
+import { useState, type PropsWithChildren, type ReactNode } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Refreshable, ScreenScroll } from "../ui/primitives";
-import { studentDarkTheme as theme, stripRichText } from "../../theme/studentDark";
+import { stripRichText } from "../../theme/studentDark";
+import { teacherTheme as theme } from "../../theme/teacher";
 import { shadow } from "../../theme/tokens";
 
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>["name"];
@@ -11,9 +13,6 @@ export { theme as teacherTheme, stripRichText };
 
 export function TeacherScreen({
   title,
-  workspaceLabel = "Teacher workspace",
-  subtitle,
-  icon,
   showBackButton = false,
   onBackPress,
   backLabel = "Back",
@@ -33,6 +32,7 @@ export function TeacherScreen({
   refreshing?: boolean;
   onRefresh?: () => void;
 }>) {
+  const insets = useSafeAreaInsets();
   const canGoBack = showBackButton && typeof onBackPress === "function";
 
   return (
@@ -42,92 +42,264 @@ export function TeacherScreen({
         onRefresh ? <Refreshable refreshing={Boolean(refreshing)} onRefresh={onRefresh} /> : undefined
       }
     >
-      <View style={{ backgroundColor: theme.topbar, borderBottomWidth: 1, borderBottomColor: theme.border }}>
-        <View style={{ paddingHorizontal: 20, paddingTop: 44, paddingBottom: 18 }}>
+      <View
+        testID="teacher-compact-header"
+        style={{
+          backgroundColor: theme.topbar,
+          borderBottomWidth: 1,
+          borderBottomColor: theme.border,
+          paddingHorizontal: 16,
+          paddingTop: insets.top + 6,
+          paddingBottom: 8,
+        }}
+      >
+        <View style={{ minHeight: 48, flexDirection: "row", alignItems: "center", gap: 10 }}>
           {canGoBack ? (
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={backLabel}
               onPress={onBackPress}
               style={{
-                alignSelf: "flex-start",
-                flexDirection: "row",
+                width: 44,
+                height: 44,
+                borderRadius: 12,
                 alignItems: "center",
-                gap: 6,
-                minHeight: 44,
-                borderRadius: 8,
-                borderWidth: 1,
-                borderColor: theme.border,
-                backgroundColor: theme.active,
-                paddingHorizontal: 10,
-                paddingVertical: 9,
-                marginBottom: 10,
+                justifyContent: "center",
+                backgroundColor: theme.redSoft,
               }}
             >
-              <MaterialCommunityIcons name="arrow-left" size={14} color={theme.red} />
-              <Text style={{ fontSize: 11, fontWeight: "700", color: theme.red }}>{backLabel}</Text>
+              <MaterialCommunityIcons name="arrow-left" size={20} color={theme.red} />
             </Pressable>
-          ) : null}
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            {icon ? (
-              <View
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 8,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: theme.redSoft,
-                }}
-              >
-                <MaterialCommunityIcons name={icon} size={18} color={theme.red} />
-              </View>
-            ) : null}
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 10, fontWeight: "600", letterSpacing: 0.7, textTransform: "uppercase", color: theme.muted }}>
-                {workspaceLabel}
-              </Text>
-              <Text style={{ marginTop: 4, fontSize: 24, fontWeight: "900", color: theme.text }}>{title}</Text>
-            </View>
-            {rightAction || onRefresh ? (
-              <View style={{ alignItems: "flex-end", gap: 8 }}>
-                {rightAction}
-                {onRefresh ? (
-                  <Pressable
-                    onPress={onRefresh}
-                    disabled={Boolean(refreshing)}
-                    style={{
-                      opacity: refreshing ? 0.6 : 1,
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 6,
-                      minHeight: 44,
-                      borderRadius: 8,
-                      borderWidth: 1,
-                      borderColor: theme.border,
-                      backgroundColor: theme.active,
-                      paddingHorizontal: 10,
-                      paddingVertical: 9,
-                    }}
-                  >
-                    <MaterialCommunityIcons
-                      name={refreshing ? "refresh-circle" : "refresh"}
-                      size={14}
-                      color={theme.red}
-                    />
-                    <Text style={{ fontSize: 11, fontWeight: "700", color: theme.red }}>
-                      {refreshing ? "Refreshing..." : "Refresh"}
-                    </Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            ) : null}
-          </View>
-          {subtitle ? (
-            <Text style={{ marginTop: 12, fontSize: 13, lineHeight: 20, color: theme.subtext }}>{subtitle}</Text>
+          ) : (
+            <View
+              accessibilityElementsHidden
+              style={{ width: 4, height: 28, borderRadius: 999, backgroundColor: theme.red }}
+            />
+          )}
+          <Text
+            numberOfLines={1}
+            maxFontSizeMultiplier={1.35}
+            style={{ flex: 1, fontSize: 20, fontWeight: "900", color: theme.text }}
+          >
+            {title}
+          </Text>
+          {rightAction}
+          {onRefresh ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Refresh ${title}`}
+              onPress={onRefresh}
+              disabled={Boolean(refreshing)}
+              style={{
+                opacity: refreshing ? 0.55 : 1,
+                width: 44,
+                minHeight: 44,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: theme.border,
+                backgroundColor: theme.surface,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <MaterialCommunityIcons
+                name={refreshing ? "refresh-circle" : "refresh"}
+                size={20}
+                color={theme.red}
+              />
+            </Pressable>
           ) : null}
         </View>
       </View>
       {children}
     </ScreenScroll>
+  );
+}
+
+export function TeacherAccordionSection({
+  title,
+  subtitle,
+  icon,
+  count,
+  expanded,
+  onToggle,
+  action,
+  accent = "red",
+  children,
+}: PropsWithChildren<{
+  title: string;
+  subtitle?: string;
+  icon: IconName;
+  count?: number | string;
+  expanded: boolean;
+  onToggle: () => void;
+  action?: ReactNode;
+  accent?: "red" | "amber";
+}>) {
+  const accentColor = accent === "amber" ? theme.amber : theme.red;
+  const accentSurface = accent === "amber" ? theme.amberSoft : theme.redSoft;
+
+  return (
+    <View
+      style={{
+        marginHorizontal: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.border,
+        backgroundColor: expanded ? theme.surface : "transparent",
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center" }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${expanded ? "Collapse" : "Expand"} ${title}`}
+          accessibilityState={{ expanded }}
+          onPress={onToggle}
+          style={{
+            flex: 1,
+            minHeight: 60,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 10,
+            paddingVertical: 9,
+          }}
+        >
+          <View
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 12,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: accentSurface,
+            }}
+          >
+            <MaterialCommunityIcons name={icon} size={19} color={accentColor} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 14, fontWeight: "800", color: theme.text }}>{title}</Text>
+            {subtitle ? (
+              <Text numberOfLines={1} style={{ marginTop: 2, fontSize: 11, color: theme.muted }}>
+                {subtitle}
+              </Text>
+            ) : null}
+          </View>
+          {count !== undefined ? (
+            <View style={{ minWidth: 28, borderRadius: 999, backgroundColor: accentSurface, paddingHorizontal: 8, paddingVertical: 4 }}>
+              <Text style={{ textAlign: "center", fontSize: 11, fontWeight: "800", color: accentColor }}>{count}</Text>
+            </View>
+          ) : null}
+          <MaterialCommunityIcons
+            name={expanded ? "chevron-up" : "chevron-down"}
+            size={20}
+            color={theme.dim}
+          />
+        </Pressable>
+        {action ? <View style={{ marginLeft: 8 }}>{action}</View> : null}
+      </View>
+      {expanded ? (
+        <View style={{ borderTopWidth: 1, borderTopColor: theme.border, paddingBottom: 4 }}>
+          {children}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+export function TeacherSelectMenu({
+  label,
+  selectedValue,
+  options,
+  onSelect,
+}: {
+  label: string;
+  selectedValue: string;
+  options: Array<{ label: string; value: string }>;
+  onSelect: (value: string) => void;
+}) {
+  const [visible, setVisible] = useState(false);
+  const selectedLabel = options.find((option) => option.value === selectedValue)?.label ?? label;
+
+  return (
+    <>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${label}: ${selectedLabel}`}
+        accessibilityState={{ expanded: visible }}
+        onPress={() => setVisible(true)}
+        style={{
+          marginHorizontal: 16,
+          marginTop: 12,
+          minHeight: 48,
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: theme.border,
+          backgroundColor: theme.surface,
+          paddingHorizontal: 14,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 10,
+        }}
+      >
+        <MaterialCommunityIcons name="google-classroom" size={19} color={theme.red} />
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 10, fontWeight: "700", color: theme.muted, textTransform: "uppercase" }}>{label}</Text>
+          <Text style={{ marginTop: 2, fontSize: 13, fontWeight: "800", color: theme.text }}>{selectedLabel}</Text>
+        </View>
+        <MaterialCommunityIcons name="chevron-down" size={20} color={theme.dim} />
+      </Pressable>
+      <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Close ${label}`}
+          onPress={() => setVisible(false)}
+          style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(15,23,42,0.38)" }}
+        >
+          <View
+            style={{
+              maxHeight: "70%",
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              backgroundColor: theme.surface,
+              paddingHorizontal: 16,
+              paddingTop: 16,
+              paddingBottom: 24,
+            }}
+          >
+            <Text style={{ fontSize: 17, fontWeight: "900", color: theme.text }}>{label}</Text>
+            <ScrollView style={{ marginTop: 10 }}>
+              {options.map((option) => {
+                const selected = option.value === selectedValue;
+                return (
+                  <Pressable
+                    key={option.value}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    onPress={() => {
+                      onSelect(option.value);
+                      setVisible(false);
+                    }}
+                    style={{
+                      minHeight: 48,
+                      borderBottomWidth: 1,
+                      borderBottomColor: theme.border,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      paddingHorizontal: 4,
+                    }}
+                  >
+                    <Text style={{ flex: 1, fontSize: 14, fontWeight: selected ? "800" : "600", color: selected ? theme.red : theme.text }}>
+                      {option.label}
+                    </Text>
+                    {selected ? <MaterialCommunityIcons name="check" size={20} color={theme.red} /> : null}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
+    </>
   );
 }
 
