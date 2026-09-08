@@ -121,6 +121,7 @@ export function AssessmentSettingsFields({
   periods,
   classId,
   ai = false,
+  showAssessmentType = true,
   disabled = false,
 }: {
   value: Settings;
@@ -128,6 +129,7 @@ export function AssessmentSettingsFields({
   periods: AcademicPeriod[];
   classId?: string;
   ai?: boolean;
+  showAssessmentType?: boolean;
   disabled?: boolean;
 }) {
   const [advanced, setAdvanced] = useState(false);
@@ -173,18 +175,20 @@ export function AssessmentSettingsFields({
         onChange={(description) => patch({ description })}
         disabled={disabled}
       />
-      <Choices
-        label="Assessment type"
-        value={value.type}
-        disabled={disabled}
-        options={[
-          { value: "quiz", label: "Quiz" },
-          { value: "exam", label: "Exam" },
-          { value: "assignment", label: "Assignment" },
-          ...(!ai ? [{ value: "file_upload", label: "File upload" }] : []),
-        ]}
-        onChange={(type) => patch({ type: type as Settings["type"] })}
-      />
+      {showAssessmentType && (
+        <Choices
+          label="Assessment type"
+          value={value.type}
+          disabled={disabled}
+          options={[
+            { value: "quiz", label: "Quiz" },
+            { value: "exam", label: "Exam" },
+            { value: "assignment", label: "Assignment" },
+            ...(!ai ? [{ value: "file_upload", label: "File upload" }] : []),
+          ]}
+          onChange={(type) => patch({ type: type as Settings["type"] })}
+        />
+      )}
       <Choices
         label="Grading period"
         value={value.quarter}

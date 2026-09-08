@@ -468,7 +468,22 @@ describe('AssessmentEditorPage', () => {
       | undefined;
     expect(updatePayload).toBeDefined();
     expect(updatePayload).not.toHaveProperty('isPublished');
+    expect(updatePayload).not.toHaveProperty('type');
     expect(mockedAssessmentService.updateQuestion).not.toHaveBeenCalled();
+  });
+
+  it('keeps the created assessment format fixed in Settings', async () => {
+    render(<AssessmentEditorPage />);
+
+    expect(
+      (await screen.findAllByDisplayValue('Fractions Checkpoint')).length,
+    ).toBeGreaterThan(0);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0]);
+
+    expect(screen.queryByText('Assessment format')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /file upload assessment/i }),
+    ).not.toBeInTheDocument();
   });
 
   it('sanitizes advanced numeric inputs and constrains passing score choices', async () => {
@@ -816,15 +831,17 @@ describe('AssessmentEditorPage', () => {
   });
 
   it('swaps the setup rules for file upload mode', async () => {
+    mockedAssessmentService.getById.mockResolvedValueOnce({
+      success: true,
+      message: 'ok',
+      data: buildAssessment({ type: 'file_upload', questions: [] }),
+    } as Awaited<ReturnType<typeof assessmentService.getById>>);
     render(<AssessmentEditorPage />);
 
     expect(
       (await screen.findAllByDisplayValue('Fractions Checkpoint')).length,
     ).toBeGreaterThan(0);
 
-    fireEvent.click(
-      screen.getAllByRole('button', { name: /file upload assessment/i })[0],
-    );
     fireEvent.click(
       screen.getByRole('button', { name: /view .* setup issues/i }),
     );
@@ -839,15 +856,17 @@ describe('AssessmentEditorPage', () => {
   });
 
   it('simplifies advanced settings for file upload mode and fixes scoring to 100 points', async () => {
+    mockedAssessmentService.getById.mockResolvedValueOnce({
+      success: true,
+      message: 'ok',
+      data: buildAssessment({ type: 'file_upload', questions: [] }),
+    } as Awaited<ReturnType<typeof assessmentService.getById>>);
     render(<AssessmentEditorPage />);
 
     expect(
       (await screen.findAllByDisplayValue('Fractions Checkpoint')).length,
     ).toBeGreaterThan(0);
 
-    fireEvent.click(
-      screen.getAllByRole('button', { name: /file upload assessment/i })[0],
-    );
     fireEvent.click(screen.getAllByRole('button', { name: 'Advanced' })[0]);
 
     expect(
@@ -971,6 +990,11 @@ describe('AssessmentEditorPage', () => {
   });
 
   it('keeps rubric points within 100 and requires an exact total before saving', async () => {
+    mockedAssessmentService.getById.mockResolvedValueOnce({
+      success: true,
+      message: 'ok',
+      data: buildAssessment({ type: 'file_upload', questions: [] }),
+    } as Awaited<ReturnType<typeof assessmentService.getById>>);
     mockedAssessmentService.reviewRubric.mockResolvedValueOnce({
       success: true,
       message: 'saved',
@@ -998,9 +1022,6 @@ describe('AssessmentEditorPage', () => {
       (await screen.findAllByDisplayValue('Fractions Checkpoint')).length,
     ).toBeGreaterThan(0);
 
-    fireEvent.click(
-      screen.getAllByRole('button', { name: /file upload assessment/i })[0],
-    );
     fireEvent.click(screen.getByRole('button', { name: /rubric/i }));
     fireEvent.click(screen.getByRole('button', { name: /add row/i }));
     fireEvent.click(screen.getByRole('button', { name: /add row/i }));

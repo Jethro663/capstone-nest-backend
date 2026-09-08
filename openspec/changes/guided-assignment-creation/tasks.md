@@ -21,18 +21,18 @@ The execution record must capture the pushed development revision, exact CI run,
 
 ## 4. Immutable assessment format
 
-- [ ] 4.1 Add a backend regression test and reject changes to an existing assessment type with a structured immutable-format error.
-- [ ] 4.2 Remove the web editor format switcher and stale switch-copy; omit type from existing web saves and cover the behavior.
-- [ ] 4.3 Remove the post-creation mobile type selector while retaining pre-creation AI choices; omit type from existing mobile saves and cover the behavior.
+- [x] 4.1 Add a backend regression test and reject changes to an existing assessment type with a structured immutable-format error.
+- [x] 4.2 Remove the web editor format switcher and stale switch-copy; omit type from existing web saves and cover the behavior.
+- [x] 4.3 Remove the post-creation mobile type selector while retaining pre-creation AI choices; omit type from existing mobile saves and cover the behavior.
 
 ## 5. Native mobile creation parity
 
-- [ ] 5.1 Add mobile creation-context types, payload conversion and actor/class-scoped exact-request recovery with red-green unit coverage.
-- [ ] 5.2 Replace the compatibility create screen with the accessible animated three-step wizard, conflict rollback and backend-derived handoff confirmation.
-- [ ] 5.3 Route teacher class, teacher assessment and admin New actions through the wizard and cover navigation plus complete/skip/cancel/retry flows.
+- [x] 5.1 Add mobile creation-context types, payload conversion and actor/class-scoped exact-request recovery with red-green unit coverage.
+- [x] 5.2 Replace the compatibility create screen with the accessible animated three-step wizard, conflict rollback and backend-derived handoff confirmation.
+- [x] 5.3 Route teacher class, teacher assessment and admin New actions through the wizard and cover navigation plus complete/skip/cancel/retry flows.
 
 ## 6. Follow-up verification and release
 
-- [ ] 6.1 Run focused and full backend, web and mobile checks plus native flow evidence.
-- [ ] 6.2 Build the next production Android APK, validate package/version/ABI/signature/alignment/API target, prepare and verify its delivery manifest.
+- [x] 6.1 Run focused and full backend, web and mobile checks plus native flow evidence.
+- [x] 6.2 Build the next production Android APK, validate package/version/ABI/signature/alignment/API target, prepare and verify its delivery manifest.
 - [ ] 6.3 Review the complete scoped diff, commit and push `developement`, observe exact CI/Railway success, verify live health/APK bytes and register/read back the Android update contract.

@@ -387,8 +387,8 @@ export function NewAssignmentWizard({
                       </span>
                     </button>
                     <p className="text-sm text-muted-foreground sm:col-span-2">
-                      Both formats can sync scores to your class record. You can
-                      change the format in the editor.
+                      Both formats can sync scores to your class record. The
+                      format is fixed after creation.
                     </p>
                   </div>
                 )}

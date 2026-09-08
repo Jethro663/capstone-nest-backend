@@ -7,6 +7,7 @@ import { normalizeArray, unwrapEnvelope } from "../http";
 import { fetchAllPages, normalizePageEnvelope } from "../pagination";
 import { downloadProtectedFile, openLocalFile } from "./protected-files";
 import type { ApiEnvelope } from "../../types/api";
+import type { AssignmentCreationContext } from "../../types/assignment-creation";
 import type {
   Assessment,
   AssessmentAttempt,
@@ -117,6 +118,12 @@ function normalizeTeacherSubmissionsResponse(
 }
 
 export const assessmentsApi = {
+  async getCreationContext(classId: string) {
+    return unwrapEnvelope<AssignmentCreationContext>(
+      (await apiClient.get(`/assessments/class/${classId}/creation-context`))
+        .data,
+    );
+  },
   async uploadAuthorImage(
     kind: "questions" | "options",
     id: string,

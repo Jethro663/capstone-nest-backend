@@ -165,10 +165,6 @@ type AssessmentEditorLocalDraft = {
 const TEACHER_ASSESSMENT_DRAFT_STORAGE_PREFIX =
   "teacher-assessment-editor-draft";
 
-const ASSESSMENT_TYPE_TABS: Array<{ value: AssessmentType; label: string }> = [
-  { value: "quiz", label: "Question Assessment" },
-  { value: "file_upload", label: "File Upload Assessment" },
-];
 const DEFAULT_RESULT_RELEASE_DELAY_HOURS = 24;
 const RESULT_RELEASE_OPTIONS: Array<{
   value: ResultReleaseMode;
@@ -2200,7 +2196,6 @@ export default function AssessmentEditorPage() {
       const updatePayload = {
         title: title.trim() || "Untitled assessment",
         description,
-        type: assessmentType,
         passingScore,
         maxAttempts: toBoundedPositiveInteger(
                 maxAttempts,
@@ -2466,36 +2461,6 @@ export default function AssessmentEditorPage() {
     },
   ];
 
-  const assessmentTypeSwitcher = (
-    <div className="assessment-editor__inline-card">
-      <p className="assessment-editor__kicker">Assessment format</p>
-      <div className="mt-3 grid gap-2 sm:grid-cols-2">
-        {ASSESSMENT_TYPE_TABS.map((entry) => (
-          <button
-            key={entry.value}
-            type="button"
-            aria-pressed={assessmentType === entry.value}
-            className={`rounded-2xl border px-4 py-3 text-left text-sm font-semibold transition ${
-              assessmentType === entry.value
-                ? "border-[#ef233c]/40 bg-[#fff5f5] text-[#9f1239]"
-                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-            }`}
-            onClick={() => {
-              setAssessmentType(entry.value);
-              if (entry.value === "file_upload") {
-                toast.info(
-                  "File Upload mode enabled. Questions are preserved but hidden.",
-                );
-              }
-            }}
-          >
-            {entry.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-
   const rubricContent = (
     <div className="space-y-4 rounded-[1.5rem] border border-slate-200/80 bg-white p-4">
       <div className="assessment-editor__rubric-head">
@@ -2695,8 +2660,6 @@ export default function AssessmentEditorPage() {
 
   const settingsContent = (
     <div className="space-y-5">
-      {assessmentTypeSwitcher}
-
       <div className="space-y-4 rounded-[1.5rem] border border-slate-200/80 bg-white p-4">
         <div>
           <p className="text-sm font-black text-slate-900">Core settings</p>
@@ -3280,8 +3243,8 @@ export default function AssessmentEditorPage() {
         <div className="assessment-editor__file-mode-head">
           <h3>File Upload Assessment</h3>
           <p>
-            Students submit files instead of answering question cards. Existing
-            questions are kept for future mode switches.
+            Students submit files instead of answering question cards. This
+            format is fixed for the life of the assessment.
           </p>
         </div>
 

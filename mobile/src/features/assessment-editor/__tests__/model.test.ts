@@ -56,6 +56,7 @@ describe("mobile assessment editor document", () => {
       feedbackDelayHours: 2,
       closeWhenDue: false,
     });
+    expect(request.settings).not.toHaveProperty("type");
     expect(request.questions?.[0]).toMatchObject({
       id: "question",
       content: "<p><strong>Hello</strong></p>",
@@ -76,6 +77,15 @@ describe("mobile assessment editor document", () => {
     expect(request.action).toBe("save");
     expect(request.questions?.[0].content).toBe("");
     expect(request.settings).not.toHaveProperty("isPublished");
+  });
+  it("sends the selected type when creating the assessment for the first time", () => {
+    const document = {
+      ...assessmentToEditor(assessment),
+      id: undefined,
+      revision: 0,
+    };
+    const request = buildEditorRequest(document, "mutation", "save");
+    expect(request.settings.type).toBe("quiz");
   });
   it("keeps legacy ordering unchanged unless the teacher moves questions or choices", () => {
     const legacy: Assessment = {

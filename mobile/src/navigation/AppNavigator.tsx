@@ -775,6 +775,7 @@ function TeacherNavigator() {
       <RootStack.Screen
         name="TeacherCreateAssessment"
         component={TeacherCreateAssessmentScreen}
+        options={{ presentation: "modal" }}
       />
       <RootStack.Screen
         name="TeacherClassAddStudents"
@@ -892,7 +893,7 @@ function AdminNavigator() {
       <RootStack.Screen name="TeacherLessonEditor" component={TeacherLessonEditorScreen} />
       <RootStack.Screen name="TeacherLessons" component={TeacherLessonsScreen} />
       <RootStack.Screen name="TeacherCreateModule" component={TeacherCreateModuleScreen} />
-      <RootStack.Screen name="TeacherCreateAssessment" component={TeacherCreateAssessmentScreen} />
+      <RootStack.Screen name="TeacherCreateAssessment" component={TeacherCreateAssessmentScreen} options={{ presentation: "modal" }} />
       <RootStack.Screen name="TeacherModuleFileDetail" component={TeacherModuleFileDetailScreen} />
       <RootStack.Screen name="TeacherCalendar" component={TeacherCalendarScreen} />
       <RootStack.Screen name="TeacherExtractionDetail" component={TeacherExtractionDetailScreen} />

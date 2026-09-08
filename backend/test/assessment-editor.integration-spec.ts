@@ -416,6 +416,33 @@ describe('assessment editor PostgreSQL transactions', () => {
     },
   );
 
+  it('keeps the assessment type unchanged when an editor request tries to switch formats', async () => {
+    const dto = create();
+    dto.settings.type = AssessmentType.QUIZ;
+    const saved = await editor.save(undefined, dto, actor);
+
+    await expect(
+      editor.save(
+        saved.assessment.id,
+        {
+          mutationId: randomUUID(),
+          expectedRevision: saved.revision,
+          action: 'save',
+          settings: { type: AssessmentType.FILE_UPLOAD },
+        },
+        actor,
+      ),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({
+        code: 'ASSESSMENT_TYPE_IMMUTABLE',
+      }),
+    });
+
+    const after = await service.getAssessmentById(saved.assessment.id);
+    expect(after.type).toBe(AssessmentType.QUIZ);
+    expect(after.questions).toEqual(saved.assessment.questions);
+  });
+
   it('preserves rubric review metadata when file-upload settings are resubmitted unchanged', async () => {
     const rubricCriteria = [
       {

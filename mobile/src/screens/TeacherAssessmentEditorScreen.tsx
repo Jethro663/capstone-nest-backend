@@ -678,6 +678,44 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
               Could not load assessment. Retry
             </Action>
           )}
+          {route.params?.created && detail.data ? (
+            <View
+              accessibilityRole="summary"
+              style={{
+                padding: 14,
+                gap: 6,
+                borderWidth: 1,
+                borderColor: theme.green,
+                backgroundColor: theme.greenSoft,
+                borderRadius: 10,
+              }}
+            >
+              <Text style={{ color: theme.text, fontWeight: "800" }}>
+                Draft created
+              </Text>
+              <Text style={{ color: theme.subtext, lineHeight: 20 }}>
+                {detail.data.type === "file_upload"
+                  ? "File upload assignment"
+                  : "Question assignment"}
+                {detail.data.quarter ? ` · ${detail.data.quarter}` : ""}
+                {detail.data.classRecordCategory
+                  ? ` · ${detail.data.classRecordCategory.replace(/_/g, " ")}`
+                  : " · placement pending"}
+                {detail.data.classRecordPlacement?.itemId
+                  ? " · slot reserved"
+                  : ""}
+              </Text>
+              <Text style={{ color: theme.subtext, lineHeight: 20 }}>
+                {detail.data.dueDate
+                  ? `Due ${new Date(detail.data.dueDate).toLocaleString()} · `
+                  : "No due date · "}
+                {detail.data.type === "file_upload"
+                  ? "latest revision is graded"
+                  : `${detail.data.maxAttempts ?? 1} attempt${detail.data.maxAttempts === 1 ? "" : "s"}`}
+                {" · hidden from students"}
+              </Text>
+            </View>
+          ) : null}
           {detail.data?.authoringRestrictions?.reason && (
             <Text style={{ color: theme.muted }}>
               {detail.data.authoringRestrictions.reason}
@@ -778,6 +816,7 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
                 value={document.settings}
                 periods={periods}
                 classId={document.classId}
+                showAssessmentType={false}
                 disabled={Boolean(
                   saving ||
                   conflict ||

@@ -126,7 +126,7 @@ const flatten = (node: { children: Array<string | object> }): string =>
       typeof child === "string" ? child : flatten(child as typeof node),
     )
     .join(" ");
-async function mount() {
+async function mount(created = false) {
   navigation = {
     goBack: jest.fn(),
     addListener: jest.fn(() => jest.fn()),
@@ -138,7 +138,11 @@ async function mount() {
         navigation={navigation as never}
         route={
           {
-            params: { assessmentId: mockAssessment?.id, classId: "class-1" },
+            params: {
+              assessmentId: mockAssessment?.id,
+              classId: "class-1",
+              created,
+            },
           } as never
         }
       />,
@@ -292,6 +296,19 @@ it("preview does not create an attempt or reveal correct-answer markers", async 
   expect(flatten(renderer.root)).toContain("no attempt will be created");
   expect(flatten(renderer.root)).not.toContain("Correct answer");
   expect(assessmentsApi.saveEditor).not.toHaveBeenCalled();
+});
+it("keeps assessment type out of post-creation settings and confirms the draft", async () => {
+  mockAssessment = {
+    ...saved().assessment,
+    classRecordCategory: "written_work",
+  };
+  await mount(true);
+  await press("Settings");
+  expect(
+    renderer.root.findByType("SettingsFields").props.showAssessmentType,
+  ).toBe(false);
+  expect(flatten(renderer.root)).toContain("Draft created");
+  expect(flatten(renderer.root)).toContain("hidden from students");
 });
 it("edits fill-in-the-blank answer keys as plain text for automatic grading", async () => {
   await mount();

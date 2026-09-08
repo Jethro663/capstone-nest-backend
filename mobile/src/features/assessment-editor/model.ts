@@ -165,12 +165,15 @@ export function buildEditorRequest(
   mutationId: string,
   action: SaveAssessmentEditorInput["action"],
 ): SaveAssessmentEditorInput {
+  const { type: fixedType, ...editableSettings } = document.settings;
   return {
     mutationId,
     classId: document.classId,
     expectedRevision: document.id ? document.revision : undefined,
     action,
-    settings: { ...document.settings },
+    settings: document.id
+      ? editableSettings
+      : { ...editableSettings, type: fixedType },
     deletedQuestionIds: document.deletedQuestionIds,
     questions:
       document.settings.type === "file_upload"

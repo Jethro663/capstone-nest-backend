@@ -78,7 +78,7 @@ export type RootStackParamList = {
   TeacherLessons: undefined;
   TeacherAssessmentDetail: { assessmentId: string; classId?: string };
   TeacherAssessmentEditor:
-    | { assessmentId?: string; classId?: string }
+    | { assessmentId?: string; classId?: string; created?: boolean }
     | undefined;
   TeacherAssessmentReview: {
     attemptId: string;

@@ -242,7 +242,7 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
     if (creatingAssessment) return;
     try {
       setCreatingAssessment(true);
-      navigation.navigate("TeacherAssessmentEditor", { classId });
+      navigation.navigate("TeacherCreateAssessment", { classId });
     } catch (error) {
       Alert.alert("Unable to create assessment", toAppError(error).message);
     } finally {

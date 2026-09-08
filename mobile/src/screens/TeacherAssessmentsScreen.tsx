@@ -186,7 +186,7 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
 
     try {
       setCreatingAssessment(true);
-      navigation.navigate("TeacherAssessmentEditor", { classId });
+      navigation.navigate("TeacherCreateAssessment", { classId });
     } catch (error) {
       Alert.alert("Unable to create assessment", toAppError(error).message);
     } finally {

@@ -2309,6 +2309,23 @@ export class AssessmentsService {
       'You can only manage assessments for your own classes',
     );
 
+    if (
+      updateAssessmentDto.type !== undefined &&
+      updateAssessmentDto.type !== existingAssessment.type
+    ) {
+      throw new BadRequestException({
+        code: 'ASSESSMENT_TYPE_IMMUTABLE',
+        message:
+          'Assessment format is fixed after creation. Create a new assessment to use another format.',
+        fieldErrors: [
+          {
+            field: 'type',
+            message: 'Assessment format cannot be changed after creation',
+          },
+        ],
+      });
+    }
+
     await this.assertAcademicMutation(existingAssessment, 'prepare');
     const nextQuarter =
       updateAssessmentDto.quarter !== undefined
@@ -2329,8 +2346,6 @@ export class AssessmentsService {
             } | null
           )?.itemId);
     const contentChanged =
-      (updateAssessmentDto.type !== undefined &&
-        updateAssessmentDto.type !== existingAssessment.type) ||
       (updateAssessmentDto.rubricCriteria !== undefined &&
         JSON.stringify(
           this.normalizeRubricCriteria(updateAssessmentDto.rubricCriteria),
@@ -2349,7 +2364,7 @@ export class AssessmentsService {
       { ...existingAssessment, quarter: nextQuarter },
       updateAssessmentDto.isPublished === true ? 'release' : 'prepare',
     );
-    const nextType = updateAssessmentDto.type ?? existingAssessment.type;
+    const nextType = existingAssessment.type;
     const nextIsFileUpload = nextType === AssessmentType.FILE_UPLOAD;
     const wasPublished = Boolean(existingAssessment.isPublished);
     const shouldSyncClassRecordPlacement =
@@ -2424,8 +2439,6 @@ export class AssessmentsService {
       updateData.description = this.sanitizeOptionalRichText(
         updateAssessmentDto.description,
       );
-    if (updateAssessmentDto.type !== undefined)
-      updateData.type = updateAssessmentDto.type;
     if (updateAssessmentDto.dueDate !== undefined)
       updateData.dueDate = updateAssessmentDto.dueDate
         ? new Date(updateAssessmentDto.dueDate)

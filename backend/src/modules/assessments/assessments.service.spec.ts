@@ -726,6 +726,40 @@ describe('AssessmentsService', () => {
   // ═══════════════════════════════════════════════════════════════════════════
 
   describe('updateAssessment', () => {
+    it('should reject changing the assessment type after creation', async () => {
+      db.query.assessments.findFirst.mockResolvedValue(MOCK_ASSESSMENT);
+
+      await expect(
+        service.updateAssessment(
+          ASSESSMENT_ID,
+          { type: 'file_upload' } as any,
+          { userId: 'teacher-1', roles: ['teacher'] },
+        ),
+      ).rejects.toMatchObject({
+        response: expect.objectContaining({
+          code: 'ASSESSMENT_TYPE_IMMUTABLE',
+        }),
+      });
+
+      expect(db.update).not.toHaveBeenCalled();
+    });
+
+    it('should accept the existing assessment type from legacy clients', async () => {
+      const updated = { ...MOCK_ASSESSMENT, title: 'Legacy save' };
+      db.query.assessments.findFirst
+        .mockResolvedValueOnce(MOCK_ASSESSMENT)
+        .mockResolvedValueOnce(updated);
+      mockUpdateReturning(db, [updated]);
+
+      const result = await service.updateAssessment(
+        ASSESSMENT_ID,
+        { type: 'quiz', title: 'Legacy save' } as any,
+        { userId: 'teacher-1', roles: ['teacher'] },
+      );
+
+      expect(result.title).toBe('Legacy save');
+    });
+
     it('should update title without validation when not publishing', async () => {
       const updated = { ...MOCK_ASSESSMENT, title: 'Updated' };
       db.query.assessments.findFirst
