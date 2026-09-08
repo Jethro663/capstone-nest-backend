@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next';
+import { baselineSecurityHeaders } from './src/lib/security-headers';
 
 const RAILWAY_BACKEND_PUBLIC_ORIGIN =
   process.env.RAILWAY_SERVICE_CAPSTONE_BACKEND_V2_URL
@@ -16,6 +17,13 @@ const DEFAULT_SERVER_API_ORIGIN =
     : 'http://127.0.0.1:3000';
 
 const nextConfig: NextConfig = {
+  poweredByHeader: false,
+  async headers() {
+    return [{
+      source: '/((?!api(?:/|$)).*)',
+      headers: baselineSecurityHeaders(process.env.NODE_ENV === 'production'),
+    }];
+  },
   output: 'standalone',
   outputFileTracingRoot: __dirname,
   turbopack: {

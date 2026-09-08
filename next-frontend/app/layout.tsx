@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { connection } from 'next/server';
 import { AuthProvider } from '@/providers/AuthProvider';
 import { QueryProvider } from '@/providers/QueryProvider';
 import { Toaster } from '@/components/ui/sonner';
@@ -14,11 +15,13 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // A fresh request nonce cannot be embedded in prerendered/shared cached HTML.
+  await connection();
   return (
     <html lang="en" suppressHydrationWarning>
       <body>

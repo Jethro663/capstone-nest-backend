@@ -90,6 +90,12 @@ jobs:
       - name: Wait for this frontend deployment to pass its runtime health check
         run: node .github/scripts/wait-railway-deployment.cjs "$RUNNER_TEMP/frontend-deployment.json"
 
+      - name: Verify public security headers and API policy ownership
+        env:
+          SECURITY_CHECK_ORIGIN: https://nexora-lms.com
+          SECURITY_CHECK_API: 'true'
+        run: node next-frontend/scripts/check-security-headers.mjs
+
       - name: Record deployment provenance
         run: |
           echo "tested_sha=$TESTED_SHA" >> "$GITHUB_STEP_SUMMARY"

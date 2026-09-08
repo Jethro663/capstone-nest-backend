@@ -94,6 +94,10 @@ async function bootstrap() {
   // Helmet — strict in production; disable CSP in development so Swagger UI
   // can load its inline scripts and CDN assets without being blocked.
   app.use(isProd ? helmet() : helmet({ contentSecurityPolicy: false }));
+  app.use((_req: express.Request, res: express.Response, next: express.NextFunction) => {
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()');
+    next();
+  });
   const requestBodyLimit = process.env.REQUEST_BODY_LIMIT ?? '1mb';
   app.use(express.json({ limit: requestBodyLimit }));
   app.use(express.urlencoded({ extended: true, limit: requestBodyLimit }));

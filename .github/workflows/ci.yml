@@ -138,6 +138,20 @@ jobs:
       - run: npm run test -- --ci
       - run: npm run build
 
+      - name: Install browser for production security checks
+        run: npx playwright install --with-deps chromium
+      - name: Verify production headers, nonce rendering, and browser enforcement
+        run: |
+          PORT=3101 HOSTNAME=127.0.0.1 npm start > "$RUNNER_TEMP/security-frontend.log" 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 60); do
+            curl --silent --fail http://127.0.0.1:3101/login > /dev/null && break
+            sleep 1
+          done
+          node scripts/check-security-headers.mjs
+          node scripts/security-browser-smoke.mjs
+
   mobile:
     name: Mobile
     runs-on: ubuntu-latest
