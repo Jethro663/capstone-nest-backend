@@ -2535,7 +2535,7 @@ describe("mobile rendered screen flows", () => {
     });
   });
 
-  it("renders Dashboard screen shell with the dark student home sections", () => {
+  it("renders the compact agenda-first student home hierarchy", () => {
     const { DashboardScreen } = require("../DashboardScreen");
     const navigate = jest.fn();
 
@@ -2555,18 +2555,19 @@ describe("mobile rendered screen flows", () => {
       .join(" ");
 
     expect(renderedText).toContain("Student Home");
-    expect(renderedText).toContain("Weekly Progress");
-    expect(renderedText).toContain("Continue Learning");
-    expect(renderedText).toContain("Day Schedule");
-    expect(renderedText).toContain("Pending Tasks");
-    expect(renderedText).toContain("Recent Lessons");
-    expect(renderedText).toContain("Student Tools");
+    expect(renderedText).toContain("Next for you");
+    expect(renderedText).toContain("Today");
+    expect(renderedText).toContain("Continue learning");
+    expect(renderedText).toContain("Due soon");
+    expect(renderedText).toContain("Latest update");
+    expect(renderedText).not.toContain("Weekly Progress");
+    expect(renderedText).not.toContain("Student Tools");
     expect(mockedUseLessons).toHaveBeenCalledWith("class-1");
     expect(mockedUseLessonCompletions).toHaveBeenCalledWith("class-1");
     expect(mockedUseAssessments).toHaveBeenCalledWith("class-1");
   });
 
-  it("routes dashboard hero secondary action to My Courses", () => {
+  it("routes the home class action to the Classes tab", () => {
     const { DashboardScreen } = require("../DashboardScreen");
     const navigate = jest.fn();
 
@@ -2580,18 +2581,18 @@ describe("mobile rendered screen flows", () => {
       );
     });
 
-    const myCoursesButton = findPressableByText(
+    const classesButton = findPressableByText(
       testRenderer!.root,
-      "My Courses",
+      "View all classes",
     );
     act(() => {
-      myCoursesButton.props.onPress();
+      classesButton.props.onPress();
     });
 
-    expect(navigate).toHaveBeenCalledWith("Courses");
+    expect(navigate).toHaveBeenCalledWith("Classes");
   });
 
-  it("routes dashboard stat cards and profile nudge to the expected screens", () => {
+  it("removes dashboard stat shortcuts and keeps the profile nudge actionable", () => {
     const { DashboardScreen } = require("../DashboardScreen");
     const navigate = jest.fn();
 
@@ -2605,29 +2606,23 @@ describe("mobile rendered screen flows", () => {
       );
     });
 
-    const classesShortcut = findPressableByText(testRenderer!.root, "Classes");
-    const performanceShortcut = findPressableByText(
-      testRenderer!.root,
-      "Average",
-    );
     const profileShortcut = findPressableByText(
       testRenderer!.root,
       "Complete your learner profile",
     );
 
     act(() => {
-      classesShortcut.props.onPress();
-    });
-    act(() => {
-      performanceShortcut.props.onPress();
-    });
-    act(() => {
       profileShortcut.props.onPress();
     });
 
-    expect(navigate).toHaveBeenCalledWith("Classes");
-    expect(navigate).toHaveBeenCalledWith("Performance");
     expect(navigate).toHaveBeenCalledWith("Profile");
+
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+    expect(renderedText).not.toContain("Average");
+    expect(renderedText).not.toContain("Evaluations");
   });
 
   it("renders Courses screen and opens class detail from a course card", () => {

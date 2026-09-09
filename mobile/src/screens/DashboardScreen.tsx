@@ -39,6 +39,7 @@ import { studentDarkTheme } from "../theme/studentDark";
 import { shadow } from "../theme/tokens";
 import { refetchWithConcurrency } from "../utils/refetchWithConcurrency";
 import { RoleMenuButton } from "../components/navigation/RoleNavigationDrawer";
+import { StudentHomeView } from "./student-home/StudentHomeView";
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, "Dashboard">,
@@ -1168,6 +1169,59 @@ export function DashboardScreen({ navigation }: Props) {
   const handleOpenProfile = () => {
     navigation.navigate("Profile");
   };
+
+  if (studentDarkTheme.bg === "#FBFAF8") {
+    return (
+      <StudentHomeView
+        navigation={navigation}
+        bridges={
+          <>
+            {schoolYear ? (
+              <DashboardSchoolEventsBridge
+                schoolYear={schoolYear}
+                onChange={handleSchoolEventsChange}
+                onRefreshReady={handleSchoolEventsRefreshReady}
+              />
+            ) : null}
+            {classIds.map((classId) => (
+              <DashboardClassDataBridge
+                key={classId}
+                classId={classId}
+                onChange={handleClassDataChange}
+                onRemove={handleClassDataRemove}
+                onRefreshReady={handleClassRefreshReady}
+              />
+            ))}
+          </>
+        }
+        firstName={firstName}
+        initials={initials}
+        unreadCount={unreadCount}
+        profileReadiness={profileReadiness}
+        pendingAssessments={pendingAssessments}
+        pendingAssessmentStatusCount={pendingAssessmentStatusCount}
+        hasPendingAssessmentSync={hasPendingAssessmentSync}
+        todaySchedule={todaySchedule}
+        continueLearning={continueLearning}
+        recentLessons={recentLessons}
+        latestUpdate={
+          schoolEvents[0]
+            ? {
+                id: schoolEvents[0].id,
+                title: schoolEvents[0].title,
+                subtitle: formatEventDate(
+                  schoolEvents[0].startsAt,
+                  schoolEvents[0].allDay,
+                ),
+              }
+            : upcomingTimeline[0]
+        }
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
+        errorMessage={primaryError ? peekAppError(primaryError).message : undefined}
+      />
+    );
+  }
 
   return (
     <ScreenScroll
