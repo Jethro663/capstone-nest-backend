@@ -42,7 +42,7 @@
 - Consumes: `RoleHeaderNavigationButton`, `ScreenScroll`, `Refreshable`, `RootStackParamList`, current P2 teacher tokens.
 - Produces: `StudentScreen`, `StudentContextStrip`, `StudentWorkspaceSwitcher`, `StudentSegmentedControl`, `StudentSelectMenu`, `StudentFlatSection`, `StudentListRow`, `StudentInlineNotice`, `StudentActionSheet`, `StudentBottomActionBar`, and `goBackFromStudentDetail(navigation, routeName, params)`.
 
-- [ ] **Step 1: Write failing primitive and palette tests**
+- [x] **Step 1: Write failing primitive and palette tests**
 
 ```tsx
 expect(studentDarkTheme.bg).toBe("#FBFAF8");
@@ -59,7 +59,7 @@ const renderer = create(
 expect(renderer.root.findByProps({ accessibilityLabel: "Open class workspace menu" })).toBeTruthy();
 ```
 
-- [ ] **Step 2: Write failing direct-entry fallback tests**
+- [x] **Step 2: Write failing direct-entry fallback tests**
 
 ```ts
 expect(resolveStudentDetailFallback("ModuleDetail", { classId: "c1", moduleId: "m1" })).toEqual({
@@ -72,7 +72,7 @@ expect(resolveStudentDetailFallback("LessonDetail", { lessonId: "l1", classId: "
 });
 ```
 
-- [ ] **Step 3: Run the focused tests and confirm RED**
+- [x] **Step 3: Run the focused tests and confirm RED**
 
 Run:
 
@@ -82,7 +82,7 @@ npm --prefix mobile test -- --runInBand src/theme/__tests__/student-theme.test.t
 
 Expected: failures for the unimplemented P2 values, primitives, and fallback resolver.
 
-- [ ] **Step 4: Implement the shared primitives and additive source types**
+- [x] **Step 4: Implement the shared primitives and additive source types**
 
 Add optional sources without changing existing callers:
 
@@ -95,7 +95,7 @@ export type StudentAssessmentDetailSource = "assessments" | "class" | "home" | "
 
 `StudentScreen` renders one compact safe-area-aware header and places `bottomAction` outside `ScreenScroll`. `StudentWorkspaceSwitcher`, `StudentSelectMenu`, and `StudentActionSheet` use native `Modal` with `onRequestClose`, a dismiss scrim, semantic selected/expanded states, and 44 px controls.
 
-- [ ] **Step 5: Add Calendar as a hidden student tab drawer destination without removing the contextual `Calendar` stack route**
+- [x] **Step 5: Add Calendar as a hidden student tab drawer destination without removing the contextual `Calendar` stack route**
 
 ```ts
 // MainTabParamList
@@ -107,7 +107,7 @@ StudentCalendar: undefined;
 
 Mount `StudentCalendar` with `CalendarScreen` inside `StudentTabs`, keep the existing `RootStack` `Calendar` route for class-scoped and Home entries, and set `backBehavior="history"` on student tabs.
 
-- [ ] **Step 6: Run focused tests and confirm GREEN**
+- [x] **Step 6: Run focused tests and confirm GREEN**
 
 Run the Task 1 command plus:
 
@@ -118,7 +118,7 @@ npm --prefix mobile run typecheck
 
 Expected: all focused suites pass and TypeScript accepts every additive route parameter.
 
-- [ ] **Step 7: Commit the foundation slice**
+- [x] **Step 7: Commit the foundation slice**
 
 ```bash
 git add mobile/src/components/student mobile/src/navigation mobile/src/theme/studentDark.ts mobile/src/theme/__tests__/student-theme.test.ts
@@ -137,7 +137,7 @@ git commit -m "feat(mobile): add student workspace foundations"
 - Consumes: existing dashboard class/lesson/attempt/event snapshots and Task 1 student primitives.
 - Produces: `buildStudentHomeAgenda(...)` returning `nextAction`, `today`, `continueLearning`, `dueSoon`, and `latestUpdate` with no new server calls.
 
-- [ ] **Step 1: Write the failing hierarchy/model tests**
+- [x] **Step 1: Write the failing hierarchy/model tests**
 
 ```ts
 expect(buildStudentHomeAgenda(input).nextAction?.kind).toBe("assessment");
@@ -155,7 +155,7 @@ expect(text).not.toContain("Student Tools");
 expect(text).not.toContain("Overall Performance");
 ```
 
-- [ ] **Step 2: Run the Home tests and confirm RED**
+- [x] **Step 2: Run the Home tests and confirm RED**
 
 ```bash
 npm --prefix mobile test -- --runInBand src/screens/student-home/__tests__/model.test.ts src/screens/__tests__/screen-render.test.tsx
@@ -163,19 +163,19 @@ npm --prefix mobile test -- --runInBand src/screens/student-home/__tests__/model
 
 Expected: the new model is missing and legacy Dashboard content assertions fail.
 
-- [ ] **Step 3: Implement the model from existing derived data**
+- [x] **Step 3: Implement the model from existing derived data**
 
 Prioritize an overdue/pending assessment, then the first unfinished visible lesson, then the first current class. Limit Today to current-day schedules, Continue Learning to two entries, Due Soon to three entries, and Latest Update to one announcement. Keep unresolved-attempt safeguards: an unresolved or failed attempt query cannot be labeled Pending.
 
-- [ ] **Step 4: Replace only the Dashboard presentation**
+- [x] **Step 4: Replace only the Dashboard presentation**
 
 Use `StudentScreen` and render the approved order. Remove the embedded month calendar, performance stat, avatar hero, and Student Tools block. Route each visible row to its existing destination with optional source metadata; keep notifications, refresh, and incomplete-profile notice.
 
-- [ ] **Step 5: Run Home tests and confirm GREEN**
+- [x] **Step 5: Run Home tests and confirm GREEN**
 
 Run the Task 2 test command and `npm --prefix mobile run typecheck`.
 
-- [ ] **Step 6: Commit the Home slice**
+- [x] **Step 6: Commit the Home slice**
 
 ```bash
 git add mobile/src/screens/DashboardScreen.tsx mobile/src/screens/student-home mobile/src/screens/__tests__/screen-render.test.tsx
@@ -194,7 +194,7 @@ git commit -m "feat(mobile): turn student home into an agenda"
 - Consumes: current class/module/completion/announcement/assessment queries, `StudentScreen`, `StudentWorkspaceSwitcher`, `StudentListRow`, and `goBackFromStudentDetail`.
 - Produces: direct-open class rows and one seven-option Class Detail workspace selector.
 
-- [ ] **Step 1: Write failing class navigation and layout tests**
+- [x] **Step 1: Write failing class navigation and layout tests**
 
 ```tsx
 expect(flattenText(classes.toJSON())).toContain("Current classes");
@@ -208,25 +208,25 @@ expect(classDetail.root.findByProps({ accessibilityLabel: "Open class workspace 
 expect(flattenText(classDetail.toJSON())).not.toContain("More");
 ```
 
-- [ ] **Step 2: Run the focused screen suites and confirm RED**
+- [x] **Step 2: Run the focused screen suites and confirm RED**
 
 ```bash
 npm --prefix mobile test -- --runInBand src/screens/__tests__/screen-render.test.tsx src/screens/__tests__/student-parity-navigation.test.tsx
 ```
 
-- [ ] **Step 3: Recompose My Classes**
+- [x] **Step 3: Recompose My Classes**
 
 Keep Current and Completed filters only. Preserve search, refresh, progress derivation, partial errors, and empty states. A class row is one modest surface with subject mark, section/teacher, next schedule, and progress; row tap opens `ClassDetail`. The optional trailing workspace button opens a sheet that navigates to the same class with `initialTab`.
 
-- [ ] **Step 4: Replace Class Detail visible tabs and overflow with the workspace selector**
+- [x] **Step 4: Replace Class Detail visible tabs and overflow with the workspace selector**
 
 Map the existing `DetailTab` values to selector items and retain every current workspace body. Keep one expanded module at a time. Pass sources to Module, Lesson, Assessment, and Calendar; use `goBackFromStudentDetail` for the header.
 
-- [ ] **Step 5: Run focused tests and typecheck**
+- [x] **Step 5: Run focused tests and typecheck**
 
 Run the Task 3 command and `npm --prefix mobile run typecheck`. Expected: direct-open and selector assertions pass; all existing discussion, grade, announcement, calendar, and refresh assertions remain green.
 
-- [ ] **Step 6: Commit the class workspace slice**
+- [x] **Step 6: Commit the class workspace slice**
 
 ```bash
 git add mobile/src/screens/LessonsScreen.tsx mobile/src/screens/ClassDetailScreen.tsx mobile/src/screens/__tests__
@@ -244,29 +244,29 @@ git commit -m "feat(mobile): streamline student class workspaces"
 - Consumes: existing module detail, lesson detail, completion, file open/download behavior, Task 1 primitives, and source metadata from Task 3.
 - Produces: flat module section lists, reading-first lesson content, sticky completion, and source-aware Back.
 
-- [ ] **Step 1: Write failing Module/Lesson structure and Back tests**
+- [x] **Step 1: Write failing Module/Lesson structure and Back tests**
 
 Assert `StudentContextStrip`, section dividers, direct lesson accessibility labels, file Open/Download labels, `student-bottom-action-bar`, and fallback calls. Keep assertions for locked/draft content exclusion and completion failure.
 
-- [ ] **Step 2: Run the focused render suite and confirm RED**
+- [x] **Step 2: Run the focused render suite and confirm RED**
 
 ```bash
 npm --prefix mobile test -- --runInBand src/screens/__tests__/screen-render.test.tsx src/navigation/__tests__/student-detail-back.test.ts
 ```
 
-- [ ] **Step 3: Recompose Module Detail**
+- [x] **Step 3: Recompose Module Detail**
 
 Render compact class/module context, description/progress, then section headers and one divided list per section. Lesson/assessment rows navigate directly with source metadata. File rows keep both existing actions, loading labels, and normalized errors.
 
-- [ ] **Step 4: Recompose Lesson Detail**
+- [x] **Step 4: Recompose Lesson Detail**
 
 Render title/context, overview text, and content blocks as reading sections separated by dividers. Keep images, extracted content, local understood state, pull-to-refresh, completion error, and `handleComplete`. Move Mark Complete into `StudentBottomActionBar`; remove the duplicate Back footer.
 
-- [ ] **Step 5: Run focused tests and typecheck**
+- [x] **Step 5: Run focused tests and typecheck**
 
 Run the Task 4 command and `npm --prefix mobile run typecheck`.
 
-- [ ] **Step 6: Commit the learning detail slice**
+- [x] **Step 6: Commit the learning detail slice**
 
 ```bash
 git add mobile/src/screens/ModuleDetailScreen.tsx mobile/src/screens/LessonDetailScreen.tsx mobile/src/screens/__tests__/screen-render.test.tsx
@@ -290,7 +290,7 @@ git commit -m "feat(mobile): simplify student module and lesson views"
 - Consumes: current assessment/attempt, announcement, profile/avatar, and calendar behavior plus Task 1 primitives.
 - Produces: direct assessment rows, one class selector, flat announcement feed, grouped profile form, and complete assessment-chain source metadata.
 
-- [ ] **Step 1: Write failing root-surface assertions**
+- [x] **Step 1: Write failing root-surface assertions**
 
 ```tsx
 expect(assessments.root.findByProps({ accessibilityLabel: "Assessment status filters" })).toBeTruthy();
@@ -301,29 +301,29 @@ expect(profile.root.findAllByProps({ accessibilityLabel: "Sign Out" })).toHaveLe
 
 Also assert that Sign Out follows the Security section in rendered order and that announcement Back closes the modal through `onRequestClose`.
 
-- [ ] **Step 2: Run focused suites and confirm RED**
+- [x] **Step 2: Run focused suites and confirm RED**
 
 ```bash
 npm --prefix mobile test -- --runInBand src/screens/__tests__/screen-render.test.tsx src/screens/__tests__/student-parity-navigation.test.tsx
 ```
 
-- [ ] **Step 3: Replace assessment accordion rows with direct task rows**
+- [x] **Step 3: Replace assessment accordion rows with direct task rows**
 
 Retain the four status filters and Pending default. Add one class `StudentSelectMenu`, group rows by urgency, and route a row directly to `AssessmentDetail`. Keep header search/history and every empty/error state. No attempt is started from the list.
 
-- [ ] **Step 4: Flatten Announcements and group Profile**
+- [x] **Step 4: Flatten Announcements and group Profile**
 
 Announcements gets one class selector, one All/Pinned toggle, pinned-first chronological rows, and the existing rich-text detail modal. Profile gets compact identity, conditional completeness notice, Personal/Contact/Emergency disclosure sections, Transcript/Evaluations rows, existing save/avatar behavior, and Sign Out at the bottom.
 
-- [ ] **Step 5: Harden the assessment and calendar navigation chain**
+- [x] **Step 5: Harden the assessment and calendar navigation chain**
 
 Pass optional source/parent identifiers through Assessment Detail → Take/Results/History and Calendar → Assessment/Class Detail. Use actual-history-first fallback on details, results, and history. Do not modify `AssessmentTakeScreen` attempt locking or submission behavior.
 
-- [ ] **Step 6: Run focused suites and typecheck**
+- [x] **Step 6: Run focused suites and typecheck**
 
 Run the Task 5 command, assessment service/provider suites, and `npm --prefix mobile run typecheck`.
 
-- [ ] **Step 7: Commit the task/update/profile slice**
+- [x] **Step 7: Commit the task/update/profile slice**
 
 ```bash
 git add mobile/src/screens/AssessmentsScreen.tsx mobile/src/screens/AnnouncementsScreen.tsx mobile/src/screens/ProfileScreen.tsx mobile/src/screens/AssessmentDetailScreen.tsx mobile/src/screens/AssessmentHistoryScreen.tsx mobile/src/screens/AssessmentResultsScreen.tsx mobile/src/screens/CalendarScreen.tsx mobile/src/screens/__tests__
@@ -343,21 +343,21 @@ git commit -m "feat(mobile): modernize student tasks and profile"
 - Consumes: existing JA chat/practice/review/LXP sessions and Task 1 primitives/theme.
 - Produces: P2-aligned headers, selectors, notices, and flat record sections only.
 
-- [ ] **Step 1: Add failing presentation assertions**
+- [x] **Step 1: Add failing presentation assertions**
 
 Assert one compact JA header, a visible class context selector, existing New chat/history controls, and absence of decorative introductory panels. Assert Performance, Transcript, and Evaluations use the P2 canvas/surface theme and preserve their current values/actions.
 
-- [ ] **Step 2: Run the focused render suite and confirm RED**
+- [x] **Step 2: Run the focused render suite and confirm RED**
 
 ```bash
 npm --prefix mobile test -- --runInBand src/screens/__tests__/screen-render.test.tsx
 ```
 
-- [ ] **Step 3: Align presentation around existing behavior**
+- [x] **Step 3: Align presentation around existing behavior**
 
 Replace only headers, panel shells, selectors, and section wrappers. Preserve every JA class/lesson requirement, stale-thread behavior, send gating, new-chat behavior, tool routing, practice/review/LXP mutation, and error message.
 
-- [ ] **Step 4: Run focused and full mobile verification**
+- [x] **Step 4: Run focused and full mobile verification**
 
 ```bash
 npm --prefix mobile run typecheck
@@ -369,7 +369,7 @@ git diff --check
 
 Expected: typecheck passes, every mobile suite is green, generated rich text is unchanged, and no whitespace errors remain.
 
-- [ ] **Step 5: Commit the final student UI slice**
+- [x] **Step 5: Commit the final student UI slice**
 
 ```bash
 git add mobile/src/screens/JaScreen.tsx mobile/src/screens/PerformanceScreen.tsx mobile/src/screens/TranscriptScreen.tsx mobile/src/screens/StudentEvaluationsScreen.tsx mobile/src/screens/__tests__/screen-render.test.tsx
@@ -389,11 +389,11 @@ git commit -m "feat(mobile): align student support and records"
 - Consumes: complete student source, `mobile/scripts/app-version-release.cjs`, CI, Railway deploy workflow, `/api/app-version/register`, and `/api/app-version/check`.
 - Produces: Android `0.1.27` / code `28`, a byte-matched public APK/manifest pair, and registered production update policy.
 
-- [ ] **Step 1: Bump Android version sources and release fixture**
+- [x] **Step 1: Bump Android version sources and release fixture**
 
 Set Expo/Gradle version name to `0.1.27`, Android version code to `28`, preserve iOS build number `3`, and update the release fixture’s expected source versions and description.
 
-- [ ] **Step 2: Run release tests before building**
+- [x] **Step 2: Run release tests before building**
 
 ```bash
 npm --prefix mobile run test:release
@@ -401,7 +401,7 @@ npm --prefix mobile run test:release
 
 Expected: all release metadata tests pass.
 
-- [ ] **Step 3: Build the production ARM64 APK**
+- [x] **Step 3: Build the production ARM64 APK**
 
 ```bash
 cd mobile/android
@@ -415,7 +415,7 @@ cd ../..
 
 Expected: `BUILD SUCCESSFUL` and APK at `mobile/android/app/build/outputs/apk/release/app-release.apk`.
 
-- [ ] **Step 4: Inspect, copy, prepare, and verify the exact artifact**
+- [x] **Step 4: Inspect, copy, prepare, and verify the exact artifact**
 
 Use build-tools `36.0.0` to require package `com.nexora.lms.mobile`, version `0.1.27` / `28`, ARM64 libraries, REQUEST_INSTALL_PACKAGES, v2 signature, and 16 KB ZIP alignment. Copy the APK to the frontend, then run:
 
@@ -427,7 +427,7 @@ npm --prefix mobile run release:verify
 cmp mobile/android/app/build/outputs/apk/release/app-release.apk next-frontend/public/downloads/nexora-student-mobile-release.apk
 ```
 
-- [ ] **Step 5: Run final local gates and commit the reviewed release**
+- [x] **Step 5: Run final local gates and commit the reviewed release**
 
 ```bash
 npm --prefix mobile run typecheck

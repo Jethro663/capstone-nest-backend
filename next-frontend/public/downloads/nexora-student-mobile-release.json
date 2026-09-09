@@ -1,12 +1,12 @@
 {
   "platform": "android",
-  "versionCode": 27,
-  "minSupportedVersionCode": 27,
-  "nativeVersion": "0.1.26",
-  "otaRuntimeVersion": "0.1.26",
+  "versionCode": 28,
+  "minSupportedVersionCode": 28,
+  "nativeVersion": "0.1.27",
+  "otaRuntimeVersion": "0.1.27",
   "apkDownloadUrl": "https://next-frontend-v2-production.up.railway.app/downloads/nexora-student-mobile-release.apk",
   "requiresFullApk": true,
-  "releaseNotes": "Teacher class workspaces now use compact navigation, streamlined module and lesson controls, a focused student enrollment roster, staged AI drafting, and durable detail back navigation.",
-  "apkSha256": "35b456ce7d67ae97de98d2449dcfd613645fe507b14f3d8d70bcf78f52f9e438",
-  "apkSizeBytes": 41005295
+  "releaseNotes": "Redesigned student mobile experience with an agenda-first Home, streamlined classes and learning flow, direct assessment and announcement lists, compact records, and consistent drawer navigation.",
+  "apkSha256": "5fbe30cb24fdd75d96f67dff16ca87da9c3392ff39905d43037bc6e7595e6d53",
+  "apkSizeBytes": 41016579
 }
