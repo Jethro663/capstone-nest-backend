@@ -30,13 +30,17 @@ import type { ClassModule, ModuleItem } from "../types/module";
 import { studentDarkTheme } from "../theme/studentDark";
 import { shadow } from "../theme/tokens";
 import { RoleMenuButton } from "../components/navigation/RoleNavigationDrawer";
+import {
+  StudentClassesView,
+  type StudentClassFilter,
+} from "./student-classes/StudentClassesView";
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, "Classes">,
   NativeStackScreenProps<RootStackParamList>
 >;
 
-type ClassFilterKey = "allClasses" | "inProgress" | "completed" | "hidden";
+type ClassFilterKey = StudentClassFilter;
 type ChannelKey = "modules" | "assignments" | "announcements" | "calendar";
 
 type ModuleLessonItem = ModuleItem & {
@@ -66,10 +70,8 @@ const darkTheme = studentDarkTheme;
 const avatarColors = ["#1D4ED8", "#15803D", "#6D28D9"] as const;
 
 const filterTabs: Array<{ key: ClassFilterKey; label: string }> = [
-  { key: "allClasses", label: "All Classes" },
-  { key: "inProgress", label: "In Progress" },
+  { key: "inProgress", label: "Current" },
   { key: "completed", label: "Completed" },
-  { key: "hidden", label: "Hidden" },
 ];
 
 const channelConfig: Record<
@@ -259,7 +261,7 @@ export function LessonsScreen({ navigation }: Props) {
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<ClassFilterKey>("allClasses");
+  const [activeFilter, setActiveFilter] = useState<ClassFilterKey>("inProgress");
   const [expandedClassId, setExpandedClassId] = useState<string | null>(null);
 
   const classesQuery = useStudentClasses(user?.userId || user?.id);
@@ -347,12 +349,7 @@ export function LessonsScreen({ navigation }: Props) {
     const normalizedQuery = searchQuery.trim().toLowerCase();
 
     return derivedClasses.filter((classItem) => {
-      const matchesFilter =
-        activeFilter === "allClasses"
-          ? true
-          : activeFilter === "hidden"
-            ? false
-            : classItem.status === activeFilter;
+      const matchesFilter = classItem.status === activeFilter;
 
       const matchesSearch =
         normalizedQuery.length === 0
@@ -398,6 +395,23 @@ export function LessonsScreen({ navigation }: Props) {
   };
 
   const userInitials = resolveUserInitials(user?.firstName, user?.lastName, user?.email);
+
+  if (darkTheme.bg === "#FBFAF8") {
+    return (
+      <StudentClassesView
+        navigation={navigation}
+        classes={filteredClasses}
+        searchQuery={searchQuery}
+        onSearchQueryChange={setSearchQuery}
+        activeFilter={activeFilter}
+        onFilterChange={setActiveFilter}
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
+        loading={classesQuery.isLoading}
+        errorMessage={primaryError ? peekAppError(primaryError).message : undefined}
+      />
+    );
+  }
 
   return (
     <ScreenScroll

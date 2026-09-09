@@ -26,7 +26,9 @@ import { peekAppError } from "../api/http";
 import type {
   ClassDetailInitialTab,
   RootStackParamList,
+  StudentClassDetailSource,
 } from "../navigation/types";
+import { navigateStudentDetailBack } from "../navigation/student-detail-back";
 import { assessmentsApi } from "../api/services/assessments";
 import { StudentDiscussionBoard } from "../components/student/StudentDiscussionBoard";
 import { useAuth } from "../providers/AuthProvider";
@@ -39,6 +41,10 @@ import {
   boundAcademicPercentage,
   presentAcademicScore,
 } from "../lib/academicScore";
+import {
+  StudentContextStrip,
+  StudentWorkspaceSwitcher,
+} from "../components/student/StudentWorkspacePrimitives";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ClassDetail">;
 type DetailNavigation = NativeStackNavigationProp<RootStackParamList>;
@@ -545,10 +551,12 @@ export function StudentClassDetailContent({
   classId,
   navigation,
   initialTab,
+  source,
 }: {
   classId: string;
-  navigation: Pick<DetailNavigation, "goBack" | "navigate">;
+  navigation: DetailNavigation;
   initialTab?: ClassDetailInitialTab;
+  source?: StudentClassDetailSource;
 }) {
   const [activeTab, setActiveTab] = useState<DetailTab>(
     initialTab ?? "modules",
@@ -884,7 +892,70 @@ export function StudentClassDetailContent({
         }
       >
         <View
+          testID="student-compact-header"
           style={{
+            minHeight: 58,
+            paddingHorizontal: 16,
+            paddingVertical: 7,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 10,
+            backgroundColor: theme.topbar,
+            borderBottomWidth: 1,
+            borderBottomColor: theme.border,
+          }}
+        >
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            onPress={() =>
+              navigateStudentDetailBack(
+                navigation,
+                "ClassDetail",
+                { classId, initialTab, source },
+              )
+            }
+            style={{ width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: theme.redSoft }}
+          >
+            <MaterialCommunityIcons name="arrow-left" size={20} color={theme.redText} />
+          </Pressable>
+          <Text numberOfLines={1} style={{ flex: 1, fontSize: 18, fontWeight: "900", color: theme.text }}>
+            Class workspace
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Refresh class workspace"
+            onPress={handleRefresh}
+            style={{ width: 44, height: 44, borderRadius: 12, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.surface, alignItems: "center", justifyContent: "center" }}
+          >
+            <MaterialCommunityIcons name="refresh" size={20} color={theme.redText} />
+          </Pressable>
+        </View>
+
+        <StudentContextStrip
+          title={classItem.subjectName || "Class Detail"}
+          subtitle={`${classItem.subjectCode || "CLASS"} · ${classItem.section?.name || "Section"} · ${formatTeacher(classItem)}`}
+          status={`${lessonProgress}% progress`}
+        />
+
+        <StudentWorkspaceSwitcher
+          activeKey={activeTab}
+          items={([
+            { key: "modules", label: "Modules", icon: "book-open-page-variant-outline", count: modules.length },
+            { key: "assignments", label: "Assessments", icon: "clipboard-text-outline", count: assignmentCards.length },
+            { key: "announcements", label: "Announcements", icon: "bullhorn-outline", count: announcements.length },
+            { key: "discussion", label: "Discussion", icon: "forum-outline" },
+            { key: "classmates", label: "Classmates", icon: "account-group-outline", count: memberCount },
+            { key: "grades", label: "Grades", icon: "chart-box-outline", count: detailedGradeRows.length },
+            { key: "calendar", label: "Calendar", icon: "calendar-month-outline", count: eventRows.length },
+          ] satisfies Array<{ key: DetailTab; label: string; icon: React.ComponentProps<typeof MaterialCommunityIcons>["name"]; count?: number }>)}
+          onSelect={setActiveTab}
+        />
+
+        {false ? (
+        <View
+          style={{
+            display: "none",
             backgroundColor: theme.header,
             borderBottomWidth: 1,
             borderBottomColor: theme.border,
@@ -948,13 +1019,13 @@ export function StudentClassDetailContent({
                     color: theme.muted,
                   }}
                 >
-                  {`${classItem.subjectCode || "CLASS"} · ${classItem.section?.name || "Section"}`}
+                  {`${classItem!.subjectCode || "CLASS"} · ${classItem!.section?.name || "Section"}`}
                 </Text>
                 <Text
                   numberOfLines={1}
                   style={{ fontSize: 17, fontWeight: "700", color: theme.text }}
                 >
-                  {classItem.subjectName || "Class Detail"}
+                  {classItem!.subjectName || "Class Detail"}
                 </Text>
               </View>
 
@@ -998,7 +1069,7 @@ export function StudentClassDetailContent({
                   color={theme.muted}
                 />
                 <Text style={{ fontSize: 11, color: theme.muted }}>
-                  {formatScheduleLabel(classItem.schedules?.[0])}
+                  {formatScheduleLabel(classItem!.schedules?.[0])}
                 </Text>
               </View>
               <View
@@ -1018,7 +1089,7 @@ export function StudentClassDetailContent({
                   color={theme.muted}
                 />
                 <Text style={{ fontSize: 11, color: theme.muted }}>
-                  {classItem.room || "Room TBA"}
+                  {classItem!.room || "Room TBA"}
                 </Text>
               </View>
               <View
@@ -1030,7 +1101,7 @@ export function StudentClassDetailContent({
                 }}
               />
               <Text style={{ fontSize: 11, color: theme.muted }}>
-                {formatTeacher(classItem)}
+                {formatTeacher(classItem!)}
               </Text>
             </View>
 
@@ -1139,6 +1210,7 @@ export function StudentClassDetailContent({
             </Pressable>
           </View>
         </View>
+        ) : null}
 
         {primaryError ? (
           <DarkEmptyPanel
@@ -1151,6 +1223,7 @@ export function StudentClassDetailContent({
           <View>
             <View
               style={{
+                display: "none",
                 marginHorizontal: 16,
                 marginTop: 14,
                 borderRadius: 14,
@@ -1286,10 +1359,11 @@ export function StudentClassDetailContent({
                   <View
                     key={moduleEntry.id}
                     style={{
-                      marginHorizontal: 16,
-                      marginTop: index === 0 ? 6 : 8,
-                      borderRadius: 12,
-                      borderWidth: 1,
+                      marginHorizontal: 0,
+                      marginTop: 0,
+                      borderRadius: 0,
+                      borderWidth: 0,
+                      borderTopWidth: 1,
                       borderColor: theme.border,
                       overflow: "hidden",
                       backgroundColor: theme.surface,
@@ -1309,6 +1383,7 @@ export function StudentClassDetailContent({
                           navigation.navigate("ModuleDetail", {
                             classId,
                             moduleId: moduleEntry.id,
+                            source: "class",
                           })
                         }
                         style={{
@@ -1405,6 +1480,8 @@ export function StudentClassDetailContent({
                                   navigation.navigate("LessonDetail", {
                                     lessonId: lesson.id,
                                     classId,
+                                    moduleId: moduleEntry.id,
+                                    source: "class",
                                   })
                                 }
                                 style={{
@@ -1488,6 +1565,7 @@ export function StudentClassDetailContent({
                     navigation.navigate("AssessmentDetail", {
                       assessmentId: assessment.id,
                       classId,
+                      source: "class",
                     })
                   }
                   style={{
@@ -2400,6 +2478,7 @@ export function ClassDetailScreen({ route, navigation }: Props) {
       classId={route.params.classId}
       navigation={navigation}
       initialTab={route.params.initialTab}
+      source={route.params.source}
     />
   );
 }

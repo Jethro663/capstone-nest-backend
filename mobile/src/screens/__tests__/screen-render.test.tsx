@@ -2905,7 +2905,7 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).not.toContain("No courses found");
   });
 
-  it("renders Lessons screen as a single-open class accordion and routes channel actions into class detail tabs", () => {
+  it("renders Classes as direct current-class rows without accordion channels", () => {
     const { LessonsScreen } = require("../LessonsScreen");
     const navigate = jest.fn();
 
@@ -3110,49 +3110,26 @@ describe("mobile rendered screen flows", () => {
       .join(" ");
 
     expect(renderedText).toContain("My Classes");
-    expect(renderedText).toContain("2 classes");
-    expect(renderedText).toContain("All");
-    expect(renderedText).toContain("In Progress");
+    expect(renderedText).toContain("1 class");
+    expect(renderedText).toContain("Current");
     expect(renderedText).toContain("Completed");
     expect(renderedText).toContain("Mathematics");
-    expect(renderedText).toContain("English");
-    expect(renderedText).not.toContain("Continue Learning");
+    expect(renderedText).not.toContain("English");
+    expect(renderedText).not.toContain("Courses & Channels");
 
-    const continueCard = findPressableByText(testRenderer!.root, "Mathematics");
+    const classRow = findPressableByText(testRenderer!.root, "Mathematics");
     act(() => {
-      continueCard.props.onPress();
-    });
-
-    renderedText = testRenderer!.root
-      .findAll((node) => node.type === "Text")
-      .map((node) => flattenText(node))
-      .join(" ");
-
-    expect(renderedText).toContain("Modules");
-    expect(renderedText).toContain("Assignments");
-    expect(renderedText).toContain("Announcements");
-    expect(renderedText).toContain("Calendar");
-    expect(renderedText).toContain("1 lesson");
-    expect(renderedText).toContain("1 pending");
-    expect(renderedText).toContain("1 new");
-    expect(renderedText).toContain("2 events");
-
-    const announcementsAction = findPressableByText(
-      testRenderer!.root,
-      "Announcements",
-    );
-    act(() => {
-      announcementsAction.props.onPress();
+      classRow.props.onPress();
     });
 
     expect(navigate).toHaveBeenCalledWith("ClassDetail", {
       classId: "class-1",
-      initialTab: "announcements",
+      source: "classes",
     });
 
-    const englishRow = findPressableByText(testRenderer!.root, "English");
+    const completedFilter = findPressableByText(testRenderer!.root, "Completed");
     act(() => {
-      englishRow.props.onPress();
+      completedFilter.props.onPress();
     });
 
     renderedText = testRenderer!.root
@@ -3161,8 +3138,8 @@ describe("mobile rendered screen flows", () => {
       .join(" ");
 
     expect(renderedText).toContain("2 lessons");
-    expect(renderedText).not.toContain("1 pending");
-    expect(renderedText).not.toContain("1 new");
+    expect(renderedText).toContain("English");
+    expect(renderedText).not.toContain("Mathematics");
   });
 
   it("excludes locked module lessons from class accordion progress and channel counts", () => {
@@ -3383,21 +3360,7 @@ describe("mobile rendered screen flows", () => {
         .map((node) => flattenText(node))
         .join(" ");
 
-      const zeroProgressFill = testRenderer!.root.findAll((node) => {
-        const style = node.props?.style;
-        const styles = Array.isArray(style) ? style : [style];
-        return styles.some(
-          (entry) =>
-            entry &&
-            typeof entry === "object" &&
-            "width" in entry &&
-            "height" in entry &&
-            (entry as { width?: unknown }).width === "0%" &&
-            (entry as { height?: unknown }).height === "100%",
-        );
-      });
-
-      expect(zeroProgressFill.length).toBeGreaterThan(0);
+      expect(renderedText).toContain("0%");
       expect(renderedText).toContain("1 lesson");
       expect(renderedText).not.toContain("2 lessons");
       expect(renderedText).not.toContain("Locked Lesson");
@@ -3587,15 +3550,6 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).toContain("English");
     expect(renderedText).not.toContain("Mathematics");
 
-    const searchButton = testRenderer!.root.find(
-      (node) =>
-        node.type === "Pressable" &&
-        node.props.accessibilityLabel === "Open class search",
-    );
-    act(() => {
-      searchButton.props.onPress();
-    });
-
     const searchField = testRenderer!.root.find(
       (node) => node.type === "TextInput",
     );
@@ -3648,6 +3602,7 @@ describe("mobile rendered screen flows", () => {
     expect(navigate).toHaveBeenCalledWith("ModuleDetail", {
       classId: "class-1",
       moduleId: "module-1",
+      source: "class",
     });
   });
 
@@ -3999,6 +3954,8 @@ describe("mobile rendered screen flows", () => {
     expect(navigate).toHaveBeenCalledWith("LessonDetail", {
       lessonId: "lesson-visible",
       classId: "class-1",
+      moduleId: "module-open",
+      source: "class",
     });
   });
 
@@ -4225,7 +4182,7 @@ describe("mobile rendered screen flows", () => {
     const moreTabsButton = testRenderer!.root.find(
       (node) =>
         node.type === "Pressable" &&
-        node.props.accessibilityLabel === "Open more class tabs",
+        node.props.accessibilityLabel === "Open class workspace menu",
     );
     act(() => {
       moreTabsButton.props.onPress();
@@ -4298,7 +4255,7 @@ describe("mobile rendered screen flows", () => {
         .find(
           (node) =>
             node.type === "Pressable" &&
-            node.props.accessibilityLabel === "Open more class tabs",
+        node.props.accessibilityLabel === "Open class workspace menu",
         )
         .props.onPress();
     });
@@ -4358,7 +4315,7 @@ describe("mobile rendered screen flows", () => {
     const moreTabsButton = testRenderer!.root.find(
       (node) =>
         node.type === "Pressable" &&
-        node.props.accessibilityLabel === "Open more class tabs",
+        node.props.accessibilityLabel === "Open class workspace menu",
     );
     act(() => {
       moreTabsButton.props.onPress();
@@ -4431,7 +4388,7 @@ describe("mobile rendered screen flows", () => {
     const moreTabsButton = testRenderer!.root.find(
       (node) =>
         node.type === "Pressable" &&
-        node.props.accessibilityLabel === "Open more class tabs",
+        node.props.accessibilityLabel === "Open class workspace menu",
     );
     act(() => {
       moreTabsButton.props.onPress();
@@ -4563,6 +4520,8 @@ describe("mobile rendered screen flows", () => {
     expect(navigate).toHaveBeenCalledWith("LessonDetail", {
       lessonId: "lesson-1",
       classId: "class-1",
+      moduleId: "module-1",
+      source: "class",
     });
   });
 
@@ -4592,6 +4551,8 @@ describe("mobile rendered screen flows", () => {
     expect(navigate).toHaveBeenCalledWith("LessonDetail", {
       lessonId: "lesson-1",
       classId: "class-1",
+      moduleId: "module-1",
+      source: "module",
     });
   });
 
@@ -4703,6 +4664,8 @@ describe("mobile rendered screen flows", () => {
     expect(navigate).toHaveBeenCalledWith("LessonDetail", {
       lessonId: "lesson-visible",
       classId: "class-1",
+      moduleId: "module-1",
+      source: "module",
     });
   });
 
