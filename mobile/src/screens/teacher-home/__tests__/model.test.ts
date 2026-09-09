@@ -16,7 +16,7 @@ function classItem(overrides: Partial<ClassItem> & Pick<ClassItem, "id" | "subje
 }
 
 describe("teacher home model", () => {
-  const now = new Date("2026-09-09T08:30:00+08:00");
+  const now = new Date(2026, 8, 9, 8, 30, 0);
 
   it("orders today's class blocks and marks the first class that has not started as next", () => {
     const schedule = buildTeacherHomeSchedule(

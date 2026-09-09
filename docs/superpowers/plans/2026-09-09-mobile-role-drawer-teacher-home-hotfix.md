@@ -245,7 +245,7 @@ Expected: PASS.
 const schedule = buildTeacherHomeSchedule([
   { id: "early", subjectCode: "ENG", schedules: [{ days: ["WED"], startTime: "08:00", endTime: "09:00" }] },
   { id: "late", subjectCode: "SCI", schedules: [{ days: ["W"], startTime: "10:00", endTime: "11:00" }] },
-] as ClassItem[], new Date("2026-09-09T08:30:00+08:00"));
+] as ClassItem[], new Date(2026, 8, 9, 8, 30, 0));
 expect(schedule.map((item) => item.classItem.id)).toEqual(["early", "late"]);
 expect(schedule.find((item) => item.isNext)?.classItem.id).toBe("late");
 
