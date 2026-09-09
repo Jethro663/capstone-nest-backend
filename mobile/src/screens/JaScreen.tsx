@@ -620,7 +620,7 @@ export function JaScreen({ navigation, route }: Props) {
     >
       <View style={{ backgroundColor: dark.header, borderBottomWidth: 1, borderBottomColor: dark.border }}>
         <View style={{ paddingHorizontal: 16, paddingTop: 13, paddingBottom: 10, flexDirection: "row", alignItems: "center", gap: 10 }}>
-          <RoleHeaderNavigationButton color={dark.red} onBackPress={navigation.goBack} />
+          <RoleHeaderNavigationButton color={dark.redText} onBackPress={navigation.goBack} />
           <View style={{ flex: 1 }}>
             <Text style={{ color: dark.muted, fontSize: 9, fontWeight: "900", textTransform: "uppercase", letterSpacing: 1 }}>JA Hub</Text>
             <Text style={{ color: dark.text, fontSize: 14, fontWeight: "800" }}>{panel === "review" ? "Replay" : "Learner's Path"}</Text>
@@ -634,7 +634,7 @@ export function JaScreen({ navigation, route }: Props) {
               onPress={() => setClassPickerOpen((current) => !current)}
               style={classSelectorStyle}
             >
-              <View style={{ width: 8, height: 8, borderRadius: 999, backgroundColor: dark.blue }} />
+              <View style={{ width: 8, height: 8, borderRadius: 999, backgroundColor: dark.red }} />
               <Text style={{ color: dark.text, fontSize: 12, fontWeight: "700" }}>{selectedClassText}</Text>
               <MaterialCommunityIcons
                 name={classPickerOpen ? "chevron-up" : "chevron-down"}
@@ -644,7 +644,7 @@ export function JaScreen({ navigation, route }: Props) {
             </Pressable>
           ) : (
             <View style={classSelectorStyle}>
-              <View style={{ width: 8, height: 8, borderRadius: 999, backgroundColor: dark.blue }} />
+              <View style={{ width: 8, height: 8, borderRadius: 999, backgroundColor: dark.red }} />
               <Text style={{ color: dark.text, fontSize: 12, fontWeight: "700" }}>{selectedClassText}</Text>
             </View>
           )}
@@ -694,10 +694,10 @@ export function JaScreen({ navigation, route }: Props) {
               <Pressable
                 key={mode.key}
                 onPress={() => switchPanel(mode.key)}
-                style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: active ? dark.blue : "transparent" }}
+                style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: active ? dark.red : "transparent" }}
               >
-                <MaterialCommunityIcons name={mode.icon as never} size={14} color={active ? dark.blue : dark.muted} />
-                <Text style={{ color: active ? dark.blue : dark.muted, fontSize: 12, fontWeight: active ? "800" : "600" }}>{mode.label}</Text>
+                <MaterialCommunityIcons name={mode.icon as never} size={14} color={active ? dark.redText : dark.muted} />
+                <Text style={{ color: active ? dark.redText : dark.muted, fontSize: 12, fontWeight: active ? "800" : "600" }}>{mode.label}</Text>
               </Pressable>
             );
           })}

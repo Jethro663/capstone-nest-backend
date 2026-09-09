@@ -142,7 +142,7 @@ describe('mobile screen flow helpers', () => {
   });
 
   it('keeps all student web parity routes reachable in mobile', () => {
-    expect(studentParityRouteInventory).toHaveLength(20);
+    expect(studentParityRouteInventory).toHaveLength(21);
   });
 
   it('declares the support route inventory separately from parity routes', () => {

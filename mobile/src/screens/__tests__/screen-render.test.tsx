@@ -6192,11 +6192,8 @@ describe("mobile rendered screen flows", () => {
       .map((node) => flattenText(node))
       .join(" ");
 
-    expect(renderedText).toContain("Student Records");
-    expect(renderedText).toContain("Subject Enrollment Transcript");
-    expect(renderedText).toContain(
-      "Every class you have enrolled in, grouped by school year.",
-    );
+    expect(renderedText).toContain("Student records");
+    expect(renderedText).toContain("Transcript");
     expect(renderedText).toContain("1 enrollment");
     expect(renderedText).toContain("Mathematics (MATH-1)");
     expect(renderedText).toContain("2025-2026");
@@ -6250,7 +6247,7 @@ describe("mobile rendered screen flows", () => {
       testRenderer!.root.find(
         (node) =>
           node.type === "Text" &&
-          flattenText(node).includes("Performance overview"),
+          flattenText(node).includes("Performance"),
       ),
     ).toBeTruthy();
   });

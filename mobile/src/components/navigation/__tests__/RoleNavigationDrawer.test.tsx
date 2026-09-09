@@ -91,6 +91,7 @@ describe("role drawer destination contracts", () => {
       "Dashboard",
       "Classes",
       "Assessments",
+      "StudentCalendar",
       "JA",
       "Announcements",
     ]);

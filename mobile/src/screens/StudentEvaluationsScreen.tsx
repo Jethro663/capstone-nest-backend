@@ -200,10 +200,10 @@ export function StudentEvaluationsScreen({ navigation }: Props) {
       }
     >
       <View style={{ backgroundColor: theme.header, borderBottomWidth: 1, borderBottomColor: theme.border }}>
-        <View style={{ paddingHorizontal: 16, paddingTop: 44, paddingBottom: 16 }}>
+        <View style={{ paddingHorizontal: 16, paddingTop: 7, paddingBottom: 7 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <Pressable onPress={() => navigation.goBack()} style={{ padding: 4 }}>
-              <MaterialCommunityIcons name="arrow-left" size={22} color={theme.text} />
+            <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => navigation.goBack()} style={{ width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: theme.redSoft }}>
+              <MaterialCommunityIcons name="arrow-left" size={20} color={theme.redText} />
             </Pressable>
             <View
               style={{
@@ -212,16 +212,16 @@ export function StudentEvaluationsScreen({ navigation }: Props) {
                 borderRadius: 10,
                 alignItems: "center",
                 justifyContent: "center",
-                backgroundColor: theme.blue,
+                backgroundColor: theme.redSoft,
               }}
             >
-              <MaterialCommunityIcons name="clipboard-check-outline" size={20} color="#FFFFFF" />
+              <MaterialCommunityIcons name="clipboard-check-outline" size={20} color={theme.redText} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 10, fontWeight: "600", letterSpacing: 0.6, textTransform: "uppercase", color: theme.muted }}>
                 Student Inbox
               </Text>
-              <Text style={{ marginTop: 2, fontSize: 22, fontWeight: "800", color: theme.text }}>Student Evaluations</Text>
+              <Text style={{ marginTop: 2, fontSize: 20, fontWeight: "900", color: theme.text }}>Evaluations</Text>
             </View>
           </View>
         </View>

@@ -158,14 +158,14 @@ export function TranscriptScreen({ navigation }: Props) {
       }
     >
       <View style={{ backgroundColor: theme.header, borderBottomWidth: 1, borderBottomColor: theme.border }}>
-        <View style={{ paddingHorizontal: 16, paddingTop: 44, paddingBottom: 16 }}>
+        <View style={{ paddingHorizontal: 16, paddingTop: 7, paddingBottom: 12 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
             <Pressable
               onPress={() => navigation.goBack()}
               style={{
-                width: 38,
-                height: 38,
-                borderRadius: 999,
+                width: 44,
+                height: 44,
+                borderRadius: 12,
                 alignItems: "center",
                 justifyContent: "center",
                 backgroundColor: theme.active,
@@ -174,13 +174,8 @@ export function TranscriptScreen({ navigation }: Props) {
               <MaterialCommunityIcons name="chevron-left" size={20} color={theme.text} />
             </Pressable>
             <View style={{ flex: 1 }}>
-              <Text style={{ color: theme.text, fontSize: 12, fontWeight: "700" }}>Student Records</Text>
-              <Text style={{ marginTop: 4, color: theme.text, fontSize: 26, fontWeight: "900" }}>
-                Subject Enrollment Transcript
-              </Text>
-              <Text style={{ marginTop: 6, color: theme.muted, fontSize: 12, lineHeight: 18 }}>
-                Every class you have enrolled in, grouped by school year.
-              </Text>
+              <Text style={{ color: theme.muted, fontSize: 10, fontWeight: "700" }}>Student records</Text>
+              <Text style={{ marginTop: 2, color: theme.text, fontSize: 20, fontWeight: "900" }}>Transcript</Text>
             </View>
             <ToneTag label={pluralize(totalRows, "enrollment", "enrollments")} tone="blue" />
           </View>
