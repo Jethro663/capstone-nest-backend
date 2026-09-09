@@ -44,4 +44,11 @@ describe("administrator navigation manifest", () => {
   it("does not mount the former generic role workspace", () => {
     expect(source).not.toContain("RoleWorkspaceScreen");
   });
+
+  it("keeps tab state while replacing every visible bottom bar with the role drawer", () => {
+    expect(source).toContain("RoleDrawerProvider");
+    expect(source.match(/tabBar=\{\(\) => null\}/g)).toHaveLength(3);
+    expect(source).not.toContain("<BottomTabBar");
+    expect(source).not.toContain('from "../components/ui/BottomTabBar"');
+  });
 });

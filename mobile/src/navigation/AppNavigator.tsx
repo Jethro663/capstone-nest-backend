@@ -14,7 +14,6 @@ import {
 } from "react";
 import {
   ActivityIndicator,
-  Platform,
   Pressable,
   Text,
   View,
@@ -22,7 +21,6 @@ import {
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import {
   createBottomTabNavigator,
-  type BottomTabBarProps,
   type BottomTabScreenProps,
 } from "@react-navigation/bottom-tabs";
 import {
@@ -30,7 +28,7 @@ import {
   type NativeStackScreenProps,
 } from "@react-navigation/native-stack";
 import { useAuth } from "../providers/AuthProvider";
-import { BottomTabBar } from "../components/ui/BottomTabBar";
+import { RoleDrawerProvider } from "../components/navigation/RoleNavigationDrawer";
 import { DashboardScreen } from "../screens/DashboardScreen";
 import { CalendarScreen } from "../screens/CalendarScreen";
 import { ClassDetailScreen } from "../screens/ClassDetailScreen";
@@ -113,6 +111,7 @@ import type {
 import { resolveMobileRole } from "./role-resolver";
 import { rootNavigationRef } from "./navigation-ref";
 import { resolveAuthenticatedSurface } from "./auth-surface";
+import type { RoleDrawerDestination } from "./role-drawer-model";
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const RootStack = createNativeStackNavigator<RootStackParamList>();
@@ -666,16 +665,23 @@ function AuthNavigator() {
 }
 
 function StudentTabs() {
-  const tabBar =
-    Platform.OS === "web"
-      ? undefined
-      : (props: BottomTabBarProps) => (
-          <BottomTabBar {...props} role="student" />
-        );
+  const [activeRouteName, setActiveRouteName] = useState("Dashboard");
   return (
-    <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={tabBar}>
-      {studentTabRouteNames.map(renderStudentTabScreen)}
-    </Tab.Navigator>
+    <RoleDrawerProvider
+      role="student"
+      activeRouteName={activeRouteName}
+      onNavigate={navigateFromRoleDrawer}
+    >
+      <Tab.Navigator
+        screenOptions={{ headerShown: false }}
+        tabBar={() => null}
+        screenListeners={{
+          state: (event) => setActiveRouteName(getActiveRouteName(event.data.state)),
+        }}
+      >
+        {studentTabRouteNames.map(renderStudentTabScreen)}
+      </Tab.Navigator>
+    </RoleDrawerProvider>
   );
 }
 
@@ -705,20 +711,27 @@ function StudentNavigator() {
 }
 
 function TeacherTabs() {
-  const tabBar =
-    Platform.OS === "web"
-      ? undefined
-      : (props: BottomTabBarProps) => (
-          <BottomTabBar {...props} role="teacher" />
-        );
+  const [activeRouteName, setActiveRouteName] = useState("Home");
   return (
-    <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={tabBar}>
-      <Tab.Screen name="Home" component={TeacherHomeScreen} />
-      <Tab.Screen name="Assessments" component={TeacherAssessmentsScreen} />
-      <Tab.Screen name="Classes" component={TeacherClassesScreen} />
-      <Tab.Screen name="Sections" component={TeacherSectionsScreen} />
-      <Tab.Screen name="Profile" component={TeacherProfileScreen} />
-    </Tab.Navigator>
+    <RoleDrawerProvider
+      role="teacher"
+      activeRouteName={activeRouteName}
+      onNavigate={navigateFromRoleDrawer}
+    >
+      <Tab.Navigator
+        screenOptions={{ headerShown: false }}
+        tabBar={() => null}
+        screenListeners={{
+          state: (event) => setActiveRouteName(getActiveRouteName(event.data.state)),
+        }}
+      >
+        <Tab.Screen name="Home" component={TeacherHomeScreen} />
+        <Tab.Screen name="Assessments" component={TeacherAssessmentsScreen} />
+        <Tab.Screen name="Classes" component={TeacherClassesScreen} />
+        <Tab.Screen name="Sections" component={TeacherSectionsScreen} />
+        <Tab.Screen name="Profile" component={TeacherProfileScreen} />
+      </Tab.Navigator>
+    </RoleDrawerProvider>
   );
 }
 
@@ -851,22 +864,27 @@ function RoleTabs({ role }: { role: "teacher" | "admin" }) {
 }
 
 function AdminTabs() {
-
-  const tabBar =
-    Platform.OS === "web"
-      ? undefined
-      : (props: BottomTabBarProps) => (
-          <BottomTabBar {...props} role="admin" />
-        );
-
+  const [activeRouteName, setActiveRouteName] = useState("Home");
   return (
-    <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={tabBar}>
-      <Tab.Screen name="Home" component={AdminHomeScreen} />
-      <Tab.Screen name="Classes" component={AdminClassesScreen} />
-      <Tab.Screen name="Assessments" component={AdminAssessmentsScreen} />
-      <Tab.Screen name="Academic" component={AdminAcademicScreen} />
-      <Tab.Screen name="Profile" component={AdminProfileScreen} />
-    </Tab.Navigator>
+    <RoleDrawerProvider
+      role="admin"
+      activeRouteName={activeRouteName}
+      onNavigate={navigateFromRoleDrawer}
+    >
+      <Tab.Navigator
+        screenOptions={{ headerShown: false }}
+        tabBar={() => null}
+        screenListeners={{
+          state: (event) => setActiveRouteName(getActiveRouteName(event.data.state)),
+        }}
+      >
+        <Tab.Screen name="Home" component={AdminHomeScreen} />
+        <Tab.Screen name="Classes" component={AdminClassesScreen} />
+        <Tab.Screen name="Assessments" component={AdminAssessmentsScreen} />
+        <Tab.Screen name="Academic" component={AdminAcademicScreen} />
+        <Tab.Screen name="Profile" component={AdminProfileScreen} />
+      </Tab.Navigator>
+    </RoleDrawerProvider>
   );
 }
 
@@ -917,6 +935,21 @@ type ActiveRouteState = {
     state?: ActiveRouteState;
   }>;
 };
+
+function navigateFromRoleDrawer(destination: RoleDrawerDestination) {
+  if (!rootNavigationRef.isReady()) return;
+
+  const navigate = rootNavigationRef.navigate as unknown as (
+    routeName: string,
+    params?: { screen: string },
+  ) => void;
+  if (destination.kind === "tab") {
+    navigate("MainTabs", { screen: String(destination.route) });
+    return;
+  }
+
+  navigate(String(destination.route));
+}
 
 function getActiveRouteName(state?: ActiveRouteState): string {
   const route = state?.routes?.[state?.index ?? 0];

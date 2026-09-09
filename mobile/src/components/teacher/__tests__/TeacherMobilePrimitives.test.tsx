@@ -47,6 +47,16 @@ jest.mock("../../ui/primitives", () => {
   };
 });
 
+jest.mock("../../navigation/RoleNavigationDrawer", () => {
+  const ReactRuntime = require("react");
+  return {
+    RoleMenuButton: () =>
+      ReactRuntime.createElement("RoleMenuButton", {
+        accessibilityLabel: "Open navigation menu",
+      }),
+  };
+});
+
 function flattenText(node: TestRenderer.ReactTestRendererJSON | TestRenderer.ReactTestRendererJSON[] | null): string {
   if (!node) return "";
   if (Array.isArray(node)) return node.map(flattenText).join(" ");
@@ -56,10 +66,16 @@ function flattenText(node: TestRenderer.ReactTestRendererJSON | TestRenderer.Rea
 }
 
 describe("teacher mobile primitives", () => {
-  it("uses the GABHS red teacher palette", () => {
-    expect(teacherTheme.red).toBe("#DC2626");
+  it("uses the restrained P2 GABHS teacher palette", () => {
+    expect(teacherTheme.red).toBe("#C96B68");
+    expect(teacherTheme.redText).toBe("#98484A");
     expect(teacherTheme.topbar).toBe("#FFFFFF");
-    expect(teacherTheme.bg).toBe("#FFFAF9");
+    expect(teacherTheme.surface).toBe("#FFFFFF");
+    expect(teacherTheme.bg).toBe("#FBFAF8");
+    expect(teacherTheme.redSoft).toBe("#FFF5F2");
+    expect(teacherTheme.border).toBe("#E7E3DF");
+    expect(teacherTheme.blue).not.toBe(teacherTheme.red);
+    expect(teacherTheme.purple).not.toBe(teacherTheme.red);
   });
 
   it("renders a compact title row without workspace or subtitle copy", () => {
@@ -88,9 +104,25 @@ describe("teacher mobile primitives", () => {
     expect(text).not.toContain("Refresh");
 
     const refresh = renderer!.root.findByProps({ accessibilityLabel: "Refresh Assessments" });
+    expect(renderer!.root.findByProps({ accessibilityLabel: "Open navigation menu" })).toBeTruthy();
     expect(refresh.props.style.minHeight).toBeGreaterThanOrEqual(44);
     act(() => refresh.props.onPress());
     expect(onRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the back action instead of the root hamburger on detail screens", () => {
+    let renderer: TestRenderer.ReactTestRenderer;
+
+    act(() => {
+      renderer = TestRenderer.create(
+        <TeacherScreen title="Class details" showBackButton onBackPress={jest.fn()}>
+          <React.Fragment>Detail body</React.Fragment>
+        </TeacherScreen>,
+      );
+    });
+
+    expect(renderer!.root.findByProps({ accessibilityLabel: "Back" })).toBeTruthy();
+    expect(renderer!.root.findAllByProps({ accessibilityLabel: "Open navigation menu" })).toHaveLength(0);
   });
 
   it("exposes disclosure state and keeps content behind the same header action", () => {

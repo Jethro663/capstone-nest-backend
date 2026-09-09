@@ -29,6 +29,7 @@ import type { LessonCompletion } from "../types/lesson";
 import type { ClassModule, ModuleItem } from "../types/module";
 import { studentDarkTheme } from "../theme/studentDark";
 import { shadow } from "../theme/tokens";
+import { RoleMenuButton } from "../components/navigation/RoleNavigationDrawer";
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, "Classes">,
@@ -422,18 +423,7 @@ export function LessonsScreen({ navigation }: Props) {
             }}
           >
             <View style={{ flexDirection: "row", alignItems: "center", gap: 9 }}>
-              <View
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 8,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: darkTheme.red,
-                }}
-              >
-                <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "700" }}>N</Text>
-              </View>
+              <RoleMenuButton color={darkTheme.red} />
               <Text style={{ color: darkTheme.text, fontSize: 17, fontWeight: "600" }}>My Classes</Text>
             </View>
 

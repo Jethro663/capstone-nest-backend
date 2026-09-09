@@ -22,6 +22,7 @@ import type { ClassItem } from "../types/class";
 import { studentDarkTheme } from "../theme/studentDark";
 import { shadow } from "../theme/tokens";
 import { presentAcademicScore } from "../lib/academicScore";
+import { RoleMenuButton } from "../components/navigation/RoleNavigationDrawer";
 
 type Props = BottomTabScreenProps<MainTabParamList, "Assessments">;
 type AssessmentFilterKey =
@@ -548,22 +549,7 @@ export function AssessmentsScreen({ navigation }: Props) {
             <View
               style={{ alignItems: "center", flexDirection: "row", gap: 9 }}
             >
-              <View
-                style={{
-                  alignItems: "center",
-                  backgroundColor: darkTheme.red,
-                  borderRadius: 8,
-                  height: 28,
-                  justifyContent: "center",
-                  width: 28,
-                }}
-              >
-                <Text
-                  style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "700" }}
-                >
-                  N
-                </Text>
-              </View>
+              <RoleMenuButton color={darkTheme.red} />
               <Text
                 style={{
                   color: darkTheme.text,

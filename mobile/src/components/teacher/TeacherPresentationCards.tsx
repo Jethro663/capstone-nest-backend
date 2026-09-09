@@ -7,7 +7,7 @@ import type { TeacherSection } from "../../types/teacher";
 import { getPresetColors } from "../../utils/class-card-presets";
 import { teacherTheme as theme } from "../../theme/teacher";
 
-const GABHS_FALLBACK = ["#BE123C", "#DC2626", "#7F1D1D"] as const;
+const GABHS_FALLBACK = ["#C96B68", "#A85A5B", "#98484A"] as const;
 
 function heroColors(preset?: string | null): [string, string, ...string[]] {
   return (preset ? getPresetColors(preset) : GABHS_FALLBACK) as [
@@ -347,7 +347,7 @@ export function TeacherSectionPresentationCard({
         </View>
         <View style={{ marginTop: 8, height: 7, borderRadius: 999, backgroundColor: theme.border, overflow: "hidden" }}>
           <LinearGradient
-            colors={["#DC2626", "#FB7185"]}
+            colors={["#C96B68", "#E6A09B"]}
             style={{ width: `${occupancy}%`, height: "100%", borderRadius: 999 }}
           />
         </View>

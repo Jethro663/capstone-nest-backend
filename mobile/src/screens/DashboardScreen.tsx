@@ -38,6 +38,7 @@ import type { SchoolEvent } from "../types/school-event";
 import { studentDarkTheme } from "../theme/studentDark";
 import { shadow } from "../theme/tokens";
 import { refetchWithConcurrency } from "../utils/refetchWithConcurrency";
+import { RoleMenuButton } from "../components/navigation/RoleNavigationDrawer";
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, "Dashboard">,
@@ -1192,7 +1193,7 @@ export function DashboardScreen({ navigation }: Props) {
         />
       ))}
 
-      <View style={{ backgroundColor: theme.bg, paddingBottom: 88 }}>
+      <View style={{ backgroundColor: theme.bg, paddingBottom: 28 }}>
         <View
           style={{
             backgroundColor: theme.topbar,
@@ -1214,22 +1215,7 @@ export function DashboardScreen({ navigation }: Props) {
             <View
               style={{ flexDirection: "row", alignItems: "center", gap: 9 }}
             >
-              <View
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 8,
-                  backgroundColor: theme.red,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Text
-                  style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "700" }}
-                >
-                  N
-                </Text>
-              </View>
+              <RoleMenuButton color={theme.red} />
               <Text
                 style={{ color: theme.text, fontSize: 17, fontWeight: "600" }}
               >

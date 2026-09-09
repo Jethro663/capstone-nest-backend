@@ -6,6 +6,7 @@ import { Refreshable, ScreenScroll } from "../ui/primitives";
 import { stripRichText } from "../../theme/studentDark";
 import { teacherTheme as theme } from "../../theme/teacher";
 import { shadow } from "../../theme/tokens";
+import { RoleMenuButton } from "../navigation/RoleNavigationDrawer";
 
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>["name"];
 
@@ -71,10 +72,7 @@ export function TeacherScreen({
               <MaterialCommunityIcons name="arrow-left" size={20} color={theme.red} />
             </Pressable>
           ) : (
-            <View
-              accessibilityElementsHidden
-              style={{ width: 4, height: 28, borderRadius: 999, backgroundColor: theme.red }}
-            />
+            <RoleMenuButton />
           )}
           <Text
             numberOfLines={1}

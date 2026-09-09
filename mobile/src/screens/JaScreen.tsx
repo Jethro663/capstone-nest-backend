@@ -21,10 +21,12 @@ import type { JaAskLessonContextSummary, JaAskMessage, JaMode, JaPracticeSession
 import type { GuidedAssessmentAttemptSummary, LxpCheckpoint, LxpOverviewResponse, LxpPathSummary } from "../types/lxp";
 import type { JaPanel, LxpMobileTab } from "../navigation/types";
 import { studentDarkTheme, stripRichText } from "../theme/studentDark";
+import { RoleHeaderNavigationButton } from "../components/navigation/RoleNavigationDrawer";
 
 type Props = {
   navigation: {
     navigate: (routeName: never, params?: never) => void;
+    goBack?: () => void;
   };
   route?: {
     params?: {
@@ -618,9 +620,7 @@ export function JaScreen({ navigation, route }: Props) {
     >
       <View style={{ backgroundColor: dark.header, borderBottomWidth: 1, borderBottomColor: dark.border }}>
         <View style={{ paddingHorizontal: 16, paddingTop: 13, paddingBottom: 10, flexDirection: "row", alignItems: "center", gap: 10 }}>
-          <View style={{ width: 27, height: 27, borderRadius: 8, backgroundColor: dark.red, alignItems: "center", justifyContent: "center" }}>
-            <Text style={{ color: "#fff", fontSize: 12, fontWeight: "900" }}>N</Text>
-          </View>
+          <RoleHeaderNavigationButton color={dark.red} onBackPress={navigation.goBack} />
           <View style={{ flex: 1 }}>
             <Text style={{ color: dark.muted, fontSize: 9, fontWeight: "900", textTransform: "uppercase", letterSpacing: 1 }}>JA Hub</Text>
             <Text style={{ color: dark.text, fontSize: 14, fontWeight: "800" }}>{panel === "review" ? "Replay" : "Learner's Path"}</Text>

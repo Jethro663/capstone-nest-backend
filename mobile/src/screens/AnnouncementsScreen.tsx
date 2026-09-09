@@ -12,6 +12,7 @@ import type { MainTabParamList } from "../navigation/types";
 import { studentDarkTheme as theme } from "../theme/studentDark";
 import { RichTextContent } from "../components/ui/RichTextContent";
 import { announcementPreview, normalizeAnnouncementContent } from "../utils/announcementContent";
+import { RoleMenuButton } from "../components/navigation/RoleNavigationDrawer";
 
 type Props = BottomTabScreenProps<MainTabParamList, "Announcements">;
 type FilterMode = "all" | "pinned";
@@ -100,18 +101,7 @@ export function AnnouncementsScreen(_: Props) {
       <View style={{ backgroundColor: theme.header, borderBottomWidth: 1, borderBottomColor: theme.border }}>
         <View style={{ paddingHorizontal: 16, paddingTop: 44, paddingBottom: 16 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <View
-              style={{
-                width: 38,
-                height: 38,
-                borderRadius: 10,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: theme.red,
-              }}
-            >
-              <MaterialCommunityIcons name="bullhorn-outline" size={18} color="#FFFFFF" />
-            </View>
+            <RoleMenuButton color={theme.red} />
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 10, fontWeight: "600", letterSpacing: 0.6, textTransform: "uppercase", color: theme.muted }}>
                 Class updates

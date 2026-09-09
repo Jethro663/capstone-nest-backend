@@ -16,6 +16,7 @@ import { PhPhoneInputField } from "../components/ui/PhPhoneInputField";
 import { PasswordChangeForm } from "../components/account/PasswordChangeForm";
 import { AppVersionInfo } from "../components/AppVersionInfo";
 import { studentDarkTheme } from "../theme/studentDark";
+import { RoleMenuButton } from "../components/navigation/RoleNavigationDrawer";
 
 type Props = BottomTabScreenProps<MainTabParamList, "Profile">;
 
@@ -458,7 +459,7 @@ export function ProfileScreen(props: Props) {
       backgroundColor={theme.pageBg}
       refreshControl={<Refreshable onRefresh={() => void profileQuery.refetch()} refreshing={refreshBusy} />}
     >
-      <View style={{ backgroundColor: theme.pageBg, paddingBottom: 132 }}>
+      <View style={{ backgroundColor: theme.pageBg, paddingBottom: 32 }}>
         <View
           style={{
             backgroundColor: theme.topbar,
@@ -471,18 +472,7 @@ export function ProfileScreen(props: Props) {
         >
           <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
             <View style={{ alignItems: "center", flexDirection: "row" }}>
-              <View
-                style={{
-                  alignItems: "center",
-                  backgroundColor: theme.red,
-                  borderRadius: 8,
-                  height: 28,
-                  justifyContent: "center",
-                  width: 28,
-                }}
-              >
-                <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "700" }}>N</Text>
-              </View>
+              <RoleMenuButton color={theme.red} />
               <Text style={{ color: theme.text, fontSize: 16, fontWeight: "600", marginLeft: 9 }}>My Profile</Text>
             </View>
 

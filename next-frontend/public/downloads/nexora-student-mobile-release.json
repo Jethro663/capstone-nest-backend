@@ -1,12 +1,12 @@
 {
   "platform": "android",
-  "versionCode": 24,
-  "minSupportedVersionCode": 24,
-  "nativeVersion": "0.1.23",
-  "otaRuntimeVersion": "0.1.23",
+  "versionCode": 25,
+  "minSupportedVersionCode": 25,
+  "nativeVersion": "0.1.24",
+  "otaRuntimeVersion": "0.1.24",
   "apkDownloadUrl": "https://next-frontend-v2-production.up.railway.app/downloads/nexora-student-mobile-release.apk",
   "requiresFullApk": true,
-  "releaseNotes": "GABHS-red teacher workspace redesign with compact navigation, class-first assessments, web-style class and section cards, and less intrusive version verification.",
-  "apkSha256": "b63067cb47880fb21e1517a64064a1ae614d4f6a7dd6ece3ebea0ac6e9d810b6",
-  "apkSizeBytes": 40986887
+  "releaseNotes": "Introduces shared role navigation, a calmer GABHS palette, and a redesigned teacher Home overview.",
+  "apkSha256": "a0e7f4b2d289ae5cd3a5c056c3281fcb3aefb99d38990d056542074ff7033373",
+  "apkSizeBytes": 40993783
 }

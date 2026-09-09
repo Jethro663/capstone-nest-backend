@@ -217,7 +217,7 @@ describe("teacher mobile screens", () => {
     });
   });
 
-  it("renders the teacher home overview with class-centric content", () => {
+  it("renders the teacher home as the approved agenda-and-class overview", () => {
     mockedUseTeacherClasses.mockReturnValue({
       data: [
         {
@@ -227,6 +227,24 @@ describe("teacher mobile screens", () => {
           section: { name: "12-A" },
           schoolYear: "2025-2026",
           enrollmentCount: 32,
+          room: "ICT Lab",
+          schedules: [{ id: "schedule-1", days: ["W"], startTime: "10:00", endTime: "11:00" }],
+        },
+        {
+          id: "class-2",
+          subjectCode: "ICT101",
+          subjectName: "Programming",
+          section: { name: "11-B" },
+          schoolYear: "2025-2026",
+          enrollmentCount: 30,
+        },
+        {
+          id: "class-3",
+          subjectCode: "EXTRA",
+          subjectName: "Third class",
+          section: { name: "10-C" },
+          schoolYear: "2025-2026",
+          enrollmentCount: 28,
         },
       ],
       isRefetching: false,
@@ -246,13 +264,21 @@ describe("teacher mobile screens", () => {
     const text = flattenText(renderer.toJSON());
     expect(text).toContain("Teacher Home");
     expect(renderer.root.findAll((node) => node.type === "TeacherStats")).toHaveLength(0);
-    expect(text).toContain("Needs attention");
-    expect(text).toContain("My classes");
-    expect(text).toContain("Intervention focus");
-    expect(text).toContain("Upcoming assessments");
-    expect(text).toContain("Recent announcements");
-    expect(text).not.toContain("Active classes");
-    expect(text).toContain("Calendar");
+    expect(renderer.root.findAll((node) => node.type === "TeacherAccordionSection")).toHaveLength(0);
+    expect(renderer.root.findAll((node) => node.type === "TeacherActionButton")).toHaveLength(0);
+    expect(text).toContain("Next up");
+    expect(text).toContain("Today");
+    expect(text).toContain("Priority");
+    expect(text).toContain("Your classes");
+    expect(text).toContain("Recent update");
+    expect(text.indexOf("Next up")).toBeLessThan(text.indexOf("Today"));
+    expect(text.indexOf("Today")).toBeLessThan(text.indexOf("Priority"));
+    expect(text.indexOf("Priority")).toBeLessThan(text.indexOf("Your classes"));
+    expect(text).toContain("INF234");
+    expect(text).toContain("ICT101");
+    expect(text).not.toContain("EXTRA");
+    expect(text).not.toContain("Needs attention");
+    expect(text).not.toContain("Intervention focus");
   });
 
   it("renders teacher assessment detail with submissions", () => {
