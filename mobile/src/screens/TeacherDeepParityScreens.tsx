@@ -90,7 +90,10 @@ type InterventionDetailProps = NativeStackScreenProps<
   "TeacherInterventionDetail"
 >;
 type InterventionWorkspaceContentProps = {
-  navigation: NativeStackNavigationProp<RootStackParamList>;
+  navigation: Pick<
+    NativeStackNavigationProp<RootStackParamList>,
+    "navigate" | "goBack"
+  >;
   caseId: string;
   classId?: string;
   embedded?: boolean;
@@ -2217,7 +2220,10 @@ export function TeacherInterventionWorkspaceContent({
       if (onAssigned) {
         onAssigned(activeClassId);
       } else if (activeClassId) {
-        navigation.navigate("TeacherInterventions", { classId: activeClassId });
+        navigation.navigate("TeacherDrawer", {
+          screen: "TeacherInterventions",
+          params: { classId: activeClassId },
+        });
       } else {
         navigation.goBack();
       }

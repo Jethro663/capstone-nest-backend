@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Alert, Pressable, Text, TextInput, View } from "react-native";
 import {
@@ -61,21 +60,8 @@ export function TeacherSectionDetailScreen({ navigation, route }: Props) {
           : "Teacher section detail view"
       }
       icon="google-classroom"
-      rightAction={
-        <Pressable
-          onPress={() => navigation.goBack()}
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 10,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: theme.redSoft,
-          }}
-        >
-          <MaterialCommunityIcons name="arrow-left" size={18} color={theme.red} />
-        </Pressable>
-      }
+      showBackButton
+      onBackPress={() => navigation.goBack()}
       refreshing={
         detailQuery.isRefetching ||
         rosterQuery.isRefetching ||

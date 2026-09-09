@@ -6,6 +6,7 @@ import {
   ROLE_DRAWER_PROFILE_DESTINATION,
   flattenRoleDrawerDestinations,
 } from "../../../navigation/role-drawer-model";
+import { teacherDrawerRouteNames } from "../../../navigation/teacher-route-manifest";
 import {
   RoleHeaderNavigationButton,
   RoleDrawerProvider,
@@ -82,6 +83,7 @@ describe("role drawer destination contracts", () => {
       "Evaluations",
     ]);
     expect(flattenRoleDrawerDestinations("teacher").some((item) => item.route === "TeacherMore")).toBe(false);
+    expect(flattenRoleDrawerDestinations("teacher").every((item) => item.kind === "tab")).toBe(true);
   });
 
   it("preserves the existing student and admin tab destinations", () => {
@@ -103,6 +105,13 @@ describe("role drawer destination contracts", () => {
       route: "Profile",
       kind: "tab",
     });
+  });
+
+  it("keeps the teacher navigator in the exact order shown by the drawer", () => {
+    expect([
+      ...flattenRoleDrawerDestinations("teacher").map((item) => item.route),
+      ROLE_DRAWER_PROFILE_DESTINATION.route,
+    ]).toEqual(teacherDrawerRouteNames);
   });
 });
 
@@ -151,5 +160,29 @@ describe("RoleDrawerProvider", () => {
     act(() => back.props.onPress());
     expect(onBackPress).toHaveBeenCalledTimes(1);
     expect(renderer!.root.findAllByProps({ accessibilityLabel: "Open navigation menu" })).toHaveLength(0);
+  });
+
+  it("prefers the hamburger inside a drawer context even when Back is available", () => {
+    const onBackPress = jest.fn();
+    let renderer: TestRenderer.ReactTestRenderer;
+
+    act(() => {
+      renderer = TestRenderer.create(
+        <RoleDrawerProvider
+          role="teacher"
+          activeRouteName="TeacherCalendar"
+          onNavigate={jest.fn()}
+        >
+          <RoleHeaderNavigationButton onBackPress={onBackPress} />
+        </RoleDrawerProvider>,
+      );
+    });
+
+    const menu = renderer!.root.findByProps({ accessibilityLabel: "Open navigation menu" });
+    act(() => menu.props.onPress());
+
+    expect(renderer!.root.findByProps({ testID: "role-navigation-drawer" })).toBeTruthy();
+    expect(renderer!.root.findAllByProps({ accessibilityLabel: "Back" })).toHaveLength(0);
+    expect(onBackPress).not.toHaveBeenCalled();
   });
 });

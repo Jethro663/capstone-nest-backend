@@ -7,11 +7,80 @@ function readSource(relativePath: string) {
 
 describe("role drawer integration", () => {
   const appNavigator = readSource("../AppNavigator.tsx");
+  const teacherNavigatorSource = appNavigator.match(
+    /function TeacherNavigator\(\)[\s\S]*?function RoleTabs/,
+  )?.[0] ?? "";
 
   it("mounts the drawer for every role while keeping the existing tab navigators", () => {
     expect(appNavigator.match(/<RoleDrawerProvider/g)).toHaveLength(3);
     expect(appNavigator.match(/<Tab\.Navigator/g)).toHaveLength(3);
     expect(appNavigator.match(/tabBar=\{\(\) => null\}/g)).toHaveLength(3);
+  });
+
+  it("makes the teacher drawer the primary navigator for all fourteen workspaces", () => {
+    expect(appNavigator).toContain("function TeacherDrawerNavigator()");
+    expect(appNavigator).toContain('backBehavior="history"');
+    expect(teacherNavigatorSource).toContain(
+      '<RootStack.Screen name="TeacherDrawer" component={TeacherDrawerNavigator} />',
+    );
+
+    for (const routeName of [
+      "TeacherCalendar",
+      "TeacherLessons",
+      "TeacherLibrary",
+      "TeacherClassRecord",
+      "TeacherAnnouncements",
+      "TeacherReports",
+      "TeacherInterventions",
+      "TeacherPerformance",
+      "TeacherEvaluations",
+    ]) {
+      expect(appNavigator).toContain(`<Tab.Screen name="${routeName}"`);
+      expect(teacherNavigatorSource).not.toContain(`<RootStack.Screen name="${routeName}"`);
+    }
+  });
+
+  it.each([
+    "../../screens/TeacherCalendarScreen.tsx",
+    "../../screens/TeacherLessonsScreen.tsx",
+    "../../screens/TeacherLibraryScreen.tsx",
+    "../../screens/TeacherClassRecordScreen.tsx",
+    "../../screens/TeacherAnnouncementsScreen.tsx",
+    "../../screens/TeacherReportsScreen.tsx",
+    "../../screens/TeacherInterventionsScreen.tsx",
+    "../../screens/TeacherPerformanceScreen.tsx",
+    "../../screens/TeacherEvaluationsScreen.tsx",
+  ])("uses the hamburger instead of Back on teacher drawer root %s", (screenPath) => {
+    const source = readSource(screenPath);
+    expect(source).not.toContain("showBackButton");
+    expect(source).toContain("onBackPress={() => navigation.goBack()}");
+  });
+
+  it.each([
+    "../../screens/TeacherClassDetailScreen.tsx",
+    "../../screens/TeacherModuleDetailScreen.tsx",
+    "../../screens/TeacherLessonDetailScreen.tsx",
+    "../../screens/TeacherSectionDetailScreen.tsx",
+    "../../screens/TeacherAssessmentDetailScreen.tsx",
+    "../../screens/TeacherAssessmentReviewScreen.tsx",
+    "../../screens/TeacherCreateModuleScreen.tsx",
+  ])("puts Back in the leading header position on teacher detail %s", (screenPath) => {
+    const source = readSource(screenPath);
+    expect(source).toContain("showBackButton");
+    expect(source).toContain("onBackPress={() => navigation.goBack()}");
+  });
+
+  it("gives the root-stack Notifications utility a visible Back action", () => {
+    const source = readSource("../../screens/NotificationsInboxScreen.tsx");
+    expect(source).toContain('NativeStackScreenProps<RootStackParamList, "Notifications">');
+    expect(source).toContain('accessibilityLabel="Back"');
+    expect(source).toContain('navigation.navigate("TeacherDrawer", { screen: "Home" })');
+  });
+
+  it("keeps Calendar announcement links inside the teacher drawer navigator", () => {
+    const source = readSource("../../screens/TeacherCalendarScreen.tsx");
+    expect(source).toContain('navigation.navigate("TeacherAnnouncements")');
+    expect(source).not.toContain("navigation.getParent()");
   });
 
   it.each([

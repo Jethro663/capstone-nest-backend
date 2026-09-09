@@ -144,7 +144,7 @@ test("verifyManifest rejects a changed APK", async () => {
   );
 });
 
-test("role drawer and teacher home hotfix release keeps Expo and Gradle at 0.1.24 build 25", async () => {
+test("teacher drawer primary navigation release keeps Expo and Gradle at 0.1.25 build 26", async () => {
   const appJson = JSON.parse(
     await readFile(path.join(__dirname, "..", "app.json"), "utf8"),
   );
@@ -153,8 +153,9 @@ test("role drawer and teacher home hotfix release keeps Expo and Gradle at 0.1.2
     "utf8",
   );
 
-  assert.equal(appJson.expo.version, "0.1.24");
-  assert.equal(appJson.expo.android.versionCode, 25);
-  assert.match(buildGradle, /\bversionCode\s+25\b/);
-  assert.match(buildGradle, /\bversionName\s+["']0\.1\.24["']/);
+  assert.equal(appJson.expo.version, "0.1.25");
+  assert.equal(appJson.expo.android.versionCode, 26);
+  assert.match(buildGradle, /\bversionCode\s+26\b/);
+  assert.match(buildGradle, /\bversionName\s+["']0\.1\.25["']/);
+  assert.equal(appJson.expo.ios.buildNumber, "3");
 });

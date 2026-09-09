@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Alert, Text, View } from "react-native";
 import {
   useTeacherClasses,
@@ -10,7 +9,7 @@ import {
 } from "../api/hooks";
 import { lxpApi } from "../api/services/lxp";
 import { toAppError } from "../api/http";
-import type { RootStackParamList } from "../navigation/types";
+import type { TeacherDrawerScreenProps } from "../navigation/types";
 import { useAuth } from "../providers/AuthProvider";
 import { boundAcademicPercentage } from "../lib/academicScore";
 import type {
@@ -31,7 +30,7 @@ import {
   teacherTheme,
 } from "../components/teacher/TeacherMobilePrimitives";
 
-type Props = NativeStackScreenProps<RootStackParamList, "TeacherInterventions">;
+type Props = TeacherDrawerScreenProps<"TeacherInterventions">;
 type WorkspaceView = "queue" | "overview" | "history";
 type LeaderboardScope = "xp" | "streak" | "checkpoints";
 type StatusFilter = "all" | "pending" | "active" | "completed" | "dismissed";
@@ -392,7 +391,6 @@ export function TeacherInterventionsScreen({ navigation, route }: Props) {
           : "Targeted intervention queue, outcomes, history, and AI-assisted remedial planning."
       }
       icon="account-alert-outline"
-      showBackButton
       onBackPress={() => navigation.goBack()}
       refreshing={isRefreshing}
       onRefresh={() => void refreshAll()}

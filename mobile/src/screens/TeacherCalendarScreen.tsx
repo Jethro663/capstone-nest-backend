@@ -1,11 +1,10 @@
 import { useMemo, useState } from "react";
 import { useQueries } from "@tanstack/react-query";
-import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Pressable, Text, View } from "react-native";
 import { queryKeys, useSchoolEvents, useTeacherClasses } from "../api/hooks";
 import { announcementsApi } from "../api/services/announcements";
 import { assessmentsApi } from "../api/services/assessments";
-import type { RootStackParamList } from "../navigation/types";
+import type { TeacherDrawerScreenProps } from "../navigation/types";
 import { useAuth } from "../providers/AuthProvider";
 import {
   TeacherChip,
@@ -16,7 +15,7 @@ import {
   teacherTheme as theme,
 } from "../components/teacher/TeacherMobilePrimitives";
 
-type Props = NativeStackScreenProps<RootStackParamList, "TeacherCalendar">;
+type Props = TeacherDrawerScreenProps<"TeacherCalendar">;
 type FeedItemKind = "assessment" | "announcement" | "school_event" | "class_schedule";
 type FeedItem = {
   id: string;
@@ -172,7 +171,7 @@ export function TeacherCalendarScreen({ navigation, route }: Props) {
           title: announcement.title,
           subtitle: `${classItem.subjectCode} | Announcement`,
           kind: "announcement",
-          action: () => navigation.getParent()?.navigate("Announcements" as never),
+          action: () => navigation.navigate("TeacherAnnouncements"),
         });
       });
     });
@@ -207,7 +206,6 @@ export function TeacherCalendarScreen({ navigation, route }: Props) {
       title="Calendar"
       subtitle="Unified feed from class schedules, assessments, announcements, and school events."
       icon="calendar-month-outline"
-      showBackButton
       onBackPress={() => navigation.goBack()}
       refreshing={classesQuery.isRefetching || schoolEventsQuery.isRefetching}
       onRefresh={() => {

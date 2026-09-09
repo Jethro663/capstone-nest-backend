@@ -1,11 +1,15 @@
+import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
+import type { CompositeScreenProps, NavigatorScreenParams } from "@react-navigation/native";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+
 export type {
   StudentParityRouteName,
   StudentSupportRouteName,
 } from "./student-route-manifest";
 export type {
+  TeacherDrawerRouteName,
   TeacherParityRouteName,
   TeacherStackRouteName,
-  TeacherTabRouteName,
 } from "./teacher-route-manifest";
 
 export type ClassDetailInitialTab =
@@ -35,7 +39,8 @@ export type JaRouteParams = {
 
 export type RootStackParamList = {
   CompleteProfile: undefined;
-  MainTabs: undefined;
+  MainTabs: NavigatorScreenParams<MainTabParamList> | undefined;
+  TeacherDrawer: NavigatorScreenParams<MainTabParamList> | undefined;
   Notifications: undefined;
   AdminTools: { section?: "users" | "evaluations" | "calendar" | "library" | "reports" | "audit" | "diagnostics" | "roster" | "templates" | "settings" | "records" };
   AdminAcademic: undefined;
@@ -118,6 +123,15 @@ export type MainTabParamList = {
   Classes: undefined;
   Sections: undefined;
   Assessments: undefined;
+  TeacherCalendar: { classId?: string } | undefined;
+  TeacherLessons: undefined;
+  TeacherLibrary: undefined;
+  TeacherClassRecord: undefined;
+  TeacherAnnouncements: undefined;
+  TeacherReports: undefined;
+  TeacherInterventions: { classId?: string } | undefined;
+  TeacherPerformance: undefined;
+  TeacherEvaluations: undefined;
   JA: JaRouteParams | undefined;
   Announcements: undefined;
   Profile: undefined;
@@ -127,6 +141,13 @@ export type MainTabParamList = {
   Progress: undefined;
   Lessons: undefined;
 };
+
+export type TeacherDrawerScreenProps<
+  RouteName extends keyof MainTabParamList,
+> = CompositeScreenProps<
+  BottomTabScreenProps<MainTabParamList, RouteName>,
+  NativeStackScreenProps<RootStackParamList>
+>;
 
 export type AuthStackParamList = {
   Login: undefined;

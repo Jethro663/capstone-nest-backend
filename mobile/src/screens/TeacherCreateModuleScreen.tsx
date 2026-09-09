@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Alert, Pressable, View } from "react-native";
+import { Alert, View } from "react-native";
 import { useTeacherCreateModuleMutation } from "../api/hooks";
 import { toAppError } from "../api/http";
 import type { RootStackParamList } from "../navigation/types";
@@ -11,7 +10,6 @@ import {
   TeacherInlineField,
   TeacherPanel,
   TeacherScreen,
-  teacherTheme as theme,
 } from "../components/teacher/TeacherMobilePrimitives";
 
 type Props = NativeStackScreenProps<RootStackParamList, "TeacherCreateModule">;
@@ -52,21 +50,8 @@ export function TeacherCreateModuleScreen({ navigation, route }: Props) {
       title="Create Module"
       subtitle="Create a module from mobile so teachers can organize content directly from the app."
       icon="folder-plus-outline"
-      rightAction={
-        <Pressable
-          onPress={() => navigation.goBack()}
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 10,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: theme.redSoft,
-          }}
-        >
-          <MaterialCommunityIcons name="arrow-left" size={18} color={theme.red} />
-        </Pressable>
-      }
+      showBackButton
+      onBackPress={() => navigation.goBack()}
     >
       <TeacherPanel title="Module details" subtitle="Title is required. Description and visibility options are optional.">
         <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>

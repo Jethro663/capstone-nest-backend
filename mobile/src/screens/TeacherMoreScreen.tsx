@@ -103,10 +103,10 @@ export function TeacherMoreScreen() {
 
       <TeacherPanel title="Quick launch" subtitle="Tap a workflow to jump straight into day-to-day teacher operations.">
         <View style={{ paddingHorizontal: 14, paddingBottom: 14, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          <TeacherActionButton label="Calendar" icon="calendar-month-outline" tone="purple" onPress={() => navigation.navigate("TeacherCalendar")} />
-          <TeacherActionButton label="Announcements" icon="bullhorn-outline" tone="amber" onPress={() => navigation.navigate("TeacherAnnouncements")} />
-          <TeacherActionButton label="Performance" icon="chart-line" tone="blue" onPress={() => navigation.navigate("TeacherPerformance")} />
-          <TeacherActionButton label="Interventions" icon="account-alert-outline" tone="red" onPress={() => navigation.navigate("TeacherInterventions")} />
+          <TeacherActionButton label="Calendar" icon="calendar-month-outline" tone="purple" onPress={() => navigation.navigate("TeacherDrawer", { screen: "TeacherCalendar" })} />
+          <TeacherActionButton label="Announcements" icon="bullhorn-outline" tone="amber" onPress={() => navigation.navigate("TeacherDrawer", { screen: "TeacherAnnouncements" })} />
+          <TeacherActionButton label="Performance" icon="chart-line" tone="blue" onPress={() => navigation.navigate("TeacherDrawer", { screen: "TeacherPerformance" })} />
+          <TeacherActionButton label="Interventions" icon="account-alert-outline" tone="red" onPress={() => navigation.navigate("TeacherDrawer", { screen: "TeacherInterventions" })} />
         </View>
       </TeacherPanel>
 

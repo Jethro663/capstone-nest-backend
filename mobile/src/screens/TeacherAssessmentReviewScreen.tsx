@@ -1,10 +1,8 @@
 import { useEffect, useState } from "react";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import {
   Alert,
   Image,
-  Pressable,
   ScrollView,
   Text,
   TextInput,
@@ -233,25 +231,8 @@ export function TeacherAssessmentReviewScreen({ navigation, route }: Props) {
       title={result?.assessment?.title || "Attempt review"}
       subtitle={`Attempt #${result?.attemptNumber ?? "?"} · review answers, files, feedback, and direct score from mobile.`}
       icon="clipboard-check-outline"
-      rightAction={
-        <Pressable
-          onPress={() => navigation.goBack()}
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 10,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: theme.redSoft,
-          }}
-        >
-          <MaterialCommunityIcons
-            name="arrow-left"
-            size={18}
-            color={theme.red}
-          />
-        </Pressable>
-      }
+      showBackButton
+      onBackPress={() => navigation.goBack()}
       refreshing={resultQuery.isRefetching}
       onRefresh={() => {
         void resultQuery.refetch();

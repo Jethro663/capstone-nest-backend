@@ -205,7 +205,10 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
         title: entry.title,
         subtitle: `School event - ${formatDate(entry.startsAt)}`,
         sortAt: new Date(entry.startsAt).getTime(),
-        action: () => navigation.navigate("TeacherCalendar", { classId }),
+        action: () => navigation.navigate("TeacherDrawer", {
+          screen: "TeacherCalendar",
+          params: { classId },
+        }),
       }));
 
     return [...assessmentItems, ...eventItems]
@@ -259,14 +262,8 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
           : "Teacher class shell"
       }
       icon="google-classroom"
-      rightAction={
-        <Pressable
-          onPress={() => navigation.goBack()}
-          style={{ width: 44, height: 44, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: theme.redSoft }}
-        >
-          <MaterialCommunityIcons name="arrow-left" size={18} color={theme.red} />
-        </Pressable>
-      }
+      showBackButton
+      onBackPress={() => navigation.goBack()}
       refreshing={
         classQuery.isRefetching ||
         modulesQuery.isRefetching ||

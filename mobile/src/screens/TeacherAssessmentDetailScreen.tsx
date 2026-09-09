@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Alert, Modal, Pressable, Text, View } from "react-native";
+import { Alert, Modal, Text, View } from "react-native";
 import {
   useAssessmentDetail,
   useTeacherAssessmentSubmissions,
@@ -275,25 +275,8 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
           : "Review submissions and return grades from the current mobile shell."
       }
       icon="clipboard-check-outline"
-      rightAction={
-        <Pressable
-          onPress={() => navigation.goBack()}
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 10,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: theme.redSoft,
-          }}
-        >
-          <MaterialCommunityIcons
-            name="arrow-left"
-            size={18}
-            color={theme.red}
-          />
-        </Pressable>
-      }
+      showBackButton
+      onBackPress={() => navigation.goBack()}
       refreshing={assessmentQuery.isRefetching || submissionsQuery.isRefetching}
       onRefresh={() => {
         void Promise.all([

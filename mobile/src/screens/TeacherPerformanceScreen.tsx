@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Text, View } from "react-native";
 import {
   useTeacherClassAtRisk,
@@ -7,7 +6,7 @@ import {
   useTeacherClasses,
   useTeacherInterventionQuizComparison,
 } from "../api/hooks";
-import type { RootStackParamList } from "../navigation/types";
+import type { TeacherDrawerScreenProps } from "../navigation/types";
 import { useAuth } from "../providers/AuthProvider";
 import { boundAcademicPercentage } from "../lib/academicScore";
 import {
@@ -20,7 +19,7 @@ import {
   teacherTheme,
 } from "../components/teacher/TeacherMobilePrimitives";
 
-type Props = NativeStackScreenProps<RootStackParamList, "TeacherPerformance">;
+type Props = TeacherDrawerScreenProps<"TeacherPerformance">;
 
 function toPercent(value: number | null | undefined) {
   return typeof value === "number"
@@ -185,7 +184,6 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
       title="Performance"
       subtitle="Class-level performance metrics and at-risk students from teacher analytics endpoints."
       icon="chart-line"
-      showBackButton
       onBackPress={() => navigation.goBack()}
       refreshing={
         classesQuery.isRefetching ||

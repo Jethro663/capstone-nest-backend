@@ -1,36 +1,47 @@
 import {
+  teacherMountedDrawerRouteNames,
   teacherMountedStackRouteNames,
-  teacherMountedTabRouteNames,
   teacherParityRouteInventory,
   teacherParityRouteInventoryNames,
   teacherWebParityMappings,
 } from "../screen-flow";
 import {
+  teacherDrawerRouteNames,
   teacherParityRouteNames,
+  teacherRouteManifest,
   teacherStackRouteNames,
-  teacherTabRouteNames,
 } from "../../navigation/teacher-route-manifest";
 import type { MainTabParamList, RootStackParamList } from "../../navigation/types";
 
 describe("teacher parity navigation", () => {
-  it("keeps five permanent tabs and reaches Announcements through the stack", () => {
-    expect(teacherTabRouteNames).toEqual([
+  it("owns every teacher primary workspace through the drawer manifest", () => {
+    expect(teacherRouteManifest.drawer).toEqual([
       "Home",
-      "Assessments",
       "Classes",
       "Sections",
+      "Assessments",
+      "TeacherCalendar",
+      "TeacherLessons",
+      "TeacherLibrary",
+      "TeacherClassRecord",
+      "TeacherAnnouncements",
+      "TeacherReports",
+      "TeacherInterventions",
+      "TeacherPerformance",
+      "TeacherEvaluations",
       "Profile",
     ]);
-    expect(teacherStackRouteNames).toContain("TeacherAnnouncements");
+    expect(teacherStackRouteNames).not.toContain("TeacherCalendar");
+    expect(teacherStackRouteNames).not.toContain("TeacherAnnouncements");
   });
 
   it("keeps the required teacher route set typed across tabs and stack routes", () => {
-    const tabRoutes: ReadonlyArray<keyof MainTabParamList> = teacherTabRouteNames;
+    const drawerRoutes: ReadonlyArray<keyof MainTabParamList> = teacherDrawerRouteNames;
     const stackRoutes: ReadonlyArray<keyof RootStackParamList> = teacherStackRouteNames;
 
-    expect(tabRoutes).toEqual(teacherMountedTabRouteNames);
+    expect(drawerRoutes).toEqual(teacherMountedDrawerRouteNames);
     expect(stackRoutes).toEqual(teacherMountedStackRouteNames);
-    expect(teacherParityRouteNames).toEqual([...teacherTabRouteNames, ...teacherStackRouteNames]);
+    expect(teacherParityRouteNames).toEqual([...teacherDrawerRouteNames, ...teacherStackRouteNames]);
     expect(teacherParityRouteInventory.map((route) => route.name)).toEqual(teacherParityRouteInventoryNames);
   });
 
@@ -69,7 +80,7 @@ describe("teacher parity navigation", () => {
       "/dashboard/teacher/extractions/[id]",
     ]);
 
-    const mountedRoutes = new Set<string>([...teacherTabRouteNames, ...teacherStackRouteNames]);
+    const mountedRoutes = new Set<string>([...teacherDrawerRouteNames, ...teacherStackRouteNames]);
     for (const mapping of teacherWebParityMappings) {
       expect(mountedRoutes.has(mapping.mobile)).toBe(true);
     }

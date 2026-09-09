@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { Refreshable, ScreenScroll } from "../components/ui/primitives";
 import { notificationsApi } from "../api/services/notifications";
-import type { MainTabParamList } from "../navigation/types";
+import type { RootStackParamList } from "../navigation/types";
 import { resolveMobileRole } from "../navigation/role-resolver";
 import { useAuth } from "../providers/AuthProvider";
 import { studentDarkTheme as theme, stripRichText } from "../theme/studentDark";
@@ -13,7 +13,7 @@ import { colors, hexToRgba, shadow } from "../theme/tokens";
 import type { MobileNotification } from "../types/notification";
 import { openMobileNotification } from "../utils/mobile-notification-routing";
 
-type Props = BottomTabScreenProps<MainTabParamList, "Announcements">;
+type Props = NativeStackScreenProps<RootStackParamList, "Notifications">;
 type FilterMode = "all" | "unread" | "interventions" | "assessments";
 
 const FILTERS: Array<{ id: FilterMode; label: string }> = [
@@ -141,6 +141,20 @@ export function NotificationsInboxScreen({ navigation }: Props) {
   const filteredNotifications = notifications.filter((entry) => matchesFilter(entry, filterMode));
   const refreshing = notificationsQuery.isRefetching || unreadQuery.isRefetching;
 
+  const returnFromNotifications = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+    if (role === "teacher") {
+      navigation.navigate("TeacherDrawer", { screen: "Home" });
+      return;
+    }
+    navigation.navigate("MainTabs", {
+      screen: role === "admin" ? "Home" : "Dashboard",
+    });
+  };
+
   const openNotification = async (notification: MobileNotification) => {
     if (!notification.isRead) {
       await notificationsApi.markRead(notification.id).catch(() => undefined);
@@ -180,18 +194,23 @@ export function NotificationsInboxScreen({ navigation }: Props) {
       <View style={{ backgroundColor: "#071832", borderBottomWidth: 1, borderBottomColor: hexToRgba(colors.primary, 0.22) }}>
         <View style={{ paddingHorizontal: 16, paddingTop: 44, paddingBottom: 20 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <View
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+              onPress={returnFromNotifications}
               style={{
                 width: 44,
                 height: 44,
                 borderRadius: 16,
                 alignItems: "center",
                 justifyContent: "center",
-                backgroundColor: "#1D4ED8",
+                borderWidth: 1,
+                borderColor: "rgba(255,255,255,0.36)",
+                backgroundColor: "rgba(255,255,255,0.12)",
               }}
             >
-              <MaterialCommunityIcons name="bell-badge-outline" size={22} color="#FFFFFF" />
-            </View>
+              <MaterialCommunityIcons name="arrow-left" size={22} color="#FFFFFF" />
+            </Pressable>
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 10, fontWeight: "900", letterSpacing: 1, textTransform: "uppercase", color: "#93C5FD" }}>
                 Notification Center

@@ -1,8 +1,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Alert, Image, Pressable, Text, View } from "react-native";
+import { Alert, Image, Text, View } from "react-native";
 import { useLessonDetail, useTeacherLessonDraftStateMutation } from "../api/hooks";
 import { toAppError } from "../api/http";
 import { lessonsApi } from "../api/services/lessons";
@@ -87,14 +86,8 @@ export function TeacherLessonDetailScreen({ navigation, route }: Props) {
       title={lesson?.title || "Lesson detail"}
       subtitle={buildLessonSubtitle(lesson?.description)}
       icon="text-box-outline"
-      rightAction={
-        <Pressable
-          onPress={() => navigation.goBack()}
-          style={{ width: 44, height: 44, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: theme.redSoft }}
-        >
-          <MaterialCommunityIcons name="arrow-left" size={18} color={theme.red} />
-        </Pressable>
-      }
+      showBackButton
+      onBackPress={() => navigation.goBack()}
       refreshing={lessonQuery.isRefetching}
       onRefresh={() => {
         void lessonQuery.refetch();

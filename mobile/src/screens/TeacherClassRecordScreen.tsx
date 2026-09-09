@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { Text, View } from "react-native";
-import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useTeacherClasses } from "../api/hooks";
 import { useAuth } from "../providers/AuthProvider";
-import type { RootStackParamList } from "../navigation/types";
+import type { TeacherDrawerScreenProps } from "../navigation/types";
 import { AcademicWorkbook } from "../components/academic/AcademicWorkbook";
 import {
   TeacherScreen,
@@ -12,7 +11,7 @@ import {
 } from "../components/teacher/TeacherMobilePrimitives";
 export function TeacherClassRecordScreen({
   navigation,
-}: NativeStackScreenProps<RootStackParamList, "TeacherClassRecord">) {
+}: TeacherDrawerScreenProps<"TeacherClassRecord">) {
   const { user } = useAuth();
   const classes = useTeacherClasses(user?.userId || user?.id);
   const [classId, setClassId] = useState("");
@@ -22,7 +21,6 @@ export function TeacherClassRecordScreen({
     <TeacherScreen
       title="Academic class records"
       subtitle="Policy periods, eligibility, score evidence and official annual results."
-      showBackButton
       onBackPress={() => navigation.goBack()}
       onRefresh={() => void classes.refetch()}
       refreshing={classes.isFetching}

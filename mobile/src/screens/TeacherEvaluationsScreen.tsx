@@ -1,12 +1,11 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useTeacherEvaluationSummary } from "../api/hooks";
 import { evaluationsApi, type AssignedSystemEvaluation } from "../api/services/evaluations";
 import { toAppError } from "../api/http";
-import type { RootStackParamList } from "../navigation/types";
+import type { TeacherDrawerScreenProps } from "../navigation/types";
 import type { TeacherEvaluationType } from "../types/teacher";
 import {
   TeacherChip,
@@ -18,7 +17,7 @@ import {
   teacherTheme as theme,
 } from "../components/teacher/TeacherMobilePrimitives";
 
-type Props = NativeStackScreenProps<RootStackParamList, "TeacherEvaluations">;
+type Props = TeacherDrawerScreenProps<"TeacherEvaluations">;
 type GradingFilter = "all" | "Q1" | "Q2" | "Q3" | "Q4";
 
 const evaluationTypes: Array<{ label: string; value: TeacherEvaluationType }> = [
@@ -88,7 +87,6 @@ export function TeacherEvaluationsScreen({ navigation }: Props) {
       title="Evaluations"
       subtitle="Complete assigned forms or inspect anonymous learner feedback."
       icon="clipboard-check-outline"
-      showBackButton
       onBackPress={() => navigation.goBack()}
       refreshing={summaryQuery.isRefetching || inboxQuery.isRefetching}
       onRefresh={() => void Promise.all([summaryQuery.refetch(), inboxQuery.refetch()])}

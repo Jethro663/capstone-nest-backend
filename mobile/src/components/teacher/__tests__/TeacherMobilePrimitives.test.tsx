@@ -50,9 +50,10 @@ jest.mock("../../ui/primitives", () => {
 jest.mock("../../navigation/RoleNavigationDrawer", () => {
   const ReactRuntime = require("react");
   return {
-    RoleMenuButton: () =>
-      ReactRuntime.createElement("RoleMenuButton", {
-        accessibilityLabel: "Open navigation menu",
+    RoleHeaderNavigationButton: ({ onBackPress }: { onBackPress?: () => void }) =>
+      ReactRuntime.createElement("RoleHeaderNavigationButton", {
+        accessibilityLabel: onBackPress ? "Back" : "Open navigation menu",
+        onPress: onBackPress,
       }),
   };
 });

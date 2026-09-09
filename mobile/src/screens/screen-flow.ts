@@ -6,14 +6,14 @@ import {
   type StudentSupportRouteName,
 } from "../navigation/student-route-manifest";
 import {
+  teacherDrawerRouteNames,
   teacherParityRouteNames,
   teacherRouteManifest,
   teacherStackRouteNames,
-  teacherTabRouteNames,
   teacherWebRouteMappings,
+  type TeacherDrawerRouteName,
   type TeacherParityRouteName,
   type TeacherStackRouteName,
-  type TeacherTabRouteName,
 } from "../navigation/teacher-route-manifest";
 
 export type StudentParityRouteInventoryEntry = {
@@ -41,8 +41,8 @@ export const studentSupportRouteInventoryNames = studentSupportRouteNames;
 
 export type TeacherParityRouteInventoryEntry =
   | {
-      name: TeacherTabRouteName;
-      kind: "tab";
+      name: TeacherDrawerRouteName;
+      kind: "drawer";
     }
   | {
       name: TeacherStackRouteName;
@@ -50,12 +50,12 @@ export type TeacherParityRouteInventoryEntry =
     };
 
 export const teacherParityRouteInventory = [
-  ...teacherRouteManifest.tabs.map((name) => ({ name, kind: "tab" as const })),
+  ...teacherRouteManifest.drawer.map((name) => ({ name, kind: "drawer" as const })),
   ...teacherRouteManifest.stack.map((name) => ({ name, kind: "stack" as const })),
 ] as const satisfies ReadonlyArray<TeacherParityRouteInventoryEntry>;
 
 export const teacherParityRouteInventoryNames = teacherParityRouteNames;
-export const teacherMountedTabRouteNames = teacherTabRouteNames;
+export const teacherMountedDrawerRouteNames = teacherDrawerRouteNames;
 export const teacherMountedStackRouteNames = teacherStackRouteNames;
 export const teacherWebParityMappings = teacherWebRouteMappings;
 

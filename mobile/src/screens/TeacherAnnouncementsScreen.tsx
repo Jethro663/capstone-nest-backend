@@ -1,10 +1,9 @@
 import { announcementPreview } from "../utils/announcementContent";
 import { useEffect, useMemo, useState } from "react";
-import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Alert, View } from "react-native";
 import { useAnnouncements, useTeacherAnnouncementMutation, useTeacherClasses, useTeacherDeleteAnnouncementMutation } from "../api/hooks";
 import { toAppError } from "../api/http";
-import type { RootStackParamList } from "../navigation/types";
+import type { TeacherDrawerScreenProps } from "../navigation/types";
 import { useAuth } from "../providers/AuthProvider";
 import { TeacherConfirmModal } from "../components/teacher/TeacherConfirmModal";
 import { TeacherAnnouncementEditorModal } from "../components/teacher/TeacherAnnouncementEditorModal";
@@ -19,7 +18,7 @@ import {
   TeacherStats,
 } from "../components/teacher/TeacherMobilePrimitives";
 
-type Props = NativeStackScreenProps<RootStackParamList, "TeacherAnnouncements">;
+type Props = TeacherDrawerScreenProps<"TeacherAnnouncements">;
 type FeedFilter = "all" | "pinned" | "scheduled";
 
 export function TeacherAnnouncementsScreen({ navigation }: Props) {
@@ -98,7 +97,6 @@ export function TeacherAnnouncementsScreen({ navigation }: Props) {
       title="Announcements"
       subtitle="Create, schedule, pin, and edit class announcements with rich formatting."
       icon="bullhorn-outline"
-      showBackButton
       onBackPress={() => navigation.goBack()}
       refreshing={classesQuery.isRefetching || announcementsQuery.isRefetching}
       onRefresh={() => {

@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Alert, View } from "react-native";
 import { toAppError } from "../api/http";
 import { reportsApi } from "../api/services/reports";
@@ -12,7 +11,7 @@ import {
   useTeacherReportSystemUsage,
 } from "../api/hooks";
 import type { TeacherPaginatedReportResponse, TeacherReportQuery } from "../types/report";
-import type { RootStackParamList } from "../navigation/types";
+import type { TeacherDrawerScreenProps } from "../navigation/types";
 import { useAuth } from "../providers/AuthProvider";
 import {
   TeacherActionButton,
@@ -25,7 +24,7 @@ import {
   TeacherStats,
 } from "../components/teacher/TeacherMobilePrimitives";
 
-type Props = NativeStackScreenProps<RootStackParamList, "TeacherReports">;
+type Props = TeacherDrawerScreenProps<"TeacherReports">;
 type ReportType = "enrollment" | "performance" | "assessment" | "intervention" | "usage";
 type RowViewModel = { id: string; title: string; subtitle: string };
 
@@ -216,7 +215,6 @@ export function TeacherReportsScreen({ navigation }: Props) {
       title="Reports"
       subtitle="Interactive teacher report workspace with class filtering and live endpoint snapshots used on web."
       icon="chart-box-outline"
-      showBackButton
       onBackPress={() => navigation.goBack()}
       refreshing={isRefreshing}
       onRefresh={() => {

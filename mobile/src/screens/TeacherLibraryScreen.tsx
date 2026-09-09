@@ -1,13 +1,12 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useMemo, useState } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Alert, Pressable, Text, TextInput, View } from "react-native";
 import { queryKeys, useTeacherClasses } from "../api/hooks";
 import { toAppError } from "../api/http";
 import { fileUploadApi } from "../api/services/file-upload";
 import { modulesApi } from "../api/services/modules";
-import type { RootStackParamList } from "../navigation/types";
+import type { TeacherDrawerScreenProps } from "../navigation/types";
 import { useAuth } from "../providers/AuthProvider";
 import { TeacherConfirmModal } from "../components/teacher/TeacherConfirmModal";
 import {
@@ -22,7 +21,7 @@ import {
   teacherTheme,
 } from "../components/teacher/TeacherMobilePrimitives";
 
-type Props = NativeStackScreenProps<RootStackParamList, "TeacherLibrary">;
+type Props = TeacherDrawerScreenProps<"TeacherLibrary">;
 type LibraryTab = "files" | "modules";
 type ScopeFilter = "all" | "private" | "general";
 
@@ -145,7 +144,6 @@ export function TeacherLibraryScreen({ navigation }: Props) {
       title="Nexora Library"
       subtitle="Raw document assets & cross-class content modules with 1:1 web parity."
       icon="folder-open-outline"
-      showBackButton
       onBackPress={() => navigation.goBack()}
       refreshing={classesQuery.isRefetching || moduleQueries.some((query) => query.isRefetching)}
       onRefresh={() => {

@@ -689,7 +689,7 @@ function StudentNavigator() {
   return (
     <RootStack.Navigator screenOptions={{ headerShown: false }}>
       <RootStack.Screen name="MainTabs" component={StudentTabs} />
-      <RootStack.Screen name="Notifications" component={NotificationsInboxScreen as never} />
+      <RootStack.Screen name="Notifications" component={NotificationsInboxScreen} />
       {renderStudentSupportScreen(classWorkspaceRouteName)}
       {studentStackRouteNames.map(renderStudentStackScreen)}
       <RootStack.Screen
@@ -710,15 +710,16 @@ function StudentNavigator() {
   );
 }
 
-function TeacherTabs() {
+function TeacherDrawerNavigator() {
   const [activeRouteName, setActiveRouteName] = useState("Home");
   return (
     <RoleDrawerProvider
       role="teacher"
       activeRouteName={activeRouteName}
-      onNavigate={navigateFromRoleDrawer}
+      onNavigate={navigateFromTeacherDrawer}
     >
       <Tab.Navigator
+        backBehavior="history"
         screenOptions={{ headerShown: false }}
         tabBar={() => null}
         screenListeners={{
@@ -726,9 +727,18 @@ function TeacherTabs() {
         }}
       >
         <Tab.Screen name="Home" component={TeacherHomeScreen} />
-        <Tab.Screen name="Assessments" component={TeacherAssessmentsScreen} />
         <Tab.Screen name="Classes" component={TeacherClassesScreen} />
         <Tab.Screen name="Sections" component={TeacherSectionsScreen} />
+        <Tab.Screen name="Assessments" component={TeacherAssessmentsScreen} />
+        <Tab.Screen name="TeacherCalendar" component={TeacherCalendarScreen} />
+        <Tab.Screen name="TeacherLessons" component={TeacherLessonsScreen} />
+        <Tab.Screen name="TeacherLibrary" component={TeacherLibraryScreen} />
+        <Tab.Screen name="TeacherClassRecord" component={TeacherClassRecordScreen} />
+        <Tab.Screen name="TeacherAnnouncements" component={TeacherAnnouncementsScreen} />
+        <Tab.Screen name="TeacherReports" component={TeacherReportsScreen} />
+        <Tab.Screen name="TeacherInterventions" component={TeacherInterventionsScreen} />
+        <Tab.Screen name="TeacherPerformance" component={TeacherPerformanceScreen} />
+        <Tab.Screen name="TeacherEvaluations" component={TeacherEvaluationsScreen} />
         <Tab.Screen name="Profile" component={TeacherProfileScreen} />
       </Tab.Navigator>
     </RoleDrawerProvider>
@@ -738,8 +748,8 @@ function TeacherTabs() {
 function TeacherNavigator() {
   return (
     <RootStack.Navigator screenOptions={{ headerShown: false }}>
-      <RootStack.Screen name="MainTabs" component={TeacherTabs} />
-      <RootStack.Screen name="Notifications" component={NotificationsInboxScreen as never} />
+      <RootStack.Screen name="TeacherDrawer" component={TeacherDrawerNavigator} />
+      <RootStack.Screen name="Notifications" component={NotificationsInboxScreen} />
       <RootStack.Screen
         name="TeacherClassDetail"
         component={TeacherClassDetailScreen}
@@ -760,7 +770,6 @@ function TeacherNavigator() {
         name="TeacherLessonEditor"
         component={TeacherLessonEditorScreen}
       />
-      <RootStack.Screen name="TeacherLessons" component={TeacherLessonsScreen} />
       <RootStack.Screen
         name="TeacherAssessmentDetail"
         component={TeacherAssessmentDetailScreen}
@@ -776,10 +785,6 @@ function TeacherNavigator() {
       <RootStack.Screen
         name="TeacherAssessmentAttemptResult"
         component={TeacherAssessmentAttemptResultScreen}
-      />
-      <RootStack.Screen
-        name="TeacherCalendar"
-        component={TeacherCalendarScreen}
       />
       <RootStack.Screen
         name="TeacherCreateModule"
@@ -821,34 +826,6 @@ function TeacherNavigator() {
       <RootStack.Screen
         name="TeacherInterventionDetail"
         component={TeacherInterventionDetailScreen}
-      />
-      <RootStack.Screen
-        name="TeacherLibrary"
-        component={TeacherLibraryScreen}
-      />
-      <RootStack.Screen
-        name="TeacherClassRecord"
-        component={TeacherClassRecordScreen}
-      />
-      <RootStack.Screen
-        name="TeacherReports"
-        component={TeacherReportsScreen}
-      />
-      <RootStack.Screen
-        name="TeacherInterventions"
-        component={TeacherInterventionsScreen}
-      />
-      <RootStack.Screen
-        name="TeacherPerformance"
-        component={TeacherPerformanceScreen}
-      />
-      <RootStack.Screen
-        name="TeacherEvaluations"
-        component={TeacherEvaluationsScreen}
-      />
-      <RootStack.Screen
-        name="TeacherAnnouncements"
-        component={TeacherAnnouncementsScreen}
       />
       <RootStack.Screen name="TeacherMore" component={TeacherMoreScreen} />
     </RootStack.Navigator>
@@ -892,7 +869,7 @@ function AdminNavigator() {
   return (
     <RootStack.Navigator screenOptions={{ headerShown: false }}>
       <RootStack.Screen name="MainTabs" component={AdminTabs} />
-      <RootStack.Screen name="Notifications" component={NotificationsInboxScreen as never} />
+      <RootStack.Screen name="Notifications" component={NotificationsInboxScreen} />
       <RootStack.Screen name="AdminTools" component={AdminToolsScreen} />
       <RootStack.Screen name="AdminAcademic" component={AdminAcademicScreen} />
       <RootStack.Screen name="AdminAnnouncements" component={AdminAnnouncementsScreen} />
@@ -949,6 +926,16 @@ function navigateFromRoleDrawer(destination: RoleDrawerDestination) {
   }
 
   navigate(String(destination.route));
+}
+
+function navigateFromTeacherDrawer(destination: RoleDrawerDestination) {
+  if (!rootNavigationRef.isReady()) return;
+
+  const navigate = rootNavigationRef.navigate as unknown as (
+    routeName: string,
+    params?: { screen: string },
+  ) => void;
+  navigate("TeacherDrawer", { screen: String(destination.route) });
 }
 
 function getActiveRouteName(state?: ActiveRouteState): string {

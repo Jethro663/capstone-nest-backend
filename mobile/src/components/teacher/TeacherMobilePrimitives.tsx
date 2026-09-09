@@ -6,7 +6,7 @@ import { Refreshable, ScreenScroll } from "../ui/primitives";
 import { stripRichText } from "../../theme/studentDark";
 import { teacherTheme as theme } from "../../theme/teacher";
 import { shadow } from "../../theme/tokens";
-import { RoleMenuButton } from "../navigation/RoleNavigationDrawer";
+import { RoleHeaderNavigationButton } from "../navigation/RoleNavigationDrawer";
 
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>["name"];
 
@@ -72,7 +72,7 @@ export function TeacherScreen({
               <MaterialCommunityIcons name="arrow-left" size={20} color={theme.red} />
             </Pressable>
           ) : (
-            <RoleMenuButton />
+            <RoleHeaderNavigationButton onBackPress={onBackPress} />
           )}
           <Text
             numberOfLines={1}

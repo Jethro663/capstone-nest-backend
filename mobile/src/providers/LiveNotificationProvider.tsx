@@ -402,6 +402,16 @@ function navigateToMainTab(tabName: string) {
   return true;
 }
 
+function navigateToTeacherDrawer(screen: string, params?: unknown) {
+  if (!rootNavigationRef.isReady()) return false;
+  const drawerParams = params === undefined ? { screen } : { screen, params };
+  (rootNavigationRef.navigate as unknown as (name: string, params?: unknown) => void)(
+    "TeacherDrawer",
+    drawerParams,
+  );
+  return true;
+}
+
 function resolveNotificationNavigation(notification: MobileNotification, role: string | null) {
   const normalizedRole = String(role || "").toLowerCase();
   const referenceId = notification.referenceId || undefined;
@@ -411,14 +421,17 @@ function resolveNotificationNavigation(notification: MobileNotification, role: s
   }
 
   if (notification.type === "teacher_pending_intervention_reminder") {
-    return () => rootNavigationRef.navigate("TeacherInterventions", referenceId ? { classId: referenceId } : undefined);
+    return () => navigateToTeacherDrawer(
+      "TeacherInterventions",
+      referenceId ? { classId: referenceId } : undefined,
+    );
   }
 
   if (isInterventionAlertNotification(notification)) {
     if (normalizedRole === "teacher") {
       return referenceId
         ? () => rootNavigationRef.navigate("TeacherInterventionDetail", { caseId: referenceId })
-        : () => rootNavigationRef.navigate("TeacherInterventions", undefined);
+        : () => navigateToTeacherDrawer("TeacherInterventions");
     }
     return () => rootNavigationRef.navigate("LXP", { tab: "case" });
   }
@@ -427,14 +440,14 @@ function resolveNotificationNavigation(notification: MobileNotification, role: s
     if (normalizedRole === "teacher") {
       return referenceId
         ? () => rootNavigationRef.navigate("TeacherAssessmentDetail", { assessmentId: referenceId })
-        : () => navigateToMainTab("Assessments");
+        : () => navigateToTeacherDrawer("Assessments");
     }
     return () => rootNavigationRef.navigate("AssessmentHistory", referenceId ? { assessmentId: referenceId } : undefined);
   }
 
   if (notification.type === "announcement_posted") {
     if (normalizedRole === "teacher") {
-      return () => rootNavigationRef.navigate("TeacherAnnouncements");
+      return () => navigateToTeacherDrawer("TeacherAnnouncements");
     }
     return () => navigateToMainTab("Announcements");
   }
@@ -445,12 +458,14 @@ function resolveNotificationNavigation(notification: MobileNotification, role: s
 
   if (notification.type === "grade_updated") {
     if (normalizedRole === "teacher") {
-      return () => rootNavigationRef.navigate("TeacherClassRecord");
+      return () => navigateToTeacherDrawer("TeacherClassRecord");
     }
     return () => rootNavigationRef.navigate("Performance");
   }
 
-  return () => navigateToMainTab(normalizedRole === "teacher" ? "Home" : "Dashboard");
+  return normalizedRole === "teacher"
+    ? () => navigateToTeacherDrawer("Home")
+    : () => navigateToMainTab("Dashboard");
 }
 
 function navigateToNotification(notification: MobileNotification, role: string | null) {

@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Alert, View } from "react-native";
-import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { lessonsApi } from "../api/services/lessons";
 import { useLessons, useTeacherClasses } from "../api/hooks";
 import { toAppError } from "../api/http";
 import { useAuth } from "../providers/AuthProvider";
-import type { RootStackParamList } from "../navigation/types";
+import type { TeacherDrawerScreenProps } from "../navigation/types";
 import {
   TeacherActionButton,
   TeacherChip,
@@ -16,7 +15,7 @@ import {
   TeacherStats,
 } from "../components/teacher/TeacherMobilePrimitives";
 
-type Props = NativeStackScreenProps<RootStackParamList, "TeacherLessons">;
+type Props = TeacherDrawerScreenProps<"TeacherLessons">;
 
 export function TeacherLessonsScreen({ navigation }: Props) {
   const { user } = useAuth();
@@ -102,7 +101,6 @@ export function TeacherLessonsScreen({ navigation }: Props) {
       title="Lesson management"
       subtitle="Open, reorder, publish, return to draft, and delete lessons through the same backend lifecycle used by web."
       icon="book-cog-outline"
-      showBackButton
       onBackPress={() => navigation.goBack()}
       refreshing={classesQuery.isRefetching || lessonsQuery.isRefetching}
       onRefresh={() => void Promise.all([classesQuery.refetch(), lessonsQuery.refetch()])}

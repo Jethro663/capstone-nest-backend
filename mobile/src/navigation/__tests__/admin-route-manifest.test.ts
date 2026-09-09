@@ -26,7 +26,7 @@ describe("administrator navigation manifest", () => {
   });
 
   it("exposes notifications separately and mounts the administrator tools stack", () => {
-    expect(source).toContain('<RootStack.Screen name="Notifications" component={NotificationsInboxScreen as never} />');
+    expect(source).toContain('<RootStack.Screen name="Notifications" component={NotificationsInboxScreen} />');
     expect(source).toContain('<RootStack.Screen name="AdminTools" component={AdminToolsScreen} />');
   });
 
