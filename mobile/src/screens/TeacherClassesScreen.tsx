@@ -153,7 +153,7 @@ export function TeacherClassesScreen({ navigation }: Props) {
                 bannerUri={resolveImageUri(classItem.cardBannerUrl)}
                 schedule={formatSchedule(classItem)}
                 onOpen={() =>
-                  navigation.navigate("TeacherClassDetail", { classId: classItem.id })
+                  navigation.navigate("TeacherClassDetail", { classId: classItem.id, source: "classes" })
                 }
                 onCustomize={() => {
                   setCustomizingClass(classItem);

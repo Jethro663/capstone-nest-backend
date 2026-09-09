@@ -470,6 +470,7 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
             navigation.navigate("TeacherAiDraft", {
               classId: job.classId,
               jobId: job.jobId,
+              source: "assessments",
             });
           }}
           onOpenAssessment={(job) => {

@@ -287,7 +287,7 @@ export function TeacherHomeScreen({ navigation }: Props) {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`Open class ${nextClass.classItem.subjectCode}`}
-              onPress={() => navigation.navigate("TeacherClassDetail", { classId: nextClass.classItem.id })}
+              onPress={() => navigation.navigate("TeacherClassDetail", { classId: nextClass.classItem.id, source: "home" })}
               style={{
                 minHeight: 112,
                 borderRadius: 18,
@@ -340,7 +340,7 @@ export function TeacherHomeScreen({ navigation }: Props) {
                     key={item.id}
                     accessibilityRole="button"
                     accessibilityLabel={`Open class ${item.classItem.subjectCode}`}
-                    onPress={() => navigation.navigate("TeacherClassDetail", { classId: item.classItem.id })}
+                    onPress={() => navigation.navigate("TeacherClassDetail", { classId: item.classItem.id, source: "home" })}
                     style={{
                       minHeight: 64,
                       flexDirection: "row",
@@ -443,7 +443,7 @@ export function TeacherHomeScreen({ navigation }: Props) {
                 key={classItem.id}
                 accessibilityRole="button"
                 accessibilityLabel={`Open class ${classItem.subjectCode}`}
-                onPress={() => navigation.navigate("TeacherClassDetail", { classId: classItem.id })}
+                onPress={() => navigation.navigate("TeacherClassDetail", { classId: classItem.id, source: "home" })}
                 style={{
                   minHeight: 72,
                   flexDirection: "row",
@@ -491,6 +491,7 @@ export function TeacherHomeScreen({ navigation }: Props) {
                 navigation.navigate("TeacherClassDetail", {
                   classId: recentAnnouncements[0].classId,
                   initialTab: "announcements",
+                  source: "home",
                 })
               }
               style={{

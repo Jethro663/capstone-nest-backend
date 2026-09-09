@@ -135,7 +135,7 @@ export function TeacherCalendarScreen({ navigation, route }: Props) {
               title: `${classItem.subjectCode} class`,
               subtitle: `${slot.startTime} - ${slot.endTime}${classItem.room ? ` | ${classItem.room}` : ""}`,
               kind: "class_schedule",
-              action: () => navigation.navigate("TeacherClassDetail", { classId: classItem.id, initialTab: "calendar" }),
+              action: () => navigation.navigate("TeacherClassDetail", { classId: classItem.id, initialTab: "calendar", source: "calendar" }),
             });
           });
         });

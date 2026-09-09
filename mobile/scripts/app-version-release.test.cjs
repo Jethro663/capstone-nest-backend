@@ -144,7 +144,7 @@ test("verifyManifest rejects a changed APK", async () => {
   );
 });
 
-test("teacher drawer primary navigation release keeps Expo and Gradle at 0.1.25 build 26", async () => {
+test("teacher class flow redesign release keeps Expo and Gradle at 0.1.26 build 27", async () => {
   const appJson = JSON.parse(
     await readFile(path.join(__dirname, "..", "app.json"), "utf8"),
   );
@@ -153,9 +153,9 @@ test("teacher drawer primary navigation release keeps Expo and Gradle at 0.1.25 
     "utf8",
   );
 
-  assert.equal(appJson.expo.version, "0.1.25");
-  assert.equal(appJson.expo.android.versionCode, 26);
-  assert.match(buildGradle, /\bversionCode\s+26\b/);
-  assert.match(buildGradle, /\bversionName\s+["']0\.1\.25["']/);
+  assert.equal(appJson.expo.version, "0.1.26");
+  assert.equal(appJson.expo.android.versionCode, 27);
+  assert.match(buildGradle, /\bversionCode\s+27\b/);
+  assert.match(buildGradle, /\bversionName\s+["']0\.1\.26["']/);
   assert.equal(appJson.expo.ios.buildNumber, "3");
 });

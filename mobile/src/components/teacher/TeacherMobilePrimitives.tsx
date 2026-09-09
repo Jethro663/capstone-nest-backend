@@ -20,6 +20,7 @@ export function TeacherScreen({
   rightAction,
   refreshing,
   onRefresh,
+  bottomAction,
   children,
 }: PropsWithChildren<{
   workspaceLabel?: string;
@@ -32,85 +33,95 @@ export function TeacherScreen({
   rightAction?: ReactNode;
   refreshing?: boolean;
   onRefresh?: () => void;
+  bottomAction?: ReactNode;
 }>) {
   const insets = useSafeAreaInsets();
   const canGoBack = showBackButton && typeof onBackPress === "function";
 
-  return (
+  const scrollContent = (
     <ScreenScroll
-      backgroundColor={theme.bg}
-      refreshControl={
-        onRefresh ? <Refreshable refreshing={Boolean(refreshing)} onRefresh={onRefresh} /> : undefined
-      }
-    >
-      <View
-        testID="teacher-compact-header"
-        style={{
-          backgroundColor: theme.topbar,
-          borderBottomWidth: 1,
-          borderBottomColor: theme.border,
-          paddingHorizontal: 16,
-          paddingTop: insets.top + 6,
-          paddingBottom: 8,
-        }}
+        backgroundColor={theme.bg}
+        refreshControl={
+          onRefresh ? <Refreshable refreshing={Boolean(refreshing)} onRefresh={onRefresh} /> : undefined
+        }
       >
-        <View style={{ minHeight: 48, flexDirection: "row", alignItems: "center", gap: 10 }}>
-          {canGoBack ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={backLabel}
-              onPress={onBackPress}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 12,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: theme.redSoft,
-              }}
+        <View
+          testID="teacher-compact-header"
+          style={{
+            backgroundColor: theme.topbar,
+            borderBottomWidth: 1,
+            borderBottomColor: theme.border,
+            paddingHorizontal: 16,
+            paddingTop: insets.top + 6,
+            paddingBottom: 8,
+          }}
+        >
+          <View style={{ minHeight: 48, flexDirection: "row", alignItems: "center", gap: 10 }}>
+            {canGoBack ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={backLabel}
+                onPress={onBackPress}
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 12,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: theme.redSoft,
+                }}
+              >
+                <MaterialCommunityIcons name="arrow-left" size={20} color={theme.red} />
+              </Pressable>
+            ) : (
+              <RoleHeaderNavigationButton onBackPress={onBackPress} />
+            )}
+            <Text
+              numberOfLines={1}
+              maxFontSizeMultiplier={1.35}
+              style={{ flex: 1, fontSize: 20, fontWeight: "900", color: theme.text }}
             >
-              <MaterialCommunityIcons name="arrow-left" size={20} color={theme.red} />
-            </Pressable>
-          ) : (
-            <RoleHeaderNavigationButton onBackPress={onBackPress} />
-          )}
-          <Text
-            numberOfLines={1}
-            maxFontSizeMultiplier={1.35}
-            style={{ flex: 1, fontSize: 20, fontWeight: "900", color: theme.text }}
-          >
-            {title}
-          </Text>
-          {rightAction}
-          {onRefresh ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Refresh ${title}`}
-              onPress={onRefresh}
-              disabled={Boolean(refreshing)}
-              style={{
-                opacity: refreshing ? 0.55 : 1,
-                width: 44,
-                minHeight: 44,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: theme.border,
-                backgroundColor: theme.surface,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <MaterialCommunityIcons
-                name={refreshing ? "refresh-circle" : "refresh"}
-                size={20}
-                color={theme.red}
-              />
-            </Pressable>
-          ) : null}
+              {title}
+            </Text>
+            {rightAction}
+            {onRefresh ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Refresh ${title}`}
+                onPress={onRefresh}
+                disabled={Boolean(refreshing)}
+                style={{
+                  opacity: refreshing ? 0.55 : 1,
+                  width: 44,
+                  minHeight: 44,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  backgroundColor: theme.surface,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <MaterialCommunityIcons
+                  name={refreshing ? "refresh-circle" : "refresh"}
+                  size={20}
+                  color={theme.red}
+                />
+              </Pressable>
+            ) : null}
+          </View>
         </View>
-      </View>
-      {children}
-    </ScreenScroll>
+        {children}
+      </ScreenScroll>
+  );
+
+  if (!bottomAction) return scrollContent;
+
+  return (
+    <View style={{ flex: 1, backgroundColor: theme.bg }}>
+      {scrollContent}
+      {bottomAction}
+    </View>
   );
 }
 

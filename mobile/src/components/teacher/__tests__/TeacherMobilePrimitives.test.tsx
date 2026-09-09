@@ -66,6 +66,11 @@ function flattenText(node: TestRenderer.ReactTestRendererJSON | TestRenderer.Rea
     .join(" ");
 }
 
+function flattenInstanceText(node: TestRenderer.ReactTestInstance | string): string {
+  if (typeof node === "string") return node;
+  return node.children.map((child) => flattenInstanceText(child as TestRenderer.ReactTestInstance | string)).join(" ");
+}
+
 describe("teacher mobile primitives", () => {
   it("uses the restrained P2 GABHS teacher palette", () => {
     expect(teacherTheme.red).toBe("#C96B68");
@@ -124,6 +129,26 @@ describe("teacher mobile primitives", () => {
 
     expect(renderer!.root.findByProps({ accessibilityLabel: "Back" })).toBeTruthy();
     expect(renderer!.root.findAllByProps({ accessibilityLabel: "Open navigation menu" })).toHaveLength(0);
+  });
+
+  it("renders a bottom action outside the scrollable body", () => {
+    let renderer: TestRenderer.ReactTestRenderer;
+
+    act(() => {
+      renderer = TestRenderer.create(
+        <TeacherScreen
+          title="Add students"
+          bottomAction={<React.Fragment>Sticky add action</React.Fragment>}
+        >
+          <React.Fragment>Scrollable roster</React.Fragment>
+        </TeacherScreen>,
+      );
+    });
+
+    const scroll = renderer!.root.findByType("ScreenScroll");
+    expect(flattenInstanceText(scroll)).toContain("Scrollable roster");
+    expect(flattenInstanceText(scroll)).not.toContain("Sticky add action");
+    expect(flattenText(renderer!.toJSON())).toContain("Sticky add action");
   });
 
   it("exposes disclosure state and keeps content behind the same header action", () => {

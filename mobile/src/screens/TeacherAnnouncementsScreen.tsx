@@ -163,6 +163,7 @@ export function TeacherAnnouncementsScreen({ navigation }: Props) {
                 navigation.navigate("TeacherClassDetail", {
                   classId: currentClass.id,
                   initialTab: "announcements",
+                  source: "announcements",
                 });
               }}
             />

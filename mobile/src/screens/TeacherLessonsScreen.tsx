@@ -127,7 +127,7 @@ export function TeacherLessonsScreen({ navigation }: Props) {
             key={lesson.id}
             title={lesson.title}
             subtitle={`${lesson.isDraft ? "Draft" : "Published"} · Position ${index + 1}`}
-            onPress={() => navigation.navigate("TeacherLessonDetail", { lessonId: lesson.id, classId })}
+            onPress={() => navigation.navigate("TeacherLessonDetail", { lessonId: lesson.id, classId, source: "lessons" })}
             right={<View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
               <TeacherChip label={selectedIds.includes(lesson.id) ? "Selected" : "Select"} active={selectedIds.includes(lesson.id)} onPress={() => setSelectedIds((current) => current.includes(lesson.id) ? current.filter((id) => id !== lesson.id) : [...current, lesson.id])} />
               <TeacherActionButton label="Up" tone="neutral" disabled={index === 0 || busy} onPress={() => void move(index, -1)} />

@@ -16,16 +16,24 @@ import {
   writeTeacherAiDraftJobId,
 } from "../api/teacher-ai-draft-jobs";
 import type { RootStackParamList } from "../navigation/types";
+import { navigateTeacherDetailBack } from "../navigation/teacher-detail-back";
 import type { QuizDraftStructuredOutput } from "../types/ai";
 import {
   TeacherActionButton,
   TeacherEmpty,
   TeacherInlineField,
-  TeacherPanel,
   TeacherRow,
   TeacherScreen,
-  TeacherStats,
+  teacherTheme as theme,
 } from "../components/teacher/TeacherMobilePrimitives";
+import {
+  TeacherActionSheet,
+  TeacherBottomActionBar,
+  TeacherContextStrip,
+  TeacherFlatSection,
+  TeacherInlineNotice,
+  TeacherStepTabs,
+} from "../components/teacher/TeacherWorkspacePrimitives";
 import {
   acceptReviewWarning,
   buildQuizDraftSourceFields,
@@ -42,10 +50,15 @@ function getErrorMessage(error: unknown) {
 
 const QUESTION_TYPES = SUPPORTED_QUESTION_TYPES;
 const TERMINAL_STATUSES = ["completed", "approved", "failed", "cancelled", "rejected"];
+type AiDraftStage = "sources" | "setup" | "review";
 
 export function TeacherAiDraftScreen({ navigation, route }: AiDraftProps) {
+  const handleBack = () =>
+    navigateTeacherDetailBack(navigation, "TeacherAiDraft", route.params);
   const queryClient = useQueryClient();
   const { classId, jobId: requestedJobId } = route.params;
+  const [stage, setStage] = useState<AiDraftStage>(requestedJobId ? "review" : "sources");
+  const [jobActionsVisible, setJobActionsVisible] = useState(false);
   const [indexStatus, setIndexStatus] = useState<Awaited<ReturnType<typeof aiApi.getClassIndexStatus>> | null>(null);
   const [job, setJob] = useState<Awaited<ReturnType<typeof aiApi.createQuizDraftJob>> | null>(null);
   const [result, setResult] = useState<Awaited<ReturnType<typeof aiApi.getQuizDraftJobResult>> | null>(null);
@@ -109,6 +122,7 @@ export function TeacherAiDraftScreen({ navigation, route }: AiDraftProps) {
           await writeTeacherAiDraftJobId(classId, jobId);
         }
         setJob(restored);
+        setStage("review");
         if (restored.status === "completed" || restored.status === "approved") await loadJobResult(restored.id);
       } catch (error) {
         if (active) Alert.alert("Unable to restore AI draft", getErrorMessage(error));
@@ -190,6 +204,7 @@ export function TeacherAiDraftScreen({ navigation, route }: AiDraftProps) {
         ...sourceFields,
       });
       setJob(created);
+      setStage("review");
       await writeTeacherAiDraftJobId(classId, created.id);
       Alert.alert("Success", "Quiz draft generation job started.");
     } catch (error) {
@@ -219,6 +234,7 @@ export function TeacherAiDraftScreen({ navigation, route }: AiDraftProps) {
       await clearTeacherAiDraftJobId(classId);
       setJob(null);
       setResult(null);
+      setStage("sources");
       if (action === "delete") Alert.alert("Deleted", "AI draft job deleted.");
     } catch (error) {
       Alert.alert(action === "cancel" ? "Unable to cancel job" : "Unable to delete job", getErrorMessage(error));
@@ -338,104 +354,131 @@ export function TeacherAiDraftScreen({ navigation, route }: AiDraftProps) {
       subtitle="Choose published indexed sources, generate a grounded draft, review it, then create an unpublished assessment."
       icon="robot-outline"
       showBackButton
-      onBackPress={() => navigation.goBack()}
+      onBackPress={handleBack}
       refreshing={loading}
       onRefresh={() => void loadStatus()}
-    >
-      <TeacherStats items={[
-        { label: "Ready lessons", value: indexStatus?.sourceSummary.lessons.ready ?? 0, tone: "green" },
-        { label: "Ready extracts", value: indexStatus?.sourceSummary.extractions.ready ?? 0, tone: "blue" },
-        { label: "Job", value: job?.status || "None", tone: job?.status === "failed" ? "red" : "amber" },
-        { label: "Questions", value: draft?.questions.length ?? 0, tone: "purple" },
-      ]} />
-
-      <TeacherPanel title="Sources" subtitle="Only published, indexed lessons and extracted materials can ground this quiz.">
-        {indexStatus?.reason ? <Text style={{ paddingHorizontal: 14, paddingBottom: 10, color: "#92400e" }}>{indexStatus.reason}</Text> : null}
-        <View style={{ paddingHorizontal: 14, paddingBottom: 10 }}>
-          <TeacherActionButton label={`Use all ready sources${useAllReadySources ? " (selected)" : ""}`} icon="layers-outline" tone={useAllReadySources ? "green" : "blue"} onPress={toggleAllSources} />
-        </View>
-        {(indexStatus?.readyLessons ?? []).map((source) => (
-          <TeacherRow key={source.lessonId} title={`${source.title}${selectedLessonIds.includes(source.lessonId) ? " (selected)" : ""}`} subtitle={`${source.chunkCount} indexed chunk(s)`} onPress={() => toggleLesson(source.lessonId)} />
-        ))}
-        {(indexStatus?.readyExtractions ?? []).map((source) => (
-          <TeacherRow key={source.extractionId} title={`${source.title}${selectedExtractionIds.includes(source.extractionId) ? " (selected)" : ""}`} subtitle={`${source.chunkCount} indexed chunk(s)`} onPress={() => toggleExtraction(source.extractionId)} />
-        ))}
-        {(indexStatus?.lessonBlockers ?? []).map((source) => <TeacherRow key={source.lessonId} title={`${source.title} (blocked)`} subtitle={source.reason} />)}
-        {(indexStatus?.extractionBlockers ?? []).map((source) => <TeacherRow key={source.extractionId} title={`${source.title} (blocked)`} subtitle={source.reason} />)}
-        <View style={{ paddingHorizontal: 14, paddingVertical: 14, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          <TeacherActionButton label="Refresh status" icon="refresh" tone="blue" onPress={() => void loadStatus()} />
-          {readinessBlockers.some((blocker) => blocker.canReindex) ? (
-            <TeacherActionButton label={reindexing ? "Reindexing..." : "Reindex class"} icon="database-refresh-outline" tone="amber" disabled={reindexing} onPress={() => void reindexClass()} />
-          ) : null}
-        </View>
-      </TeacherPanel>
-
-      <TeacherPanel title="Assessment settings" subtitle="These settings belong to the assessment. Editing them does not regenerate questions.">
-        <View style={{ padding: 14, gap: 12 }}>
-          <Text>{context.data?.cls.subjectName} · {context.data?.cls.schoolYear}</Text>
-          {context.isError && <TeacherActionButton label="Policy failed to load. Retry" onPress={() => void context.refetch()} />}
-          <AssessmentSettingsFields ai classId={classId} periods={context.data?.policy.periods ?? []} value={settings} disabled={settingsLoading || job?.status === 'approved'} onChange={value => { setSettings(value as AiAssessmentSettings); setSettingsReviewed(false); }} />
-          <Text>Resolved period: {context.data?.policy.periods.find(period => period.key === settings.quarter)?.label ?? 'Unassigned'}</Text>
-          {job && job.status !== 'approved' && <TeacherActionButton label={settingsLoading ? 'Saving settings…' : 'Save assessment settings'} disabled={settingsLoading} onPress={() => void saveSettings()} />}
-          {!settingsReviewed && job && <Text>Settings need review and saving before application.</Text>}
-        </View>
-      </TeacherPanel>
-      <TeacherPanel title="Generate quiz draft" subtitle="Generation starts only when the selected source scope is ready.">
-        <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
-
-          <TeacherInlineField label="Question count (1-15)" value={questionCount} onChangeText={setQuestionCount} />
-          <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151", marginTop: 8, marginBottom: 4 }}>Question Type</Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
-            {QUESTION_TYPES.map((type) => {
-              const selected = questionType === type.value;
-              return (
-                <TouchableOpacity key={type.value} accessibilityRole="button" accessibilityState={{ selected }} onPress={() => setQuestionType(type.value)} style={{ minHeight: 44, minWidth: 44, justifyContent: "center", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: selected ? "#4f46e5" : "#f3f4f6", borderWidth: 1, borderColor: selected ? "#4f46e5" : "#e5e7eb" }}>
-                  <Text style={{ fontSize: 12, fontWeight: "600", color: selected ? "#ffffff" : "#374151" }}>{type.label}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-          <TeacherInlineField label="Teacher note (optional)" value={teacherNote} onChangeText={setTeacherNote} multiline />
-          {!canGenerate ? (
-            <View style={{ marginTop: 12, gap: 4 }}>
-              <Text style={{ color: "#991b1b", fontWeight: "700" }}>
-                {readinessBlockers[0]?.message}
-              </Text>
-              {readinessBlockers.slice(1).map((blocker) => (
-                <Text key={blocker.code} style={{ color: "#6b7280", fontSize: 13 }}>
-                  • {blocker.message}
-                </Text>
-              ))}
-            </View>
-          ) : null}
-          <View style={{ marginTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            <TeacherActionButton label={submitting ? "Generating..." : "Generate"} icon="auto-fix" tone="green" disabled={!canGenerate} onPress={() => void createJob()} />
-            <TeacherActionButton label="Refresh job" icon="refresh" tone="blue" disabled={!job} onPress={() => void refreshJob()} />
-            {job?.status === "failed" ? <TeacherActionButton label="Retry generation" icon="refresh" tone="amber" onPress={() => void retryJob()} /> : null}
-            {job && !TERMINAL_STATUSES.includes(job.status) ? <TeacherActionButton label="Cancel generation" icon="cancel" tone="amber" onPress={() => void clearJob("cancel")} /> : null}
-            <TeacherActionButton label="Delete job" icon="trash-can-outline" tone="red" disabled={!job} onPress={() => void clearJob("delete")} />
-          </View>
-        </View>
-      </TeacherPanel>
-
-      <TeacherPanel title="Generated result" subtitle={jobDetail || (job && !TERMINAL_STATUSES.includes(job.status) ? "Generation in progress. Status refreshes every 5 seconds." : "Review the generated questions before applying.")}>
-        {draft && !degradedResult ? (
-          <TeacherAiDraftReviewPanel
-            draft={draft}
-            saving={savingDraft}
-            applying={applying}
-            onMarkQuestionReviewed={(index) => void persistDraft(markQuestionReviewed(draft, index), draft)}
-            onAcceptWarning={(issueId) => void persistDraft(acceptReviewWarning(draft, issueId), draft)}
-            onPreviewApply={() => void previewAndApply()}
+      bottomAction={
+        stage === "sources" ? (
+          <TeacherBottomActionBar
+            primaryLabel="Continue to setup"
+            primaryIcon="arrow-right"
+            disabled={!canGenerate}
+            onPrimary={() => setStage("setup")}
+          />
+        ) : stage === "setup" ? (
+          <TeacherBottomActionBar
+            primaryLabel={submitting ? "Generating draft..." : "Generate draft"}
+            primaryIcon="auto-fix"
+            disabled={!canGenerate}
+            onPrimary={() => void createJob()}
           />
         ) : (
-          <TeacherEmpty
-            title={degradedResult ? "Draft result unavailable" : "No result loaded"}
-            subtitle={degradedResult ? "This fallback result cannot be applied. Retry generation when the AI service is available." : job && !TERMINAL_STATUSES.includes(job.status) ? `Job state: ${job.status} (${job.progressPercent ?? 0}%). Polling...` : jobDetail || "Generate a job, then wait for its result."}
-            icon="robot-confused-outline"
+          <TeacherBottomActionBar
+            primaryLabel="Refresh job"
+            primaryIcon="refresh"
+            disabled={!job}
+            onPrimary={() => void refreshJob()}
+            secondary={
+              <TeacherActionButton
+                label="Job actions"
+                icon="dots-horizontal"
+                tone="neutral"
+                disabled={!job}
+                onPress={() => setJobActionsVisible(true)}
+              />
+            }
           />
-        )}
-      </TeacherPanel>
+        )
+      }
+    >
+      <TeacherContextStrip
+        title={context.data?.cls.subjectName || "Class AI draft"}
+        subtitle={`${indexStatus?.sourceSummary.lessons.ready ?? 0} ready lessons · ${indexStatus?.sourceSummary.extractions.ready ?? 0} ready extracts`}
+        status={job?.status || (canGenerate ? "Ready" : "Needs setup")}
+        icon="robot-outline"
+      />
+      <TeacherStepTabs
+        activeStep={stage}
+        steps={[
+          { key: "sources", label: "Sources" },
+          { key: "setup", label: "Setup" },
+          { key: "review", label: "Review" },
+        ]}
+        onSelect={setStage}
+      />
+
+      {stage === "sources" ? (
+        <TeacherFlatSection title="Grounding sources" subtitle="Only published, indexed lessons and extracted materials can ground this quiz.">
+          {indexStatus?.reason ? <TeacherInlineNotice title="Source readiness" description={indexStatus.reason} tone="amber" icon="database-alert-outline" /> : null}
+          <View style={{ paddingHorizontal: 14, paddingVertical: 10 }}>
+            <TeacherActionButton label={`Use all ready sources${useAllReadySources ? " (selected)" : ""}`} icon="layers-outline" tone={useAllReadySources ? "green" : "blue"} onPress={toggleAllSources} />
+          </View>
+          {(indexStatus?.readyLessons ?? []).map((source) => (
+            <TeacherRow key={source.lessonId} title={`${source.title}${selectedLessonIds.includes(source.lessonId) ? " (selected)" : ""}`} subtitle={`${source.chunkCount} indexed chunk(s)`} onPress={() => toggleLesson(source.lessonId)} />
+          ))}
+          {(indexStatus?.readyExtractions ?? []).map((source) => (
+            <TeacherRow key={source.extractionId} title={`${source.title}${selectedExtractionIds.includes(source.extractionId) ? " (selected)" : ""}`} subtitle={`${source.chunkCount} indexed chunk(s)`} onPress={() => toggleExtraction(source.extractionId)} />
+          ))}
+          {(indexStatus?.lessonBlockers ?? []).map((source) => <TeacherRow key={source.lessonId} title={`${source.title} (blocked)`} subtitle={source.reason} />)}
+          {(indexStatus?.extractionBlockers ?? []).map((source) => <TeacherRow key={source.extractionId} title={`${source.title} (blocked)`} subtitle={source.reason} />)}
+          <View style={{ paddingHorizontal: 14, paddingVertical: 14, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            <TeacherActionButton label="Refresh status" icon="refresh" tone="blue" onPress={() => void loadStatus()} />
+            {readinessBlockers.some((blocker) => blocker.canReindex) ? <TeacherActionButton label={reindexing ? "Reindexing..." : "Reindex class"} icon="database-refresh-outline" tone="amber" disabled={reindexing} onPress={() => void reindexClass()} /> : null}
+          </View>
+        </TeacherFlatSection>
+      ) : null}
+
+      {stage === "setup" ? (
+        <>
+          {!canGenerate ? <TeacherInlineNotice title="Generation is not ready" description={[indexStatus?.reason, ...readinessBlockers.map((blocker) => blocker.message)].filter(Boolean).join(" ")} tone="amber" icon="alert-circle-outline" /> : null}
+          <TeacherFlatSection title="Assessment settings" subtitle="Editing these settings does not regenerate questions.">
+            <View style={{ padding: 14, gap: 12 }}>
+              <Text style={{ color: theme.text }}>{context.data?.cls.subjectName} · {context.data?.cls.schoolYear}</Text>
+              {context.isError ? <TeacherActionButton label="Policy failed to load. Retry" onPress={() => void context.refetch()} /> : null}
+              <AssessmentSettingsFields ai classId={classId} periods={context.data?.policy.periods ?? []} value={settings} disabled={settingsLoading || job?.status === "approved"} onChange={(value) => { setSettings(value as AiAssessmentSettings); setSettingsReviewed(false); }} />
+              <Text style={{ color: theme.muted }}>Resolved period: {context.data?.policy.periods.find((period) => period.key === settings.quarter)?.label ?? "Unassigned"}</Text>
+              {job && job.status !== "approved" ? <TeacherActionButton label={settingsLoading ? "Saving settings…" : "Save assessment settings"} disabled={settingsLoading} onPress={() => void saveSettings()} /> : null}
+              {!settingsReviewed && job ? <Text style={{ color: theme.redText }}>Settings need review and saving before application.</Text> : null}
+            </View>
+          </TeacherFlatSection>
+          <TeacherFlatSection title="Draft setup" subtitle="Choose question shape and add optional teacher guidance.">
+            <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
+              <TeacherInlineField label="Question count (1-15)" value={questionCount} onChangeText={setQuestionCount} />
+              <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text, marginTop: 10, marginBottom: 6 }}>Question type</Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+                {QUESTION_TYPES.map((type) => {
+                  const selected = questionType === type.value;
+                  return (
+                    <TouchableOpacity key={type.value} accessibilityRole="button" accessibilityState={{ selected }} onPress={() => setQuestionType(type.value)} style={{ minHeight: 44, minWidth: 44, justifyContent: "center", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: selected ? theme.redSoft : theme.active, borderWidth: 1, borderColor: selected ? theme.redLine : theme.border }}>
+                      <Text style={{ fontSize: 12, fontWeight: "700", color: selected ? theme.redText : theme.subtext }}>{type.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <TeacherInlineField label="Teacher note (optional)" value={teacherNote} onChangeText={setTeacherNote} multiline />
+            </View>
+          </TeacherFlatSection>
+        </>
+      ) : null}
+
+      {stage === "review" ? (
+        <TeacherFlatSection title="Generated result" subtitle={jobDetail || (job && !TERMINAL_STATUSES.includes(job.status) ? "Generation in progress. Status refreshes every 5 seconds." : "Review the generated questions before applying.")}>
+          {draft && !degradedResult ? (
+            <TeacherAiDraftReviewPanel draft={draft} saving={savingDraft} applying={applying} onMarkQuestionReviewed={(index) => void persistDraft(markQuestionReviewed(draft, index), draft)} onAcceptWarning={(issueId) => void persistDraft(acceptReviewWarning(draft, issueId), draft)} onPreviewApply={() => void previewAndApply()} />
+          ) : (
+            <TeacherEmpty title={degradedResult ? "Draft result unavailable" : "No result loaded"} subtitle={degradedResult ? "This fallback result cannot be applied. Retry generation when the AI service is available." : job && !TERMINAL_STATUSES.includes(job.status) ? `Job state: ${job.status} (${job.progressPercent ?? 0}%). Polling...` : jobDetail || "Generate a job, then wait for its result."} icon="robot-confused-outline" />
+          )}
+        </TeacherFlatSection>
+      ) : null}
+
+      <TeacherActionSheet visible={jobActionsVisible} title="Job actions" subtitle={jobDetail || `Current status: ${job?.status || "none"}`} onClose={() => setJobActionsVisible(false)}>
+        <View style={{ paddingVertical: 10, gap: 8 }}>
+          <TeacherActionButton label="Refresh job" icon="refresh" tone="blue" disabled={!job} onPress={() => void refreshJob()} />
+          {job?.status === "failed" ? <TeacherActionButton label="Retry generation" icon="refresh" tone="amber" onPress={() => { setJobActionsVisible(false); void retryJob(); }} /> : null}
+          {job && !TERMINAL_STATUSES.includes(job.status) ? <TeacherActionButton label="Cancel generation" icon="cancel" tone="amber" onPress={() => { setJobActionsVisible(false); void clearJob("cancel"); }} /> : null}
+          <TeacherActionButton label="Delete job" icon="trash-can-outline" tone="red" disabled={!job} onPress={() => { setJobActionsVisible(false); void clearJob("delete"); }} />
+        </View>
+      </TeacherActionSheet>
     </TeacherScreen>
   );
 }

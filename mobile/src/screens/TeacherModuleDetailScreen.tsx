@@ -19,6 +19,7 @@ import {
 } from "../api/hooks";
 import { toAppError } from "../api/http";
 import type { RootStackParamList } from "../navigation/types";
+import { navigateTeacherDetailBack } from "../navigation/teacher-detail-back";
 import { fileUploadApi } from "../api/services/file-upload";
 import { assessmentsApi } from "../api/services/assessments";
 import { lessonsApi } from "../api/services/lessons";
@@ -26,18 +27,26 @@ import { modulesApi } from "../api/services/modules";
 import { TeacherConfirmModal } from "../components/teacher/TeacherConfirmModal";
 import {
   TeacherActionButton,
+  TeacherAccordionSection,
   TeacherEmpty,
-  TeacherPanel,
   TeacherRow,
   TeacherScreen,
-  TeacherStats,
   teacherTheme as theme,
 } from "../components/teacher/TeacherMobilePrimitives";
+import {
+  TeacherActionSheet,
+  TeacherBottomActionBar,
+  TeacherContextStrip,
+  TeacherFlatSection,
+  TeacherQuickActionRail,
+} from "../components/teacher/TeacherWorkspacePrimitives";
 
 type Props = NativeStackScreenProps<RootStackParamList, "TeacherModuleDetail">;
 
 export function TeacherModuleDetailScreen({ navigation, route }: Props) {
   const { classId, moduleId } = route.params;
+  const handleBack = () =>
+    navigateTeacherDetailBack(navigation, "TeacherModuleDetail", route.params);
   const [newSectionTitle, setNewSectionTitle] = useState("");
   const [deletingSection, setDeletingSection] = useState<{ id: string; title: string } | null>(null);
   const [detachingItem, setDetachingItem] = useState<{ id: string; title: string } | null>(null);
@@ -49,6 +58,11 @@ export function TeacherModuleDetailScreen({ navigation, route }: Props) {
   const [editingSection, setEditingSection] = useState<{ id: string; title: string; description: string } | null>(null);
   const [gradingScaleDraft, setGradingScaleDraft] = useState("");
   const [savingExtendedControl, setSavingExtendedControl] = useState(false);
+  const [moduleControlsVisible, setModuleControlsVisible] = useState(false);
+  const [addMenuVisible, setAddMenuVisible] = useState(false);
+  const [expandedSectionIds, setExpandedSectionIds] = useState<string[]>([]);
+  const [managingSection, setManagingSection] = useState<{ id: string; title: string; index: number } | null>(null);
+  const [managingItem, setManagingItem] = useState<{ id: string; sectionId: string; title: string; index: number } | null>(null);
 
   const moduleQuery = useModuleDetail(classId, moduleId);
   const moduleUpdateMutation = useTeacherModuleUpdateMutation(classId, moduleId);
@@ -68,7 +82,11 @@ export function TeacherModuleDetailScreen({ navigation, route }: Props) {
   useEffect(() => {
     if (!module) return;
     setGradingScaleDraft((module.gradingScaleEntries ?? []).map((entry) => `${entry.letter}|${entry.label}|${entry.minScore}|${entry.maxScore}`).join("\n"));
+    setExpandedSectionIds((current) => current.length ? current : module.sections.slice(0, 1).map((section) => section.id));
   }, [module]);
+
+  const managedItemSection = module?.sections.find((section) => section.id === managingItem?.sectionId);
+  const managedItem = managedItemSection?.items.find((item) => item.id === managingItem?.id);
 
   const saveSection = async () => {
     if (!editingSection?.title.trim()) return;
@@ -236,7 +254,13 @@ export function TeacherModuleDetailScreen({ navigation, route }: Props) {
     item: NonNullable<typeof module>["sections"][number]["items"][number],
   ) => {
     if (item.itemType === "lesson" && item.lessonId) {
-      navigation.navigate("TeacherLessonDetail", { lessonId: item.lessonId, classId });
+      navigation.navigate("TeacherLessonDetail", {
+        lessonId: item.lessonId,
+        classId,
+        moduleId,
+        source: "module",
+        moduleSource: route.params.source ?? "class",
+      });
       return;
     }
     if (item.itemType === "assessment" && item.assessmentId) {
@@ -259,119 +283,56 @@ export function TeacherModuleDetailScreen({ navigation, route }: Props) {
       subtitle={module?.description || "Review this module, its sections, and item visibility from mobile."}
       icon="view-module-outline"
       showBackButton
-      onBackPress={() => navigation.goBack()}
+      onBackPress={handleBack}
       refreshing={moduleQuery.isRefetching}
       onRefresh={() => {
         void moduleQuery.refetch();
       }}
+      bottomAction={
+        module ? (
+          <TeacherBottomActionBar
+            primaryLabel="Add to module"
+            primaryIcon="plus"
+            onPrimary={() => setAddMenuVisible(true)}
+          />
+        ) : undefined
+      }
     >
       {module ? (
         <>
-          <TeacherStats
-            items={[
-              { label: "Sections", value: module.sections?.length ?? 0, tone: "red" },
-              { label: "Visible", value: module.isVisible === false ? "No" : "Yes", tone: "blue" },
-              { label: "Locked", value: module.isLocked ? "Yes" : "No", tone: "amber" },
+          <TeacherContextStrip
+            title={module.title}
+            subtitle={`${module.sections?.length ?? 0} sections · ${module.isVisible === false ? "Hidden" : "Visible"}`}
+            status={module.isLocked ? "Locked" : "Open"}
+            icon="view-module-outline"
+          />
+          <TeacherQuickActionRail
+            actions={[
+              { label: "Module settings", icon: "tune-variant", tone: "blue", onPress: () => setModuleControlsVisible(true) },
             ]}
           />
-
-          <TeacherPanel title="Module controls" subtitle="Manage lock, visibility, and cover image.">
-            <View style={{ paddingHorizontal: 14, paddingBottom: 14, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-              <TeacherActionButton
-                label={module.isLocked ? "Unlock module" : "Lock module"}
-                icon={module.isLocked ? "lock-open-variant-outline" : "lock-outline"}
-                tone="amber"
-                onPress={() => void toggleModuleField("isLocked")}
-                disabled={moduleUpdateMutation.isPending}
-              />
-              <TeacherActionButton
-                label={module.isVisible === false ? "Show module" : "Hide module"}
-                icon={module.isVisible === false ? "eye-outline" : "eye-off-outline"}
-                tone="blue"
-                onPress={() => void toggleModuleField("isVisible")}
-                disabled={moduleUpdateMutation.isPending}
-              />
-              <TeacherActionButton
-                label={coverMutation.isPending ? "Uploading..." : "Cover image"}
-                icon="image-outline"
-                tone="purple"
-                onPress={() => void handlePickCoverImage()}
-                disabled={coverMutation.isPending}
-              />
-              {module.isCoreTemplateAsset ? (
-                <TeacherActionButton
-                  label="Release core module"
-                  icon="shield-check-outline"
-                  tone="green"
-                  onPress={() => void releaseCoreModule()}
-                  disabled={savingExtendedControl}
-                />
-              ) : null}
-            </View>
-          </TeacherPanel>
-
-          <TeacherPanel title="Module grading scale" subtitle="One entry per line: Letter|Label|Minimum|Maximum. Saving replaces the complete scale after local validation.">
-            <View style={{ paddingHorizontal: 14, paddingBottom: 14, gap: 8 }}>
-              <TextInput
-                accessibilityLabel="Module grading scale"
-                multiline
-                value={gradingScaleDraft}
-                onChangeText={setGradingScaleDraft}
-                placeholder={"A|Excellent|90|100\nB|Proficient|80|89"}
-                placeholderTextColor={theme.muted}
-                style={{ minHeight: 96, textAlignVertical: "top", backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, borderRadius: 8, padding: 12, fontSize: 13, color: theme.text }}
-              />
-              <TeacherActionButton label="Replace grading scale" icon="content-save-outline" tone="blue" onPress={() => void saveGradingScale()} disabled={savingExtendedControl || !gradingScaleDraft.trim()} />
-            </View>
-          </TeacherPanel>
-
-          <TeacherPanel title="Sections and items" subtitle="Add sections, reorder sections/items, and attach content.">
+          <TeacherFlatSection title="Module outline" subtitle="Expand a section to open its lessons, assessments, and files.">
             {module.sections?.length ? (
               module.sections.map((section, sIndex) => (
-                <View key={section.id} style={{ borderTopWidth: 1, borderTopColor: theme.border }}>
-                  <View style={{ paddingHorizontal: 14, paddingTop: 14, paddingBottom: 8, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 13, fontWeight: "800", color: theme.text }}>{section.title}</Text>
-                      {section.description ? (
-                        <Text style={{ marginTop: 4, fontSize: 11, lineHeight: 17, color: theme.muted }}>{section.description}</Text>
-                      ) : null}
-                    </View>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                      <Pressable
-                        onPress={() => void moveSection(sIndex, "up")}
-                        disabled={sIndex === 0 || sectionReorderMutation.isPending}
-                        style={{ padding: 4, opacity: sIndex === 0 ? 0.3 : 1 }}
-                      >
-                        <MaterialCommunityIcons name="chevron-up" size={18} color={theme.text} />
-                      </Pressable>
-                      <Pressable
-                        onPress={() => void moveSection(sIndex, "down")}
-                        disabled={sIndex === module.sections.length - 1 || sectionReorderMutation.isPending}
-                        style={{ padding: 4, opacity: sIndex === module.sections.length - 1 ? 0.3 : 1 }}
-                      >
-                        <MaterialCommunityIcons name="chevron-down" size={18} color={theme.text} />
-                      </Pressable>
-                      <Pressable
-                        onPress={() => setAttachingSectionId(section.id)}
-                        style={{ padding: 4, backgroundColor: theme.blueSoft, borderRadius: 6 }}
-                      >
-                        <MaterialCommunityIcons name="plus-box-outline" size={18} color={theme.blue} />
-                      </Pressable>
-                      <Pressable
-                        onPress={() => setEditingSection({ id: section.id, title: section.title, description: section.description ?? "" })}
-                        style={{ padding: 4 }}
-                      >
-                        <MaterialCommunityIcons name="pencil-outline" size={18} color={theme.blue} />
-                      </Pressable>
-                      <Pressable
-                        onPress={() => handleDeleteSection(section.id, section.title)}
-                        style={{ padding: 4 }}
-                      >
-                        <MaterialCommunityIcons name="trash-can-outline" size={18} color={theme.red} />
-                      </Pressable>
-                    </View>
-                  </View>
-
+                <TeacherAccordionSection
+                  key={section.id}
+                  title={section.title}
+                  subtitle={section.description || `${section.items.length} items`}
+                  icon="folder-outline"
+                  count={section.items.length}
+                  expanded={expandedSectionIds.includes(section.id)}
+                  onToggle={() => setExpandedSectionIds((current) => current.includes(section.id) ? current.filter((id) => id !== section.id) : [...current, section.id])}
+                  action={
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Manage ${section.title}`}
+                      onPress={() => setManagingSection({ id: section.id, title: section.title, index: sIndex })}
+                      style={{ width: 44, height: 44, borderRadius: 10, alignItems: "center", justifyContent: "center" }}
+                    >
+                      <MaterialCommunityIcons name="dots-horizontal" size={20} color={theme.muted} />
+                    </Pressable>
+                  }
+                >
                   {section.items.length ? (
                     section.items.map((item, iIndex) => {
                       const itemTitle =
@@ -392,42 +353,14 @@ export function TeacherModuleDetailScreen({ navigation, route }: Props) {
                           subtitle={`${itemSubtitle} · ${item.isVisible === false ? "Hidden" : "Visible"}`}
                           onPress={() => void openItem(item)}
                           right={
-                            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                              <Pressable
-                                onPress={() => void moveItem(section.id, section.items, iIndex, "up")}
-                                disabled={iIndex === 0 || itemReorderMutation.isPending}
-                                style={{ padding: 4, opacity: iIndex === 0 ? 0.3 : 1 }}
-                              >
-                                <MaterialCommunityIcons name="chevron-up" size={16} color={theme.text} />
-                              </Pressable>
-                              <Pressable
-                                onPress={() => void moveItem(section.id, section.items, iIndex, "down")}
-                                disabled={iIndex === section.items.length - 1 || itemReorderMutation.isPending}
-                                style={{ padding: 4, opacity: iIndex === section.items.length - 1 ? 0.3 : 1 }}
-                              >
-                                <MaterialCommunityIcons name="chevron-down" size={16} color={theme.text} />
-                              </Pressable>
-                              <TeacherActionButton
-                                label={item.isVisible === false ? "Show" : "Hide"}
-                                tone="neutral"
-                                onPress={() => void toggleItemVisibility(item.id, item.isVisible)}
-                                disabled={itemUpdateMutation.isPending}
-                              />
-                              {item.isCoreTemplateAsset ? (
-                                <TeacherActionButton
-                                  label="Release"
-                                  tone="green"
-                                  onPress={() => void releaseCoreItem(item.id)}
-                                  disabled={savingExtendedControl}
-                                />
-                              ) : null}
-                              <Pressable
-                                onPress={() => setDetachingItem({ id: item.id, title: itemTitle })}
-                                style={{ padding: 4 }}
-                              >
-                                <MaterialCommunityIcons name="delete-outline" size={16} color={theme.red} />
-                              </Pressable>
-                            </View>
+                            <Pressable
+                              accessibilityRole="button"
+                              accessibilityLabel={`Manage ${itemTitle}`}
+                              onPress={() => setManagingItem({ id: item.id, sectionId: section.id, title: itemTitle, index: iIndex })}
+                              style={{ width: 44, height: 44, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: theme.active }}
+                            >
+                              <MaterialCommunityIcons name="dots-horizontal" size={18} color={theme.muted} />
+                            </Pressable>
                           }
                         />
                       );
@@ -435,38 +368,70 @@ export function TeacherModuleDetailScreen({ navigation, route }: Props) {
                   ) : (
                     <TeacherEmpty title="No items here" subtitle="Tap the '+' button above to attach an assessment, lesson, or file." icon="playlist-remove" />
                   )}
-                </View>
+                </TeacherAccordionSection>
               ))
             ) : (
               <TeacherEmpty title="No sections yet" subtitle="This module does not have any sections or published items yet." icon="view-module-outline" />
             )}
-
-            <View style={{ padding: 14, borderTopWidth: 1, borderTopColor: theme.border }}>
-              <Text style={{ fontSize: 12, fontWeight: "700", color: theme.text, marginBottom: 8 }}>Add Section</Text>
-              <View style={{ flexDirection: "row", gap: 8 }}>
-                <TextInput
-                  style={{ flex: 1, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, borderRadius: 8, paddingHorizontal: 12, fontSize: 13, color: theme.text }}
-                  placeholder="Section title..."
-                  placeholderTextColor={theme.muted}
-                  value={newSectionTitle}
-                  onChangeText={setNewSectionTitle}
-                />
-                <TeacherActionButton
-                  label="Add"
-                  icon="plus"
-                  tone="green"
-                  onPress={handleAddSection}
-                  disabled={sectionCreateMutation.isPending || !newSectionTitle.trim()}
-                />
-              </View>
-            </View>
-          </TeacherPanel>
+          </TeacherFlatSection>
         </>
       ) : (
-        <TeacherPanel title="Module unavailable" subtitle={moduleQuery.error ? toAppError(moduleQuery.error).message : "Loading module"}>
+        <TeacherFlatSection title="Module unavailable" subtitle={moduleQuery.error ? toAppError(moduleQuery.error).message : "Loading module"}>
           <TeacherEmpty title="Unable to load module" subtitle="Pull to refresh after the module endpoint is available." />
-        </TeacherPanel>
+        </TeacherFlatSection>
       )}
+
+      {module ? (
+        <TeacherActionSheet visible={moduleControlsVisible} title="Module settings" subtitle="Visibility, release, cover, and grading controls." onClose={() => setModuleControlsVisible(false)}>
+          <View style={{ paddingVertical: 10, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            <TeacherActionButton label={module.isLocked ? "Unlock module" : "Lock module"} icon={module.isLocked ? "lock-open-variant-outline" : "lock-outline"} tone="amber" onPress={() => void toggleModuleField("isLocked")} disabled={moduleUpdateMutation.isPending} />
+            <TeacherActionButton label={module.isVisible === false ? "Show module" : "Hide module"} icon={module.isVisible === false ? "eye-outline" : "eye-off-outline"} tone="blue" onPress={() => void toggleModuleField("isVisible")} disabled={moduleUpdateMutation.isPending} />
+            <TeacherActionButton label={coverMutation.isPending ? "Uploading..." : "Cover image"} icon="image-outline" tone="purple" onPress={() => void handlePickCoverImage()} disabled={coverMutation.isPending} />
+            {module.isCoreTemplateAsset ? <TeacherActionButton label="Release core module" icon="shield-check-outline" tone="green" onPress={() => void releaseCoreModule()} disabled={savingExtendedControl} /> : null}
+          </View>
+          <View style={{ borderTopWidth: 1, borderTopColor: theme.border, paddingVertical: 14, gap: 8 }}>
+            <Text style={{ fontSize: 13, fontWeight: "900", color: theme.text }}>Module grading scale</Text>
+            <Text style={{ fontSize: 11, lineHeight: 16, color: theme.muted }}>One entry per line: Letter|Label|Minimum|Maximum.</Text>
+            <TextInput accessibilityLabel="Module grading scale" multiline value={gradingScaleDraft} onChangeText={setGradingScaleDraft} placeholder={"A|Excellent|90|100\nB|Proficient|80|89"} placeholderTextColor={theme.muted} style={{ minHeight: 112, textAlignVertical: "top", backgroundColor: theme.active, borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, fontSize: 13, color: theme.text }} />
+            <TeacherActionButton label="Replace grading scale" icon="content-save-outline" tone="blue" onPress={() => void saveGradingScale()} disabled={savingExtendedControl || !gradingScaleDraft.trim()} />
+          </View>
+        </TeacherActionSheet>
+      ) : null}
+
+      <TeacherActionSheet visible={addMenuVisible} title="Add to module" subtitle="Create a section or choose where to attach content." onClose={() => setAddMenuVisible(false)}>
+        <View style={{ paddingVertical: 10, flexDirection: "row", gap: 8 }}>
+          <TextInput style={{ flex: 1, minHeight: 44, backgroundColor: theme.active, borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingHorizontal: 12, fontSize: 13, color: theme.text }} placeholder="New section title" placeholderTextColor={theme.muted} value={newSectionTitle} onChangeText={setNewSectionTitle} />
+          <TeacherActionButton label="Add section" icon="plus" tone="green" onPress={() => { void handleAddSection(); setAddMenuVisible(false); }} disabled={sectionCreateMutation.isPending || !newSectionTitle.trim()} />
+        </View>
+        <Text style={{ marginTop: 6, fontSize: 11, fontWeight: "800", color: theme.muted }}>ATTACH TO A SECTION</Text>
+        {(module?.sections ?? []).map((section) => (
+          <Pressable key={section.id} accessibilityRole="button" accessibilityLabel={`Attach content to ${section.title}`} onPress={() => { setAddMenuVisible(false); setAttachingSectionId(section.id); }} style={{ minHeight: 48, borderBottomWidth: 1, borderBottomColor: theme.border, flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <MaterialCommunityIcons name="folder-plus-outline" size={19} color={theme.blue} />
+            <Text style={{ flex: 1, fontSize: 13, fontWeight: "800", color: theme.text }}>{section.title}</Text>
+            <MaterialCommunityIcons name="chevron-right" size={18} color={theme.dim} />
+          </Pressable>
+        ))}
+      </TeacherActionSheet>
+
+      <TeacherActionSheet visible={Boolean(managingSection)} title={managingSection?.title || "Section actions"} subtitle="Manage this section without crowding the outline." onClose={() => setManagingSection(null)}>
+        <View style={{ paddingVertical: 10, gap: 8 }}>
+          <TeacherActionButton label="Move up" icon="arrow-up" tone="neutral" disabled={!managingSection || managingSection.index === 0 || sectionReorderMutation.isPending} onPress={() => { if (managingSection) void moveSection(managingSection.index, "up"); setManagingSection(null); }} />
+          <TeacherActionButton label="Move down" icon="arrow-down" tone="neutral" disabled={!managingSection || managingSection.index === (module?.sections.length ?? 0) - 1 || sectionReorderMutation.isPending} onPress={() => { if (managingSection) void moveSection(managingSection.index, "down"); setManagingSection(null); }} />
+          <TeacherActionButton label="Attach content" icon="plus-box-outline" tone="blue" onPress={() => { if (managingSection) setAttachingSectionId(managingSection.id); setManagingSection(null); }} />
+          <TeacherActionButton label="Edit section" icon="pencil-outline" tone="blue" onPress={() => { const section = module?.sections.find((entry) => entry.id === managingSection?.id); if (section) setEditingSection({ id: section.id, title: section.title, description: section.description ?? "" }); setManagingSection(null); }} />
+          <TeacherActionButton label="Delete section" icon="trash-can-outline" tone="red" onPress={() => { if (managingSection) handleDeleteSection(managingSection.id, managingSection.title); setManagingSection(null); }} />
+        </View>
+      </TeacherActionSheet>
+
+      <TeacherActionSheet visible={Boolean(managingItem)} title={managingItem?.title || "Item actions"} subtitle="Reorder, release, hide, or detach this item." onClose={() => setManagingItem(null)}>
+        <View style={{ paddingVertical: 10, gap: 8 }}>
+          <TeacherActionButton label="Move up" icon="arrow-up" tone="neutral" disabled={!managingItem || managingItem.index === 0 || itemReorderMutation.isPending} onPress={() => { if (managingItem && managedItemSection) void moveItem(managingItem.sectionId, managedItemSection.items, managingItem.index, "up"); setManagingItem(null); }} />
+          <TeacherActionButton label="Move down" icon="arrow-down" tone="neutral" disabled={!managingItem || !managedItemSection || managingItem.index === managedItemSection.items.length - 1 || itemReorderMutation.isPending} onPress={() => { if (managingItem && managedItemSection) void moveItem(managingItem.sectionId, managedItemSection.items, managingItem.index, "down"); setManagingItem(null); }} />
+          <TeacherActionButton label={managedItem?.isVisible === false ? "Show item" : "Hide item"} icon={managedItem?.isVisible === false ? "eye-outline" : "eye-off-outline"} tone="blue" disabled={!managedItem || itemUpdateMutation.isPending} onPress={() => { if (managedItem) void toggleItemVisibility(managedItem.id, managedItem.isVisible); setManagingItem(null); }} />
+          {managedItem?.isCoreTemplateAsset ? <TeacherActionButton label="Release core item" icon="shield-check-outline" tone="green" disabled={savingExtendedControl} onPress={() => { if (managedItem) void releaseCoreItem(managedItem.id); setManagingItem(null); }} /> : null}
+          <TeacherActionButton label="Detach item" icon="delete-outline" tone="red" onPress={() => { if (managingItem) setDetachingItem({ id: managingItem.id, title: managingItem.title }); setManagingItem(null); }} />
+        </View>
+      </TeacherActionSheet>
 
       <Modal visible={Boolean(editingSection)} transparent animationType="fade" onRequestClose={() => setEditingSection(null)}>
         <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.65)", justifyContent: "center", alignItems: "center", padding: 20 }} onPress={() => setEditingSection(null)}>

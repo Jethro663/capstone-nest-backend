@@ -60,14 +60,45 @@ describe("role drawer integration", () => {
     "../../screens/TeacherClassDetailScreen.tsx",
     "../../screens/TeacherModuleDetailScreen.tsx",
     "../../screens/TeacherLessonDetailScreen.tsx",
+    "../../screens/TeacherAiDraftScreen.tsx",
+    "../../screens/TeacherDeepParityScreens.tsx",
+  ])("uses durable Back handling on redesigned teacher detail %s", (screenPath) => {
+    const source = readSource(screenPath);
+    expect(source).toContain("showBackButton");
+    expect(source).toContain("navigateTeacherDetailBack");
+    expect(source).toContain("onBackPress={handleBack}");
+  });
+
+  it.each([
     "../../screens/TeacherSectionDetailScreen.tsx",
     "../../screens/TeacherAssessmentDetailScreen.tsx",
     "../../screens/TeacherAssessmentReviewScreen.tsx",
     "../../screens/TeacherCreateModuleScreen.tsx",
-  ])("puts Back in the leading header position on teacher detail %s", (screenPath) => {
+  ])("puts Back in the leading header position on unchanged teacher detail %s", (screenPath) => {
     const source = readSource(screenPath);
     expect(source).toContain("showBackButton");
     expect(source).toContain("onBackPress={() => navigation.goBack()}");
+  });
+
+  it("carries source metadata into alternate teacher detail entries", () => {
+    expect(readSource("../../screens/TeacherLibraryScreen.tsx")).toContain(
+      'source: "library"',
+    );
+    expect(readSource("../../screens/TeacherLessonsScreen.tsx")).toContain(
+      'source: "lessons"',
+    );
+    expect(readSource("../../screens/TeacherAssessmentsScreen.tsx")).toContain(
+      'source: "assessments"',
+    );
+    expect(readSource("../../screens/TeacherModuleDetailScreen.tsx")).toContain(
+      "moduleId",
+    );
+    expect(readSource("../../screens/TeacherModuleDetailScreen.tsx")).toContain(
+      'source: "module"',
+    );
+    expect(readSource("../../screens/TeacherModuleDetailScreen.tsx")).toContain(
+      "moduleSource: route.params.source",
+    );
   });
 
   it("gives the root-stack Notifications utility a visible Back action", () => {

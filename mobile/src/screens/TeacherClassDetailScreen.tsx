@@ -2,7 +2,7 @@ import { TeacherAnnouncementRow } from "../components/teacher/TeacherAnnouncemen
 import { useMemo, useRef, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Pressable, Text, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   queryKeys,
@@ -21,6 +21,7 @@ import { announcementsApi } from "../api/services/announcements";
 import { modulesApi } from "../api/services/modules";
 import { toAppError } from "../api/http";
 import type { RootStackParamList, TeacherClassDetailTab } from "../navigation/types";
+import { navigateTeacherDetailBack } from "../navigation/teacher-detail-back";
 import { confirmAction } from "../utils/confirmAction";
 import { formatStudentIdentityLine } from "../utils/studentIdentity";
 import { TeacherClassRecordBoard } from "../components/teacher/TeacherClassRecordBoard";
@@ -31,14 +32,17 @@ import { TeacherAnnouncementEditorModal } from "../components/teacher/TeacherAnn
 import { TeacherAddModuleModal } from "../components/teacher/TeacherAddModuleModal";
 import {
   TeacherActionButton,
-  TeacherChip,
   TeacherEmpty,
-  TeacherPanel,
   TeacherRow,
   TeacherScreen,
-  TeacherStats,
   teacherTheme as theme,
 } from "../components/teacher/TeacherMobilePrimitives";
+import {
+  TeacherContextStrip,
+  TeacherFlatSection,
+  TeacherQuickActionRail,
+  TeacherWorkspaceSwitcher,
+} from "../components/teacher/TeacherWorkspacePrimitives";
 
 type Props = NativeStackScreenProps<RootStackParamList, "TeacherClassDetail">;
 
@@ -49,16 +53,20 @@ function formatDate(value?: string | null) {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-const CLASS_TABS: Array<{ key: TeacherClassDetailTab; label: string }> = [
-  { key: "modules", label: "Modules" },
-  { key: "assessments", label: "Assessments" },
-  { key: "announcements", label: "Announcements" },
-  { key: "extraction", label: "Extraction" },
-  { key: "discussion", label: "Discussion Board" },
-  { key: "classRecord", label: "Class Record" },
-  { key: "calendar", label: "Calendar" },
-  { key: "students", label: "Students" },
-];
+const CLASS_TABS = [
+  { key: "modules", label: "Modules", icon: "view-module-outline" },
+  { key: "assessments", label: "Assessments", icon: "clipboard-text-outline" },
+  { key: "announcements", label: "Announcements", icon: "bullhorn-outline" },
+  { key: "extraction", label: "Extraction", icon: "text-box-search-outline" },
+  { key: "discussion", label: "Discussion Board", icon: "forum-outline" },
+  { key: "classRecord", label: "Class Record", icon: "table-account" },
+  { key: "calendar", label: "Calendar", icon: "calendar-outline" },
+  { key: "students", label: "Students", icon: "account-group-outline" },
+] as const satisfies ReadonlyArray<{
+  key: TeacherClassDetailTab;
+  label: string;
+  icon: React.ComponentProps<typeof MaterialCommunityIcons>["name"];
+}>;
 
 export function TeacherClassDetailScreen({ navigation, route }: Props) {
   const queryClient = useQueryClient();
@@ -83,6 +91,8 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
   } | null>(null);
   const [deletingAnnouncementModal, setDeletingAnnouncementModal] = useState<{ id: string; title: string } | null>(null);
   const [savingAnnouncement, setSavingAnnouncement] = useState(false);
+  const handleBack = () =>
+    navigateTeacherDetailBack(navigation, "TeacherClassDetail", route.params);
 
   const tabRefetchersRef = useRef<Partial<Record<TeacherClassDetailTab, () => Promise<unknown>>>>({});
   const classQuery = useClassDetail(classId);
@@ -263,7 +273,7 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
       }
       icon="google-classroom"
       showBackButton
-      onBackPress={() => navigation.goBack()}
+      onBackPress={handleBack}
       refreshing={
         classQuery.isRefetching ||
         modulesQuery.isRefetching ||
@@ -287,58 +297,42 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
         void Promise.all(tasks);
       }}
     >
-      <TeacherStats
-        items={[
-          { label: "Modules", value: modulesQuery.data?.length ?? 0, tone: "red" },
-          { label: "Assessments", value: assessmentsQuery.data?.length ?? 0, tone: "blue" },
-          { label: "Announcements", value: announcementsQuery.data?.length ?? 0, tone: "amber" },
-          { label: "Students", value: rosterQuery.data?.length ?? 0, tone: "green" },
+      <TeacherContextStrip
+        title={classQuery.data ? `${classQuery.data.subjectCode} · ${classQuery.data.subjectName}` : "Loading class"}
+        subtitle={classQuery.data ? `${classQuery.data.section?.name || "Section pending"} · ${classQuery.data.schoolYear}` : "Preparing workspace"}
+        status={classQuery.data?.isActive === false ? "Archived" : "Active"}
+      />
+      <TeacherWorkspaceSwitcher
+        activeKey={activeTab}
+        items={CLASS_TABS.map((entry) => ({
+          ...entry,
+          count:
+            entry.key === "modules" ? modulesQuery.data?.length ?? 0
+              : entry.key === "assessments" ? assessmentsQuery.data?.length ?? 0
+                : entry.key === "announcements" ? announcementsQuery.data?.length ?? 0
+                  : entry.key === "students" ? rosterQuery.data?.length ?? 0
+                    : undefined,
+        }))}
+        onSelect={setActiveTab}
+      />
+      <TeacherQuickActionRail
+        actions={[
+          ...(activeTab === "modules" ? [{ label: "New module", icon: "plus-box-outline" as const, tone: "red" as const, onPress: () => setShowAddModuleModal(true) }] : []),
+          ...(activeTab === "assessments" ? [{ label: "New assessment", icon: "clipboard-plus-outline" as const, tone: "red" as const, disabled: creatingAssessment, onPress: () => void handleCreateAssessment() }] : []),
+          ...(activeTab === "announcements" ? [{ label: "New post", icon: "bullhorn-outline" as const, tone: "red" as const, onPress: () => { setEditingAnnouncement(null); setShowAnnouncementModal(true); } }] : []),
+          { label: "Add students", icon: "account-multiple-plus-outline", tone: "green", onPress: () => navigation.navigate("TeacherClassAddStudents", { classId, sourceTab: activeTab }) },
+          { label: "AI draft", icon: "robot-outline", tone: "purple", onPress: () => navigation.navigate("TeacherAiDraft", { classId, source: "class", sourceTab: activeTab }) },
         ]}
       />
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 10, paddingRight: 20, gap: 6 }}
-      >
-        {CLASS_TABS.map((entry) => (
-          <TeacherChip
-            key={entry.key}
-            label={entry.label}
-            active={activeTab === entry.key}
-            onPress={() => setActiveTab(entry.key)}
-          />
-        ))}
-      </ScrollView>
-      <Text style={{ marginTop: 6, marginHorizontal: 16, fontSize: 11, color: theme.muted }}>
-        Swipe tabs to view all class tools, including Extraction, Discussion Board, and Class Record.
-      </Text>
-
-      <TeacherPanel title="Class actions" subtitle="Mobile shortcuts for web teacher deep workflows.">
-        <View style={{ paddingHorizontal: 14, paddingBottom: 14, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          <TeacherActionButton
-            label="AI draft"
-            icon="robot-outline"
-            tone="purple"
-            onPress={() => navigation.navigate("TeacherAiDraft", { classId })}
-          />
-          <TeacherActionButton
-            label="Add students"
-            icon="account-multiple-plus-outline"
-            tone="green"
-            onPress={() => navigation.navigate("TeacherClassAddStudents", { classId })}
-          />
-        </View>
-      </TeacherPanel>
-
       {topError ? (
-        <TeacherPanel title="Class data issue" subtitle={toAppError(topError).message}>
+        <TeacherFlatSection title="Class data issue" subtitle={toAppError(topError).message}>
           <TeacherEmpty title="Unable to render the full class" subtitle="Pull to refresh once the class APIs are stable again." />
-        </TeacherPanel>
+        </TeacherFlatSection>
       ) : null}
 
       {activeTab === "modules" ? (
-        <TeacherPanel
+        <TeacherFlatSection
           title="Modules"
           subtitle="Open modules, inspect their content, and manage lock or visibility at the module level."
           action={
@@ -356,7 +350,7 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
                 key={module.id}
                 title={module.title}
                 subtitle={`${module.sections?.length ?? 0} sections - ${module.isLocked ? "Locked" : "Unlocked"} - ${module.isVisible === false ? "Hidden" : "Visible"}`}
-                onPress={() => navigation.navigate("TeacherModuleDetail", { classId, moduleId: module.id })}
+                onPress={() => navigation.navigate("TeacherModuleDetail", { classId, moduleId: module.id, source: "class" })}
                 right={
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
                     <Pressable
@@ -386,11 +380,11 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
           ) : (
             <TeacherEmpty title="No modules yet" subtitle="Class modules will appear here once they are attached or published." icon="view-module-outline" />
           )}
-        </TeacherPanel>
+        </TeacherFlatSection>
       ) : null}
 
       {activeTab === "assessments" ? (
-        <TeacherPanel
+        <TeacherFlatSection
           title="Assessments"
           subtitle="Select assessments to bulk delete, or open one to review submissions, grade attempts, or edit."
           action={
@@ -533,11 +527,11 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
           ) : (
             <TeacherEmpty title="No assessments yet" subtitle="Assessments assigned to this class will appear here." icon="clipboard-text-outline" />
           )}
-        </TeacherPanel>
+        </TeacherFlatSection>
       ) : null}
 
       {activeTab === "announcements" ? (
-        <TeacherPanel
+        <TeacherFlatSection
           title="Announcements"
           subtitle="Publish class updates with rich formatting, pin posts, or schedule announcements."
           action={
@@ -573,7 +567,7 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
           ) : (
             <TeacherEmpty title="No announcements yet" subtitle="Tap 'Create Announcement' above to publish quick class updates." icon="bullhorn-outline" />
           )}
-        </TeacherPanel>
+        </TeacherFlatSection>
       ) : null}
 
       {activeTab === "extraction" ? (
@@ -602,7 +596,7 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
       ) : null}
 
       {activeTab === "calendar" ? (
-        <TeacherPanel title="Class Calendar" subtitle="School events and assessment due dates mapped to this class section.">
+        <TeacherFlatSection title="Class Calendar" subtitle="School events and assessment due dates mapped to this class section.">
           {upcomingItems.length ? (
             upcomingItems.map((item) => (
               <TeacherRow key={item.id} title={item.title} subtitle={item.subtitle} onPress={item.action} />
@@ -610,11 +604,11 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
           ) : (
             <TeacherEmpty title="No upcoming items" subtitle="No events or assessment deadlines are currently scheduled." icon="calendar-blank-outline" />
           )}
-        </TeacherPanel>
+        </TeacherFlatSection>
       ) : null}
 
       {activeTab === "students" ? (
-        <TeacherPanel
+        <TeacherFlatSection
           title="Students & Roster"
           subtitle="Learners enrolled in this class section."
           action={
@@ -625,6 +619,7 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
               onPress={() =>
                 navigation.navigate("TeacherClassAddStudents", {
                   classId,
+                  sourceTab: activeTab,
                 })
               }
             />
@@ -680,7 +675,7 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
           ) : (
             <TeacherEmpty title="No roster loaded" subtitle="Enrolled learners will appear here when the class roster is available." icon="account-group-outline" />
           )}
-        </TeacherPanel>
+        </TeacherFlatSection>
       ) : null}
 
       <TeacherConfirmModal

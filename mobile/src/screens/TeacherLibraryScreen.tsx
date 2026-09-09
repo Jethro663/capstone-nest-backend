@@ -228,7 +228,7 @@ export function TeacherLibraryScreen({ navigation }: Props) {
                 key={module.id}
                 title={module.title}
                 subtitle={`${module.classLabel} | ${module.sections?.length ?? 0} sections`}
-                onPress={() => navigation.navigate("TeacherModuleDetail", { classId: module.classId, moduleId: module.id })}
+                onPress={() => navigation.navigate("TeacherModuleDetail", { classId: module.classId, moduleId: module.id, source: "library" })}
                 right={
                   <View
                     style={{

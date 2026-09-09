@@ -16,6 +16,7 @@ import { assessmentsApi } from "../api/services/assessments";
 import { toAppError } from "../api/http";
 import { boundAcademicPercentage } from "../lib/academicScore";
 import type { RootStackParamList } from "../navigation/types";
+import { navigateTeacherDetailBack } from "../navigation/teacher-detail-back";
 import type {
   StudentMasterlistItem,
   TeacherClassStudentOverview,
@@ -53,6 +54,12 @@ import {
   stripRichText,
   teacherTheme as theme,
 } from "../components/teacher/TeacherMobilePrimitives";
+import {
+  TeacherBottomActionBar,
+  TeacherFlatSection,
+  TeacherInlineNotice,
+  TeacherStepTabs,
+} from "../components/teacher/TeacherWorkspacePrimitives";
 
 export { TeacherAiDraftScreen } from "./TeacherAiDraftScreen";
 export { TeacherExtractionDetailScreen } from "./TeacherExtractionDetailScreen";
@@ -317,6 +324,12 @@ export function TeacherClassAddStudentsScreen({
   route,
 }: ClassAddStudentsProps) {
   const { classId } = route.params;
+  const handleBack = () =>
+    navigateTeacherDetailBack(
+      navigation,
+      "TeacherClassAddStudents",
+      route.params,
+    );
   const [gradeLevel, setGradeLevel] = useState("");
   const [search, setSearch] = useState("");
   const [eligibility, setEligibility] = useState<
@@ -420,72 +433,41 @@ export function TeacherClassAddStudentsScreen({
       subtitle={classLabel}
       icon="account-multiple-plus-outline"
       showBackButton
-      onBackPress={() => navigation.goBack()}
+      onBackPress={handleBack}
       refreshing={loading}
       onRefresh={() => void load()}
+      bottomAction={
+        <TeacherBottomActionBar
+          primaryLabel={adding ? "Adding students..." : `Add selected${selectedIds.length ? ` (${selectedIds.length})` : ""}`}
+          primaryIcon="account-plus-outline"
+          disabled={adding || selectedIds.length === 0}
+          onPrimary={() => void addSelected()}
+        />
+      }
     >
+      <TeacherInlineNotice
+        title="Grade and section locked"
+        description={`Showing only Grade ${gradeLevel || "matched"} students from ${sectionLabel || "this class section"}.`}
+        icon="lock-outline"
+        tone="blue"
+      />
       <TeacherSearch
         value={search}
         onChangeText={setSearch}
         placeholder="Search masterlist"
       />
-      <View
-        style={{
-          marginHorizontal: 16,
-          marginTop: 10,
-          flexDirection: "row",
-          flexWrap: "wrap",
-          gap: 8,
-        }}
-      >
-        {(["all", "eligible", "mismatch"] as const).map((value) => (
-          <TeacherChip
-            key={value}
-            label={value}
-            active={eligibility === value}
-            onPress={() => setEligibility(value)}
-          />
-        ))}
-      </View>
-      <View
-        style={{
-          marginHorizontal: 16,
-          marginTop: 10,
-          borderRadius: 16,
-          borderWidth: 1,
-          borderColor: theme.border,
-          backgroundColor: theme.blueSoft,
-          paddingHorizontal: 14,
-          paddingVertical: 10,
-        }}
-      >
-        <Text style={{ fontSize: 12, fontWeight: "800", color: theme.blue }}>
-          Grade and section locked
-        </Text>
-        <Text
-          style={{
-            marginTop: 3,
-            fontSize: 11,
-            lineHeight: 16,
-            color: theme.muted,
-          }}
-        >
-          Showing only Grade {gradeLevel || "matched"} students from{" "}
-          {sectionLabel || "this class section"}.
-        </Text>
-      </View>
-      <TeacherPanel
-        title="Eligible students"
+      <TeacherStepTabs
+        activeStep={eligibility}
+        steps={[
+          { key: "eligible", label: "Eligible" },
+          { key: "all", label: "All" },
+          { key: "mismatch", label: "Mismatch" },
+        ]}
+        onSelect={setEligibility}
+      />
+      <TeacherFlatSection
+        title="Student roster"
         subtitle={`Selected ${selectedIds.length}. Only matching grade and section students are shown.`}
-        action={
-          <TeacherActionButton
-            label={adding ? "Adding..." : "Add selected"}
-            icon="account-plus-outline"
-            tone="green"
-            disabled={adding}
-            onPress={() => void addSelected()}
-          />
-        }
       >
         {students.length ? (
           students.map((student) => {
@@ -522,12 +504,15 @@ export function TeacherClassAddStudentsScreen({
                     }
                     style={{
                       opacity: student.isEligible ? 1 : 0.45,
+                      minWidth: 44,
+                      minHeight: 44,
                       borderRadius: 8,
                       backgroundColor: selected
                         ? theme.greenSoft
                         : theme.blueSoft,
                       paddingHorizontal: 8,
-                      paddingVertical: 5,
+                      alignItems: "center",
+                      justifyContent: "center",
                     }}
                   >
                     <Text
@@ -551,7 +536,7 @@ export function TeacherClassAddStudentsScreen({
             icon="account-search-outline"
           />
         )}
-      </TeacherPanel>
+      </TeacherFlatSection>
     </TeacherScreen>
   );
 }

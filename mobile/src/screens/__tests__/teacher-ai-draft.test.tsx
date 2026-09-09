@@ -45,9 +45,10 @@ jest.mock("../../components/teacher/TeacherMobilePrimitives", () => {
   const Pressable = component("Pressable");
   const TextInput = component("TextInput");
   return {
+    teacherTheme: { text: "#0F172A", muted: "#64748B", subtext: "#475569", redText: "#98484A", redSoft: "#FFF5F2", active: "#FFF5F2", redLine: "rgba(201,107,104,0.24)", border: "#E7E3DF" },
     stripRichText: (value?: string) => value || "",
-    TeacherScreen: ({ title, subtitle, children }: any) =>
-      ReactRuntime.createElement("TeacherScreen", null, ReactRuntime.createElement(Text, null, title), ReactRuntime.createElement(Text, null, subtitle), children),
+    TeacherScreen: ({ title, subtitle, children, bottomAction }: any) =>
+      ReactRuntime.createElement("TeacherScreen", null, ReactRuntime.createElement(Text, null, title), ReactRuntime.createElement(Text, null, subtitle), children, bottomAction),
     TeacherPanel: ({ title, subtitle, children }: any) =>
       ReactRuntime.createElement("TeacherPanel", null, ReactRuntime.createElement(Text, null, title), ReactRuntime.createElement(Text, null, subtitle), children),
     TeacherStats: ({ items }: any) =>
@@ -60,6 +61,21 @@ jest.mock("../../components/teacher/TeacherMobilePrimitives", () => {
       ReactRuntime.createElement(Pressable, { onPress, disabled: !onPress }, ReactRuntime.createElement(Text, null, title), ReactRuntime.createElement(Text, null, subtitle), right),
     TeacherInlineField: ({ label, value, onChangeText }: any) =>
       ReactRuntime.createElement("TeacherInlineField", null, ReactRuntime.createElement(Text, null, label), ReactRuntime.createElement(TextInput, { accessibilityLabel: label, value, onChangeText })),
+  };
+});
+
+jest.mock("../../components/teacher/TeacherWorkspacePrimitives", () => {
+  const ReactRuntime = require("react");
+  const Text = (props: any) => ReactRuntime.createElement("Text", props, props.children);
+  const Pressable = (props: any) => ReactRuntime.createElement("Pressable", props, props.children);
+  return {
+    TeacherContextStrip: ({ title, subtitle, status }: any) => ReactRuntime.createElement("TeacherContextStrip", null, ReactRuntime.createElement(Text, null, title), ReactRuntime.createElement(Text, null, subtitle), ReactRuntime.createElement(Text, null, status)),
+    TeacherFlatSection: ({ title, subtitle, children }: any) => ReactRuntime.createElement("TeacherFlatSection", null, ReactRuntime.createElement(Text, null, title), ReactRuntime.createElement(Text, null, subtitle), children),
+    TeacherInlineNotice: ({ title, description }: any) => ReactRuntime.createElement("TeacherInlineNotice", null, ReactRuntime.createElement(Text, null, title), ReactRuntime.createElement(Text, null, description)),
+    TeacherQuickActionRail: ({ actions }: any) => ReactRuntime.createElement("TeacherQuickActionRail", null, actions.map((action: any) => ReactRuntime.createElement(Pressable, { key: action.label, onPress: action.onPress, disabled: action.disabled }, ReactRuntime.createElement(Text, null, action.label)))),
+    TeacherStepTabs: ({ steps, activeStep, onSelect }: any) => ReactRuntime.createElement("TeacherStepTabs", { activeStep }, steps.map((step: any) => ReactRuntime.createElement(Pressable, { key: step.key, accessibilityState: { selected: step.key === activeStep }, onPress: () => onSelect(step.key) }, ReactRuntime.createElement(Text, null, step.label)))),
+    TeacherBottomActionBar: ({ primaryLabel, onPrimary, disabled, secondary }: any) => ReactRuntime.createElement("TeacherBottomActionBar", null, secondary, ReactRuntime.createElement(Pressable, { onPress: onPrimary, disabled }, ReactRuntime.createElement(Text, null, primaryLabel))),
+    TeacherActionSheet: ({ visible, title, children }: any) => visible ? ReactRuntime.createElement("TeacherActionSheet", null, ReactRuntime.createElement(Text, null, title), children) : null,
   };
 });
 
@@ -189,6 +205,15 @@ describe("TeacherAiDraftScreen", () => {
     mockedAiApi.cancelQuizDraftJob.mockResolvedValue({ ...pendingJob, status: "cancelled" } as never);
   });
 
+  it("starts with the Sources, Setup, and Review staged workflow", async () => {
+    const { renderer } = await renderScreen();
+    expect(flattenInstance(renderer.root)).toContain("Sources");
+    expect(flattenInstance(renderer.root)).toContain("Setup");
+    expect(flattenInstance(renderer.root)).toContain("Review");
+    expect(renderer.root.findByType("TeacherStepTabs").props.activeStep).toBe("sources");
+    expect(flattenInstance(renderer.root)).not.toContain("Assessment settings");
+  });
+
   it("disables generation while the class index needs reindex", async () => {
     mockedAiApi.getClassIndexStatus.mockResolvedValue({
       ...readyIndexStatus,
@@ -198,6 +223,7 @@ describe("TeacherAiDraftScreen", () => {
     } as never);
 
     const { renderer } = await renderScreen();
+    await press(renderer.root, "Setup");
     expect(findPressableByText(renderer.root, "Generate").props.disabled).toBe(true);
     expect(flattenInstance(renderer.root)).toContain("Class sources changed after the last index.");
   });
@@ -205,6 +231,7 @@ describe("TeacherAiDraftScreen", () => {
   it("sends the selected lesson id instead of every class source", async () => {
     const { renderer } = await renderScreen();
     await press(renderer.root, "Fractions lesson");
+    await press(renderer.root, "Setup");
     await press(renderer.root, "Generate");
 
     expect(mockedAiApi.createQuizDraftJob).toHaveBeenCalledWith(expect.objectContaining({
@@ -224,6 +251,16 @@ describe("TeacherAiDraftScreen", () => {
 
     expect(mockedAiApi.getTeacherJobStatus).toHaveBeenCalledWith("job-1");
     expect(mockedAiApi.getQuizDraftJobResult).toHaveBeenCalledWith("job-1");
+  });
+
+  it("opens a restored job directly on Review", async () => {
+    mockedStorage.readTeacherAiDraftJobId.mockResolvedValue("job-1");
+    mockedAiApi.getTeacherJobStatus.mockResolvedValue(completedJob as never);
+    mockedAiApi.getQuizDraftJobResult.mockResolvedValue(readyResult as never);
+
+    const { renderer } = await renderScreen();
+    expect(renderer.root.findByType("TeacherStepTabs").props.activeStep).toBe("review");
+    expect(flattenInstance(renderer.root)).toContain("Generated result");
   });
 
   it("restores the job selected from the assessment tab before the cached job", async () => {
@@ -252,6 +289,7 @@ describe("TeacherAiDraftScreen", () => {
 
     const { renderer } = await renderScreen();
     expect(flattenInstance(renderer.root)).toContain("No indexed source content found.");
+    await press(renderer.root, "Job actions");
     await press(renderer.root, "Retry generation");
     expect(mockedAiApi.retryQuizDraftJob).toHaveBeenCalledWith("job-failed");
     expect(mockedStorage.writeTeacherAiDraftJobId).toHaveBeenCalledWith("class-1", "job-2");
@@ -332,6 +370,7 @@ describe("TeacherAiDraftScreen", () => {
 
     expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ["teacher-ai-jobs"] });
     expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ["assessments", "class-1"] });
+    await press(renderer.root, "Setup");
     expect(renderer.root.findByType("AssessmentSettingsFields").props.disabled).toBe(true);
     expect(navigation.navigate).toHaveBeenCalledWith("TeacherAssessmentEditor", {
       assessmentId: "assessment-1",
@@ -344,10 +383,12 @@ describe("TeacherAiDraftScreen", () => {
   });
 it('sends full assessment settings through generate and settings-only review edits', async () => {
   const { renderer } = await renderScreen();
+  await press(renderer.root, 'Setup');
   const settings = { title: 'Teacher exam', type: 'exam', quarter: 'Q2', passingScore: 83, maxAttempts: 3, timeLimitMinutes: 22, questionTimeLimitSeconds: 40, timedQuestionsEnabled: true, randomizeQuestions: true, strictMode: true, closeWhenDue: false, feedbackLevel: 'detailed', feedbackDelayHours: 7 };
   await act(async () => renderer.root.findByType('AssessmentSettingsFields').props.onChange(settings));
   await press(renderer.root, 'Generate');
   expect(mockedAiApi.createQuizDraftJob).toHaveBeenCalledWith(expect.objectContaining({ assessmentSettings: settings }));
+  await press(renderer.root, 'Setup');
   await act(async () => renderer.root.findByType('AssessmentSettingsFields').props.onChange(settings));
   await press(renderer.root, 'Save assessment settings');
   expect(mockedAiApi.updateQuizDraftSettings).toHaveBeenCalledWith('job-1', settings);

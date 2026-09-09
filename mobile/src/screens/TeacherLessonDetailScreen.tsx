@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Alert, Image, Text, View } from "react-native";
@@ -6,15 +6,20 @@ import { useLessonDetail, useTeacherLessonDraftStateMutation } from "../api/hook
 import { toAppError } from "../api/http";
 import { lessonsApi } from "../api/services/lessons";
 import type { RootStackParamList } from "../navigation/types";
+import { navigateTeacherDetailBack } from "../navigation/teacher-detail-back";
 import { extractLessonBlockText, resolveLessonBlockMeta } from "../utils/lessonBlocks";
 import {
   TeacherActionButton,
-  TeacherPanel,
   TeacherScreen,
-  TeacherStats,
   stripRichText,
   teacherTheme as theme,
 } from "../components/teacher/TeacherMobilePrimitives";
+import {
+  TeacherActionSheet,
+  TeacherBottomActionBar,
+  TeacherContextStrip,
+  TeacherFlatSection,
+} from "../components/teacher/TeacherWorkspacePrimitives";
 
 type Props = NativeStackScreenProps<RootStackParamList, "TeacherLessonDetail">;
 
@@ -38,8 +43,11 @@ function buildLessonSubtitle(description?: string | null) {
 
 export function TeacherLessonDetailScreen({ navigation, route }: Props) {
   const { classId, lessonId } = route.params;
+  const handleBack = () =>
+    navigateTeacherDetailBack(navigation, "TeacherLessonDetail", route.params);
   const lessonQuery = useLessonDetail(lessonId);
   const lesson = lessonQuery.data;
+  const [controlsVisible, setControlsVisible] = useState(false);
   const draftMutation = useTeacherLessonDraftStateMutation(classId || lesson?.classId, lessonId);
   const versionsQuery = useQuery({ queryKey: ["lesson-versions", lessonId], queryFn: () => lessonsApi.getVersions(lessonId) });
 
@@ -87,54 +95,38 @@ export function TeacherLessonDetailScreen({ navigation, route }: Props) {
       subtitle={buildLessonSubtitle(lesson?.description)}
       icon="text-box-outline"
       showBackButton
-      onBackPress={() => navigation.goBack()}
+      onBackPress={handleBack}
       refreshing={lessonQuery.isRefetching}
       onRefresh={() => {
         void lessonQuery.refetch();
       }}
+      bottomAction={
+        lesson ? (
+          <TeacherBottomActionBar
+            primaryLabel="Edit lesson"
+            primaryIcon="notebook-edit-outline"
+            onPrimary={() => navigation.navigate("TeacherLessonEditor", { lessonId: lesson.id, classId: classId || lesson.classId })}
+            secondary={
+              <TeacherActionButton
+                label="Options"
+                icon="dots-horizontal"
+                tone="neutral"
+                onPress={() => setControlsVisible(true)}
+              />
+            }
+          />
+        ) : undefined
+      }
     >
       {lesson ? (
         <>
-          <TeacherStats
-            items={[
-              { label: "Blocks", value: blockCount, tone: "red" },
-              { label: "Interactive", value: interactiveCount, tone: "blue" },
-              { label: "State", value: lesson.isDraft ? "Draft" : "Published", tone: lesson.isDraft ? "amber" : "green" },
-            ]}
+          <TeacherContextStrip
+            title={lesson.title}
+            subtitle={`${blockCount} blocks · ${interactiveCount} interactive · ${buildLessonSubtitle(lesson.description)}`}
+            status={lesson.isDraft ? "Draft" : "Published"}
+            icon="text-box-outline"
           />
-
-          <TeacherPanel title="Lesson controls" subtitle="This screen stays read-manage only and avoids deeper authoring UI.">
-            <View style={{ paddingHorizontal: 14, paddingBottom: 14, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-              <TeacherActionButton
-                label="Edit lesson"
-                icon="notebook-edit-outline"
-                tone="blue"
-                onPress={() => navigation.navigate("TeacherLessonEditor", { lessonId: lesson.id, classId: classId || lesson.classId })}
-              />
-              <TeacherActionButton
-                label={lesson.isDraft ? "Publish lesson" : "Move back to draft"}
-                icon={lesson.isDraft ? "publish" : "file-hidden"}
-                tone={lesson.isDraft ? "green" : "amber"}
-                onPress={() => void togglePublish()}
-                disabled={draftMutation.isPending}
-              />
-              <TeacherActionButton label="Save version" icon="content-save-check-outline" tone="blue" onPress={() => void createSnapshot()} />
-            </View>
-          </TeacherPanel>
-
-          <TeacherPanel title="Version history" subtitle="Create and restore server-owned lesson snapshots.">
-            {(versionsQuery.data ?? []).length ? (versionsQuery.data ?? []).map((version) => (
-              <View key={version.id} style={{ paddingHorizontal: 14, paddingVertical: 12, borderTopWidth: 1, borderTopColor: theme.border, flexDirection: "row", alignItems: "center", gap: 10 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: theme.text, fontWeight: "800" }}>Version {version.versionNumber}{version.label ? ` - ${version.label}` : ""}</Text>
-                  <Text style={{ color: theme.muted, fontSize: 11, marginTop: 4 }}>{new Date(version.createdAt).toLocaleString()}</Text>
-                </View>
-                <TeacherActionButton label="Restore" icon="history" tone="amber" onPress={() => void restoreSnapshot(version.id)} />
-              </View>
-            )) : <View style={{ padding: 14 }}><Text style={{ color: theme.muted }}>No saved versions yet.</Text></View>}
-          </TeacherPanel>
-
-          <TeacherPanel title="Lesson content" subtitle="Teachers can review the same block sequence students consume.">
+          <TeacherFlatSection title="Lesson content" subtitle="The same block sequence students consume.">
             {(lesson.contentBlocks ?? []).map((block, index) => {
               const meta = resolveLessonBlockMeta(block.type);
               const blockText = extractLessonBlockText(block);
@@ -165,10 +157,28 @@ export function TeacherLessonDetailScreen({ navigation, route }: Props) {
                 </View>
               );
             })}
-          </TeacherPanel>
+          </TeacherFlatSection>
+
+          <TeacherActionSheet visible={controlsVisible} title="Lesson options" subtitle="Publishing and server-owned version history." onClose={() => setControlsVisible(false)}>
+            <View style={{ paddingVertical: 10, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              <TeacherActionButton label={lesson.isDraft ? "Publish lesson" : "Move back to draft"} icon={lesson.isDraft ? "publish" : "file-hidden"} tone={lesson.isDraft ? "green" : "amber"} onPress={() => void togglePublish()} disabled={draftMutation.isPending} />
+              <TeacherActionButton label="Save version" icon="content-save-check-outline" tone="blue" onPress={() => void createSnapshot()} />
+            </View>
+            <TeacherFlatSection title="Version history" subtitle="Create and restore server-owned lesson snapshots.">
+              {(versionsQuery.data ?? []).length ? (versionsQuery.data ?? []).map((version) => (
+                <View key={version.id} style={{ paddingHorizontal: 14, paddingVertical: 12, borderTopWidth: 1, borderTopColor: theme.border, flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: theme.text, fontWeight: "800" }}>Version {version.versionNumber}{version.label ? ` - ${version.label}` : ""}</Text>
+                    <Text style={{ color: theme.muted, fontSize: 11, marginTop: 4 }}>{new Date(version.createdAt).toLocaleString()}</Text>
+                  </View>
+                  <TeacherActionButton label="Restore" icon="history" tone="amber" onPress={() => void restoreSnapshot(version.id)} />
+                </View>
+              )) : <View style={{ padding: 14 }}><Text style={{ color: theme.muted }}>No saved versions yet.</Text></View>}
+            </TeacherFlatSection>
+          </TeacherActionSheet>
         </>
       ) : (
-        <TeacherPanel title="Lesson unavailable" subtitle={lessonQuery.error ? toAppError(lessonQuery.error).message : "Loading lesson"} />
+        <TeacherFlatSection title="Lesson unavailable" subtitle={lessonQuery.error ? toAppError(lessonQuery.error).message : "Loading lesson"} />
       )}
     </TeacherScreen>
   );

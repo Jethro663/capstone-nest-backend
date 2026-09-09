@@ -30,6 +30,15 @@ export type TeacherClassDetailTab =
   | "calendar"
   | "students";
 
+export type TeacherClassDetailSource =
+  | "classes"
+  | "home"
+  | "announcements"
+  | "calendar";
+export type TeacherModuleDetailSource = "class" | "library";
+export type TeacherLessonDetailSource = "module" | "lessons";
+export type TeacherAiDraftSource = "class" | "assessments";
+
 export type JaRouteParams = {
   panel?: JaPanel;
   classId?: string;
@@ -70,15 +79,29 @@ export type RootStackParamList = {
   Performance: undefined;
   Transcript: undefined;
   AiTutor: { classId?: string } | undefined;
-  TeacherClassDetail: { classId: string; initialTab?: TeacherClassDetailTab };
-  TeacherModuleDetail: { classId: string; moduleId: string };
+  TeacherClassDetail: {
+    classId: string;
+    initialTab?: TeacherClassDetailTab;
+    source?: TeacherClassDetailSource;
+  };
+  TeacherModuleDetail: {
+    classId: string;
+    moduleId: string;
+    source?: TeacherModuleDetailSource;
+  };
   TeacherModuleFileDetail: {
     classId: string;
     moduleId: string;
     fileId: string;
     itemId?: string;
   };
-  TeacherLessonDetail: { lessonId: string; classId?: string };
+  TeacherLessonDetail: {
+    lessonId: string;
+    classId?: string;
+    moduleId?: string;
+    source?: TeacherLessonDetailSource;
+    moduleSource?: TeacherModuleDetailSource;
+  };
   TeacherLessonEditor: { lessonId: string; classId?: string };
   TeacherLessons: undefined;
   TeacherAssessmentDetail: { assessmentId: string; classId?: string };
@@ -98,13 +121,21 @@ export type RootStackParamList = {
   TeacherCalendar: { classId?: string } | undefined;
   TeacherCreateModule: { classId: string };
   TeacherCreateAssessment: { classId: string };
-  TeacherClassAddStudents: { classId: string };
+  TeacherClassAddStudents: {
+    classId: string;
+    sourceTab?: TeacherClassDetailTab;
+  };
   TeacherClassStudentOverview: { classId: string; studentId: string };
   TeacherSectionDetail: { sectionId: string };
   TeacherSectionAddStudents: { sectionId: string };
   TeacherSectionStudentProfile: { sectionId: string; studentId: string };
   TeacherExtractionDetail: { extractionId: string; classId?: string };
-  TeacherAiDraft: { classId: string; jobId?: string };
+  TeacherAiDraft: {
+    classId: string;
+    jobId?: string;
+    source?: TeacherAiDraftSource;
+    sourceTab?: TeacherClassDetailTab;
+  };
   TeacherInterventionDetail: { caseId: string; classId?: string };
   TeacherLibrary: undefined;
   TeacherClassRecord: undefined;
