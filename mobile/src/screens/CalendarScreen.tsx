@@ -11,6 +11,7 @@ import { Refreshable, ScreenScroll } from "../components/ui/primitives";
 import type { RootStackParamList } from "../navigation/types";
 import { useAuth } from "../providers/AuthProvider";
 import { studentDarkTheme as theme, stripRichText } from "../theme/studentDark";
+import { RoleHeaderNavigationButton } from "../components/navigation/RoleNavigationDrawer";
 import {
   buildCalendarDayIndex,
   buildMonthCells,
@@ -235,17 +236,17 @@ export function CalendarScreen({ navigation, route }: Props) {
   const openFeedItem = (item: CalendarFeedItem) => {
     if (item.kind === "assessment" && item.classId) {
       const assessmentId = item.id.replace(/^assessment-/, "");
-      navigation.navigate("AssessmentDetail", { assessmentId, classId: item.classId });
+      navigation.navigate("AssessmentDetail", { assessmentId, classId: item.classId, source: "calendar" });
       return;
     }
 
     if (item.kind === "announcement" && item.classId) {
-      navigation.navigate("ClassDetail", { classId: item.classId, initialTab: "announcements" });
+      navigation.navigate("ClassDetail", { classId: item.classId, initialTab: "announcements", source: "calendar" });
       return;
     }
 
     if (item.kind === "class_schedule" && item.classId) {
-      navigation.navigate("ClassDetail", { classId: item.classId, initialTab: "calendar" });
+      navigation.navigate("ClassDetail", { classId: item.classId, initialTab: "calendar", source: "calendar" });
     }
   };
 
@@ -255,43 +256,13 @@ export function CalendarScreen({ navigation, route }: Props) {
       refreshControl={<Refreshable refreshing={refreshing} onRefresh={() => void handleRefresh()} />}
     >
       <View style={{ backgroundColor: theme.header, borderBottomWidth: 1, borderBottomColor: theme.border }}>
-        <View style={{ paddingHorizontal: 16, paddingTop: 44, paddingBottom: 16 }}>
+        <View style={{ paddingHorizontal: 16, paddingTop: 7, paddingBottom: 7 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <View
-              style={{
-                width: 38,
-                height: 38,
-                borderRadius: 10,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: theme.red,
-              }}
-            >
-              <MaterialCommunityIcons name="calendar-month-outline" size={18} color="#FFFFFF" />
-            </View>
+            <RoleHeaderNavigationButton color={theme.redText} onBackPress={() => navigation.goBack()} />
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 10, fontWeight: "600", letterSpacing: 0.6, textTransform: "uppercase", color: theme.muted }}>
-                Student Planner
-              </Text>
-              <Text style={{ marginTop: 4, fontSize: 24, fontWeight: "800", color: theme.text }}>Calendar</Text>
+              <Text style={{ fontSize: 20, fontWeight: "900", color: theme.text }}>Calendar</Text>
             </View>
-            <Pressable
-              onPress={() => navigation.goBack()}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 999,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: theme.active,
-              }}
-            >
-              <MaterialCommunityIcons name="chevron-left" size={18} color={theme.text} />
-            </Pressable>
           </View>
-          <Text style={{ marginTop: 12, fontSize: 12, lineHeight: 18, color: theme.muted }}>
-            Review class schedules, assessment deadlines, announcements, and school-wide events in one timeline.
-          </Text>
         </View>
       </View>
 

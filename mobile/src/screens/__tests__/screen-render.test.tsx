@@ -2654,6 +2654,7 @@ describe("mobile rendered screen flows", () => {
 
     expect(navigate).toHaveBeenCalledWith("ClassDetail", {
       classId: "class-1",
+      source: "courses",
     });
   });
 
@@ -4032,6 +4033,7 @@ describe("mobile rendered screen flows", () => {
     expect(navigate).toHaveBeenCalledWith("AssessmentDetail", {
       assessmentId: "assessment-1",
       classId: "class-1",
+      source: "calendar",
     });
   });
 
@@ -4415,10 +4417,12 @@ describe("mobile rendered screen flows", () => {
     }])));
     let renderer: TestRenderer.ReactTestRenderer;
     act(() => { renderer = TestRenderer.create(React.createElement(AnnouncementsScreen, {})); });
+    expect(renderer!.root.find((node) => node.type === "Pressable" && node.props.accessibilityLabel === "Class: All classes")).toBeTruthy();
     act(() => findPressableByText(renderer!.root, "Rich notice").props.onPress());
-    const details = renderer!.root.findByType("Modal");
-    expect(details.props.visible).toBe(true);
-    const texts = details.findAllByType("Text");
+    const details = renderer!.root.findAllByType("Modal").find((modal) => modal.props.visible);
+    expect(details).toBeTruthy();
+    expect(details!.props.visible).toBe(true);
+    const texts = details!.findAllByType("Text");
     expect(texts.some(node => node.props.style?.fontWeight === "800" && flattenText(node) === "a notebook")).toBe(true);
     expect(texts.map(flattenText).join(" ")).toContain("•");
   });
@@ -6337,7 +6341,7 @@ describe("mobile rendered screen flows", () => {
     expect(rendered()).toContain("Finished task");
   });
 
-  it("renders Assessments screen as an accordion and routes expanded actions", () => {
+  it("renders Assessments as a direct work list without action accordions", () => {
     const { AssessmentsScreen } = require("../AssessmentsScreen");
     const navigate = jest.fn();
     mockAssessmentsAccordionQueries();
@@ -6355,7 +6359,7 @@ describe("mobile rendered screen flows", () => {
       testRenderer!.root.find(
         (node) =>
           node.type === "Text" &&
-          flattenText(node).includes("Assessments & Actions"),
+          flattenText(node).includes("Assessment work"),
       ),
     ).toBeTruthy();
 
@@ -6367,28 +6371,15 @@ describe("mobile rendered screen flows", () => {
       assessmentCard.props.onPress();
     });
 
-    const detailAction = findPressableByText(
-      testRenderer!.root,
-      "Open Assessment",
-    );
-    act(() => {
-      detailAction.props.onPress();
-    });
-
     expect(navigate).toHaveBeenCalledWith("AssessmentDetail", {
       assessmentId: "assessment-1",
       classId: "class-1",
+      source: "assessments",
     });
 
-    const classAction = findPressableByText(testRenderer!.root, "Open Class");
-    act(() => {
-      classAction.props.onPress();
-    });
-
-    expect(navigate).toHaveBeenCalledWith("ClassDetail", {
-      classId: "class-1",
-      initialTab: "assignments",
-    });
+    const renderedText = testRenderer!.root.findAllByType("Text").map(flattenText).join(" ");
+    expect(renderedText).not.toContain("Open Class");
+    expect(renderedText).not.toContain("Latest Status");
   });
 
   it("routes from the assessments tab into assessment history", () => {

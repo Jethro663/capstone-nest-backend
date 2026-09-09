@@ -192,7 +192,7 @@ export function CoursesScreen({ navigation }: Props) {
             {filteredCourses.map((course, index) => (
               <AnimatedEntrance key={course.id} delay={index * 60}>
                 <Pressable
-                  onPress={() => navigation.navigate("ClassDetail", { classId: course.id })}
+                  onPress={() => navigation.navigate("ClassDetail", { classId: course.id, source: "courses" })}
                   style={[
                     {
                       borderRadius: 24,

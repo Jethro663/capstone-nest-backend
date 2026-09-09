@@ -12,6 +12,7 @@ import { peekAppError, toAppError } from "../api/http";
 import { assessmentsApi } from "../api/services/assessments";
 import { Refreshable, ScreenScroll } from "../components/ui/primitives";
 import type { RootStackParamList } from "../navigation/types";
+import { navigateStudentDetailBack } from "../navigation/student-detail-back";
 import { studentDarkTheme as theme, stripRichText } from "../theme/studentDark";
 import type {
   AssessmentAttempt,
@@ -445,7 +446,7 @@ function resolveClassHeading(classItem?: ClassItem) {
 }
 
 export function AssessmentDetailScreen({ route, navigation }: Props) {
-  const { assessmentId, classId } = route.params;
+  const { assessmentId, classId, source } = route.params;
   const detailQuery = useAssessmentDetail(assessmentId);
   const attemptsQuery = useAssessmentAttempts(assessmentId);
   const classQuery = useClassDetail(classId);
@@ -514,6 +515,12 @@ export function AssessmentDetailScreen({ route, navigation }: Props) {
       classQuery.refetch(),
     ]);
   };
+  const handleBack = () =>
+    navigateStudentDetailBack(navigation, "AssessmentDetail", {
+      assessmentId,
+      classId,
+      source,
+    });
 
   const academicAllowed =
     !assessment?.academicCapabilities ||
@@ -756,7 +763,7 @@ export function AssessmentDetailScreen({ route, navigation }: Props) {
         >
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
             <Pressable
-              onPress={() => navigation.goBack()}
+              onPress={handleBack}
               style={{
                 width: 44,
                 height: 44,

@@ -465,15 +465,15 @@ export function ProfileScreen(props: Props) {
             backgroundColor: theme.topbar,
             borderBottomColor: theme.border,
             borderBottomWidth: 1,
-            paddingBottom: 16,
-            paddingHorizontal: 20,
-            paddingTop: 30,
+            paddingBottom: 7,
+            paddingHorizontal: 16,
+            paddingTop: 7,
           }}
         >
           <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
             <View style={{ alignItems: "center", flexDirection: "row" }}>
               <RoleMenuButton color={theme.red} />
-              <Text style={{ color: theme.text, fontSize: 16, fontWeight: "600", marginLeft: 9 }}>My Profile</Text>
+              <Text style={{ color: theme.text, fontSize: 20, fontWeight: "900", marginLeft: 9 }}>My Profile</Text>
             </View>
 
             <View style={{ alignItems: "center", flexDirection: "row" }}>
@@ -495,6 +495,7 @@ export function ProfileScreen(props: Props) {
               <Pressable
                 onPress={() => void profileQuery.refetch()}
                 style={{
+                  display: "none",
                   alignItems: "center",
                   backgroundColor: theme.active,
                   borderColor: theme.border,
@@ -518,14 +519,15 @@ export function ProfileScreen(props: Props) {
             borderBottomColor: theme.border,
             borderBottomWidth: 1,
             overflow: "hidden",
-            paddingBottom: 22,
-            paddingHorizontal: 20,
-            paddingTop: 28,
+            paddingBottom: 16,
+            paddingHorizontal: 16,
+            paddingTop: 16,
             position: "relative",
           }}
         >
           <View
             style={{
+              display: "none",
               backgroundColor: theme.blueSoft,
               borderRadius: 999,
               height: 130,
@@ -713,9 +715,11 @@ export function ProfileScreen(props: Props) {
           style={{
             backgroundColor: theme.surface,
             borderColor: theme.border,
-            borderRadius: 14,
-            borderWidth: 1,
-            marginHorizontal: 16,
+            borderRadius: 0,
+            borderWidth: 0,
+            borderTopWidth: 1,
+            borderBottomWidth: 1,
+            marginHorizontal: 0,
             overflow: "hidden",
           }}
         >
@@ -805,9 +809,11 @@ export function ProfileScreen(props: Props) {
           style={{
             backgroundColor: theme.surface,
             borderColor: theme.border,
-            borderRadius: 14,
-            borderWidth: 1,
-            marginHorizontal: 16,
+            borderRadius: 0,
+            borderWidth: 0,
+            borderTopWidth: 1,
+            borderBottomWidth: 1,
+            marginHorizontal: 0,
             overflow: "hidden",
           }}
         >
@@ -881,9 +887,11 @@ export function ProfileScreen(props: Props) {
           style={{
             backgroundColor: theme.surface,
             borderColor: theme.border,
-            borderRadius: 14,
-            borderWidth: 1,
-            marginHorizontal: 16,
+            borderRadius: 0,
+            borderWidth: 0,
+            borderTopWidth: 1,
+            borderBottomWidth: 1,
+            marginHorizontal: 0,
             overflow: "hidden",
           }}
         >
@@ -980,9 +988,11 @@ export function ProfileScreen(props: Props) {
           style={{
             backgroundColor: theme.surface,
             borderColor: theme.border,
-            borderRadius: 14,
-            borderWidth: 1,
-            marginHorizontal: 16,
+            borderRadius: 0,
+            borderWidth: 0,
+            borderTopWidth: 1,
+            borderBottomWidth: 1,
+            marginHorizontal: 0,
             overflow: "hidden",
           }}
         >

@@ -13,6 +13,7 @@ import { studentDarkTheme as theme } from "../theme/studentDark";
 import { RichTextContent } from "../components/ui/RichTextContent";
 import { announcementPreview, normalizeAnnouncementContent } from "../utils/announcementContent";
 import { RoleMenuButton } from "../components/navigation/RoleNavigationDrawer";
+import { StudentAnnouncementsView } from "./student-announcements/StudentAnnouncementsView";
 
 type Props = BottomTabScreenProps<MainTabParamList, "Announcements">;
 type FilterMode = "all" | "pinned";
@@ -85,6 +86,27 @@ export function AnnouncementsScreen(_: Props) {
   }, [announcements, filterMode, selectedClassId]);
 
   const refreshing = classesQuery.isRefetching || announcementQueries.some((query) => query.isRefetching);
+
+  if (theme.bg === "#FBFAF8") {
+    return (
+      <StudentAnnouncementsView
+        announcements={filteredAnnouncements}
+        allAnnouncementCount={announcements.length}
+        classOptions={[
+          { label: "All classes", value: "all" },
+          ...(classesQuery.data ?? []).map((entry) => ({ label: entry.subjectCode || entry.subjectName || "Class", value: entry.id })),
+        ]}
+        selectedClassId={selectedClassId}
+        onSelectClass={setSelectedClassId}
+        filterMode={filterMode}
+        onFilterModeChange={setFilterMode}
+        selectedAnnouncement={selectedAnnouncement}
+        onSelectAnnouncement={setSelectedAnnouncement}
+        refreshing={refreshing}
+        onRefresh={() => void Promise.all([classesQuery.refetch(), ...announcementQueries.map((query) => query.refetch())])}
+      />
+    );
+  }
 
   return (
     <ScreenScroll

@@ -637,6 +637,7 @@ export function AssessmentHistoryScreen({ route, navigation }: Props) {
                       navigation.navigate("AssessmentDetail", {
                         assessmentId: row.assessmentId,
                         classId: row.assessment?.classId || routeClassId || "",
+                        source: "history",
                       })
                     }
                   />

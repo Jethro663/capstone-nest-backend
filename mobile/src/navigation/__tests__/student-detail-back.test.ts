@@ -21,6 +21,7 @@ describe("student detail Back fallbacks", () => {
   it.each([
     ["classes", "Classes"],
     ["home", "Dashboard"],
+    ["assessments", "Assessments"],
   ] as const)("returns a class opened from %s to %s", (source, screen) => {
     expect(resolve("ClassDetail", { classId: "class-1", source })).toEqual({
       name: "MainTabs",

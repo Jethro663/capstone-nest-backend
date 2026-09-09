@@ -23,13 +23,13 @@ import { studentDarkTheme } from "../theme/studentDark";
 import { shadow } from "../theme/tokens";
 import { presentAcademicScore } from "../lib/academicScore";
 import { RoleMenuButton } from "../components/navigation/RoleNavigationDrawer";
+import {
+  StudentAssessmentsView,
+  type StudentAssessmentFilter,
+} from "./student-assessments/StudentAssessmentsView";
 
 type Props = BottomTabScreenProps<MainTabParamList, "Assessments">;
-type AssessmentFilterKey =
-  | "allAssessments"
-  | "pending"
-  | "completed"
-  | "past_due";
+type AssessmentFilterKey = StudentAssessmentFilter;
 type AssessmentStatus = Exclude<AssessmentRecord["status"], never>;
 type AssessmentActionKey = "details" | "history" | "results" | "class";
 
@@ -319,6 +319,7 @@ function navigateToAction(
       nextNavigation.navigate("AssessmentDetail", {
         assessmentId: item.id,
         classId: item.classId,
+        source: "assessments",
       });
       return;
     case "history":
@@ -346,12 +347,14 @@ function navigateToAction(
       nextNavigation.navigate("AssessmentDetail", {
         assessmentId: item.id,
         classId: item.classId,
+        source: "assessments",
       });
       return;
     case "class":
       nextNavigation.navigate("ClassDetail", {
         classId: item.classId,
         initialTab: "assignments",
+        source: "assessments",
       });
   }
 }
@@ -520,6 +523,24 @@ export function AssessmentsScreen({ navigation }: Props) {
     user?.lastName,
     user?.email,
   );
+
+  if (darkTheme.bg === "#FBFAF8") {
+    return (
+      <StudentAssessmentsView
+        navigation={navigation}
+        assessments={filteredAssessments}
+        activeFilter={activeFilter}
+        onFilterChange={setActiveFilter}
+        searchQuery={searchQuery}
+        onSearchQueryChange={setSearchQuery}
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
+        loading={classesQuery.isLoading}
+        errorMessage={primaryError ? peekAppError(primaryError).message : undefined}
+        emptySubtitle={buildEmptyStateSubtitle(activeFilter, searchQuery)}
+      />
+    );
+  }
 
   return (
     <ScreenScroll
