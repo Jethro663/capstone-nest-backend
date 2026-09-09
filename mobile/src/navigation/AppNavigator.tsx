@@ -212,6 +212,12 @@ function DashboardRouteScreen(
   );
 }
 
+function StudentCalendarRouteScreen(
+  props: BottomTabScreenProps<MainTabParamList, "StudentCalendar">,
+) {
+  return <CalendarScreen {...(props as unknown as ComponentProps<typeof CalendarScreen>)} />;
+}
+
 function JaRouteScreen(props: BottomTabScreenProps<MainTabParamList, "JA">) {
   return <JaScreen {...(props as ComponentProps<typeof JaScreen>)} />;
 }
@@ -270,6 +276,7 @@ const studentTabScreens = {
   Dashboard: DashboardRouteScreen,
   Classes: ClassesRouteScreen,
   Assessments: AssessmentsScreen,
+  StudentCalendar: StudentCalendarRouteScreen,
   JA: JaRouteScreen,
   Announcements: AnnouncementsScreen,
   Profile: ProfileScreen,
@@ -323,6 +330,14 @@ function renderStudentTabScreen(name: StudentTabRouteName) {
           key={name}
           name={name}
           component={studentTabScreens.Assessments}
+        />
+      );
+    case "StudentCalendar":
+      return (
+        <Tab.Screen
+          key={name}
+          name={name}
+          component={studentTabScreens.StudentCalendar}
         />
       );
     case "JA":
@@ -673,6 +688,7 @@ function StudentTabs() {
       onNavigate={navigateFromRoleDrawer}
     >
       <Tab.Navigator
+        backBehavior="history"
         screenOptions={{ headerShown: false }}
         tabBar={() => null}
         screenListeners={{

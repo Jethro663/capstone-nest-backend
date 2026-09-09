@@ -38,6 +38,10 @@ export type TeacherClassDetailSource =
 export type TeacherModuleDetailSource = "class" | "library";
 export type TeacherLessonDetailSource = "module" | "lessons";
 export type TeacherAiDraftSource = "class" | "assessments";
+export type StudentClassDetailSource = "classes" | "home" | "calendar" | "courses";
+export type StudentModuleDetailSource = "class";
+export type StudentLessonDetailSource = "module" | "class" | "home" | "ja";
+export type StudentAssessmentDetailSource = "assessments" | "class" | "home" | "calendar" | "history";
 
 export type JaRouteParams = {
   panel?: JaPanel;
@@ -55,13 +59,13 @@ export type RootStackParamList = {
   AdminAcademic: undefined;
   AdminAnnouncements: undefined;
   ClassWorkspace: { classId: string };
-  ClassDetail: { classId: string; initialTab?: ClassDetailInitialTab };
-  ModuleDetail: { classId: string; moduleId: string };
+  ClassDetail: { classId: string; initialTab?: ClassDetailInitialTab; source?: StudentClassDetailSource };
+  ModuleDetail: { classId: string; moduleId: string; source?: StudentModuleDetailSource };
   Calendar: { classId?: string } | undefined;
   Courses: undefined;
   Lessons: undefined;
-  LessonDetail: { lessonId: string; classId?: string };
-  AssessmentDetail: { assessmentId: string; classId: string };
+  LessonDetail: { lessonId: string; classId?: string; moduleId?: string; source?: StudentLessonDetailSource };
+  AssessmentDetail: { assessmentId: string; classId: string; source?: StudentAssessmentDetailSource };
   AssessmentTake: { assessmentId: string };
   AssessmentResults: { attemptId: string };
   AssessmentHistory: { assessmentId?: string; classId?: string } | undefined;
@@ -151,6 +155,7 @@ export type MainTabParamList = {
   Academic: undefined;
   Home: undefined;
   Dashboard: undefined;
+  StudentCalendar: undefined;
   Classes: undefined;
   Sections: undefined;
   Assessments: undefined;

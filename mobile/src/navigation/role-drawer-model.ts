@@ -56,6 +56,7 @@ export const ROLE_DRAWER_GROUPS = {
         { label: "Home", route: "Dashboard", kind: "tab", icon: "home-outline" },
         { label: "My Classes", route: "Classes", kind: "tab", icon: "book-open-variant-outline" },
         { label: "Assessments", route: "Assessments", kind: "tab", icon: "clipboard-text-outline" },
+        { label: "Calendar", route: "StudentCalendar", kind: "tab", icon: "calendar-month-outline" },
         { label: "JA", route: "JA", kind: "tab", icon: "creation-outline" },
         { label: "Announcements", route: "Announcements", kind: "tab", icon: "bullhorn-outline" },
       ],

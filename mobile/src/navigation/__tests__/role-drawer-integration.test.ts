@@ -40,6 +40,20 @@ describe("role drawer integration", () => {
     }
   });
 
+  it("keeps student history and exposes Calendar through the drawer without removing contextual Calendar", () => {
+    const studentTabsSource = appNavigator.slice(
+      appNavigator.indexOf("function StudentTabs"),
+      appNavigator.indexOf("function StudentNavigator"),
+    );
+    const drawerModel = readSource("../role-drawer-model.ts");
+    expect(studentTabsSource).toContain('backBehavior="history"');
+    expect(appNavigator).toContain('case "StudentCalendar"');
+    expect(appNavigator).toContain("component={studentTabScreens.StudentCalendar}");
+    expect(drawerModel).toContain('{ label: "Calendar", route: "StudentCalendar", kind: "tab"');
+    expect(appNavigator).toContain('case "Calendar"');
+    expect(appNavigator).toContain("component={studentStackScreens.Calendar}");
+  });
+
   it.each([
     "../../screens/TeacherCalendarScreen.tsx",
     "../../screens/TeacherLessonsScreen.tsx",
