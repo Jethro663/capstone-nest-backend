@@ -1536,59 +1536,12 @@ export class SectionsService {
   ) {
     // Verify section exists first
     const section = await this.findById(id);
-
-    const linkedClass = await this.db.query.classes.findFirst({
-      where: eq(classes.sectionId, id),
-      columns: { id: true },
-    });
-    if (linkedClass)
-      throw new ConflictException(
-        'Remove empty linked classes individually; sections containing academic class history cannot be purged',
-      );
-
-    // Wrap the pre-flight count checks and the delete in a single transaction
-    // to prevent a TOCTOU race where new enrolments are inserted between the
-    // reads and the delete.
-    await this.db.transaction(async (tx) => {
-      const [activeClassesResult, enrolledStudentsResult] = await Promise.all([
-        tx
-          .select({ count: count() })
-          .from(classes)
-          .where(and(eq(classes.sectionId, id), eq(classes.isActive, true))),
-        tx
-          .select({ count: count() })
-          .from(enrollments)
-          .where(
-            and(
-              eq(enrollments.sectionId, id),
-              eq(enrollments.status, 'enrolled'),
-            ),
-          ),
-      ]);
-
-      const activeClasses = Number(activeClassesResult[0]?.count ?? 0);
-      const enrolledStudents = Number(enrolledStudentsResult[0]?.count ?? 0);
-
-      if (activeClasses > 0 || enrolledStudents > 0) {
-        throw new BadRequestException(
-          `Cannot permanently delete this section: it has ${activeClasses} active class(es) and ${enrolledStudents} enrolled student(s). ` +
-            `Deactivate or remove them first, or use the soft-delete endpoint instead.`,
-        );
-      }
-
-      await tx.delete(sections).where(eq(sections.id, id));
-    });
-
-    await this.auditService.log({
-      actorId: actorId ?? section.adviserId ?? 'system',
-      action: 'section.purged',
-      targetType: 'section',
-      targetId: id,
-      metadata: {
-        actorRole: this.resolveActorRole(actorRoles),
-        previousIsActive: section.isActive,
-      },
-    });
+    void section;
+    void actorId;
+    void actorRoles;
+    throw new ConflictException(
+      'Use the reviewed admin lifecycle permanent-deletion flow to purge an archived section.',
+    );
   }
 
   private parseGradeLevelAsNumber(gradeLevel: string): number {

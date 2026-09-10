@@ -16,6 +16,9 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import SectionForm, { type SectionFormValues } from '@/components/admin/SectionForm';
 import { AdminEmptyState, AdminPageShell, AdminSectionCard } from '@/components/admin/AdminPageShell';
+import { AdminLifecycleDialog } from '@/components/admin/AdminLifecycleDialog';
+import { academicStateService } from '@/services/academic-state-service';
+import { adminLifecycleService } from '@/services/admin-lifecycle-service';
 import { sectionService, type RosterStudent } from '@/services/section-service';
 import { userService } from '@/services/user-service';
 import { getCurrentToFutureSchoolYears } from '@/lib/school-year';
@@ -23,6 +26,7 @@ import { getApiErrorMessage } from '@/lib/api-error';
 import { toast } from 'sonner';
 import type { Section } from '@/types/section';
 import type { User } from '@/types/user';
+import type { AcademicPeriodKey } from '@/types/admin-lifecycle';
 
 function getInitials(firstName?: string, lastName?: string) {
   const firstInitial = firstName?.trim()?.charAt(0) || '';
@@ -42,7 +46,9 @@ export default function EditSectionPage() {
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [removing, setRemoving] = useState(false);
+  const [lifecycleStudent, setLifecycleStudent] = useState<RosterStudent | null>(null);
+  const [destinationSectionId, setDestinationSectionId] = useState('');
+  const [activePeriod, setActivePeriod] = useState<AcademicPeriodKey>('Q1');
 
   const schoolYears = useMemo(() => getCurrentToFutureSchoolYears(4), []);
   const availableSchoolYears = useMemo(() => {
@@ -69,17 +75,19 @@ export default function EditSectionPage() {
 
     try {
       setLoading(true);
-      const [sectionRes, rosterRes, teachersRes, sectionsRes] = await Promise.all([
+      const [sectionRes, rosterRes, teachersRes, sectionsRes, academicStateRes] = await Promise.all([
         sectionService.getById(sectionId),
         sectionService.getRoster(sectionId),
         userService.getAll({ role: 'teacher', limit: 200 }),
         sectionService.getAll({ limit: 100 }),
+        academicStateService.getCurrent(),
       ]);
 
       setSection(sectionRes.data);
       setRoster(rosterRes.data || []);
       setTeachers(teachersRes.users || []);
       setAllSections(sectionsRes.data || []);
+      setActivePeriod(academicStateRes.data.quarter as AcademicPeriodKey);
       setSelectedStudentIds([]);
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Failed to load section details'));
@@ -159,23 +167,15 @@ export default function EditSectionPage() {
     );
   };
 
-  const handleRemoveSelected = async () => {
+  const handleRemoveSelected = () => {
     if (!sectionId || selectedStudentIds.length === 0) return;
-
-    try {
-      setRemoving(true);
-      await Promise.all(
-        selectedStudentIds.map((studentId) =>
-          sectionService.removeStudent(sectionId, studentId),
-        ),
-      );
-      toast.success(`Removed ${selectedStudentIds.length} student(s)`);
-      fetchData();
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to remove selected students'));
-    } finally {
-      setRemoving(false);
-    }
+    const next = roster.find((student) => student.id === selectedStudentIds[0]);
+    if (!next) return;
+    setDestinationSectionId('');
+    setLifecycleStudent(next);
+    toast.info(
+      `${selectedStudentIds.length} selected. Review begins with ${next.firstName} ${next.lastName}; failed or unreviewed learners stay selected.`,
+    );
   };
 
   if (loading) {
@@ -259,7 +259,7 @@ export default function EditSectionPage() {
 
       <AdminSectionCard
         title={`Students (${roster.length})`}
-        description="Manage roster members and bulk actions from the same page."
+        description="Resolve selected learner memberships one at a time so failures remain selected and completed work cannot be duplicated."
         density="compact"
         action={(
           <div className="flex flex-wrap items-center gap-2">
@@ -270,10 +270,10 @@ export default function EditSectionPage() {
               variant="outline"
               size="sm"
               className="rounded-xl border-rose-200 bg-white/70 font-black text-rose-600 hover:bg-rose-50"
-              disabled={selectedStudentIds.length === 0 || removing}
+              disabled={selectedStudentIds.length === 0}
               onClick={handleRemoveSelected}
             >
-              {removing ? 'Removing...' : `Remove Selected (${selectedStudentIds.length})`}
+              Resolve Selected ({selectedStudentIds.length})
             </Button>
           </div>
         )}
@@ -343,6 +343,94 @@ export default function EditSectionPage() {
           </div>
         )}
       </AdminSectionCard>
+
+      {lifecycleStudent ? (
+        <AdminLifecycleDialog
+          open
+          onOpenChange={(open) => !open && setLifecycleStudent(null)}
+          title="Resolve selected membership"
+          description="Choose the outcome for this learner. Each completed learner is removed from the selection; failures and unreviewed learners remain selected."
+          targetLabel={`${lifecycleStudent.firstName} ${lifecycleStudent.lastName}`}
+          intents={[
+            {
+              value: 'CORRECT_ENROLLMENT',
+              label: 'Correct erroneous enrollment',
+              description: 'Close a mistaken membership and retain the correction event.',
+            },
+            {
+              value: 'WITHDRAW',
+              label: 'Withdraw from school',
+              description: 'Close current memberships while preserving submitted academic work.',
+            },
+            {
+              value: 'TRANSFER_SECTION',
+              label: 'Transfer to another section',
+              description: 'Create compatible destination memberships before closing the source.',
+            },
+          ]}
+          renderIntentFields={(intent) =>
+            intent === 'TRANSFER_SECTION' ? (
+              <select
+                aria-label="Destination section"
+                value={destinationSectionId}
+                onChange={(event) => setDestinationSectionId(event.target.value)}
+                className="admin-select mt-3 w-full"
+              >
+                <option value="">Choose destination section</option>
+                {allSections
+                  .filter(
+                    (entry) =>
+                      entry.id !== sectionId &&
+                      entry.isActive &&
+                      entry.schoolYear === section.schoolYear &&
+                      entry.gradeLevel === section.gradeLevel,
+                  )
+                  .map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.name}
+                    </option>
+                  ))}
+              </select>
+            ) : null
+          }
+          canPreview={(intent) =>
+            intent !== 'TRANSFER_SECTION' || Boolean(destinationSectionId)
+          }
+          preview={async (intent) =>
+            (
+              await adminLifecycleService.previewStudent({
+                studentId: lifecycleStudent.id,
+                sectionId,
+                resolution: intent as 'CORRECT_ENROLLMENT' | 'WITHDRAW' | 'TRANSFER_SECTION',
+                destinationSectionId:
+                  intent === 'TRANSFER_SECTION' ? destinationSectionId : undefined,
+                effectivePeriod: activePeriod,
+              })
+            ).data
+          }
+          execute={async (intent, evidence) =>
+            (
+              await adminLifecycleService.executeStudent({
+                studentId: lifecycleStudent.id,
+                sectionId,
+                resolution: intent as 'CORRECT_ENROLLMENT' | 'WITHDRAW' | 'TRANSFER_SECTION',
+                destinationSectionId:
+                  intent === 'TRANSFER_SECTION' ? destinationSectionId : undefined,
+                effectivePeriod: activePeriod,
+                ...evidence,
+              })
+            ).data
+          }
+          onCompleted={() => {
+            setSelectedStudentIds((current) =>
+              current.filter((id) => id !== lifecycleStudent.id),
+            );
+            setRoster((current) =>
+              current.filter((student) => student.id !== lifecycleStudent.id),
+            );
+          }}
+        />
+      ) : null}
     </AdminPageShell>
   );
 }

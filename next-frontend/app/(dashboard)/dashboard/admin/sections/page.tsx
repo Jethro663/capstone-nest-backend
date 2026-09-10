@@ -6,17 +6,23 @@ import { Archive, ChevronDown, Layers3, Pencil, Search, Trash2, UserPlus, Users 
 import {
   type BulkSectionLifecycleAction,
   sectionService,
+  type RosterStudent,
 } from '@/services/section-service';
+import { academicStateService } from '@/services/academic-state-service';
+import { adminLifecycleService } from '@/services/admin-lifecycle-service';
 import { AdminEmptyState, AdminPageShell, AdminSectionCard } from '@/components/admin/AdminPageShell';
+import { AdminLifecycleDialog } from '@/components/admin/AdminLifecycleDialog';
 import { Button } from '@/components/ui/button';
-import { ConfirmationDialog, type ConfirmationDialogConfig, type ConfirmationTone } from '@/components/shared/ConfirmationDialog';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
 import type { Section } from '@/types/section';
+import type { AcademicPeriodKey, PreviewSectionLifecycleInput } from '@/types/admin-lifecycle';
+
+type SectionStudentResolution =
+  PreviewSectionLifecycleInput['studentResolutions'][number]['resolution'];
 
 type StatusTab = 'active' | 'archived';
 
@@ -26,7 +32,7 @@ interface BulkActionOption {
   confirmLabel: string;
   title: string;
   description: string;
-  tone: ConfirmationTone;
+  tone: 'danger';
 }
 
 function getBulkActions(tab: StatusTab): BulkActionOption[] {
@@ -37,7 +43,7 @@ function getBulkActions(tab: StatusTab): BulkActionOption[] {
         label: 'Purge selected',
         confirmLabel: 'Purge sections',
         title: 'Permanently delete selected sections?',
-        description: 'This permanently removes the selected archived sections from the system.',
+        description: 'Review each archived section before permanent deletion.',
         tone: 'danger',
       },
     ];
@@ -49,7 +55,7 @@ function getBulkActions(tab: StatusTab): BulkActionOption[] {
       label: 'Archive selected',
       confirmLabel: 'Archive sections',
       title: 'Archive selected sections?',
-      description: 'Selected active sections will move to the archived list, clear advisers and linked class teachers, and complete active student enrollments. Archived sections can only be purged.',
+      description: 'Review every learner outcome while preserving adviser and teacher history.',
       tone: 'danger',
     },
   ];
@@ -65,10 +71,12 @@ export default function SectionManagementPage() {
   const [schoolYearFilter, setSchoolYearFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [selectedSectionIds, setSelectedSectionIds] = useState<string[]>([]);
-  const [purgeTarget, setPurgeTarget] = useState<Section | null>(null);
-  const [purgeConfirmText, setPurgeConfirmText] = useState('');
-  const [confirmation, setConfirmation] =
-    useState<ConfirmationDialogConfig | null>(null);
+  const [lifecycleTarget, setLifecycleTarget] = useState<Section | null>(null);
+  const [lifecycleRoster, setLifecycleRoster] = useState<RosterStudent[]>([]);
+  const [activePeriod, setActivePeriod] = useState<AcademicPeriodKey>('Q1');
+  const [learnerOutcomes, setLearnerOutcomes] = useState<
+    Record<string, { resolution?: SectionStudentResolution; destinationSectionId?: string }>
+  >({});
 
   const fetchData = useCallback(async (mode: 'initial' | 'table') => {
     try {
@@ -78,8 +86,12 @@ export default function SectionManagementPage() {
         setTableLoading(true);
       }
 
-      const sectionsRes = await sectionService.getAll({ limit: 100 });
+      const [sectionsRes, academicStateRes] = await Promise.all([
+        sectionService.getAll({ limit: 100 }),
+        academicStateService.getCurrent(),
+      ]);
       setSections(sectionsRes.data || []);
+      setActivePeriod(academicStateRes.data.quarter as AcademicPeriodKey);
     } catch {
       toast.error('Failed to load sections');
     } finally {
@@ -178,91 +190,34 @@ export default function SectionManagementPage() {
     setSelectedSectionIds(allVisibleSelected ? [] : selectableVisibleIds);
   };
 
-  const runBulkLifecycle = async (
-    action: BulkSectionLifecycleAction,
-    sectionIds: string[],
-  ) => {
-    const result = await sectionService.bulkLifecycle({ action, sectionIds });
-    const successCount = result.data.succeeded.length;
-    const failureCount = result.data.failed.length;
-
-    if (successCount > 0) {
-      toast.success(result.message);
+  const openSingleActionConfirmation = async (section: Section) => {
+    setLifecycleRoster([]);
+    setLearnerOutcomes({});
+    if (section.isActive) {
+      try {
+        const rosterResponse = await sectionService.getRoster(section.id);
+        const unique = Array.from(
+          new Map((rosterResponse.data || []).map((student) => [student.id, student])).values(),
+        );
+        setLifecycleRoster(unique);
+        setLifecycleTarget(section);
+      } catch {
+        toast.error('Failed to load section roster for lifecycle review');
+        setLifecycleTarget(null);
+      }
     } else {
-      toast.error(result.message);
+      setLifecycleTarget(section);
     }
-
-    if (failureCount > 0) {
-      toast.error(
-        result.data.failed[0]?.reason ??
-          'Some selected sections could not be updated.',
-      );
-    }
-
-    setSelectedSectionIds([]);
-    await refreshTable();
-  };
-
-  const openSingleActionConfirmation = (
-    section: Section,
-    option: BulkActionOption,
-  ) => {
-    setConfirmation({
-      title: option.title,
-      description: option.description,
-      confirmLabel: option.confirmLabel.replace('sections', 'section'),
-      tone: option.tone,
-      details: (
-        <p className="text-sm font-black text-[var(--student-text-strong)]">
-          {section.name}
-        </p>
-      ),
-      onConfirm: async () => {
-        await runBulkLifecycle(option.action, [section.id]);
-      },
-    });
   };
 
   const openBulkConfirmation = (option: BulkActionOption) => {
-    setConfirmation({
-      title: option.title,
-      description: option.description,
-      confirmLabel: option.confirmLabel,
-      tone: option.tone,
-      details: (
-        <div className="space-y-2 text-sm text-[var(--student-text-strong)]">
-          <p className="font-black">{selectedSectionIds.length} selected</p>
-          <p className="text-[var(--student-text-muted)]">
-            {selectedSections
-              .slice(0, 3)
-              .map((section) => section.name)
-              .join(', ')}
-            {selectedSections.length > 3
-              ? ` and ${selectedSections.length - 3} more`
-              : ''}
-          </p>
-        </div>
-      ),
-      onConfirm: async () => {
-        await runBulkLifecycle(option.action, selectedSectionIds);
-      },
-    });
-  };
-
-  const handlePurge = async () => {
-    if (!purgeTarget) return;
-    if (purgeConfirmText.trim() !== purgeTarget.name) {
-      toast.error('Type the exact section name to purge');
-      return;
-    }
-
-    try {
-      await runBulkLifecycle('purge', [purgeTarget.id]);
-      setPurgeTarget(null);
-      setPurgeConfirmText('');
-    } catch {
-      toast.error('Failed to purge section');
-    }
+    const next = selectedSections[0];
+    if (!next) return;
+    toast.info(
+      `${selectedSections.length} selected. Review begins with ${next.name}; failed or unreviewed sections stay selected.`,
+    );
+    void option;
+    void openSingleActionConfirmation(next);
   };
 
   if (initialLoading) {
@@ -519,9 +474,7 @@ export default function SectionManagementPage() {
                             <button
                               type="button"
                               className="admin-icon-button"
-                              onClick={() =>
-                                openSingleActionConfirmation(section, archiveOption)
-                              }
+                              onClick={() => void openSingleActionConfirmation(section)}
                               title="Archive section"
                             >
                               <Archive className="h-4 w-4" />
@@ -532,8 +485,7 @@ export default function SectionManagementPage() {
                               type="button"
                               className="admin-icon-button"
                               onClick={() => {
-                                setPurgeTarget(section);
-                                setPurgeConfirmText('');
+                                void openSingleActionConfirmation(section);
                               }}
                               title="Purge section"
                             >
@@ -551,57 +503,178 @@ export default function SectionManagementPage() {
         )}
       </AdminSectionCard>
 
-      <ConfirmationDialog
-        config={confirmation}
-        onClose={() => setConfirmation(null)}
-      />
-
-      <Dialog
-        open={!!purgeTarget}
-        onOpenChange={(open) => {
-          if (!open) {
-            setPurgeTarget(null);
-            setPurgeConfirmText('');
+      {lifecycleTarget ? (
+        <AdminLifecycleDialog
+          open
+          onOpenChange={(open) => !open && setLifecycleTarget(null)}
+          title={
+            lifecycleTarget.isActive
+              ? 'Resolve learners and close section'
+              : 'Permanently delete archived section'
           }
-        }}
-      >
-        <DialogContent variant="admin" className="rounded-[1.6rem] border-white/40 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(236,253,245,0.92))] shadow-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-rose-600">Purge Section</DialogTitle>
-            <DialogDescription>
-              This permanently deletes{' '}
-              <strong>{purgeTarget?.name}</strong> from the database. Type the
-              section name exactly to proceed.
-            </DialogDescription>
-          </DialogHeader>
-          <Input
-            value={purgeConfirmText}
-            onChange={(event) => setPurgeConfirmText(event.target.value)}
-            placeholder="Type section name to confirm purge"
-            className="admin-input"
-          />
-          <DialogFooter>
-            <Button
-              variant="outline"
-              className="admin-button-outline rounded-xl font-black"
-              onClick={() => {
-                setPurgeTarget(null);
-                setPurgeConfirmText('');
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              className="rounded-xl font-black"
-              disabled={purgeConfirmText.trim() !== (purgeTarget?.name || '')}
-              onClick={handlePurge}
-            >
-              Purge
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          description={
+            lifecycleTarget.isActive
+              ? 'Choose an explicit outcome for every active learner. Linked classes close only when the whole plan is valid.'
+              : 'Deletion is allowed only when no class, enrollment, lifecycle, or academic evidence remains.'
+          }
+          targetLabel={lifecycleTarget.name}
+          permanent={!lifecycleTarget.isActive}
+          intents={
+            lifecycleTarget.isActive
+              ? [
+                  {
+                    value: 'CLOSE',
+                    label: 'Resolve learners and close section',
+                    description: 'The preview validates every learner and every linked class as one atomic operation.',
+                  },
+                ]
+              : [
+                  {
+                    value: 'PURGE',
+                    label: 'Permanently delete empty record',
+                    description: 'There is no evidence override.',
+                  },
+                ]
+          }
+          renderIntentFields={() =>
+            lifecycleTarget.isActive ? (
+              <div className="mt-4 space-y-3">
+                {lifecycleRoster.length === 0 ? (
+                  <p className="rounded-xl border border-[var(--admin-outline)] bg-[#fbfcfe] p-3 text-sm text-[var(--admin-text-muted)]">
+                    No active learners are assigned to this section.
+                  </p>
+                ) : (
+                  lifecycleRoster.map((student) => {
+                    const outcome = learnerOutcomes[student.id] ?? {};
+                    return (
+                      <div key={student.id} className="rounded-xl border border-[var(--admin-outline)] bg-[#fbfcfe] p-3">
+                        <p className="font-semibold text-[var(--admin-text-strong)]">
+                          {student.firstName} {student.lastName}
+                        </p>
+                        <select
+                          aria-label={`Outcome for ${student.firstName} ${student.lastName}`}
+                          value={outcome.resolution ?? ''}
+                          onChange={(event) => {
+                            const resolution = event.target.value as SectionStudentResolution;
+                            setLearnerOutcomes((current) => ({
+                              ...current,
+                              [student.id]: {
+                                resolution,
+                                destinationSectionId:
+                                  resolution === 'TRANSFER_SECTION'
+                                    ? current[student.id]?.destinationSectionId
+                                    : undefined,
+                              },
+                            }));
+                          }}
+                          className="admin-select mt-2 w-full"
+                        >
+                          <option value="">Choose learner outcome</option>
+                          <option value="WITHDRAW">Withdraw from school</option>
+                          <option value="TRANSFER_SECTION">Transfer section</option>
+                          <option value="COMPLETE">Complete through annual transition</option>
+                        </select>
+                        {outcome.resolution === 'TRANSFER_SECTION' ? (
+                          <select
+                            aria-label={`Destination for ${student.firstName} ${student.lastName}`}
+                            value={outcome.destinationSectionId ?? ''}
+                            onChange={(event) =>
+                              setLearnerOutcomes((current) => ({
+                                ...current,
+                                [student.id]: {
+                                  ...current[student.id],
+                                  destinationSectionId: event.target.value,
+                                },
+                              }))
+                            }
+                            className="admin-select mt-2 w-full"
+                          >
+                            <option value="">Choose destination</option>
+                            {sections
+                              .filter(
+                                (entry) =>
+                                  entry.id !== lifecycleTarget.id &&
+                                  entry.isActive &&
+                                  entry.schoolYear === lifecycleTarget.schoolYear &&
+                                  entry.gradeLevel === lifecycleTarget.gradeLevel,
+                              )
+                              .map((entry) => (
+                                <option key={entry.id} value={entry.id}>
+                                  {entry.name}
+                                </option>
+                              ))}
+                          </select>
+                        ) : null}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            ) : null
+          }
+          canPreview={() =>
+            !lifecycleTarget.isActive ||
+            lifecycleRoster.every((student) => {
+              const outcome = learnerOutcomes[student.id];
+              return Boolean(
+                outcome?.resolution &&
+                  (outcome.resolution !== 'TRANSFER_SECTION' || outcome.destinationSectionId),
+              );
+            })
+          }
+          preview={async () =>
+            lifecycleTarget.isActive
+              ? (
+                  await adminLifecycleService.previewSection({
+                    sectionId: lifecycleTarget.id,
+                    effectivePeriod: activePeriod,
+                    studentResolutions: lifecycleRoster.map((student) => ({
+                      studentId: student.id,
+                      resolution: learnerOutcomes[student.id].resolution as SectionStudentResolution,
+                      destinationSectionId: learnerOutcomes[student.id].destinationSectionId,
+                    })),
+                  })
+                ).data
+              : (
+                  await adminLifecycleService.previewPurge({
+                    targetType: 'SECTION',
+                    targetId: lifecycleTarget.id,
+                  })
+                ).data
+          }
+          execute={async (_intent, evidence) =>
+            lifecycleTarget.isActive
+              ? (
+                  await adminLifecycleService.executeSection({
+                    sectionId: lifecycleTarget.id,
+                    effectivePeriod: activePeriod,
+                    studentResolutions: lifecycleRoster.map((student) => ({
+                      studentId: student.id,
+                      resolution: learnerOutcomes[student.id].resolution as SectionStudentResolution,
+                      destinationSectionId: learnerOutcomes[student.id].destinationSectionId,
+                    })),
+                    ...evidence,
+                  })
+                ).data
+              : (
+                  await adminLifecycleService.executePurge({
+                    targetType: 'SECTION',
+                    targetId: lifecycleTarget.id,
+                    ...evidence,
+                  })
+                ).data
+          }
+          onCompleted={async () => {
+            toast.success(
+              lifecycleTarget.isActive ? 'Section archived' : 'Section permanently deleted',
+            );
+            setSelectedSectionIds((current) =>
+              current.filter((id) => id !== lifecycleTarget.id),
+            );
+            await refreshTable();
+          }}
+        />
+      ) : null}
     </AdminPageShell>
   );
 }

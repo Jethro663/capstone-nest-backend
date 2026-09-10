@@ -127,6 +127,27 @@
       "when": 1788545728507,
       "tag": "0017_grade_score_invariants",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1789062562526,
+      "tag": "0018_governed_admin_lifecycle",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1789064086344,
+      "tag": "0019_academic_lifecycle_notification",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1789065067882,
+      "tag": "0020_lifecycle_audit_link",
+      "breakpoints": true
     }
   ]
 }

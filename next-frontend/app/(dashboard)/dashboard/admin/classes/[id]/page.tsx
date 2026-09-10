@@ -484,19 +484,10 @@ export default function AdminClassDetailPage() {
       return;
     }
 
-    setConfirmation({
-      title: 'Archive class?',
-      description:
-        'Archiving clears the assigned teacher and completes active student enrollments. Archived classes cannot be restored; purge them from the archive list if they are no longer needed.',
-      confirmLabel: 'Archive class',
-      tone: 'danger',
-      onConfirm: async () => {
-        await executeControlledAction('class-status', async () => {
-          await classService.toggleStatus(classItem.id);
-          toast.success('Class archived');
-        });
-      },
-    });
+    toast.info(
+      'Opening the reviewed lifecycle flow. Teacher ownership and academic history will be preserved.',
+    );
+    window.location.assign('/dashboard/admin/classes');
   };
 
   const toggleClassHiddenState = () => {

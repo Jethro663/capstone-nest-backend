@@ -203,9 +203,9 @@ export const auditLogs = pgTable(
   'audit_logs',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    actorId: uuid('actor_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+    actorId: uuid('actor_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
     action: text('action').notNull(),
     targetType: text('target_type').notNull(),
     targetId: uuid('target_id').notNull(),

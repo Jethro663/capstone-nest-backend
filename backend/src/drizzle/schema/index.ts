@@ -16,3 +16,4 @@ export * from './app-version.schema';
 export * from './transmutation.schema';
 export * from './academic-grading.schema';
 export * from './assessment-editor.schema';
+export * from './admin-lifecycle.schema';

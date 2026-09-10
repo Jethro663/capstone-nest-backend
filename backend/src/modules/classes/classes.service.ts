@@ -1696,28 +1696,11 @@ export class ClassesService {
         'Only archived classes can be permanently deleted. Archive the class first.',
       );
     }
-
-    await this.assertNoAcademicWorkbooks(id);
-    await this.db.delete(classes).where(eq(classes.id, id));
-
-    const actorRole = actorRoles.includes('admin')
-      ? 'admin'
-      : actorRoles.includes('teacher')
-        ? 'teacher'
-        : 'system';
-
-    await this.auditService.log({
-      actorId: actorId ?? classRecord.teacherId ?? 'system',
-      action: 'class.purged',
-      targetType: 'class',
-      targetId: id,
-      metadata: {
-        actorRole,
-        previousIsActive: classRecord.isActive,
-      },
-    });
-
-    return classRecord;
+    void actorId;
+    void actorRoles;
+    throw new ConflictException(
+      'Use the reviewed admin lifecycle permanent-deletion flow to purge an archived class.',
+    );
   }
 
   @AcademicMutation()
@@ -2255,10 +2238,7 @@ export class ClassesService {
 
     const activeMembership = await this.db.query.enrollments.findFirst({
       where: and(
-        or(
-          eq(enrollments.classId, id),
-          eq(enrollments.sectionId, classRecord.sectionId),
-        ),
+        eq(enrollments.classId, id),
         eq(enrollments.status, 'enrolled'),
       ),
       columns: { id: true },

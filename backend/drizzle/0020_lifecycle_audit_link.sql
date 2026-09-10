@@ -1,0 +1,1 @@
+ALTER TABLE "admin_lifecycle_operations" ADD CONSTRAINT "admin_lifecycle_operations_audit_log_id_audit_logs_id_fk" FOREIGN KEY ("audit_log_id") REFERENCES "public"."audit_logs"("id") ON DELETE set null ON UPDATE no action;

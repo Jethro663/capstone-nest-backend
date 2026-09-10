@@ -1,10 +1,10 @@
 # Governed Admin Lifecycle Resolution Plan
 
-**Status:** Proposal only - no source-code changes included
+**Status:** Approved architecture - implementation tracked by OpenSpec change `governed-admin-lifecycle`
 
 **Date:** 2026-09-10
 
-**Scope:** Admin removal of students, class archival, section archival, and permanent deletion safeguards
+**Scope:** Web-first admin correction, withdrawal, transfer, class/section closure, and permanent-deletion safeguards. Mobile admin execution is intentionally deferred until the web workflow is proven.
 
 ## Executive Recommendation
 
@@ -20,6 +20,21 @@ This turns current blockers into one of two categories:
 
 1. **Resolvable blocker:** the system offers a safe action such as withdraw, transfer, complete enrollment, or select a replacement class.
 2. **Absolute blocker:** permanent deletion would destroy academic evidence, so only archival or status changes are allowed.
+
+## Chosen Long-Term Decisions
+
+The following implementation decisions resolve the proposal's earlier ambiguities:
+
+1. **Preserve the existing coarse enrollment status enum.** Existing consumers continue to use `enrolled`, `dropped`, and `completed`. An append-only `enrollment_lifecycle_events` table records whether the precise outcome was correction, withdrawal, section transfer, class transfer, completion, or archival.
+2. **Treat correction as a retained event, not invisible deletion.** An evidence-free erroneous enrollment becomes `dropped`, draft participant eligibility becomes `not_enrolled`, and an immutable event records the correction. Any result-bearing or finalized evidence blocks correction.
+3. **Use the active grading period as the governed boundary.** Every student resolution declares an effective grading period. Earlier or finalized periods are preserved; retroactive finalized-history changes remain academic-repair work.
+4. **Persist execution operations, not abandoned previews.** Preview is read-only and stateless. Execute claims an idempotency-keyed operation row, commits successful academic changes and the success result together, and records a failure outside a rolled-back academic transaction.
+5. **Use concrete operation-specific DTOs.** Student, class, section, and purge preview/execute routes use runtime-valid `class-validator` classes rather than an erased TypeScript-only union.
+6. **Keep one target atomic.** One student resolution, one class closure, or one section closure is all-or-nothing. A multi-target bulk action may complete independent targets separately but must preserve every result and failed selection for retry.
+7. **Ship vertical slices.** Each operation ships backend, web workflow, audit, notifications, and tests together. The admin UI is not postponed until after every backend operation exists.
+8. **Keep purge separate.** Permanent deletion stays behind the archived-record danger flow and never appears as a routine resolution choice.
+9. **Gate execution, not understanding.** Preview stays available while `ADMIN_LIFECYCLE_ENABLED` can disable execution. The flag defaults to disabled and is enabled only after migration and release verification.
+10. **Use web as the first execution surface.** Mobile behavior remains unchanged in this release; it may gain parity only after the desktop review flow and contracts are stable.
 
 ## What The Current Source Code Does
 
@@ -102,7 +117,7 @@ The proposed workflow should reuse this pattern rather than introduce a separate
 
 ## Proposed Solution
 
-### 1. Add an Admin Resolution Center
+### 1. Add a contextual Admin Resolution workflow
 
 Add an admin-only workflow reached from blocked Archive and Remove actions. The normal safe action remains available. When dependencies exist, the UI displays **Resolve blockers** instead of ending with a generic error toast.
 
@@ -148,7 +163,7 @@ Before execution, return a manifest containing:
 
 No data is changed during preview.
 
-### 4. Execute atomically
+### 4. Execute atomically and idempotently
 
 Execution should require:
 
@@ -160,7 +175,9 @@ Execution should require:
 - an idempotency key; and
 - an unchanged database state/version.
 
-All enrollment, participant, class, section, notification, operation-ledger, and audit changes should commit in one `AcademicMutation` transaction. If any required mutation fails, everything rolls back.
+Execution first claims a unique operation row outside the academic transaction. All enrollment, participant, class, section, lifecycle-event, durable-notification, successful operation-result, and audit changes then commit in one `AcademicMutation` transaction. If any required mutation fails, every academic change rolls back and the operation row is marked failed outside the rolled-back transaction.
+
+Durable notification rows are part of the transaction. Socket or provider delivery runs after commit, so delivery failure cannot misreport a committed academic operation as rolled back.
 
 Do not implement a general `force` flag. It is too easy to reuse outside its intended context and provides no record of the administrator's actual intent.
 
@@ -170,11 +187,11 @@ Do not implement a general `force` flag. It is too easy to reuse outside its int
 
 Use three distinct operations:
 
-| Intent | Allowed result |
-| --- | --- |
-| Erroneous enrollment with no academic evidence | Delete the mistaken enrollment or mark it dropped, according to retention policy |
-| Withdrawal/transfer after activity exists | Preserve evidence; close the source enrollment with `dropped` or `completed`; mark current/future participation `withdrawn` or `not_enrolled` |
-| Transfer to another section/class | Create destination memberships and close source memberships in the same transaction |
+| Intent                                         | Allowed result                                                                                                                                |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Erroneous enrollment with no academic evidence | Mark the mistaken enrollment `dropped`, mark editable participants `not_enrolled`, and append a correction event                           |
+| Withdrawal/transfer after activity exists      | Preserve evidence; close the source enrollment with `dropped` or `completed`; mark current/future participation `withdrawn` or `not_enrolled` |
+| Transfer to another section/class              | Create destination memberships and close source memberships in the same transaction                                                           |
 
 Additional rules:
 
@@ -242,45 +259,30 @@ Allow purge only when the target is archived and has none of the following:
 
 If evidence exists, the administrator may archive and hide the entity but may not purge it. There should be no break-glass bypass that destroys academic evidence.
 
-## Suggested API Shape
+## Chosen API Shape
 
 Use a dedicated module such as `admin-lifecycle`, rather than spreading more exception flags through Classes and Sections services.
 
+Use concrete DTO pairs so validation survives at runtime:
+
 ```http
-POST /api/admin/lifecycle/preview
-POST /api/admin/lifecycle/execute
+POST /api/admin/lifecycle/student/preview
+POST /api/admin/lifecycle/student/execute
+POST /api/admin/lifecycle/class/preview
+POST /api/admin/lifecycle/class/execute
+POST /api/admin/lifecycle/section/preview
+POST /api/admin/lifecycle/section/execute
+POST /api/admin/lifecycle/purge/preview
+POST /api/admin/lifecycle/purge/execute
 GET  /api/admin/lifecycle/operations/:operationId
 ```
 
-The preview request should be a discriminated DTO:
-
-```ts
-type AdminLifecycleRequest =
-  | {
-      action: 'STUDENT_RESOLUTION';
-      studentId: string;
-      sectionId: string;
-      resolution: 'CORRECT_ENROLLMENT' | 'WITHDRAW' | 'TRANSFER';
-      destinationSectionId?: string;
-      effectivePeriodId?: string;
-    }
-  | {
-      action: 'ARCHIVE_CLASS';
-      classId: string;
-      replacementClassId?: string;
-    }
-  | {
-      action: 'ARCHIVE_SECTION';
-      sectionId: string;
-      studentResolutions: StudentResolution[];
-    };
-```
-
-The execute request should add:
+Every execute DTO extends its matching preview request with:
 
 ```ts
 {
   manifestHash: string;
+  manifestExpiresAt: string;
   currentPassword: string;
   reasonCode: string;
   notes: string;
@@ -289,7 +291,9 @@ The execute request should add:
 }
 ```
 
-## Admin UI Plan
+The canonical hash includes the manifest schema version, operation input, current academic state, affected row versions/timestamps, blockers, warnings, and ordered effects. Reusing an idempotency key with a different request hash is always a conflict.
+
+## Web Admin UI Plan
 
 Replace dead-end error handling with dependency-aware actions:
 
@@ -313,6 +317,10 @@ The review screen should show:
 
 Bulk actions should first produce one combined preview. Execution can use per-target atomic units, but the result must clearly report successes, failures, and safe retries. Repeating the same idempotency key must not duplicate transfers or notifications.
 
+The UI uses one shared contextual lifecycle dialog with the sequence **Preview -> Intent or resolution -> Changed versus preserved review -> Password -> Result**. Summary counts appear before expandable record detail. Stale previews preserve the administrator's choices while requiring review of a refreshed manifest. Section closure supports applying one outcome or destination to a selected learner group and then editing exceptions rather than forcing a long row-by-row form.
+
+Permanent deletion uses a separate advanced dialog from the archived tab. It is never presented beside routine correction, withdrawal, or transfer actions.
+
 Also correct stale UI copy during implementation: current backend archival preserves teacher/adviser history, while some confirmations say those assignments will be cleared.
 
 ## Security And Audit Requirements
@@ -322,49 +330,55 @@ Also correct stale UI copy during implementation: current backend archival prese
 - Require step-up authentication for every governed execution.
 - Rate-limit privileged executions.
 - Record before/after snapshots, reason, actor, school year, IP/session metadata where available, and manifest hash.
-- Store the lifecycle operation and its audit entries inside the same transaction as the academic mutation.
+- Store the successful lifecycle result and its audit entry inside the same transaction as the academic mutation; claim and failed-attempt updates live outside the transaction so rollback evidence is retained.
 - Preserve actor identity in audit history even if the administrator account is later disabled or removed; avoid cascading deletion of audit evidence.
 - Consider two-person approval only for large bulk actions or changes that require repair of finalized academic history. Routine no-evidence corrections should not become unnecessarily slow.
-- Deliver teacher/adviser notifications after commit so notification failure cannot roll back a valid academic operation.
+- Store deduplicated teacher/adviser notification rows inside the transaction and deliver live notification effects after commit so delivery failure cannot roll back a valid academic operation.
 
-## Implementation Phases
+## Vertical Implementation Phases
 
-### Phase 0 - Characterization and policy tests
+### Phase 0 - Policy, characterization, and additive schema
 
 - Capture current class/section/student guard behavior in tests.
 - Document which records count as immutable academic evidence.
 - Define exact status transitions for correction, withdrawal, transfer, completion, and archival.
+- Add append-only enrollment lifecycle events, idempotent operation records, retained actor snapshots, and audit actor retention.
+- Add concrete operation DTOs and execution feature-flag behavior.
 
-### Phase 1 - Preview and operation manifest
+### Phase 1 - Contextual preview and immediate safety fixes
 
-- Add the lifecycle DTOs and preview service.
+- Add operation-specific preview services and typed web consumers.
 - Reuse the academic-state alignment manifest-hash and confirmation pattern.
-- Add an operation ledger with `previewed`, `executing`, `completed`, `failed`, and `expired` states.
+- Correct the target-class archival guard and inaccurate archive confirmation copy.
+- Show structured, actionable blocker summaries from the existing admin pages.
 
-### Phase 2 - Student resolution
+### Phase 2 - Student resolution vertical slice
 
 - Implement erroneous-enrollment correction.
 - Implement withdrawal while preserving prior evidence.
 - Implement atomic section/class transfer.
 - Add reasoned audit and post-commit notifications.
+- Ship the complete web review/password/result flow and remove ambiguous admin-only removal actions.
 
-### Phase 3 - Class archival
+### Phase 3 - Class archival vertical slice
 
 - Correct the overly broad section-level enrollment guard.
 - Add close/transfer/replace resolutions.
 - Preserve curriculum and class-record invariants.
+- Ship empty archive, complete/drop, and compatible replacement-class transfer flows with contextual web review.
 
-### Phase 4 - Section archival
+### Phase 4 - Section archival vertical slice
 
 - Add per-student resolution mapping.
 - Resolve linked classes and enrollments atomically.
 - Integrate the existing annual-transition path where appropriate.
+- Ship grouped learner outcomes, exception editing, and all-or-nothing web review for one section.
 
-### Phase 5 - Admin UI
+### Phase 5 - Bulk results and permanent deletion
 
-- Add preview, blocker resolution, review, password confirmation, and result views.
-- Replace generic error toasts with actionable dependency summaries.
-- Add safe bulk preview and retry behavior.
+- Add safe independent-target bulk preview, complete result reporting, retained failed selections, and retry behavior.
+- Add the separate evidence-aware purge preview and execution path for archived records only.
+- Centralize purge evidence inventory so direct legacy endpoints cannot bypass it.
 
 ### Phase 6 - Hardening and rollout
 
@@ -388,9 +402,17 @@ Also correct stale UI copy during implementation: current backend archival prese
 - Guided section transfer closes all dependencies and then archives successfully.
 - A stale manifest hash is rejected and requires a new preview.
 - Repeating an idempotency key does not duplicate data or notifications.
+- Reusing an idempotency key with a different payload is rejected.
+- A failed identical request can be safely retried without duplicating completed work.
+- Execution disabled by `ADMIN_LIFECYCLE_ENABLED` makes no academic changes while preview remains available.
+- Destination section transfers reject grade, school-year, capacity, duplicate-enrollment, and ambiguous subject-mapping mismatches.
+- Destination class transfers reject subject, school-year, activity, and duplicate-enrollment mismatches.
+- Earlier, finalized, and locked participant evidence remains unchanged.
 - Purge remains blocked when any academic evidence exists.
 - Audit and operation records survive account deactivation/removal.
 - The UI shows actionable blockers rather than only a generic error.
+- A stale preview refresh retains selected resolutions but requires a new review.
+- Section-sized execution stays within the tested academic-lock duration budget on production-like data.
 
 ## Acceptance Criteria
 

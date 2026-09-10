@@ -1181,7 +1181,7 @@ describe('SectionsService', () => {
       return tx;
     };
 
-    it('deletes the section when it has no active classes or enrolled students', async () => {
+    it('routes section purge through governed lifecycle review', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue(makeSection());
       const tx = makeTxForDelete('0', '0');
       mockDb.transaction.mockImplementation((cb: Function) => cb(tx));
@@ -1192,39 +1192,30 @@ describe('SectionsService', () => {
           ADMIN_USER.userId,
           ADMIN_USER.roles,
         ),
-      ).resolves.not.toThrow();
-      expect(tx.delete).toHaveBeenCalledTimes(1);
-      expect(mockAuditService.log).toHaveBeenCalledWith({
-        actorId: ADMIN_USER.userId,
-        action: 'section.purged',
-        targetType: 'section',
-        targetId: SECTION_ID,
-        metadata: {
-          actorRole: 'admin',
-          previousIsActive: true,
-        },
-      });
+      ).rejects.toThrow('Use the reviewed admin lifecycle');
+      expect(tx.delete).not.toHaveBeenCalled();
+      expect(mockAuditService.log).not.toHaveBeenCalled();
     });
 
-    it('throws BadRequestException when there are active classes', async () => {
+    it('does not bypass lifecycle review when there are active classes', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue(makeSection());
       const tx = makeTxForDelete('2', '0');
       mockDb.transaction.mockImplementation((cb: Function) => cb(tx));
 
       await expect(
         service.permanentlyDeleteSection(SECTION_ID),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow(ConflictException);
       expect(tx.delete).not.toHaveBeenCalled();
     });
 
-    it('throws BadRequestException when there are enrolled students', async () => {
+    it('does not bypass lifecycle review when there are enrolled students', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue(makeSection());
       const tx = makeTxForDelete('0', '5');
       mockDb.transaction.mockImplementation((cb: Function) => cb(tx));
 
       await expect(
         service.permanentlyDeleteSection(SECTION_ID),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow(ConflictException);
       expect(tx.delete).not.toHaveBeenCalled();
     });
 

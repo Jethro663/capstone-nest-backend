@@ -408,6 +408,7 @@ export class UsersService {
     });
     const lastLoginIpByUserId = new Map<string, string>();
     for (const entry of loginEvents) {
+      if (!entry.actorId) continue;
       if (!lastLoginIpByUserId.has(entry.actorId)) {
         const extractedIp = this.extractIpFromMetadata(entry.metadata);
         if (extractedIp) {
@@ -429,6 +430,7 @@ export class UsersService {
     });
     const lastLogoutAtByUserId = new Map<string, Date>();
     for (const entry of logoutEvents) {
+      if (!entry.actorId) continue;
       if (!lastLogoutAtByUserId.has(entry.actorId)) {
         lastLogoutAtByUserId.set(entry.actorId, entry.createdAt);
       }

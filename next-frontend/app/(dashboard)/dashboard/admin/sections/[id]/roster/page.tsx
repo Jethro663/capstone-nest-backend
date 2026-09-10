@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, School, UserPlus } from 'lucide-react';
 import { sectionService, type RosterStudent } from '@/services/section-service';
+import { academicStateService } from '@/services/academic-state-service';
+import { adminLifecycleService } from '@/services/admin-lifecycle-service';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
@@ -17,7 +19,6 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { getApiErrorMessage } from '@/lib/api-error';
-import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
 import { SectionScheduleViewer } from '@/components/shared/SectionScheduleViewer';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { Section } from '@/types/section';
@@ -26,6 +27,8 @@ import {
   AdminPageShell,
   AdminSectionCard,
 } from '@/components/admin/AdminPageShell';
+import { AdminLifecycleDialog } from '@/components/admin/AdminLifecycleDialog';
+import type { AcademicPeriodKey } from '@/types/admin-lifecycle';
 
 function getInitials(firstName?: string, lastName?: string) {
   const firstInitial = firstName?.trim()?.charAt(0) || '';
@@ -42,17 +45,24 @@ export default function AdminSectionRosterPage() {
   const [roster, setRoster] = useState<RosterStudent[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedStudent, setSelectedStudent] = useState<RosterStudent | null>(null);
-  const [confirmation, setConfirmation] = useState<ConfirmationDialogConfig | null>(null);
+  const [lifecycleStudent, setLifecycleStudent] = useState<RosterStudent | null>(null);
+  const [destinationSectionId, setDestinationSectionId] = useState('');
+  const [destinationSections, setDestinationSections] = useState<Section[]>([]);
+  const [activePeriod, setActivePeriod] = useState<AcademicPeriodKey>('Q1');
 
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [sectionRes, rosterRes] = await Promise.all([
+      const [sectionRes, rosterRes, sectionsRes, academicStateRes] = await Promise.all([
         sectionService.getById(sectionId),
         sectionService.getRoster(sectionId),
+        sectionService.getAll({ isActive: 'true', limit: 100 }),
+        academicStateService.getCurrent(),
       ]);
       setSection(sectionRes.data);
       setRoster(rosterRes.data || []);
+      setDestinationSections(sectionsRes.data || []);
+      setActivePeriod(academicStateRes.data.quarter as AcademicPeriodKey);
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Failed to load roster'));
     } finally {
@@ -64,30 +74,9 @@ export default function AdminSectionRosterPage() {
     fetchData();
   }, [fetchData]);
 
-  const handleRemoveStudent = (student: RosterStudent) => {
-    setConfirmation({
-      title: 'Remove student from section?',
-      description: 'This will remove the student from the current section roster.',
-      confirmLabel: 'Remove Student',
-      tone: 'danger',
-      details: (
-        <p className="text-sm font-black text-[var(--admin-text-strong)]">
-          {student.firstName} {student.lastName}
-        </p>
-      ),
-      onConfirm: async () => {
-        try {
-          await sectionService.removeStudent(sectionId, student.id);
-          toast.success('Student removed');
-          setRoster((prev) => prev.filter((entry) => entry.id !== student.id));
-          if (selectedStudent?.id === student.id) {
-            setSelectedStudent(null);
-          }
-        } catch (error) {
-          toast.error(getApiErrorMessage(error, 'Failed to remove student'));
-        }
-      },
-    });
+  const openLifecycle = (student: RosterStudent) => {
+    setDestinationSectionId('');
+    setLifecycleStudent(student);
   };
 
   const dedupedRoster = useMemo(() => {
@@ -167,7 +156,7 @@ export default function AdminSectionRosterPage() {
 
       <AdminSectionCard
         title={`Students (${dedupedRoster.length})`}
-        description="Browse the enrolled students and open or remove entries directly from the roster."
+        description="Browse learners and resolve corrections, withdrawals, or transfers with a reviewed impact preview."
         density="compact"
       >
         {dedupedRoster.length === 0 ? (
@@ -232,8 +221,8 @@ export default function AdminSectionRosterPage() {
                         <Button variant="ghost" size="sm" className="rounded-xl" onClick={() => setSelectedStudent(student)}>
                           View
                         </Button>
-                        <Button variant="ghost" size="sm" className="rounded-xl text-rose-600 hover:bg-rose-50 hover:text-rose-700" onClick={() => handleRemoveStudent(student)}>
-                          Remove
+                        <Button variant="ghost" size="sm" className="rounded-xl text-rose-600 hover:bg-rose-50 hover:text-rose-700" onClick={() => openLifecycle(student)}>
+                          Resolve membership
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -272,7 +261,93 @@ export default function AdminSectionRosterPage() {
         </DialogContent>
       </Dialog>
 
-      <ConfirmationDialog config={confirmation} onClose={() => setConfirmation(null)} />
+      {lifecycleStudent ? (
+        <AdminLifecycleDialog
+          open
+          onOpenChange={(open) => !open && setLifecycleStudent(null)}
+          title="Resolve student membership"
+          description="Choose the real-world outcome first. The preview shows exactly what changes and what academic history stays untouched."
+          targetLabel={`${lifecycleStudent.firstName} ${lifecycleStudent.lastName}`}
+          intents={[
+            {
+              value: 'CORRECT_ENROLLMENT',
+              label: 'Correct erroneous enrollment',
+              description: 'Close a mistaken membership while retaining an append-only correction record.',
+            },
+            {
+              value: 'WITHDRAW',
+              label: 'Withdraw from school',
+              description: 'Close current memberships as a withdrawal and preserve submitted work.',
+            },
+            {
+              value: 'TRANSFER_SECTION',
+              label: 'Transfer to another section',
+              description: 'Create compatible destination memberships before closing the source.',
+            },
+          ]}
+          renderIntentFields={(intent) =>
+            intent === 'TRANSFER_SECTION' ? (
+              <select
+                aria-label="Destination section"
+                value={destinationSectionId}
+                onChange={(event) => setDestinationSectionId(event.target.value)}
+                className="admin-select mt-3 w-full"
+              >
+                <option value="">Choose destination section</option>
+                {destinationSections
+                  .filter(
+                    (entry) =>
+                      entry.id !== sectionId &&
+                      entry.isActive &&
+                      entry.schoolYear === section?.schoolYear &&
+                      entry.gradeLevel === section?.gradeLevel,
+                  )
+                  .map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.name}
+                    </option>
+                  ))}
+              </select>
+            ) : null
+          }
+          canPreview={(intent) =>
+            intent !== 'TRANSFER_SECTION' || Boolean(destinationSectionId)
+          }
+          preview={async (intent) =>
+            (
+              await adminLifecycleService.previewStudent({
+                studentId: lifecycleStudent.id,
+                sectionId,
+                resolution: intent as 'CORRECT_ENROLLMENT' | 'WITHDRAW' | 'TRANSFER_SECTION',
+                destinationSectionId:
+                  intent === 'TRANSFER_SECTION' ? destinationSectionId : undefined,
+                effectivePeriod: activePeriod,
+              })
+            ).data
+          }
+          execute={async (intent, evidence) =>
+            (
+              await adminLifecycleService.executeStudent({
+                studentId: lifecycleStudent.id,
+                sectionId,
+                resolution: intent as 'CORRECT_ENROLLMENT' | 'WITHDRAW' | 'TRANSFER_SECTION',
+                destinationSectionId:
+                  intent === 'TRANSFER_SECTION' ? destinationSectionId : undefined,
+                effectivePeriod: activePeriod,
+                ...evidence,
+              })
+            ).data
+          }
+          onCompleted={() => {
+            setRoster((current) =>
+              current.filter((student) => student.id !== lifecycleStudent.id),
+            );
+            if (selectedStudent?.id === lifecycleStudent.id) {
+              setSelectedStudent(null);
+            }
+          }}
+        />
+      ) : null}
     </AdminPageShell>
   );
 }

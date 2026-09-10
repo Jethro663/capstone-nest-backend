@@ -46,12 +46,20 @@ import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
 import redisConfig from './config/redis.config';
 import ollamaConfig from './config/ollama.config';
+import adminLifecycleConfig from './config/admin-lifecycle.config';
+import { AdminLifecycleModule } from './modules/admin-lifecycle/admin-lifecycle.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [databaseConfig, jwtConfig, redisConfig, ollamaConfig],
+      load: [
+        databaseConfig,
+        jwtConfig,
+        redisConfig,
+        ollamaConfig,
+        adminLifecycleConfig,
+      ],
     }),
     BullModule.forRootAsync({
       inject: [ConfigService],
@@ -109,6 +117,7 @@ import ollamaConfig from './config/ollama.config';
     DiscussionBoardModule,
     AcademicStateModule,
     AppVersionModule,
+    AdminLifecycleModule,
   ],
   providers: [
     {

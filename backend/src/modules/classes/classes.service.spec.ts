@@ -1217,7 +1217,7 @@ describe('ClassesService', () => {
   // =========================================================================
 
   describe('purge', () => {
-    it('deletes an archived class', async () => {
+    it('routes archived-class purge through governed lifecycle review', async () => {
       mockDb.query.classes.findFirst.mockResolvedValue(
         makeClass({ isActive: false }),
       );
@@ -1225,18 +1225,9 @@ describe('ClassesService', () => {
 
       await expect(
         service.purge(CLASS_ID, 'admin-actor-1', ['admin']),
-      ).resolves.not.toThrow();
-      expect(mockDb.delete).toHaveBeenCalledTimes(1);
-      expect(mockAuditService.log).toHaveBeenCalledWith({
-        actorId: 'admin-actor-1',
-        action: 'class.purged',
-        targetType: 'class',
-        targetId: CLASS_ID,
-        metadata: {
-          actorRole: 'admin',
-          previousIsActive: false,
-        },
-      });
+      ).rejects.toThrow('Use the reviewed admin lifecycle');
+      expect(mockDb.delete).not.toHaveBeenCalled();
+      expect(mockAuditService.log).not.toHaveBeenCalled();
     });
 
     it('throws ConflictException when class is still active', async () => {
@@ -2134,6 +2125,18 @@ describe('ClassesService', () => {
   // =========================================================================
 
   describe('toggleActive', () => {
+    it('does not let unrelated section-only enrollments block an empty class archive', async () => {
+      mockDb.query.classes.findFirst
+        .mockResolvedValueOnce(makeClass({ isActive: true }))
+        .mockResolvedValueOnce(makeClass({ isActive: false }));
+      mockDb.query.enrollments.findFirst.mockResolvedValue(null);
+      mockDb.update.mockReturnValue(makeUpdateChain());
+
+      await expect(service.toggleActive(CLASS_ID)).resolves.toEqual(
+        expect.objectContaining({ isActive: false }),
+      );
+    });
+
     it('archives an empty active class while preserving the teacher for history', async () => {
       mockDb.query.classes.findFirst
         .mockResolvedValueOnce(makeClass({ isActive: true }))

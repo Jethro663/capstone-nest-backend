@@ -7,16 +7,18 @@ import {
   type BulkClassLifecycleAction,
   classService,
 } from '@/services/class-service';
+import { academicStateService } from '@/services/academic-state-service';
+import { adminLifecycleService } from '@/services/admin-lifecycle-service';
 import { AdminEmptyState, AdminPageShell, AdminSectionCard } from '@/components/admin/AdminPageShell';
+import { AdminLifecycleDialog } from '@/components/admin/AdminLifecycleDialog';
 import { Button } from '@/components/ui/button';
-import { ConfirmationDialog, type ConfirmationDialogConfig, type ConfirmationTone } from '@/components/shared/ConfirmationDialog';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
 import type { ClassItem } from '@/types/class';
+import type { AcademicPeriodKey, ClassLifecycleResolution } from '@/types/admin-lifecycle';
 
 type StatusTab = 'active' | 'archived';
 
@@ -26,7 +28,7 @@ interface BulkActionOption {
   confirmLabel: string;
   title: string;
   description: string;
-  tone: ConfirmationTone;
+  tone: 'danger';
 }
 
 function formatSchedules(
@@ -50,7 +52,7 @@ function getBulkActions(tab: StatusTab): BulkActionOption[] {
         confirmLabel: 'Purge classes',
         title: 'Permanently delete selected classes?',
         description:
-          'This permanently removes the selected archived classes from the system.',
+          'Review each selected archived class before permanent deletion.',
         tone: 'danger',
       },
     ];
@@ -62,7 +64,7 @@ function getBulkActions(tab: StatusTab): BulkActionOption[] {
       label: 'Archive selected',
       confirmLabel: 'Archive classes',
       title: 'Archive selected classes?',
-      description: 'Selected active classes will move to the archived list, clear assigned teachers, and complete active student enrollments. Archived classes can only be purged.',
+      description: 'Review each class, choose the learner outcome, and preserve teacher ownership and academic history.',
       tone: 'danger',
     },
   ];
@@ -78,10 +80,9 @@ export default function ClassManagementPage() {
   const [schoolYearFilter, setSchoolYearFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
-  const [purgeTarget, setPurgeTarget] = useState<ClassItem | null>(null);
-  const [purgeConfirmText, setPurgeConfirmText] = useState('');
-  const [confirmation, setConfirmation] =
-    useState<ConfirmationDialogConfig | null>(null);
+  const [lifecycleTarget, setLifecycleTarget] = useState<ClassItem | null>(null);
+  const [replacementClassId, setReplacementClassId] = useState('');
+  const [activePeriod, setActivePeriod] = useState<AcademicPeriodKey>('Q1');
 
   const fetchData = useCallback(async (mode: 'initial' | 'table') => {
     try {
@@ -91,8 +92,12 @@ export default function ClassManagementPage() {
         setTableLoading(true);
       }
 
-      const classesRes = await classService.getAll({ limit: 100 });
+      const [classesRes, academicStateRes] = await Promise.all([
+        classService.getAll({ limit: 100 }),
+        academicStateService.getCurrent(),
+      ]);
       setClasses(classesRes.data?.data || []);
+      setActivePeriod(academicStateRes.data.quarter as AcademicPeriodKey);
     } catch {
       toast.error('Failed to load classes');
     } finally {
@@ -190,93 +195,19 @@ export default function ClassManagementPage() {
     setSelectedClassIds(allVisibleSelected ? [] : selectableVisibleIds);
   };
 
-  const runBulkLifecycle = async (
-    action: BulkClassLifecycleAction,
-    classIds: string[],
-  ) => {
-    const result = await classService.bulkLifecycle({ action, classIds });
-    const successCount = result.data.succeeded.length;
-    const failureCount = result.data.failed.length;
-
-    if (successCount > 0) {
-      toast.success(result.message);
-    } else {
-      toast.error(result.message);
-    }
-
-    if (failureCount > 0) {
-      toast.error(
-        result.data.failed[0]?.reason ??
-          'Some selected classes could not be updated.',
-      );
-    }
-
-    setSelectedClassIds([]);
-    await refreshTable();
-  };
-
-  const openSingleActionConfirmation = (
-    classItem: ClassItem,
-    option: BulkActionOption,
-  ) => {
-    setConfirmation({
-      title: option.title,
-      description: option.description,
-      confirmLabel: option.confirmLabel.replace('classes', 'class'),
-      tone: option.tone,
-      details: (
-        <p className="text-sm font-black text-[var(--student-text-strong)]">
-          {classItem.subjectName} ({classItem.subjectCode})
-        </p>
-      ),
-      onConfirm: async () => {
-        await runBulkLifecycle(option.action, [classItem.id]);
-      },
-    });
+  const openSingleActionConfirmation = (classItem: ClassItem) => {
+    setReplacementClassId('');
+    setLifecycleTarget(classItem);
   };
 
   const openBulkConfirmation = (option: BulkActionOption) => {
-    setConfirmation({
-      title: option.title,
-      description: option.description,
-      confirmLabel: option.confirmLabel,
-      tone: option.tone,
-      details: (
-        <div className="space-y-2 text-sm text-[var(--student-text-strong)]">
-          <p className="font-black">{selectedClassIds.length} selected</p>
-          <p className="text-[var(--student-text-muted)]">
-            {selectedClasses
-              .slice(0, 3)
-              .map((classItem) => `${classItem.subjectName} (${classItem.subjectCode})`)
-              .join(', ')}
-            {selectedClasses.length > 3
-              ? ` and ${selectedClasses.length - 3} more`
-              : ''}
-          </p>
-        </div>
-      ),
-      onConfirm: async () => {
-        await runBulkLifecycle(option.action, selectedClassIds);
-      },
-    });
-  };
-
-  const handlePurge = async () => {
-    if (!purgeTarget) return;
-    const expected = `${purgeTarget.subjectName} (${purgeTarget.subjectCode})`;
-
-    if (purgeConfirmText.trim() !== expected) {
-      toast.error('Confirmation text does not match');
-      return;
-    }
-
-    try {
-      await runBulkLifecycle('purge', [purgeTarget.id]);
-      setPurgeTarget(null);
-      setPurgeConfirmText('');
-    } catch {
-      toast.error('Failed to delete class');
-    }
+    const next = selectedClasses[0];
+    if (!next) return;
+    toast.info(
+      `${selectedClasses.length} selected. Review begins with ${next.subjectName}; failed or unreviewed classes stay selected.`,
+    );
+    void option;
+    openSingleActionConfirmation(next);
   };
 
   if (initialLoading) {
@@ -553,9 +484,7 @@ export default function ClassManagementPage() {
                             <button
                               type="button"
                               className="admin-icon-button"
-                              onClick={() =>
-                                openSingleActionConfirmation(classItem, archiveOption)
-                              }
+                              onClick={() => openSingleActionConfirmation(classItem)}
                               title="Archive class"
                             >
                               <Archive className="h-4 w-4" />
@@ -566,8 +495,8 @@ export default function ClassManagementPage() {
                               type="button"
                               className="admin-icon-button"
                               onClick={() => {
-                                setPurgeTarget(classItem);
-                                setPurgeConfirmText('');
+                                setReplacementClassId('');
+                                setLifecycleTarget(classItem);
                               }}
                               title="Purge class"
                             >
@@ -585,67 +514,129 @@ export default function ClassManagementPage() {
         )}
       </AdminSectionCard>
 
-      <ConfirmationDialog
-        config={confirmation}
-        onClose={() => setConfirmation(null)}
-      />
-
-      <Dialog
-        open={!!purgeTarget}
-        onOpenChange={(open) => {
-          if (!open) {
-            setPurgeTarget(null);
-            setPurgeConfirmText('');
+      {lifecycleTarget ? (
+        <AdminLifecycleDialog
+          open
+          onOpenChange={(open) => !open && setLifecycleTarget(null)}
+          title={
+            lifecycleTarget.isActive
+              ? 'Archive class with a learner outcome'
+              : 'Permanently delete archived class'
           }
-        }}
-      >
-        <DialogContent variant="admin" className="rounded-[1.6rem] border-white/40 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(236,253,245,0.92))] shadow-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-rose-600">
-              Permanently Delete Class
-            </DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete{' '}
-              <strong>{purgeTarget?.subjectName}</strong>? This cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3 text-sm">
-            <p>Type this class label to confirm:</p>
-            <p className="font-mono text-muted-foreground">
-              {purgeTarget?.subjectName} ({purgeTarget?.subjectCode})
-            </p>
-            <Input
-              value={purgeConfirmText}
-              onChange={(event) => setPurgeConfirmText(event.target.value)}
-              placeholder="Type class label here..."
-              className="admin-input"
-            />
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              className="admin-button-outline rounded-xl font-black"
-              onClick={() => {
-                setPurgeTarget(null);
-                setPurgeConfirmText('');
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              className="rounded-xl font-black"
-              onClick={handlePurge}
-              disabled={
-                purgeConfirmText !==
-                `${purgeTarget?.subjectName} (${purgeTarget?.subjectCode})`
-              }
-            >
-              Permanently Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          description={
+            lifecycleTarget.isActive
+              ? 'Only this class is evaluated. Section-only and sibling-class memberships are left unchanged.'
+              : 'Deletion is allowed only when the archived class has no retained academic or lifecycle evidence.'
+          }
+          targetLabel={`${lifecycleTarget.subjectName} (${lifecycleTarget.subjectCode})`}
+          permanent={!lifecycleTarget.isActive}
+          intents={
+            lifecycleTarget.isActive
+              ? [
+                  {
+                    value: 'ARCHIVE_EMPTY',
+                    label: 'Archive empty class',
+                    description: 'Use when this class has no active learner memberships.',
+                  },
+                  {
+                    value: 'COMPLETE',
+                    label: 'Complete memberships',
+                    description: 'Mark active class memberships completed and preserve all evidence.',
+                  },
+                  {
+                    value: 'DROP',
+                    label: 'Drop memberships',
+                    description: 'Close active class memberships as withdrawals.',
+                  },
+                  {
+                    value: 'TRANSFER',
+                    label: 'Transfer to replacement class',
+                    description: 'Create compatible replacement memberships before archiving.',
+                  },
+                ]
+              : [
+                  {
+                    value: 'PURGE',
+                    label: 'Permanently delete empty record',
+                    description: 'There is no override when retained evidence exists.',
+                  },
+                ]
+          }
+          renderIntentFields={(intent) =>
+            intent === 'TRANSFER' ? (
+              <select
+                aria-label="Replacement class"
+                value={replacementClassId}
+                onChange={(event) => setReplacementClassId(event.target.value)}
+                className="admin-select mt-3 w-full"
+              >
+                <option value="">Choose replacement class</option>
+                {classes
+                  .filter(
+                    (entry) =>
+                      entry.id !== lifecycleTarget.id &&
+                      entry.isActive &&
+                      entry.sectionId === lifecycleTarget.sectionId &&
+                      entry.schoolYear === lifecycleTarget.schoolYear &&
+                      entry.subjectCode.trim().toUpperCase() ===
+                        lifecycleTarget.subjectCode.trim().toUpperCase(),
+                  )
+                  .map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.subjectName} · {entry.section?.name ?? 'No section'}
+                    </option>
+                  ))}
+              </select>
+            ) : null
+          }
+          canPreview={(intent) => intent !== 'TRANSFER' || Boolean(replacementClassId)}
+          preview={async (intent) =>
+            lifecycleTarget.isActive
+              ? (
+                  await adminLifecycleService.previewClass({
+                    classId: lifecycleTarget.id,
+                    resolution: intent as ClassLifecycleResolution,
+                    replacementClassId: intent === 'TRANSFER' ? replacementClassId : undefined,
+                    effectivePeriod: activePeriod,
+                  })
+                ).data
+              : (
+                  await adminLifecycleService.previewPurge({
+                    targetType: 'CLASS',
+                    targetId: lifecycleTarget.id,
+                  })
+                ).data
+          }
+          execute={async (intent, evidence) =>
+            lifecycleTarget.isActive
+              ? (
+                  await adminLifecycleService.executeClass({
+                    classId: lifecycleTarget.id,
+                    resolution: intent as ClassLifecycleResolution,
+                    replacementClassId: intent === 'TRANSFER' ? replacementClassId : undefined,
+                    effectivePeriod: activePeriod,
+                    ...evidence,
+                  })
+                ).data
+              : (
+                  await adminLifecycleService.executePurge({
+                    targetType: 'CLASS',
+                    targetId: lifecycleTarget.id,
+                    ...evidence,
+                  })
+                ).data
+          }
+          onCompleted={async () => {
+            toast.success(
+              lifecycleTarget.isActive ? 'Class archived' : 'Class permanently deleted',
+            );
+            setSelectedClassIds((current) =>
+              current.filter((id) => id !== lifecycleTarget.id),
+            );
+            await refreshTable();
+          }}
+        />
+      ) : null}
     </AdminPageShell>
   );
 }
