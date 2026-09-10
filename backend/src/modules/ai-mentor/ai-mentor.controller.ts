@@ -31,7 +31,10 @@ import {
 import { AiProxyService } from './ai-proxy.service';
 import { AiGenerationQueueService } from './ai-generation-queue.service';
 import { ChatRequestDto } from './DTO/chat.dto';
-import { AdminAnalyticsChatRequestDto } from './DTO/admin-chat.dto';
+import {
+  AdminAnalyticsChatRequestDto,
+  AdminAnalyticsSessionUpdateDto,
+} from './DTO/admin-chat.dto';
 import { MentorExplainDto } from './DTO/mentor-explain.dto';
 import {
   ExtractModuleDto,
@@ -2301,6 +2304,35 @@ export class AiMentorController {
       `/api/ai/admin/sessions/${sessionId}`,
     );
     return this.adminAnalyticsChatService.getSession(user, sessionId);
+  }
+
+  @Patch('admin/sessions/:sessionId')
+  @Roles(RoleName.Student, RoleName.Teacher, RoleName.Admin)
+  @ApiOperation({ summary: 'Rename an admin analytics chat session' })
+  async renameAdminSession(
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @Body() dto: AdminAnalyticsSessionUpdateDto,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    await this.assertAdminAnalyticsAccess(
+      user,
+      `/api/ai/admin/sessions/${sessionId}`,
+    );
+    return this.adminAnalyticsChatService.renameSession(user, sessionId, dto);
+  }
+
+  @Delete('admin/sessions/:sessionId')
+  @Roles(RoleName.Student, RoleName.Teacher, RoleName.Admin)
+  @ApiOperation({ summary: 'Delete an admin analytics chat session' })
+  async deleteAdminSession(
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    await this.assertAdminAnalyticsAccess(
+      user,
+      `/api/ai/admin/sessions/${sessionId}`,
+    );
+    return this.adminAnalyticsChatService.deleteSession(user, sessionId);
   }
 
   @Post('teacher/interventions/:caseId/recommend')

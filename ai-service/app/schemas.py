@@ -63,6 +63,12 @@ class AdminChatRequest(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class AdminSessionUpdateRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=80)
+
+    model_config = {"str_strip_whitespace": True, "extra": "forbid"}
+
+
 # ---------------------------------------------------------------------------
 # Extraction
 # ---------------------------------------------------------------------------

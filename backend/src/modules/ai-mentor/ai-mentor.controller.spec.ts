@@ -56,6 +56,8 @@ const mockAdminAnalyticsChat = {
   chat: jest.fn(),
   history: jest.fn(),
   getSession: jest.fn(),
+  renameSession: jest.fn(),
+  deleteSession: jest.fn(),
   logDeniedAttempt: jest.fn(),
 };
 const mockTeacherAiJobs = {
@@ -117,6 +119,8 @@ describe('AiMentorController', () => {
     mockAdminAnalyticsChat.chat.mockReset();
     mockAdminAnalyticsChat.history.mockReset();
     mockAdminAnalyticsChat.getSession.mockReset();
+    mockAdminAnalyticsChat.renameSession.mockReset();
+    mockAdminAnalyticsChat.deleteSession.mockReset();
     mockAdminAnalyticsChat.logDeniedAttempt.mockReset();
     mockAdminAnalyticsChat.logDeniedAttempt.mockResolvedValue(undefined);
     mockTeacherAiJobs.listTeacherJobs.mockReset();
@@ -2113,6 +2117,55 @@ describe('AiMentorController', () => {
           messages: [],
         },
       });
+    });
+  });
+
+  describe('renameAdminSession()', () => {
+    it('should delegate an admin-owned conversation rename', async () => {
+      const response = {
+        success: true,
+        message: 'Admin assistant conversation renamed.',
+        data: {
+          sessionId: '11111111-1111-1111-1111-111111111111',
+          title: 'Weekly operations',
+        },
+      };
+      mockAdminAnalyticsChat.renameSession.mockResolvedValue(response);
+
+      const result = await controller.renameAdminSession(
+        '11111111-1111-1111-1111-111111111111',
+        { title: 'Weekly operations' },
+        ADMIN_USER,
+      );
+
+      expect(mockAdminAnalyticsChat.renameSession).toHaveBeenCalledWith(
+        ADMIN_USER,
+        '11111111-1111-1111-1111-111111111111',
+        { title: 'Weekly operations' },
+      );
+      expect(result).toEqual(response);
+    });
+  });
+
+  describe('deleteAdminSession()', () => {
+    it('should delegate an admin-owned conversation deletion', async () => {
+      const response = {
+        success: true,
+        message: 'Admin assistant conversation deleted.',
+        data: { sessionId: '11111111-1111-1111-1111-111111111111' },
+      };
+      mockAdminAnalyticsChat.deleteSession.mockResolvedValue(response);
+
+      const result = await controller.deleteAdminSession(
+        '11111111-1111-1111-1111-111111111111',
+        ADMIN_USER,
+      );
+
+      expect(mockAdminAnalyticsChat.deleteSession).toHaveBeenCalledWith(
+        ADMIN_USER,
+        '11111111-1111-1111-1111-111111111111',
+      );
+      expect(result).toEqual(response);
     });
   });
 

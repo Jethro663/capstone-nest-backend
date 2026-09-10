@@ -16,8 +16,65 @@ export interface AdminAnalyticsChart {
 
 export interface AdminAnalyticsSource {
   source: string;
+  label?: string | null;
   filters: Record<string, unknown>;
   window?: string | null;
+  recordCount?: number | null;
+  total?: number | null;
+  truncated?: boolean;
+  href?: string | null;
+}
+
+export type AdminAssistantTimeRange =
+  | 'current_period'
+  | 'last_7_days'
+  | 'last_30_days'
+  | 'all_available';
+
+export interface AdminAssistantScope {
+  timeRange: AdminAssistantTimeRange;
+  schoolYear?: string | null;
+  gradingPeriod?: 'Q1' | 'Q2' | 'Q3' | 'Q4' | null;
+  periodLabel?: string | null;
+  classId?: string;
+  sectionId?: string;
+  studentId?: string;
+  teacherId?: string;
+}
+
+export interface AdminAssistantDataView {
+  title: string;
+  columns: string[];
+  rows: string[][];
+  total: number | null;
+  truncated: boolean;
+}
+
+export type AdminAssistantActionTarget =
+  | 'reports'
+  | 'evaluations'
+  | 'audit'
+  | 'diagnostics'
+  | 'announcements'
+  | 'users'
+  | 'sections'
+  | 'classes'
+  | 'system_settings'
+  | 'roster_import';
+
+export interface AdminAssistantDraft {
+  title: string;
+  body: string;
+  audience: 'all' | 'students' | 'teachers' | 'admins';
+}
+
+export interface AdminAssistantAction {
+  kind: 'navigate' | 'draft';
+  target: AdminAssistantActionTarget;
+  label: string;
+  description: string;
+  href: string;
+  draft?: AdminAssistantDraft | null;
 }
 
 export interface AdminAnalyticsHistorySummary {
@@ -36,6 +93,10 @@ export interface AdminAnalyticsSessionMessage {
   createdAt: string;
   chart?: AdminAnalyticsChart | null;
   sources?: AdminAnalyticsSource[];
+  dataView?: AdminAssistantDataView | null;
+  suggestedPrompts?: string[];
+  action?: AdminAssistantAction | null;
+  scope?: AdminAssistantScope | null;
 }
 
 export interface AdminAnalyticsSessionDetail {
@@ -48,6 +109,14 @@ export interface AdminAnalyticsSessionDetail {
 export interface AdminAnalyticsChatRequest {
   message: string;
   sessionId?: string | null;
+  scope?: Pick<
+    AdminAssistantScope,
+    | 'timeRange'
+    | 'classId'
+    | 'sectionId'
+    | 'studentId'
+    | 'teacherId'
+  >;
 }
 
 export interface AdminAnalyticsChatResponse {
@@ -55,6 +124,10 @@ export interface AdminAnalyticsChatResponse {
   sessionId: string | null;
   chart?: AdminAnalyticsChart | null;
   sources: AdminAnalyticsSource[];
+  dataView: AdminAssistantDataView | null;
+  suggestedPrompts: string[];
+  action: AdminAssistantAction | null;
+  scope: AdminAssistantScope | null;
 }
 
 export interface AdminAnalyticsHealthStatus {

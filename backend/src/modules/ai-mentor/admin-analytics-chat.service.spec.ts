@@ -8,6 +8,7 @@ import { ReportsService } from '../reports/reports.service';
 import { AnalyticsService } from '../analytics/analytics.service';
 import { PerformanceService } from '../performance/performance.service';
 import { LxpService } from '../lxp/lxp.service';
+import { AcademicPolicyService } from '../academic-state/academic-policy.service';
 
 const ADMIN_USER = {
   id: 'admin-1',
@@ -40,10 +41,30 @@ describe('AdminAnalyticsChatService', () => {
   const mockLxpService = {
     listSystemEvaluations: jest.fn(),
   };
+  const mockAcademicPolicyService = {
+    currentState: jest.fn(),
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
     mockAudit.log.mockResolvedValue(undefined);
+    mockAcademicPolicyService.currentState.mockResolvedValue({
+      id: 'academic-state',
+      schoolYear: '2026-2027',
+      quarter: 'Q3',
+      policy: {
+        periods: [
+          { key: 'Q1', label: 'Term 1' },
+          { key: 'Q2', label: 'Term 2' },
+          { key: 'Q3', label: 'Term 3' },
+        ],
+      },
+      periods: [
+        { key: 'Q1', label: 'Term 1' },
+        { key: 'Q2', label: 'Term 2' },
+        { key: 'Q3', label: 'Term 3' },
+      ],
+    });
     mockAdminService.getDashboardOverview.mockResolvedValue({
       stats: { totalUsers: 12, activeClasses: 4 },
       usageSummary: { topActions: [] },
@@ -77,6 +98,10 @@ describe('AdminAnalyticsChatService', () => {
       ],
       filters: {},
       generatedAt: '2026-04-13T00:00:00.000Z',
+      total: 1,
+      page: 1,
+      limit: 25,
+      totalPages: 1,
     });
     mockReportsService.getAssessmentSummary.mockResolvedValue({
       data: [
@@ -89,11 +114,16 @@ describe('AdminAnalyticsChatService', () => {
       ],
       filters: {},
       generatedAt: '2026-04-13T00:00:00.000Z',
+      total: 1,
     });
     mockReportsService.getInterventionParticipation.mockResolvedValue({
       data: [],
       filters: {},
       generatedAt: '2026-04-13T00:00:00.000Z',
+      total: 0,
+      page: 1,
+      limit: 25,
+      totalPages: 0,
     });
     mockReportsService.getSystemUsage.mockResolvedValue({
       data: {
@@ -160,53 +190,73 @@ describe('AdminAnalyticsChatService', () => {
         { provide: AnalyticsService, useValue: mockAnalyticsService },
         { provide: PerformanceService, useValue: mockPerformanceService },
         { provide: LxpService, useValue: mockLxpService },
+        {
+          provide: AcademicPolicyService,
+          useValue: mockAcademicPolicyService,
+        },
       ],
     }).compile();
 
     service = module.get(AdminAnalyticsChatService);
   });
 
-  it('builds scoped analytics context and forwards admin chat to ai-service', async () => {
+  it('fetches only relevant data and forwards provenance with server-derived scope', async () => {
     const result = await service.chat(ADMIN_USER, {
-      message: 'Show me current at-risk trends.',
+      message: 'Show unusual audit activity this week.',
+      scope: { timeRange: 'last_7_days' },
     });
 
-    expect(mockAdminService.getDashboardOverview).toHaveBeenCalled();
+    expect(mockAcademicPolicyService.currentState).toHaveBeenCalled();
     expect(mockAdminService.getAuditLogs).toHaveBeenCalledWith({
-      limit: 10,
+      dateFrom: expect.any(Date),
+      dateTo: expect.any(Date),
+      limit: 25,
       page: 1,
     });
-    expect(mockReportsService.getStudentPerformance).toHaveBeenCalledWith({
-      limit: 12,
+    expect(mockReportsService.getSystemUsage).toHaveBeenCalledWith({
+      dateFrom: expect.any(Date),
+      dateTo: expect.any(Date),
     });
-    expect(mockReportsService.getAssessmentSummary).toHaveBeenCalledWith({
-      limit: 12,
-    });
+    expect(mockAdminService.getDashboardOverview).not.toHaveBeenCalled();
+    expect(mockReportsService.getStudentPerformance).not.toHaveBeenCalled();
+    expect(mockReportsService.getAssessmentSummary).not.toHaveBeenCalled();
     expect(
       mockReportsService.getInterventionParticipation,
-    ).toHaveBeenCalledWith({ limit: 12 });
-    expect(mockReportsService.getSystemUsage).toHaveBeenCalledWith({});
-    expect(mockAnalyticsService.getAdminOverview).toHaveBeenCalled();
-    expect(mockPerformanceService.getAdminAnalytics).toHaveBeenCalledWith(
-      ADMIN_USER.id,
-      ADMIN_USER.roles,
-    );
-    expect(mockLxpService.listSystemEvaluations).toHaveBeenCalledWith(
-      { userId: ADMIN_USER.id, roles: ADMIN_USER.roles },
-      {},
-    );
+    ).not.toHaveBeenCalled();
+    expect(mockAnalyticsService.getAdminOverview).not.toHaveBeenCalled();
+    expect(mockPerformanceService.getAdminAnalytics).not.toHaveBeenCalled();
+    expect(mockLxpService.listSystemEvaluations).not.toHaveBeenCalled();
     expect(mockProxy.forward).toHaveBeenCalledWith(
       'POST',
       '/admin/chat',
       ADMIN_USER,
       expect.objectContaining({
-        message: 'Show me current at-risk trends.',
+        message: 'Show unusual audit activity this week.',
         context: expect.objectContaining({
-          overview: expect.any(Object),
+          selectedSources: ['audit', 'systemUsage'],
           audit: expect.any(Object),
-          reports: expect.any(Object),
-          evaluations: expect.any(Object),
-          performance: expect.any(Object),
+          reports: {
+            systemUsage: expect.any(Object),
+          },
+          scope: expect.objectContaining({
+            timeRange: 'last_7_days',
+            schoolYear: '2026-2027',
+            gradingPeriod: 'Q3',
+            periodLabel: 'Term 3',
+          }),
+          provenance: expect.arrayContaining([
+            expect.objectContaining({
+              source: 'audit-log',
+              href: '/dashboard/admin/audit',
+              recordCount: 1,
+              total: 1,
+              truncated: false,
+            }),
+            expect.objectContaining({
+              source: 'system-usage-report',
+              href: '/dashboard/admin/reports',
+            }),
+          ]),
         }),
       }),
     );
@@ -232,5 +282,102 @@ describe('AdminAnalyticsChatService', () => {
 
     expect(mockProxy.forward).not.toHaveBeenCalled();
     expect(mockReportsService.getStudentPerformance).not.toHaveBeenCalled();
+  });
+
+  it('applies date and class scope to evaluation evidence', async () => {
+    await service.chat(ADMIN_USER, {
+      message: 'Summarize evaluation feedback from last week.',
+      scope: {
+        timeRange: 'last_7_days',
+        classId: '11111111-1111-4111-8111-111111111111',
+      },
+    });
+
+    expect(mockLxpService.listSystemEvaluations).toHaveBeenCalledWith(
+      { userId: ADMIN_USER.id, roles: ADMIN_USER.roles },
+      {
+        aiClassId: '11111111-1111-4111-8111-111111111111',
+        from: expect.any(String),
+        to: expect.any(String),
+      },
+    );
+    expect(mockProxy.forward).toHaveBeenCalledWith(
+      'POST',
+      '/admin/chat',
+      ADMIN_USER,
+      expect.objectContaining({
+        context: expect.objectContaining({
+          provenance: expect.arrayContaining([
+            expect.objectContaining({
+              source: 'system-evaluations',
+              filters: expect.objectContaining({
+                aiClassId: '11111111-1111-4111-8111-111111111111',
+                from: expect.any(String),
+                to: expect.any(String),
+              }),
+            }),
+          ]),
+        }),
+      }),
+    );
+  });
+
+  it('renames an owned conversation through the AI service and writes an audit event', async () => {
+    mockProxy.forward.mockResolvedValueOnce({
+      success: true,
+      message: 'Admin assistant conversation renamed.',
+      data: {
+        sessionId: '11111111-1111-1111-1111-111111111111',
+        title: 'Weekly operations',
+      },
+    });
+
+    await service.renameSession(
+      ADMIN_USER,
+      '11111111-1111-1111-1111-111111111111',
+      { title: 'Weekly operations' },
+    );
+
+    expect(mockProxy.forward).toHaveBeenCalledWith(
+      'PATCH',
+      '/admin/sessions/11111111-1111-1111-1111-111111111111',
+      ADMIN_USER,
+      { title: 'Weekly operations' },
+    );
+    expect(mockAudit.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorId: ADMIN_USER.id,
+        action: 'admin_ai_session_renamed',
+        targetType: 'ai_admin_chat',
+        targetId: '11111111-1111-1111-1111-111111111111',
+      }),
+    );
+  });
+
+  it('deletes an owned conversation through the AI service and writes an audit event', async () => {
+    mockProxy.forward.mockResolvedValueOnce({
+      success: true,
+      message: 'Admin assistant conversation deleted.',
+      data: { sessionId: '11111111-1111-1111-1111-111111111111' },
+    });
+
+    await service.deleteSession(
+      ADMIN_USER,
+      '11111111-1111-1111-1111-111111111111',
+    );
+
+    expect(mockProxy.forward).toHaveBeenCalledWith(
+      'DELETE',
+      '/admin/sessions/11111111-1111-1111-1111-111111111111',
+      ADMIN_USER,
+    );
+    expect(mockAudit.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorId: ADMIN_USER.id,
+        action: 'admin_ai_session_deleted',
+        targetType: 'ai_admin_chat',
+        targetId: '11111111-1111-1111-1111-111111111111',
+      }),
+    );
   });
 });

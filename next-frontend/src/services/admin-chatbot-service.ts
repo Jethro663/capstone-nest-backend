@@ -14,6 +14,11 @@ import type {
   AdminAnalyticsSessionDetail,
   AdminAnalyticsSessionMessage,
   AdminAnalyticsSource,
+  AdminAssistantAction,
+  AdminAssistantActionTarget,
+  AdminAssistantDataView,
+  AdminAssistantScope,
+  AdminAssistantTimeRange,
 } from '@/types/admin-chatbot';
 
 const DIRECT_ADMIN_CHAT_TIMEOUT_MS = 70_000;
@@ -23,6 +28,26 @@ type Envelope<T> = {
   message?: string;
   data: T;
 };
+
+const ADMIN_ACTION_ROUTES: Record<AdminAssistantActionTarget, string> = {
+  reports: '/dashboard/admin/reports',
+  evaluations: '/dashboard/admin/evaluations',
+  audit: '/dashboard/admin/audit',
+  diagnostics: '/dashboard/admin/diagnostics',
+  announcements: '/dashboard/admin/announcements',
+  users: '/dashboard/admin/users',
+  sections: '/dashboard/admin/sections',
+  classes: '/dashboard/admin/classes',
+  system_settings: '/dashboard/admin/system-settings',
+  roster_import: '/dashboard/admin/roster-import',
+};
+
+const ADMIN_TIME_RANGES = new Set<AdminAssistantTimeRange>([
+  'current_period',
+  'last_7_days',
+  'last_30_days',
+  'all_available',
+]);
 
 function normalizeEnvelope<T>(payload: unknown): Envelope<T> {
   if (payload && typeof payload === 'object' && 'data' in payload) {
@@ -117,14 +142,169 @@ function normalizeSources(payload: unknown): AdminAnalyticsSource[] {
 
     normalized.push({
       source: source.trim(),
+      label:
+        typeof record.label === 'string' && record.label.trim()
+          ? record.label.trim()
+          : source.trim(),
       filters:
         record.filters && typeof record.filters === 'object'
           ? (record.filters as Record<string, unknown>)
           : {},
       window: typeof record.window === 'string' ? record.window : null,
+      recordCount:
+        typeof record.recordCount === 'number' && record.recordCount >= 0
+          ? record.recordCount
+          : null,
+      total:
+        typeof record.total === 'number' && record.total >= 0
+          ? record.total
+          : null,
+      truncated: record.truncated === true,
+      href:
+        typeof record.href === 'string' &&
+        record.href.startsWith('/dashboard/admin')
+          ? record.href
+          : null,
     });
   }
   return normalized;
+}
+
+function normalizeScope(payload: unknown): AdminAssistantScope | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const record = payload as Record<string, unknown>;
+  const timeRange = record.timeRange;
+  if (
+    typeof timeRange !== 'string' ||
+    !ADMIN_TIME_RANGES.has(timeRange as AdminAssistantTimeRange)
+  ) {
+    return null;
+  }
+  const gradingPeriod = record.gradingPeriod;
+  return {
+    timeRange: timeRange as AdminAssistantTimeRange,
+    schoolYear:
+      typeof record.schoolYear === 'string' ? record.schoolYear : null,
+    gradingPeriod:
+      gradingPeriod === 'Q1' ||
+      gradingPeriod === 'Q2' ||
+      gradingPeriod === 'Q3' ||
+      gradingPeriod === 'Q4'
+        ? gradingPeriod
+        : null,
+    periodLabel:
+      typeof record.periodLabel === 'string' ? record.periodLabel : null,
+    ...(typeof record.classId === 'string' ? { classId: record.classId } : {}),
+    ...(typeof record.sectionId === 'string'
+      ? { sectionId: record.sectionId }
+      : {}),
+    ...(typeof record.studentId === 'string'
+      ? { studentId: record.studentId }
+      : {}),
+    ...(typeof record.teacherId === 'string'
+      ? { teacherId: record.teacherId }
+      : {}),
+  };
+}
+
+function normalizeDataView(payload: unknown): AdminAssistantDataView | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const record = payload as Record<string, unknown>;
+  if (typeof record.title !== 'string' || !record.title.trim()) return null;
+  if (!Array.isArray(record.columns) || !Array.isArray(record.rows)) return null;
+  const columns = record.columns
+    .slice(0, 6)
+    .filter((column): column is string => typeof column === 'string')
+    .map((column) => column.trim())
+    .filter(Boolean);
+  if (!columns.length) return null;
+
+  const rows: string[][] = [];
+  for (const row of record.rows.slice(0, 20)) {
+    if (!Array.isArray(row) || row.length !== columns.length) return null;
+    if (!row.every((cell) => typeof cell === 'string')) return null;
+    rows.push(row.map((cell) => cell.trim()));
+  }
+
+  return {
+    title: record.title.trim(),
+    columns,
+    rows,
+    total:
+      typeof record.total === 'number' && record.total >= 0
+        ? record.total
+        : null,
+    truncated: record.truncated === true,
+  };
+}
+
+function normalizeSuggestedPrompts(payload: unknown): string[] {
+  if (!Array.isArray(payload)) return [];
+  const prompts: string[] = [];
+  for (const prompt of payload) {
+    if (typeof prompt !== 'string' || !prompt.trim()) continue;
+    const normalized = prompt.trim().slice(0, 180);
+    if (!prompts.includes(normalized)) prompts.push(normalized);
+    if (prompts.length === 3) break;
+  }
+  return prompts;
+}
+
+function normalizeAction(payload: unknown): AdminAssistantAction | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const record = payload as Record<string, unknown>;
+  const target = record.target;
+  const kind = record.kind;
+  if (
+    typeof target !== 'string' ||
+    !(target in ADMIN_ACTION_ROUTES) ||
+    (kind !== 'navigate' && kind !== 'draft') ||
+    typeof record.label !== 'string' ||
+    !record.label.trim() ||
+    typeof record.description !== 'string' ||
+    !record.description.trim()
+  ) {
+    return null;
+  }
+  const typedTarget = target as AdminAssistantActionTarget;
+  const expectedHref = ADMIN_ACTION_ROUTES[typedTarget];
+  if (record.href !== expectedHref) return null;
+
+  let draft: AdminAssistantAction['draft'] = null;
+  if (kind === 'draft') {
+    if (typedTarget !== 'announcements' || !record.draft || typeof record.draft !== 'object') {
+      return null;
+    }
+    const draftRecord = record.draft as Record<string, unknown>;
+    if (
+      typeof draftRecord.title !== 'string' ||
+      !draftRecord.title.trim() ||
+      typeof draftRecord.body !== 'string' ||
+      !draftRecord.body.trim()
+    ) {
+      return null;
+    }
+    const audience = draftRecord.audience;
+    draft = {
+      title: draftRecord.title.trim().slice(0, 120),
+      body: draftRecord.body.trim().slice(0, 2000),
+      audience:
+        audience === 'students' ||
+        audience === 'teachers' ||
+        audience === 'admins'
+          ? audience
+          : 'all',
+    };
+  }
+
+  return {
+    kind,
+    target: typedTarget,
+    label: record.label.trim().slice(0, 100),
+    description: record.description.trim().slice(0, 280),
+    href: expectedHref,
+    draft,
+  };
 }
 
 function normalizeHistorySummary(payload: unknown): AdminAnalyticsHistorySummary[] {
@@ -193,6 +373,10 @@ function normalizeSessionMessage(payload: unknown): AdminAnalyticsSessionMessage
           : new Date().toISOString(),
     chart: normalizeChart(record.chart),
     sources: normalizeSources(record.sources),
+    dataView: normalizeDataView(record.dataView),
+    suggestedPrompts: normalizeSuggestedPrompts(record.suggestedPrompts),
+    action: normalizeAction(record.action),
+    scope: normalizeScope(record.scope),
   };
 }
 
@@ -254,6 +438,10 @@ function normalizeChatResponse(payload: unknown): AdminAnalyticsChatResponse {
           : null,
     chart: normalizeChart(record.chart),
     sources: normalizeSources(record.sources),
+    dataView: normalizeDataView(record.dataView),
+    suggestedPrompts: normalizeSuggestedPrompts(record.suggestedPrompts),
+    action: normalizeAction(record.action),
+    scope: normalizeScope(record.scope),
   };
 }
 
@@ -334,6 +522,40 @@ export const adminChatbotService = {
   async getSession(sessionId: string): Promise<AdminAnalyticsSessionDetail> {
     const { data } = await api.get(`/ai/admin/sessions/${sessionId}`);
     return normalizeSession(data);
+  },
+
+  async renameSession(
+    sessionId: string,
+    title: string,
+  ): Promise<{ sessionId: string; title: string }> {
+    const { data } = await api.patch(`/ai/admin/sessions/${sessionId}`, {
+      title,
+    });
+    const envelope = normalizeEnvelope<Record<string, unknown>>(data);
+    return {
+      sessionId:
+        typeof envelope.data?.sessionId === 'string'
+          ? envelope.data.sessionId
+          : sessionId,
+      title:
+        typeof envelope.data?.title === 'string' && envelope.data.title.trim()
+          ? envelope.data.title.trim()
+          : title.trim(),
+    };
+  },
+
+  async deleteSession(
+    sessionId: string,
+  ): Promise<{ sessionId: string; deleted: boolean }> {
+    const { data } = await api.delete(`/ai/admin/sessions/${sessionId}`);
+    const envelope = normalizeEnvelope<Record<string, unknown>>(data);
+    return {
+      sessionId:
+        typeof envelope.data?.sessionId === 'string'
+          ? envelope.data.sessionId
+          : sessionId,
+      deleted: envelope.data?.deleted === true,
+    };
   },
 
   async sendMessage(payload: AdminAnalyticsChatRequest): Promise<AdminAnalyticsChatResponse> {

@@ -1,710 +1,1171 @@
-.adminChatbotPage {
-  padding-top: 0;
-  padding-bottom: 0;
-  margin: -1.25rem;
+.adminAssistantPage {
   min-height: calc(100dvh - 5.2rem);
+  margin: -1.25rem;
+  padding: 0;
 }
 
-.adminChatbotPage :global(.admin-page-header) {
+.adminAssistantPage :global(.admin-page-header) {
   display: none;
 }
 
-.adminChatbotRedesign {
+.adminAssistantApp {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(14rem, 15rem) minmax(0, 1fr);
-  min-height: 0;
+  grid-template-columns: 17rem minmax(0, 1fr);
   block-size: calc(100dvh - 5.2rem);
-  overflow: hidden;
-  border: 0;
-  border-radius: 0;
-  background: #ffffff;
-  box-shadow: none;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-sidebar) {
-  display: flex;
-  flex-direction: column;
   min-height: 0;
-  border-right: 1px solid #e4ebf4;
-  background: #f8fafc;
+  overflow: hidden;
+  background: #ffffff;
+  color: #172033;
 }
 
-.adminChatbotRedesign :global(.admin-chatbot-message-icon) {
-  display: inline-flex;
+.adminAssistantApp :global(button),
+.adminAssistantApp :global(input),
+.adminAssistantApp :global(select),
+.adminAssistantApp :global(textarea) {
+  font: inherit;
+}
+
+.adminAssistantApp :global(.admin-assistant-history-shell) {
+  z-index: 30;
+  min-height: 0;
+}
+
+.adminAssistantApp :global(.admin-assistant-history) {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  border-right: 1px solid #e7e9ee;
+  background: #f8f9fb;
+  padding: 1rem 0.85rem;
+}
+
+.adminAssistantApp :global(.admin-assistant-history-top) {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.1rem 0.25rem 0.9rem;
+}
+
+.adminAssistantApp :global(.admin-assistant-history-top p),
+.adminAssistantApp :global(.admin-assistant-header-title p) {
+  margin: 0 0 0.08rem;
+  color: #a20d12;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.adminAssistantApp :global(.admin-assistant-history-top h2),
+.adminAssistantApp :global(.admin-assistant-header-title h2) {
+  margin: 0;
+  color: #1c2433;
+  font-size: 0.98rem;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.adminAssistantApp :global(.admin-assistant-history-top > button) {
+  display: none;
+  width: 2rem;
+  height: 2rem;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-  background: var(--admin-accent);
-  color: #ffffff;
+  border: 0;
+  border-radius: 0.45rem;
+  background: transparent;
+  color: #697386;
 }
 
-.adminChatbotRedesign :global(.admin-chatbot-new-chat) {
-  width: 100%;
-  min-height: 2.4rem;
+.adminAssistantApp :global(.admin-assistant-new) {
+  display: flex;
+  min-height: 2.55rem;
+  align-items: center;
   justify-content: center;
   gap: 0.45rem;
-  border: 0;
-  border-radius: 0.55rem;
-  background: var(--admin-accent);
+  border: 1px solid #d5161c;
+  border-radius: 0.62rem;
+  background: #d5161c;
   color: #ffffff;
-  box-shadow: none;
-  padding-inline: 0.85rem;
   font-size: 0.8rem;
   font-weight: 800;
 }
 
-.adminChatbotRedesign :global(.admin-chatbot-new-chat:hover) {
-  background: var(--admin-accent-strong);
+.adminAssistantApp :global(.admin-assistant-new:hover:not(:disabled)),
+.adminAssistantApp :global(.admin-assistant-send:hover:not(:disabled)) {
+  border-color: #b80f14;
+  background: #b80f14;
 }
 
-.adminChatbotRedesign :global(.admin-chatbot-sidebar-body) {
+.adminAssistantApp :global(.admin-assistant-new:disabled),
+.adminAssistantApp :global(.admin-assistant-send:disabled),
+.adminAssistantApp :global(.admin-assistant-header-new:disabled) {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.adminAssistantApp :global(.admin-assistant-history-search) {
   display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.75rem 0 0.55rem;
+  border: 1px solid #e0e3e9;
+  border-radius: 0.55rem;
+  background: #ffffff;
+  padding: 0.52rem 0.62rem;
+  color: #8a93a3;
+}
+
+.adminAssistantApp :global(.admin-assistant-history-search:focus-within) {
+  border-color: rgba(213, 22, 28, 0.5);
+  box-shadow: 0 0 0 3px rgba(213, 22, 28, 0.08);
+}
+
+.adminAssistantApp :global(.admin-assistant-history-search input) {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #283142;
+  font-size: 0.76rem;
+}
+
+.adminAssistantApp :global(.admin-assistant-history-search input::placeholder) {
+  color: #929aa9;
+}
+
+.adminAssistantApp :global(.admin-assistant-history-list) {
+  display: flex;
+  min-height: 0;
   flex: 1;
   flex-direction: column;
-  gap: 0.9rem;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 0.9rem 0.85rem;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-sidebar-section) {
-  display: grid;
-  gap: 0.65rem;
-  min-height: 0;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-sidebar-section-header) {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-sidebar-section--history) {
-  display: flex;
-  flex-direction: column;
-  flex: 0 0 auto;
-  min-height: 0;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-history-count) {
-  display: inline-flex;
-  min-width: 1.45rem;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid #e4ebf4;
-  border-radius: 999px;
-  background: #ffffff;
-  color: #6f82a1;
-  font-size: 0.68rem;
-  font-weight: 800;
-  padding: 0.08rem 0.45rem;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-section-eyebrow) {
-  margin: 0 0 0.15rem;
-  color: #8da0bf;
-  font-size: 0.62rem;
-  font-weight: 900;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-section-title) {
-  margin: 0;
-  color: #2a3d5c;
-  font-size: 0.78rem;
-  font-weight: 800;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-history-list),
-.adminChatbotRedesign :global(.admin-chatbot-prompt-list) {
-  overflow-y: auto;
-  padding-right: 0.15rem;
-  scrollbar-width: thin;
-  scrollbar-color: #ccd7e6 transparent;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-history-list) {
-  display: flex;
-  flex: 0 1 auto;
-  flex-direction: column;
   gap: 0.3rem;
-  max-height: 12rem;
-  min-height: 0;
+  overflow-y: auto;
+  padding: 0.1rem 0.05rem 1rem;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd1da transparent;
 }
 
-.adminChatbotRedesign :global(.admin-chatbot-history-item) {
-  width: 100%;
+.adminAssistantApp :global(.admin-assistant-history-state) {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0.9rem 0.65rem;
+  color: #778195;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.adminAssistantApp :global(.admin-assistant-history-item) {
+  position: relative;
+  display: flex;
+  align-items: center;
   border: 1px solid transparent;
-  border-radius: 0.55rem;
+  border-radius: 0.58rem;
   background: transparent;
-  padding: 0.68rem 0.7rem;
-  text-align: left;
-  transition:
-    border-color 150ms ease,
-    background-color 150ms ease;
 }
 
-.adminChatbotRedesign :global(.admin-chatbot-history-item:hover),
-.adminChatbotRedesign :global(.admin-chatbot-history-item.is-active) {
-  border-color: #dbe5f1;
+.adminAssistantApp :global(.admin-assistant-history-item:hover),
+.adminAssistantApp :global(.admin-assistant-history-item.is-active) {
+  border-color: #e1e4ea;
   background: #ffffff;
 }
 
-.adminChatbotRedesign :global(.admin-chatbot-history-item.is-active) {
-  box-shadow: inset 3px 0 0 var(--admin-accent);
+.adminAssistantApp :global(.admin-assistant-history-item.is-active::before) {
+  position: absolute;
+  inset: 0.58rem auto 0.58rem -1px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: #d5161c;
+  content: '';
 }
 
-.adminChatbotRedesign :global(.admin-chatbot-history-header) {
+.adminAssistantApp :global(.admin-assistant-history-open) {
   display: flex;
+  min-width: 0;
+  flex: 1;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 0.7rem;
+  gap: 0.55rem;
+  border: 0;
+  background: transparent;
+  padding: 0.68rem 0.45rem 0.68rem 0.7rem;
+  text-align: left;
 }
 
-.adminChatbotRedesign :global(.admin-chatbot-history-title) {
-  margin: 0;
-  color: #1f314d;
-  font-size: 0.78rem;
-  font-weight: 800;
-  line-height: 1.35;
+.adminAssistantApp :global(.admin-assistant-history-open > span) {
+  display: block;
+  min-width: 0;
 }
 
-.adminChatbotRedesign :global(.admin-chatbot-history-time) {
-  color: #95a6bf;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.66rem;
+.adminAssistantApp :global(.admin-assistant-history-open strong),
+.adminAssistantApp :global(.admin-assistant-history-open small) {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.adminChatbotRedesign :global(.admin-chatbot-history-preview) {
-  margin: 0.3rem 0 0;
-  color: #70819c;
-  font-size: 0.72rem;
-  line-height: 1.45;
+.adminAssistantApp :global(.admin-assistant-history-open strong) {
+  color: #293244;
+  font-size: 0.76rem;
+  font-weight: 750;
 }
 
-.adminChatbotRedesign :global(.admin-chatbot-prompt) {
+.adminAssistantApp :global(.admin-assistant-history-open small) {
+  margin-top: 0.2rem;
+  color: #7d8696;
+  font-size: 0.68rem;
+}
+
+.adminAssistantApp :global(.admin-assistant-history-open time) {
+  flex-shrink: 0;
+  color: #9ba2af;
+  font-size: 0.62rem;
+}
+
+.adminAssistantApp :global(.admin-assistant-history-actions) {
+  display: none;
+  flex-shrink: 0;
+  gap: 0.12rem;
+  padding-right: 0.35rem;
+}
+
+.adminAssistantApp :global(.admin-assistant-history-item:hover .admin-assistant-history-actions),
+.adminAssistantApp :global(.admin-assistant-history-item:focus-within .admin-assistant-history-actions) {
+  display: flex;
+}
+
+.adminAssistantApp :global(.admin-assistant-history-actions button),
+.adminAssistantApp :global(.admin-assistant-history-item form button) {
+  display: inline-flex;
+  width: 1.75rem;
+  height: 1.75rem;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: #798294;
+}
+
+.adminAssistantApp :global(.admin-assistant-history-actions button:hover),
+.adminAssistantApp :global(.admin-assistant-history-item form button:hover) {
+  background: #f1f3f6;
+  color: #b80f14;
+}
+
+.adminAssistantApp :global(.admin-assistant-history-item form) {
+  display: flex;
   width: 100%;
-  border: 1px solid #dfe7f1;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.36rem;
+}
+
+.adminAssistantApp :global(.admin-assistant-history-item form input) {
+  min-width: 0;
+  flex: 1;
+  border: 1px solid #d7dbe2;
+  border-radius: 0.42rem;
+  padding: 0.42rem 0.5rem;
+  color: #293244;
+  font-size: 0.74rem;
+  outline: 0;
+}
+
+.adminAssistantApp :global(.admin-assistant-main) {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  background: #ffffff;
+}
+
+.adminAssistantApp :global(.admin-assistant-header) {
+  display: flex;
+  min-height: 4.3rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid #e8eaf0;
+  padding: 0.7rem 1.25rem;
+}
+
+.adminAssistantApp :global(.admin-assistant-header-title),
+.adminAssistantApp :global(.admin-assistant-header-controls),
+.adminAssistantApp :global(.admin-assistant-header-title > div) {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.adminAssistantApp :global(.admin-assistant-header-title) {
+  gap: 0.65rem;
+}
+
+.adminAssistantApp :global(.admin-assistant-header-title > div) {
+  display: block;
+}
+
+.adminAssistantApp :global(.admin-assistant-header-title h2) {
+  max-width: min(34vw, 30rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adminAssistantApp :global(.admin-assistant-brand-mark),
+.adminAssistantApp :global(.admin-assistant-message-mark),
+.adminAssistantApp :global(.admin-assistant-orb) {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  background: #d5161c;
+  color: #ffffff;
+  font-weight: 900;
+}
+
+.adminAssistantApp :global(.admin-assistant-brand-mark) {
+  width: 2.15rem;
+  height: 2.15rem;
+  border-radius: 0.58rem;
+  font-size: 0.86rem;
+}
+
+.adminAssistantApp :global(.admin-assistant-history-toggle) {
+  display: none;
+  width: 2.2rem;
+  height: 2.2rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e0e3e9;
+  border-radius: 0.52rem;
+  background: #ffffff;
+  color: #586275;
+}
+
+.adminAssistantApp :global(.admin-assistant-header-controls) {
+  gap: 0.55rem;
+}
+
+.adminAssistantApp :global(.admin-assistant-scope-control) {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid #e0e3e9;
   border-radius: 0.55rem;
   background: #ffffff;
-  padding: 0.62rem 0.7rem;
-  text-align: left;
-  color: #526986;
+  padding: 0.18rem 0.25rem 0.18rem 0.58rem;
+}
+
+.adminAssistantApp :global(.admin-assistant-scope-control > span) {
+  color: #8a1420;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.adminAssistantApp :global(.admin-assistant-scope-control select) {
+  border: 0;
+  outline: 0;
+  background: transparent;
+  padding: 0.34rem 0.3rem;
+  color: #374052;
+  font-size: 0.74rem;
+  font-weight: 650;
+}
+
+.adminAssistantApp :global(.admin-assistant-header-new) {
+  display: inline-flex;
+  height: 2.35rem;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid #e0e3e9;
+  border-radius: 0.55rem;
+  background: #ffffff;
+  padding: 0 0.7rem;
+  color: #3e485b;
   font-size: 0.74rem;
   font-weight: 750;
-  line-height: 1.45;
-  transition:
-    border-color 150ms ease,
-    color 150ms ease,
-    background-color 150ms ease;
 }
 
-.adminChatbotRedesign :global(.admin-chatbot-prompt:hover) {
-  border-color: #cfd9e8;
-  background: #fdfefe;
-  color: #182a44;
+.adminAssistantApp :global(.admin-assistant-header-new:hover:not(:disabled)),
+.adminAssistantApp :global(.admin-assistant-history-toggle:hover) {
+  border-color: #d5a3a5;
+  background: #fff8f8;
+  color: #b80f14;
 }
 
-.adminChatbotRedesign :global(.admin-chatbot-prompt-list) {
-  max-height: 11.5rem;
+.adminAssistantApp :global(.admin-assistant-outage) {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  border-bottom: 1px solid #f0c7c9;
+  background: #fff6f6;
+  padding: 0.65rem 1.25rem;
+  color: #991b1b;
 }
 
-.adminChatbotRedesign :global(.admin-chatbot-sidebar-footer) {
+.adminAssistantApp :global(.admin-assistant-outage > div) {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.45rem;
+  font-size: 0.75rem;
+}
+
+.adminAssistantApp :global(.admin-assistant-outage strong) {
+  font-weight: 800;
+}
+
+.adminAssistantApp :global(.admin-assistant-outage span) {
+  color: #a84343;
+}
+
+.adminAssistantApp :global(.admin-assistant-outage button) {
+  border: 1px solid #e3aaad;
+  border-radius: 0.42rem;
+  background: #ffffff;
+  padding: 0.34rem 0.62rem;
+  color: #9f1419;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.adminAssistantApp :global(.admin-assistant-thread) {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 1.35rem;
+  overflow-y: auto;
+  padding: 2rem max(1rem, calc((100% - 52rem) / 2));
+  scrollbar-width: thin;
+  scrollbar-color: #cbd1da transparent;
+}
+
+.adminAssistantApp :global(.admin-assistant-welcome) {
   display: grid;
-  gap: 0.28rem;
-  padding: 0.85rem 1rem;
-  border-top: 1px solid #e4ebf4;
+  width: min(100%, 47rem);
+  min-height: 100%;
+  place-content: center;
+  gap: 1.65rem;
+  margin: auto;
+  padding: 1rem 0;
+}
+
+.adminAssistantApp :global(.admin-assistant-welcome-copy) {
+  max-width: 39rem;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.adminAssistantApp :global(.admin-assistant-orb) {
+  width: 3.35rem;
+  height: 3.35rem;
+  margin-bottom: 0.95rem;
+  border-radius: 1rem;
+  box-shadow: 0 8px 22px rgba(171, 13, 20, 0.18);
+  font-size: 1.25rem;
+}
+
+.adminAssistantApp :global(.admin-assistant-welcome-copy > p:first-of-type) {
+  margin: 0 0 0.22rem;
+  color: #b31218;
+  font-size: 0.67rem;
+  font-weight: 850;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.adminAssistantApp :global(.admin-assistant-welcome h2) {
+  margin: 0;
+  color: #181f2c;
+  font-size: clamp(1.45rem, 3vw, 2rem);
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.18;
+}
+
+.adminAssistantApp :global(.admin-assistant-welcome-copy > p:last-child) {
+  max-width: 35rem;
+  margin: 0.65rem auto 0;
+  color: #667085;
+  font-size: 0.86rem;
+  line-height: 1.6;
+}
+
+.adminAssistantApp :global(.admin-assistant-starters) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.adminAssistantApp :global(.admin-assistant-starters button) {
+  display: flex;
+  min-height: 5.4rem;
+  align-items: flex-start;
+  gap: 0.7rem;
+  border: 1px solid #e1e4ea;
+  border-radius: 0.75rem;
+  background: #ffffff;
+  padding: 0.85rem;
+  text-align: left;
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.adminAssistantApp :global(.admin-assistant-starters button:hover) {
+  border-color: #d7a0a3;
+  background: #fffafa;
+}
+
+.adminAssistantApp :global(.admin-assistant-starter-icon) {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.55rem;
+  background: #fff0f0;
+  color: #be1117;
+}
+
+.adminAssistantApp :global(.admin-assistant-starters strong),
+.adminAssistantApp :global(.admin-assistant-starters small) {
+  display: block;
+}
+
+.adminAssistantApp :global(.admin-assistant-starters strong) {
+  color: #2a3343;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.adminAssistantApp :global(.admin-assistant-starters small) {
+  margin-top: 0.27rem;
+  color: #70798a;
+  font-size: 0.71rem;
+  line-height: 1.42;
+}
+
+.adminAssistantApp :global(.admin-assistant-boundary) {
+  margin: -0.45rem auto 0;
+  color: #848c9a;
+  font-size: 0.69rem;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.adminAssistantApp :global(.admin-assistant-message) {
+  display: flex;
+  width: min(100%, 52rem);
+  align-items: flex-start;
+  gap: 0.7rem;
+  margin-inline: auto;
+}
+
+.adminAssistantApp :global(.admin-assistant-message--user) {
+  justify-content: flex-end;
+}
+
+.adminAssistantApp :global(.admin-assistant-message--user > div) {
+  max-width: min(78%, 36rem);
+  border-radius: 0.8rem 0.2rem 0.8rem 0.8rem;
+  background: #f0f2f5;
+  padding: 0.65rem 0.78rem 0.45rem;
+  color: #2d3647;
+}
+
+.adminAssistantApp :global(.admin-assistant-message--user p) {
+  margin: 0;
+  white-space: pre-wrap;
+  font-size: 0.83rem;
+  line-height: 1.55;
+}
+
+.adminAssistantApp :global(.admin-assistant-message--user time) {
+  display: block;
+  margin-top: 0.25rem;
+  color: #9299a5;
+  font-size: 0.6rem;
+  text-align: right;
+}
+
+.adminAssistantApp :global(.admin-assistant-message-mark) {
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 0.52rem;
+  font-size: 0.7rem;
+}
+
+.adminAssistantApp :global(.admin-assistant-message-content) {
+  min-width: 0;
+  flex: 1;
+}
+
+.adminAssistantApp :global(.admin-assistant-message-meta) {
+  display: flex;
+  align-items: center;
+  gap: 0.48rem;
+  margin-bottom: 0.33rem;
+}
+
+.adminAssistantApp :global(.admin-assistant-message-meta strong) {
+  color: #3a4354;
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.adminAssistantApp :global(.admin-assistant-message-meta time) {
+  color: #9aa1ad;
+  font-size: 0.62rem;
+}
+
+.adminAssistantApp :global(.admin-assistant-answer-copy) {
+  color: #2b3444;
+  white-space: pre-wrap;
+  font-size: 0.86rem;
+  line-height: 1.68;
+}
+
+.adminAssistantApp :global(.admin-assistant-data-view),
+.adminAssistantApp :global(.admin-assistant-action),
+.adminAssistantApp :global(.admin-assistant-evidence) {
+  margin-top: 0.9rem;
+  border: 1px solid #e1e4ea;
+  border-radius: 0.7rem;
   background: #ffffff;
 }
 
-.adminChatbotRedesign :global(.admin-chatbot-sidebar-meta) {
+.adminAssistantApp :global(.admin-assistant-data-heading) {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.72rem 0.82rem;
+  border-bottom: 1px solid #eceef2;
+}
+
+.adminAssistantApp :global(.admin-assistant-label) {
+  margin: 0 0 0.08rem;
+  color: #a20d12;
+  font-size: 0.6rem;
+  font-weight: 850;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.adminAssistantApp :global(.admin-assistant-data-heading h3) {
   margin: 0;
-  color: #7d8fa9;
+  color: #2b3444;
+  font-size: 0.79rem;
+  font-weight: 800;
+}
+
+.adminAssistantApp :global(.admin-assistant-sample-note) {
+  border-radius: 999px;
+  background: #fff3dc;
+  padding: 0.22rem 0.5rem;
+  color: #99580a;
+  font-size: 0.63rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.adminAssistantApp :global(.admin-assistant-table-wrap) {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.adminAssistantApp :global(.admin-assistant-table-wrap table) {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.73rem;
+}
+
+.adminAssistantApp :global(.admin-assistant-table-wrap th),
+.adminAssistantApp :global(.admin-assistant-table-wrap td) {
+  border-bottom: 1px solid #eff0f3;
+  padding: 0.58rem 0.8rem;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.adminAssistantApp :global(.admin-assistant-table-wrap th) {
+  background: #fafafa;
+  color: #626b7b;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.adminAssistantApp :global(.admin-assistant-table-wrap td) {
+  color: #343d4d;
+}
+
+.adminAssistantApp :global(.admin-assistant-table-wrap tr:last-child td) {
+  border-bottom: 0;
+}
+
+.adminAssistantApp :global(.admin-assistant-action) {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  border-color: #edc7c9;
+  background: #fffafa;
+  padding: 0.75rem;
+}
+
+.adminAssistantApp :global(.admin-assistant-action-icon) {
+  display: inline-flex;
+  width: 1.9rem;
+  height: 1.9rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.48rem;
+  background: #ffe9ea;
+  color: #b81016;
+}
+
+.adminAssistantApp :global(.admin-assistant-action-copy) {
+  min-width: 0;
+  flex: 1;
+}
+
+.adminAssistantApp :global(.admin-assistant-action-copy > strong) {
+  display: block;
+  color: #38292a;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.adminAssistantApp :global(.admin-assistant-action-copy > p) {
+  margin: 0.18rem 0 0;
+  color: #766466;
   font-size: 0.7rem;
   line-height: 1.45;
 }
 
-.adminChatbotRedesign :global(.admin-chatbot-status) {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  color: #526986;
-  font-size: 0.78rem;
-  font-weight: 800;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-status-dot) {
-  width: 0.44rem;
-  height: 0.44rem;
-  border-radius: 999px;
-  background: #d97706;
-  animation: admin-chatbot-pulse 2s infinite;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-status-dot--online) {
-  background: #16a34a;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-stage) {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  min-height: 0;
-  background: #ffffff;
-  overflow: hidden;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-stage-header) {
+.adminAssistantApp :global(.admin-assistant-action-buttons) {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.95rem 1.25rem 0.85rem;
-  border-bottom: 1px solid #e4ebf4;
-  background: #ffffff;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-stage-copy) {
-  display: grid;
-  gap: 0.22rem;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-stage-kicker) {
-  display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 0.4rem;
-  margin: 0;
-  color: #8da0bf;
-  font-size: 0.63rem;
-  font-weight: 900;
-  letter-spacing: 0.13em;
+}
+
+.adminAssistantApp :global(.admin-assistant-action-buttons a),
+.adminAssistantApp :global(.admin-assistant-action-buttons button) {
+  display: inline-flex;
+  min-height: 2rem;
+  align-items: center;
+  gap: 0.32rem;
+  border: 1px solid #dba9ab;
+  border-radius: 0.45rem;
+  background: #ffffff;
+  padding: 0.35rem 0.55rem;
+  color: #a61116;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.adminAssistantApp :global(.admin-assistant-draft) {
+  display: grid;
+  gap: 0.28rem;
+  margin-top: 0.58rem;
+  border-left: 3px solid #d5161c;
+  background: #ffffff;
+  padding: 0.55rem 0.62rem;
+}
+
+.adminAssistantApp :global(.admin-assistant-draft span) {
+  color: #a20d12;
+  font-size: 0.59rem;
+  font-weight: 850;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
-.adminChatbotRedesign :global(.admin-chatbot-stage-kicker::before) {
-  content: "";
-  width: 0.34rem;
-  height: 0.34rem;
+.adminAssistantApp :global(.admin-assistant-draft strong) {
+  color: #34313a;
+  font-size: 0.73rem;
+}
+
+.adminAssistantApp :global(.admin-assistant-draft p) {
+  margin: 0;
+  color: #62606a;
+  white-space: pre-wrap;
+  font-size: 0.69rem;
+  line-height: 1.45;
+}
+
+.adminAssistantApp :global(.admin-assistant-evidence) {
+  background: #fafbfc;
+}
+
+.adminAssistantApp :global(.admin-assistant-evidence summary) {
+  display: flex;
+  align-items: center;
+  gap: 0.42rem;
+  padding: 0.62rem 0.72rem;
+  color: #5d6676;
+  cursor: pointer;
+  font-size: 0.69rem;
+  font-weight: 750;
+  list-style: none;
+}
+
+.adminAssistantApp :global(.admin-assistant-evidence summary::-webkit-details-marker) {
+  display: none;
+}
+
+.adminAssistantApp :global(.admin-assistant-evidence-count) {
+  margin-left: auto;
+  color: #9198a5;
+  font-size: 0.62rem;
+  font-weight: 650;
+}
+
+.adminAssistantApp :global(.admin-assistant-evidence-body) {
+  display: grid;
+  gap: 0.5rem;
+  border-top: 1px solid #e8eaf0;
+  padding: 0.65rem;
+}
+
+.adminAssistantApp :global(.admin-assistant-scope-line) {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #6c2f33;
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
+.adminAssistantApp :global(.admin-assistant-source) {
+  display: block;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.52rem;
+  background: #ffffff;
+  padding: 0.58rem 0.65rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.adminAssistantApp :global(a.admin-assistant-source:hover) {
+  border-color: #d9aeb0;
+}
+
+.adminAssistantApp :global(.admin-assistant-source-title) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.adminAssistantApp :global(.admin-assistant-source-title strong) {
+  color: #343d4d;
+  font-size: 0.7rem;
+}
+
+.adminAssistantApp :global(.admin-assistant-source-title span) {
   border-radius: 999px;
-  background: var(--admin-accent);
+  background: #fff3dc;
+  padding: 0.15rem 0.38rem;
+  color: #99580a;
+  font-size: 0.57rem;
+  font-weight: 800;
 }
 
-.adminChatbotRedesign :global(.admin-chatbot-stage-title) {
-  max-width: 48rem;
-  margin: 0;
-  color: #13223a;
-  font-size: clamp(1.1rem, 1.6vw, 1.3rem);
-  font-weight: 850;
-  line-height: 1.25;
+.adminAssistantApp :global(.admin-assistant-source > p) {
+  margin: 0.18rem 0 0;
+  color: #7b8493;
+  font-size: 0.63rem;
 }
 
-.adminChatbotRedesign :global(.admin-chatbot-stage-description) {
-  max-width: 42rem;
+.adminAssistantApp :global(.admin-assistant-source dl) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.28rem;
+  margin: 0.45rem 0 0;
+}
+
+.adminAssistantApp :global(.admin-assistant-source dl div) {
+  display: inline-flex;
+  gap: 0.2rem;
+  border-radius: 999px;
+  background: #f2f3f5;
+  padding: 0.2rem 0.42rem;
+  color: #697283;
+  font-size: 0.58rem;
+}
+
+.adminAssistantApp :global(.admin-assistant-source dt) {
+  font-weight: 800;
+}
+
+.adminAssistantApp :global(.admin-assistant-source dd) {
   margin: 0;
-  color: #72839e;
-  font-size: 0.78rem;
+}
+
+.adminAssistantApp :global(.admin-assistant-follow-ups) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+}
+
+.adminAssistantApp :global(.admin-assistant-follow-ups button) {
+  border: 1px solid #dfe2e8;
+  border-radius: 999px;
+  background: #ffffff;
+  padding: 0.38rem 0.62rem;
+  color: #586274;
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
+.adminAssistantApp :global(.admin-assistant-follow-ups button:hover) {
+  border-color: #d3a2a5;
+  background: #fffafa;
+  color: #a61116;
+}
+
+.adminAssistantApp :global(.admin-assistant-thinking) {
+  display: inline-flex;
+  min-height: 1.9rem;
+  align-items: center;
+  gap: 0.45rem;
+  color: #7a8290;
+  font-size: 0.75rem;
+}
+
+.adminAssistantApp :global(.admin-assistant-composer-area) {
+  border-top: 1px solid #e8eaf0;
+  background: #ffffff;
+  padding: 0.85rem max(1rem, calc((100% - 52rem) / 2)) 0.75rem;
+}
+
+.adminAssistantApp :global(.admin-assistant-composer) {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.65rem;
+  border: 1px solid #d9dde4;
+  border-radius: 0.78rem;
+  background: #ffffff;
+  padding: 0.68rem 0.7rem;
+}
+
+.adminAssistantApp :global(.admin-assistant-composer:focus-within) {
+  border-color: rgba(213, 22, 28, 0.52);
+  box-shadow: 0 0 0 3px rgba(213, 22, 28, 0.08);
+}
+
+.adminAssistantApp :global(.admin-assistant-composer textarea) {
+  min-height: 1.7rem;
+  max-height: 11rem;
+  min-width: 0;
+  flex: 1;
+  resize: none;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  padding: 0.18rem 0.08rem;
+  color: #293244;
+  font-size: 0.82rem;
   line-height: 1.5;
 }
 
-.adminChatbotRedesign :global(.admin-chatbot-stage-tools) {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  padding-top: 0.1rem;
+.adminAssistantApp :global(.admin-assistant-composer textarea::placeholder) {
+  color: #989fab;
 }
 
-.adminChatbotRedesign :global(.admin-chatbot-stage-tool-row) {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.5rem;
-  width: 100%;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-model-pill) {
+.adminAssistantApp :global(.admin-assistant-send) {
   display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  border: 1px solid #ead6a7;
-  border-radius: 999px;
-  background: #fff9eb;
-  padding: 0.4rem 0.65rem;
-  color: #a16207;
-  font-size: 0.68rem;
-  font-weight: 850;
-  letter-spacing: 0.02em;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-refresh) {
-  display: inline-flex;
+  width: 2.35rem;
+  height: 2.35rem;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  width: 2rem;
-  height: 2rem;
-  border: 1px solid #dfe7f1;
-  border-radius: 0.55rem;
-  background: #ffffff;
-  color: #6f82a1;
-  transition:
-    background-color 150ms ease,
-    color 150ms ease;
+  border: 1px solid #d5161c;
+  border-radius: 0.58rem;
+  background: #d5161c;
+  color: #ffffff;
 }
 
-.adminChatbotRedesign :global(.admin-chatbot-refresh:hover) {
-  background: #f5f7fb;
-  color: #182a44;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-stage-tools .admin-chatbot-new-chat) {
-  width: 100%;
-  min-width: 8rem;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-thread) {
-  position: relative;
-  display: flex;
-  min-height: 0;
-  flex-direction: column;
-  gap: 1rem;
-  overflow-y: auto;
-  padding: 1.25rem 1.5rem;
-  background:
-    linear-gradient(180deg, #fbfdff 0%, #ffffff 56%),
-    #ffffff;
-  scrollbar-width: thin;
-  scrollbar-color: #ccd7e6 transparent;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-message) {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-  width: 100%;
-  max-width: 58rem;
-  margin-inline: auto;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-message--user) {
-  flex-direction: row-reverse;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-message--user .admin-chatbot-bubble) {
-  margin-left: auto;
-  border-radius: 0.85rem 0.25rem 0.85rem 0.85rem;
-  background: #f4f7fb;
-  color: #182a44;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-message-icon) {
-  width: 1.85rem;
-  height: 1.85rem;
-  border-radius: 0.55rem;
-  margin-top: 0.05rem;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-message-icon--user) {
-  border: 1px solid #dfe7f1;
-  background: #ffffff;
-  color: #536b90;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-bubble) {
-  width: min(100%, 46rem);
-  border: 1px solid #e2e9f3;
-  border-radius: 0.25rem 0.85rem 0.85rem 0.85rem;
-  background: #ffffff;
-  padding: 0.78rem 0.9rem;
-  color: #243956;
-  font-size: 0.86rem;
-  line-height: 1.62;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-message-meta) {
+.adminAssistantApp :global(.admin-assistant-composer-note) {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.85rem;
-  margin-bottom: 0.35rem;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-message-author) {
-  color: #526986;
-  font-size: 0.66rem;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-time) {
-  color: #95a6bf;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.66rem;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-tag-row) {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  margin-top: 0.55rem;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-tag) {
-  border-radius: 999px;
-  padding: 0.2rem 0.48rem;
+  justify-content: center;
+  gap: 0.35rem;
+  margin: 0.48rem 0 0;
+  color: #89919e;
   font-size: 0.62rem;
-  font-weight: 900;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-tag--green) {
-  background: #eafaf2;
-  color: #087a4e;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-tag--blue) {
-  background: #edf5ff;
-  color: #2563eb;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-empty-state) {
-  display: grid;
-  place-items: center;
-  gap: 0.65rem;
-  flex: 1;
-  min-height: 11rem;
-  color: #8393ab;
-  font-size: 0.78rem;
-  line-height: 1.6;
+  line-height: 1.4;
   text-align: center;
 }
 
-.adminChatbotRedesign :global(.admin-chatbot-empty-state p) {
-  margin: 0;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-empty-icon) {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 3rem;
-  height: 3rem;
-  border: 1px solid #f5d99b;
-  border-radius: 0.85rem;
-  background: #fff9eb;
-  color: #d97706;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-source-block) {
-  margin-top: 0.9rem;
-  padding-top: 0.85rem;
-  border-top: 1px solid #edf2f7;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-source-heading) {
-  margin: 0;
-  color: #5c7295;
-  font-size: 0.66rem;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-source-card) {
-  border: 1px solid #e5ebf2;
-  border-radius: 0.65rem;
-  background: #f9fbfd;
-  padding: 0.72rem 0.78rem;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-source-window) {
-  display: inline-flex;
-  border: 1px solid #e5ebf2;
-  border-radius: 999px;
-  background: #ffffff;
-  padding: 0.2rem 0.48rem;
-  color: #6c83a7;
-  font-size: 0.66rem;
-  font-weight: 800;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-composer) {
-  padding: 0.9rem 1.25rem 1rem;
-  border-top: 1px solid #e4ebf4;
-  background: #ffffff;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-composer-shell) {
-  width: min(100%, 46rem);
-  margin: 0 auto;
-  border: 1px solid #dfe7f1;
-  border-radius: 0.85rem;
-  background: #ffffff;
-  padding: 0.75rem 0.8rem;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-composer-shell:focus-within) {
-  border-color: rgba(247, 10, 16, 0.38);
-  box-shadow: 0 0 0 3px rgba(247, 10, 16, 0.08);
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-input) {
-  width: 100%;
-  min-height: 2rem;
-  max-height: 8.5rem;
-  resize: none;
-  border: 0;
-  background: transparent;
-  color: #213754;
-  padding: 0;
-  font-size: 0.86rem;
-  line-height: 1.55;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-input::placeholder) {
-  color: #95a6bf;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-input:focus) {
-  outline: none;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-composer-bar) {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.85rem;
-  margin-top: 0.65rem;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-composer-hints) {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.55rem;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-hint-pill) {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.32rem;
-  color: #7a8ca6;
-  font-size: 0.67rem;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-send) {
-  min-width: 5.4rem;
-  height: 2.25rem;
-  gap: 0.4rem;
-  border: 0;
-  border-radius: 0.55rem;
-  background: var(--admin-accent);
-  color: #ffffff;
-  font-size: 0.78rem;
-  font-weight: 850;
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-send:hover) {
-  background: var(--admin-accent-strong);
-}
-
-.adminChatbotRedesign :global(.admin-chatbot-send:disabled) {
-  opacity: 0.45;
-}
-
-@keyframes admin-chatbot-pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-
-  50% {
-    opacity: 0.45;
-  }
+.adminAssistantApp :global(.admin-assistant-backdrop) {
+  display: none;
 }
 
 @media (min-width: 768px) {
-  .adminChatbotPage {
+  .adminAssistantPage {
     margin: -1.5rem;
   }
 }
 
 @media (min-width: 1024px) {
-  .adminChatbotPage {
+  .adminAssistantPage {
     margin: -2rem;
   }
 }
 
 @media (max-width: 1080px) {
-  .adminChatbotRedesign {
+  .adminAssistantApp {
     grid-template-columns: minmax(0, 1fr);
-    block-size: auto;
-    min-height: calc(100dvh - 5.2rem);
   }
 
-  .adminChatbotRedesign :global(.admin-chatbot-sidebar) {
-    border-right: 0;
-    border-bottom: 1px solid #e4ebf4;
+  .adminAssistantApp :global(.admin-assistant-history-shell) {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: min(19rem, calc(100vw - 2rem));
+    transform: translateX(-105%);
+    transition: transform 180ms ease;
   }
 
-  .adminChatbotRedesign :global(.admin-chatbot-stage) {
-    block-size: min(44rem, calc(100dvh - 12rem));
+  .adminAssistantApp :global(.admin-assistant-history-shell.is-open) {
+    transform: translateX(0);
+  }
+
+  .adminAssistantApp :global(.admin-assistant-history-top > button),
+  .adminAssistantApp :global(.admin-assistant-history-toggle) {
+    display: inline-flex;
+  }
+
+  .adminAssistantApp :global(.admin-assistant-history-actions) {
+    display: flex;
+  }
+
+  .adminAssistantApp :global(.admin-assistant-backdrop) {
+    position: absolute;
+    z-index: 20;
+    inset: 0;
+    display: block;
+    border: 0;
+    background: rgba(17, 24, 39, 0.34);
   }
 }
 
-@media (max-width: 720px) {
-  .adminChatbotRedesign,
-  .adminChatbotRedesign :global(.admin-chatbot-stage) {
-    block-size: auto;
+@media (max-width: 680px) {
+  .adminAssistantApp :global(.admin-assistant-header) {
+    min-height: 3.9rem;
+    padding: 0.55rem 0.7rem;
   }
 
-  .adminChatbotRedesign :global(.admin-chatbot-sidebar-body) {
-    overflow: visible;
+  .adminAssistantApp :global(.admin-assistant-brand-mark),
+  .adminAssistantApp :global(.admin-assistant-header-title p),
+  .adminAssistantApp :global(.admin-assistant-scope-control > span),
+  .adminAssistantApp :global(.admin-assistant-header-new span) {
+    display: none;
   }
 
-  .adminChatbotRedesign :global(.admin-chatbot-history-list) {
-    max-height: 18rem;
+  .adminAssistantApp :global(.admin-assistant-header-title h2) {
+    max-width: 8.5rem;
+    font-size: 0.85rem;
   }
 
-  .adminChatbotRedesign :global(.admin-chatbot-thread) {
-    padding: 0.95rem;
+  .adminAssistantApp :global(.admin-assistant-scope-control) {
+    padding-left: 0.3rem;
   }
 
-  .adminChatbotRedesign :global(.admin-chatbot-stage-header),
-  .adminChatbotRedesign :global(.admin-chatbot-composer),
-  .adminChatbotRedesign :global(.admin-chatbot-sidebar-body),
-  .adminChatbotRedesign :global(.admin-chatbot-sidebar-footer) {
-    padding-inline: 0.95rem;
+  .adminAssistantApp :global(.admin-assistant-scope-control select) {
+    max-width: 9.5rem;
+    font-size: 0.68rem;
   }
 
-  .adminChatbotRedesign :global(.admin-chatbot-stage-header),
-  .adminChatbotRedesign :global(.admin-chatbot-composer-bar) {
-    flex-direction: column;
-    align-items: stretch;
+  .adminAssistantApp :global(.admin-assistant-header-new) {
+    width: 2.25rem;
+    padding: 0;
+    justify-content: center;
   }
 
-  .adminChatbotRedesign :global(.admin-chatbot-stage-tools) {
+  .adminAssistantApp :global(.admin-assistant-outage) {
+    align-items: flex-start;
+    padding: 0.62rem 0.75rem;
+  }
+
+  .adminAssistantApp :global(.admin-assistant-outage > div) {
+    display: grid;
+  }
+
+  .adminAssistantApp :global(.admin-assistant-thread) {
+    padding: 1.1rem 0.8rem;
+  }
+
+  .adminAssistantApp :global(.admin-assistant-welcome) {
+    gap: 1.15rem;
+    padding: 0.5rem 0;
+  }
+
+  .adminAssistantApp :global(.admin-assistant-starters) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .adminAssistantApp :global(.admin-assistant-starters button) {
+    min-height: 4.5rem;
+  }
+
+  .adminAssistantApp :global(.admin-assistant-message) {
+    gap: 0.5rem;
+  }
+
+  .adminAssistantApp :global(.admin-assistant-message--user > div) {
+    max-width: 88%;
+  }
+
+  .adminAssistantApp :global(.admin-assistant-action) {
+    flex-wrap: wrap;
+  }
+
+  .adminAssistantApp :global(.admin-assistant-action-buttons) {
     width: 100%;
-    align-items: stretch;
+    padding-left: 2.6rem;
   }
 
-  .adminChatbotRedesign :global(.admin-chatbot-stage-tool-row) {
-    justify-content: space-between;
+  .adminAssistantApp :global(.admin-assistant-data-heading) {
+    display: grid;
   }
 
-  .adminChatbotRedesign :global(.admin-chatbot-message) {
-    gap: 0.6rem;
+  .adminAssistantApp :global(.admin-assistant-sample-note) {
+    width: fit-content;
   }
 
-  .adminChatbotRedesign :global(.admin-chatbot-bubble) {
-    width: 100%;
+  .adminAssistantApp :global(.admin-assistant-composer-area) {
+    padding: 0.7rem 0.7rem 0.58rem;
   }
 
-  .adminChatbotRedesign :global(.admin-chatbot-send) {
-    width: 100%;
+  .adminAssistantApp :global(.admin-assistant-composer-note) {
+    align-items: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .adminAssistantApp :global(.admin-assistant-history-shell) {
+    transition: none;
   }
 }
