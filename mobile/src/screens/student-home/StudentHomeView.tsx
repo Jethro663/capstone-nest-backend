@@ -1,15 +1,15 @@
 import type { ReactNode } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { LessonCard, SubjectCard } from "../../data/types";
 import type { Assessment } from "../../types/assessment";
 import { studentDarkTheme as theme } from "../../theme/studentDark";
 import {
-  StudentFlatSection,
   StudentInlineNotice,
-  StudentListRow,
   StudentScreen,
 } from "../../components/student/StudentWorkspacePrimitives";
+
+type IconName = React.ComponentProps<typeof MaterialCommunityIcons>["name"];
 
 type ScheduleItem = {
   id: string;
@@ -64,14 +64,74 @@ function formatClock(value: string) {
   }).format(date);
 }
 
-function SectionAction({ label, onPress }: { label: string; onPress: () => void }) {
+function SectionHeading({
+  title,
+  eyebrow,
+  actionLabel,
+  onAction,
+}: {
+  title: string;
+  eyebrow?: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
+  return (
+    <View style={styles.sectionHeading}>
+      <View style={styles.headingCopy}>
+        {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
+        <Text style={styles.sectionTitle}>{title}</Text>
+      </View>
+      {actionLabel && onAction ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={onAction}
+          style={styles.sectionAction}
+        >
+          <Text style={styles.sectionActionText}>{actionLabel}</Text>
+          <MaterialCommunityIcons name="arrow-right" size={15} color={theme.redText} />
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+function MoveTile({
+  icon,
+  label,
+  title,
+  subtitle,
+  onPress,
+  tone = "blue",
+}: {
+  icon: IconName;
+  label: string;
+  title: string;
+  subtitle: string;
+  onPress?: () => void;
+  tone?: "blue" | "amber" | "green";
+}) {
+  const palette = tone === "amber"
+    ? { surface: theme.amberSoft, icon: theme.amber }
+    : tone === "green"
+      ? { surface: theme.greenSoft, icon: theme.green }
+      : { surface: theme.blueSoft, icon: theme.blue };
+
   return (
     <Pressable
-      accessibilityRole="button"
+      accessibilityRole={onPress ? "button" : undefined}
       onPress={onPress}
-      style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 4 }}
+      disabled={!onPress}
+      style={({ pressed }) => [styles.moveTile, pressed && onPress ? styles.pressed : null]}
     >
-      <Text style={{ color: theme.redText, fontSize: 11, fontWeight: "800" }}>{label}</Text>
+      <View style={[styles.moveIcon, { backgroundColor: palette.surface }]}>
+        <MaterialCommunityIcons name={icon} size={21} color={palette.icon} />
+      </View>
+      <View style={styles.moveCopy}>
+        <Text style={styles.moveLabel}>{label}</Text>
+        <Text numberOfLines={2} style={styles.moveTitle}>{title}</Text>
+        <Text numberOfLines={2} style={styles.moveSubtitle}>{subtitle}</Text>
+      </View>
+      {onPress ? <MaterialCommunityIcons name="chevron-right" size={21} color={theme.dim} /> : null}
     </Pressable>
   );
 }
@@ -80,7 +140,6 @@ export function StudentHomeView({
   navigation,
   bridges,
   firstName,
-  initials,
   unreadCount,
   profileReadiness,
   pendingAssessments,
@@ -97,7 +156,6 @@ export function StudentHomeView({
   navigation: StudentHomeNavigation;
   bridges: ReactNode;
   firstName: string;
-  initials: string;
   unreadCount: number;
   profileReadiness: number;
   pendingAssessments: PendingAssessment[];
@@ -117,49 +175,89 @@ export function StudentHomeView({
       ? { lesson: recentLessons[0], subject: recentLessons[0].subject }
       : undefined);
   const nextClass = todaySchedule[0];
+  const secondaryAssessment = nextAssessment ? pendingAssessments[1] : pendingAssessments[0];
+  const secondaryLesson = nextAssessment
+    ? nextLesson
+    : [
+        ...continueLearning,
+        ...recentLessons.map((lesson) => ({ lesson, subject: lesson.subject })),
+      ].find((item) => item.lesson.id !== nextLesson?.lesson.id);
+
+  const priorityTitle = nextAssessment?.assessment.title ??
+    nextLesson?.lesson.title ??
+    nextClass?.subjectName ??
+    "You are ready for the day";
+  const priorityContext = nextAssessment
+    ? `${nextAssessment.subject.name} · Due ${formatDueDate(nextAssessment.assessment.dueDate)}`
+    : nextLesson
+      ? `${nextLesson.subject.name} · ${nextLesson.lesson.duration}`
+      : nextClass
+        ? `${formatClock(nextClass.startTime)} · ${nextClass.teacherName}`
+        : "Nothing urgent is waiting for you.";
+  const priorityLabel = nextAssessment
+    ? "Open assessment"
+    : nextLesson
+      ? "Resume lesson"
+      : nextClass
+        ? "Open class"
+        : "See my classes";
+  const openPriority = () => {
+    if (nextAssessment) {
+      navigation.navigate("AssessmentDetail", {
+        assessmentId: nextAssessment.assessment.id,
+        classId: nextAssessment.assessment.classId,
+        source: "home",
+      });
+      return;
+    }
+    if (nextLesson) {
+      navigation.navigate("LessonDetail", {
+        lessonId: nextLesson.lesson.id,
+        classId: nextLesson.subject.id,
+        source: "home",
+      });
+      return;
+    }
+    if (nextClass) {
+      navigation.navigate("ClassDetail", { classId: nextClass.classId, source: "home" });
+      return;
+    }
+    navigation.navigate("Classes");
+  };
 
   return (
     <StudentScreen
-      title="Student Home"
+      title="Home"
       refreshing={refreshing}
       onRefresh={onRefresh}
+      showRefreshAction={false}
       rightAction={
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Open notifications"
-            onPress={() => navigation.navigate("Notifications")}
-            style={{ width: 44, height: 44, borderRadius: 12, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.surface, alignItems: "center", justifyContent: "center" }}
-          >
-            <MaterialCommunityIcons name="bell-outline" size={19} color={theme.text} />
-            {unreadCount > 0 ? (
-              <View style={{ position: "absolute", top: 5, right: 5, minWidth: 16, height: 16, borderRadius: 999, backgroundColor: theme.redText, paddingHorizontal: 3, alignItems: "center", justifyContent: "center" }}>
-                <Text style={{ color: "#FFFFFF", fontSize: 8, fontWeight: "900" }}>{unreadCount > 9 ? "9+" : unreadCount}</Text>
-              </View>
-            ) : null}
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Open profile"
-            onPress={() => navigation.navigate("Profile")}
-            style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: theme.redText, alignItems: "center", justifyContent: "center" }}
-          >
-            <Text style={{ color: "#FFFFFF", fontSize: 11, fontWeight: "900" }}>{initials}</Text>
-          </Pressable>
-        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open notifications"
+          onPress={() => navigation.navigate("Notifications")}
+          style={styles.notificationButton}
+        >
+          <MaterialCommunityIcons name="bell-outline" size={20} color={theme.text} />
+          {unreadCount > 0 ? (
+            <View style={styles.notificationBadge}>
+              <Text style={styles.notificationBadgeText}>{unreadCount > 9 ? "9+" : unreadCount}</Text>
+            </View>
+          ) : null}
+        </Pressable>
       }
     >
       {bridges}
 
-      <View style={{ paddingHorizontal: 16, paddingTop: 15, paddingBottom: 10, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border }}>
-        <Text style={{ color: theme.redText, fontSize: 10, fontWeight: "900", letterSpacing: 0.8, textTransform: "uppercase" }}>Your school day</Text>
-        <Text style={{ marginTop: 4, color: theme.text, fontSize: 21, fontWeight: "900" }}>Good day, {firstName}</Text>
-        <Text style={{ marginTop: 4, color: theme.muted, fontSize: 12, lineHeight: 17 }}>
+      <View style={styles.welcome}>
+        <Text style={styles.eyebrow}>Your school day</Text>
+        <Text style={styles.welcomeTitle}>Hi, {firstName}!</Text>
+        <Text style={styles.welcomeSubtitle}>
           {pendingAssessments.length > 0
-            ? `${pendingAssessments.length} ${pendingAssessments.length === 1 ? "task needs" : "tasks need"} your attention.`
+            ? `${pendingAssessments.length} ${pendingAssessments.length === 1 ? "task needs" : "tasks need"} your attention today.`
             : hasPendingAssessmentSync
               ? `Checking ${pendingAssessmentStatusCount} assessment status${pendingAssessmentStatusCount === 1 ? "" : "es"}.`
-              : "You are caught up. Pick up where you left off."}
+              : "You are caught up. Choose a lesson when you are ready."}
         </Text>
       </View>
 
@@ -167,122 +265,152 @@ export function StudentHomeView({
         <StudentInlineNotice title="Some home data could not load" description={errorMessage} tone="amber" />
       ) : null}
 
-      <StudentFlatSection title="Next for you" subtitle="The most useful next step based on due work and class progress.">
-        {nextAssessment ? (
-          <StudentListRow
-            title={nextAssessment.assessment.title}
-            subtitle={`${nextAssessment.subject.name} · Due ${formatDueDate(nextAssessment.assessment.dueDate)}`}
-            icon="clipboard-text-outline"
-            status="Open task"
-            tone="amber"
-            onPress={() => navigation.navigate("AssessmentDetail", {
-              assessmentId: nextAssessment.assessment.id,
-              classId: nextAssessment.assessment.classId,
-              source: "home",
-            })}
-          />
-        ) : nextLesson ? (
-          <StudentListRow
-            title={nextLesson.lesson.title}
-            subtitle={`${nextLesson.subject.name} · ${nextLesson.lesson.duration}`}
-            icon="book-open-page-variant-outline"
-            status="Continue"
-            onPress={() => navigation.navigate("LessonDetail", {
-              lessonId: nextLesson.lesson.id,
-              classId: nextLesson.subject.id,
-              source: "home",
-            })}
-          />
-        ) : nextClass ? (
-          <StudentListRow
-            title={nextClass.subjectName}
-            subtitle={`${formatClock(nextClass.startTime)} · ${nextClass.teacherName}`}
-            icon="google-classroom"
-            status="Open class"
-            onPress={() => navigation.navigate("ClassDetail", { classId: nextClass.classId, source: "home" })}
-          />
-        ) : (
-          <StudentListRow title="Nothing urgent right now" subtitle="Your next published activity will appear here." icon="check-circle-outline" tone="green" />
-        )}
-      </StudentFlatSection>
+      <View style={styles.section}>
+        <SectionHeading eyebrow="Start here" title="Your next move" />
+        <Pressable
+          accessibilityRole="button"
+          onPress={openPriority}
+          style={({ pressed }) => [styles.priorityCard, pressed ? styles.priorityPressed : null]}
+        >
+          <View style={styles.priorityTopRow}>
+            <View style={styles.priorityIcon}>
+              <MaterialCommunityIcons
+                name={nextAssessment ? "clipboard-text-outline" : nextLesson ? "book-open-page-variant-outline" : nextClass ? "google-classroom" : "check-circle-outline"}
+                size={23}
+                color="#FFFFFF"
+              />
+            </View>
+            <Text style={styles.priorityKicker}>
+              {nextAssessment ? "Needs attention" : nextLesson ? "Pick up here" : nextClass ? "Coming up" : "All clear"}
+            </Text>
+          </View>
+          <Text style={styles.priorityTitle}>{priorityTitle}</Text>
+          <Text style={styles.priorityContext}>{priorityContext}</Text>
+          <View style={styles.priorityAction}>
+            <Text style={styles.priorityActionText}>{priorityLabel}</Text>
+            <MaterialCommunityIcons name="arrow-right" size={17} color={theme.text} />
+          </View>
+        </Pressable>
+      </View>
 
-      <StudentFlatSection
-        title="Today"
-        subtitle={todaySchedule.length > 0 ? `${todaySchedule.length} class ${todaySchedule.length === 1 ? "block" : "blocks"}` : "No scheduled classes today"}
-        action={<SectionAction label="View all classes" onPress={() => navigation.navigate("Classes")} />}
-      >
-        {todaySchedule.length > 0 ? todaySchedule.map((entry) => (
-          <StudentListRow
-            key={entry.id}
-            title={entry.subjectName}
-            subtitle={`${formatClock(entry.startTime)} · ${entry.teacherName}${entry.room ? ` · Room ${entry.room}` : ""}`}
-            icon="clock-outline"
-            status="Today"
-            tone="blue"
-            onPress={() => navigation.navigate("ClassDetail", { classId: entry.classId, source: "home" })}
-          />
-        )) : (
-          <StudentListRow title="No scheduled classes" subtitle="Use the time to review a lesson or check due work." icon="calendar-blank-outline" />
-        )}
-      </StudentFlatSection>
+      <View style={styles.section}>
+        <SectionHeading
+          eyebrow="Today"
+          title="Your day"
+          actionLabel="Full calendar"
+          onAction={() => navigation.navigate("StudentCalendar")}
+        />
+        <View style={styles.dayCard}>
+          {todaySchedule.length > 0 ? todaySchedule.map((entry, index) => (
+            <Pressable
+              key={entry.id}
+              accessibilityRole="button"
+              onPress={() => navigation.navigate("ClassDetail", { classId: entry.classId, source: "home" })}
+              style={({ pressed }) => [
+                styles.scheduleRow,
+                index < todaySchedule.length - 1 ? styles.scheduleDivider : null,
+                pressed ? styles.pressed : null,
+              ]}
+            >
+              <View style={styles.timeColumn}>
+                <Text style={styles.timeText}>{formatClock(entry.startTime)}</Text>
+                <View style={styles.timelineDot} />
+                {index < todaySchedule.length - 1 ? <View style={styles.timelineLine} /> : null}
+              </View>
+              <View style={styles.scheduleCopy}>
+                <Text style={styles.scheduleTitle}>{entry.subjectName}</Text>
+                <Text style={styles.scheduleMeta}>
+                  {entry.teacherName}{entry.room ? ` · Room ${entry.room}` : ""}
+                </Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={21} color={theme.dim} />
+            </Pressable>
+          )) : (
+            <View style={styles.emptyDay}>
+              <View style={styles.emptyDayIcon}>
+                <MaterialCommunityIcons name="weather-sunny" size={24} color={theme.amber} />
+              </View>
+              <View style={styles.scheduleCopy}>
+                <Text style={styles.scheduleTitle}>No classes on your schedule</Text>
+                <Text style={styles.scheduleMeta}>A good time to review or finish a task.</Text>
+              </View>
+            </View>
+          )}
+        </View>
+      </View>
 
-      <StudentFlatSection title="Continue learning" subtitle="Resume the next available lesson.">
-        {nextLesson ? (
-          <StudentListRow
-            title={nextLesson.lesson.title}
-            subtitle={`${nextLesson.subject.name} · ${nextLesson.lesson.duration}`}
-            icon="play-circle-outline"
-            status="Resume"
-            onPress={() => navigation.navigate("LessonDetail", {
-              lessonId: nextLesson.lesson.id,
-              classId: nextLesson.subject.id,
-              source: "home",
-            })}
-          />
-        ) : (
-          <StudentListRow title="No lessons available yet" subtitle="Published lessons from your classes will appear here." icon="book-open-outline" />
-        )}
-      </StudentFlatSection>
+      <View style={styles.section}>
+        <SectionHeading eyebrow="Small steps" title="Keep moving" />
+        <View style={styles.moveGrid}>
+          {secondaryLesson ? (
+            <MoveTile
+              icon="play-circle-outline"
+              label="Learning"
+              title={secondaryLesson.lesson.title}
+              subtitle={`${secondaryLesson.subject.name} · ${secondaryLesson.lesson.duration}`}
+              onPress={() => navigation.navigate("LessonDetail", {
+                lessonId: secondaryLesson.lesson.id,
+                classId: secondaryLesson.subject.id,
+                source: "home",
+              })}
+            />
+          ) : (
+            <MoveTile
+              icon="book-check-outline"
+              label="Learning"
+              title="You are up to date"
+              subtitle="New published lessons will appear here."
+              tone="green"
+            />
+          )}
+          {secondaryAssessment ? (
+            <MoveTile
+              icon="calendar-clock-outline"
+              label="Another task"
+              title={secondaryAssessment.assessment.title}
+              subtitle={`${secondaryAssessment.subject.name} · Due ${formatDueDate(secondaryAssessment.assessment.dueDate)}`}
+              tone="amber"
+              onPress={() => navigation.navigate("AssessmentDetail", {
+                assessmentId: secondaryAssessment.assessment.id,
+                classId: secondaryAssessment.assessment.classId,
+                source: "home",
+              })}
+            />
+          ) : (
+            <MoveTile
+              icon={hasPendingAssessmentSync ? "sync" : "check-decagram-outline"}
+              label="Tasks"
+              title={hasPendingAssessmentSync ? "Checking your work" : "Nothing else is due"}
+              subtitle={hasPendingAssessmentSync ? "Your latest submissions are syncing." : "Nice work keeping up."}
+              tone={hasPendingAssessmentSync ? "blue" : "green"}
+              onPress={() => navigation.navigate("Assessments")}
+            />
+          )}
+        </View>
+      </View>
 
-      <StudentFlatSection
-        title="Due soon"
-        subtitle={hasPendingAssessmentSync && pendingAssessments.length === 0
-          ? `Checking ${pendingAssessmentStatusCount} assessment status${pendingAssessmentStatusCount === 1 ? "" : "es"}`
-          : `${pendingAssessments.length} ${pendingAssessments.length === 1 ? "task" : "tasks"} still need attention`}
-        action={<SectionAction label="View assessments" onPress={() => navigation.navigate("Assessments")} />}
-      >
-        {pendingAssessments.length > 0 ? pendingAssessments.map(({ assessment, subject }) => (
-          <StudentListRow
-            key={assessment.id}
-            title={assessment.title}
-            subtitle={`${subject.name} · ${(assessment.type || "Task").replace(/_/g, " ")} · ${assessment.totalPoints ?? 100} pts`}
-            icon="clipboard-text-outline"
-            status={formatDueDate(assessment.dueDate)}
-            tone="amber"
-            onPress={() => navigation.navigate("AssessmentDetail", {
-              assessmentId: assessment.id,
-              classId: assessment.classId,
-              source: "home",
-            })}
-          />
-        )) : hasPendingAssessmentSync ? (
-          <StudentListRow title="Checking assessment submissions" subtitle="We are verifying your latest submissions before listing what is still due." icon="sync" tone="blue" />
-        ) : (
-          <StudentListRow title="You are all caught up" subtitle="No published assessments right now." icon="check-circle-outline" tone="green" />
-        )}
-      </StudentFlatSection>
-
-      <StudentFlatSection
-        title="Latest update"
-        subtitle="One useful school or class update, without a crowded activity wall."
-        action={<SectionAction label="Open calendar" onPress={() => navigation.navigate("StudentCalendar")} />}
-      >
-        {latestUpdate ? (
-          <StudentListRow title={latestUpdate.title} subtitle={latestUpdate.subtitle} icon="calendar-star" tone="purple" onPress={() => navigation.navigate("StudentCalendar")} />
-        ) : (
-          <StudentListRow title="No new updates" subtitle="School events and due dates will appear here." icon="bell-check-outline" />
-        )}
-      </StudentFlatSection>
+      <View style={styles.section}>
+        <SectionHeading
+          eyebrow="From school"
+          title="Latest update"
+          actionLabel="See calendar"
+          onAction={() => navigation.navigate("StudentCalendar")}
+        />
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => navigation.navigate("StudentCalendar")}
+          style={({ pressed }) => [styles.updateCard, pressed ? styles.pressed : null]}
+        >
+          <View style={styles.updateIcon}>
+            <MaterialCommunityIcons name={latestUpdate ? "calendar-star" : "bell-check-outline"} size={22} color={theme.purple} />
+          </View>
+          <View style={styles.moveCopy}>
+            <Text style={styles.updateTitle}>{latestUpdate?.title ?? "No new updates"}</Text>
+            <Text style={styles.moveSubtitle}>{latestUpdate?.subtitle ?? "School events and dates will appear here."}</Text>
+          </View>
+          <MaterialCommunityIcons name="chevron-right" size={21} color={theme.dim} />
+        </Pressable>
+      </View>
 
       {profileReadiness < 100 ? (
         <Pressable accessibilityRole="button" onPress={() => navigation.navigate("Profile")}>
@@ -295,7 +423,88 @@ export function StudentHomeView({
         </Pressable>
       ) : null}
 
-      <View style={{ height: 24 }} />
+      <View style={{ height: 28 }} />
     </StudentScreen>
   );
 }
+
+const styles = StyleSheet.create({
+  notificationButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: theme.border,
+    backgroundColor: theme.surface,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  notificationBadge: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    minWidth: 17,
+    height: 17,
+    borderRadius: 999,
+    backgroundColor: theme.redText,
+    paddingHorizontal: 3,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  notificationBadgeText: { color: "#FFFFFF", fontSize: 8, fontWeight: "900" },
+  welcome: { paddingHorizontal: 18, paddingTop: 18, paddingBottom: 8 },
+  eyebrow: {
+    color: theme.redText,
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.9,
+    textTransform: "uppercase",
+  },
+  welcomeTitle: { marginTop: 5, color: theme.text, fontSize: 26, lineHeight: 32, fontWeight: "900" },
+  welcomeSubtitle: { marginTop: 5, color: theme.subtext, fontSize: 13, lineHeight: 19 },
+  section: { paddingHorizontal: 16, paddingTop: 18 },
+  sectionHeading: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    gap: 10,
+    marginBottom: 9,
+  },
+  headingCopy: { flex: 1 },
+  sectionTitle: { marginTop: 2, color: theme.text, fontSize: 19, lineHeight: 24, fontWeight: "900" },
+  sectionAction: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 4, paddingLeft: 8 },
+  sectionActionText: { color: theme.redText, fontSize: 11, fontWeight: "900" },
+  priorityCard: { borderRadius: 22, backgroundColor: theme.deepNavy, padding: 18 },
+  priorityPressed: { opacity: 0.9, transform: [{ scale: 0.995 }] },
+  priorityTopRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  priorityIcon: { width: 42, height: 42, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: theme.redText },
+  priorityKicker: { color: "#FECACA", fontSize: 10, fontWeight: "900", letterSpacing: 0.8, textTransform: "uppercase" },
+  priorityTitle: { marginTop: 15, color: "#FFFFFF", fontSize: 22, lineHeight: 28, fontWeight: "900" },
+  priorityContext: { marginTop: 5, color: "#CBD5E1", fontSize: 12, lineHeight: 18 },
+  priorityAction: { alignSelf: "flex-start", minHeight: 44, marginTop: 17, borderRadius: 13, backgroundColor: "#FFFFFF", paddingHorizontal: 15, flexDirection: "row", alignItems: "center", gap: 8 },
+  priorityActionText: { color: theme.text, fontSize: 12, fontWeight: "900" },
+  dayCard: { overflow: "hidden", borderRadius: 18, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.surface },
+  scheduleRow: { minHeight: 76, flexDirection: "row", alignItems: "center", paddingHorizontal: 14 },
+  scheduleDivider: { borderBottomWidth: 1, borderBottomColor: theme.border },
+  timeColumn: { width: 75, alignSelf: "stretch", justifyContent: "center" },
+  timeText: { color: theme.redText, fontSize: 11, fontWeight: "900" },
+  timelineDot: { position: "absolute", right: 9, top: 33, width: 9, height: 9, borderRadius: 999, backgroundColor: theme.redText },
+  timelineLine: { position: "absolute", right: 13, top: 42, bottom: -35, width: 1, backgroundColor: theme.redLine },
+  scheduleCopy: { flex: 1, minWidth: 0 },
+  scheduleTitle: { color: theme.text, fontSize: 14, lineHeight: 19, fontWeight: "900" },
+  scheduleMeta: { marginTop: 4, color: theme.muted, fontSize: 11, lineHeight: 16 },
+  emptyDay: { minHeight: 84, flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14 },
+  emptyDayIcon: { width: 44, height: 44, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: theme.amberSoft },
+  moveGrid: { gap: 9 },
+  moveTile: { minHeight: 88, borderRadius: 17, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.surface, padding: 13, flexDirection: "row", alignItems: "center", gap: 12 },
+  moveIcon: { width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  moveCopy: { flex: 1, minWidth: 0 },
+  moveLabel: { color: theme.redText, fontSize: 9, fontWeight: "900", letterSpacing: 0.7, textTransform: "uppercase" },
+  moveTitle: { marginTop: 3, color: theme.text, fontSize: 14, lineHeight: 18, fontWeight: "900" },
+  moveSubtitle: { marginTop: 3, color: theme.muted, fontSize: 11, lineHeight: 16 },
+  updateCard: { minHeight: 82, borderRadius: 17, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.surface, padding: 13, flexDirection: "row", alignItems: "center", gap: 12 },
+  updateIcon: { width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: theme.purpleSoft },
+  updateTitle: { color: theme.text, fontSize: 14, lineHeight: 18, fontWeight: "900" },
+  pressed: { opacity: 0.72 },
+});

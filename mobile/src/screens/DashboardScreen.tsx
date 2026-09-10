@@ -1195,7 +1195,6 @@ export function DashboardScreen({ navigation }: Props) {
           </>
         }
         firstName={firstName}
-        initials={initials}
         unreadCount={unreadCount}
         profileReadiness={profileReadiness}
         pendingAssessments={pendingAssessments}

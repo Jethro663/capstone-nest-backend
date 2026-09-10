@@ -125,6 +125,9 @@ jest.mock("react-native", () => {
       select: (options: Record<string, unknown>) =>
         options.ios ?? options.default,
     },
+    StyleSheet: {
+      create: (styles: Record<string, unknown>) => styles,
+    },
     useWindowDimensions: () => ({ width: 390, height: 844 }),
     Animated: {
       Value: AnimatedValue,
@@ -2535,7 +2538,7 @@ describe("mobile rendered screen flows", () => {
     });
   });
 
-  it("renders the compact agenda-first student home hierarchy", () => {
+  it("renders the student day path without repeating the priority item", () => {
     const { DashboardScreen } = require("../DashboardScreen");
     const navigate = jest.fn();
 
@@ -2554,20 +2557,37 @@ describe("mobile rendered screen flows", () => {
       .map((node) => flattenText(node))
       .join(" ");
 
-    expect(renderedText).toContain("Student Home");
-    expect(renderedText).toContain("Next for you");
-    expect(renderedText).toContain("Today");
-    expect(renderedText).toContain("Continue learning");
-    expect(renderedText).toContain("Due soon");
+    expect(renderedText).toContain("Home");
+    expect(renderedText).toContain("Your next move");
+    expect(renderedText).toContain("Your day");
+    expect(renderedText).toContain("Keep moving");
     expect(renderedText).toContain("Latest update");
+    expect(renderedText).not.toContain("Next for you");
+    expect(renderedText).not.toContain("Continue learning");
+    expect(renderedText).not.toContain("Due soon");
     expect(renderedText).not.toContain("Weekly Progress");
     expect(renderedText).not.toContain("Student Tools");
+    expect(
+      testRenderer!.root.findAll(
+        (node) => node.type === "Text" && flattenText(node) === "Assessment 1",
+      ),
+    ).toHaveLength(1);
+    expect(
+      testRenderer!.root.findAll(
+        (node) => node.props.accessibilityLabel === "Open profile",
+      ),
+    ).toHaveLength(0);
+    expect(
+      testRenderer!.root.findAll(
+        (node) => node.props.accessibilityLabel === "Refresh Student Home",
+      ),
+    ).toHaveLength(0);
     expect(mockedUseLessons).toHaveBeenCalledWith("class-1");
     expect(mockedUseLessonCompletions).toHaveBeenCalledWith("class-1");
     expect(mockedUseAssessments).toHaveBeenCalledWith("class-1");
   });
 
-  it("routes the home class action to the Classes tab", () => {
+  it("routes the home calendar action to the student calendar", () => {
     const { DashboardScreen } = require("../DashboardScreen");
     const navigate = jest.fn();
 
@@ -2581,15 +2601,12 @@ describe("mobile rendered screen flows", () => {
       );
     });
 
-    const classesButton = findPressableByText(
-      testRenderer!.root,
-      "View all classes",
-    );
+    const classesButton = findPressableByText(testRenderer!.root, "Full calendar");
     act(() => {
       classesButton.props.onPress();
     });
 
-    expect(navigate).toHaveBeenCalledWith("Classes");
+    expect(navigate).toHaveBeenCalledWith("StudentCalendar");
   });
 
   it("removes dashboard stat shortcuts and keeps the profile nudge actionable", () => {
@@ -2906,7 +2923,7 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).not.toContain("No courses found");
   });
 
-  it("renders Classes as direct current-class rows without accordion channels", () => {
+  it("renders Classes as web-derived mobile class cards", () => {
     const { LessonsScreen } = require("../LessonsScreen");
     const navigate = jest.fn();
 
@@ -2919,6 +2936,7 @@ describe("mobile rendered screen flows", () => {
           schoolYear: "2025-2026",
           section: { id: "section-1", name: "Section A", gradeLevel: "10" },
           teacher: { id: "teacher-1", firstName: "Teacher", lastName: "One" },
+          enrollmentCount: 3,
           schedules: [
             {
               id: "schedule-1",
@@ -2935,6 +2953,7 @@ describe("mobile rendered screen flows", () => {
           schoolYear: "2025-2026",
           section: { id: "section-2", name: "Section B", gradeLevel: "10" },
           teacher: { id: "teacher-2", firstName: "Teacher", lastName: "Two" },
+          enrollmentCount: 2,
         },
       ]) as ReturnType<typeof useStudentClasses>,
     );
@@ -3115,6 +3134,14 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).toContain("Current");
     expect(renderedText).toContain("Completed");
     expect(renderedText).toContain("Mathematics");
+    expect(renderedText).toContain("Classmates");
+    expect(renderedText).toContain("Lessons");
+    expect(renderedText).toContain("Pending");
+    expect(renderedText).toContain("Learning progress");
+    expect(renderedText).toContain("View Tasks");
+    expect(renderedText).toContain("Continue Learning");
+    expect(renderedText).toContain("View Schedule");
+    expect(renderedText).toContain("2 Classmates");
     expect(renderedText).not.toContain("English");
     expect(renderedText).not.toContain("Courses & Channels");
 
@@ -3125,6 +3152,31 @@ describe("mobile rendered screen flows", () => {
 
     expect(navigate).toHaveBeenCalledWith("ClassDetail", {
       classId: "class-1",
+      source: "classes",
+    });
+
+    const tasksButton = findPressableByText(testRenderer!.root, "View Tasks");
+    act(() => {
+      tasksButton.props.onPress();
+    });
+
+    expect(navigate).toHaveBeenCalledWith("ClassDetail", {
+      classId: "class-1",
+      initialTab: "assignments",
+      source: "classes",
+    });
+
+    const scheduleButton = findPressableByText(
+      testRenderer!.root,
+      "View Schedule",
+    );
+    act(() => {
+      scheduleButton.props.onPress();
+    });
+
+    expect(navigate).toHaveBeenCalledWith("ClassDetail", {
+      classId: "class-1",
+      initialTab: "calendar",
       source: "classes",
     });
 
@@ -3140,10 +3192,12 @@ describe("mobile rendered screen flows", () => {
 
     expect(renderedText).toContain("2 lessons");
     expect(renderedText).toContain("English");
+    expect(renderedText).toContain("100%");
+    expect(renderedText).toContain("Open Class");
     expect(renderedText).not.toContain("Mathematics");
   });
 
-  it("excludes locked module lessons from class accordion progress and channel counts", () => {
+  it("excludes locked module lessons from class-card progress and counts", () => {
     const { LessonsScreen } = require("../LessonsScreen");
     const mappers = require("../../data/mappers");
     const originalToSubjectCard = mappers.toSubjectCard.getMockImplementation();
@@ -3349,7 +3403,7 @@ describe("mobile rendered screen flows", () => {
 
       expect(renderedText).toContain("My Classes");
       expect(renderedText).toContain("Mathematics");
-      expect(renderedText).not.toContain("Continue Learning");
+      expect(renderedText).toContain("Continue Learning");
 
       const classRow = findPressableByText(testRenderer!.root, "Mathematics");
       act(() => {
@@ -5147,8 +5201,14 @@ describe("mobile rendered screen flows", () => {
       .map((node) => flattenText(node))
       .join(" ");
 
-    expect(renderedText).toContain("0 tasks still need attention");
-    expect(renderedText).toContain("No published assessments right now.");
+    expect(renderedText).toContain("You are caught up");
+    expect(renderedText).toContain("Nothing else is due");
+    expect(renderedText).not.toContain("Assessment 1");
+    expect(
+      testRenderer!.root.findAll(
+        (node) => node.type === "Text" && flattenText(node) === "Lesson 1",
+      ),
+    ).toHaveLength(1);
     expect(mockedUseAssessmentAttempts).toHaveBeenCalledWith("assessment-1");
   });
 
@@ -5180,7 +5240,8 @@ describe("mobile rendered screen flows", () => {
       .join(" ");
 
     expect(renderedText).toContain("Checking 1 assessment status");
-    expect(renderedText).toContain("Checking assessment submissions");
+    expect(renderedText).toContain("Checking your work");
+    expect(renderedText).toContain("Your latest submissions are syncing.");
   });
 
   it("does not count assessments as pending when attempt loading fails", () => {
@@ -5220,7 +5281,8 @@ describe("mobile rendered screen flows", () => {
       .join(" ");
 
     expect(renderedText).toContain("Checking 1 assessment status");
-    expect(renderedText).toContain("Checking assessment submissions");
+    expect(renderedText).toContain("Checking your work");
+    expect(renderedText).toContain("Your latest submissions are syncing.");
     expect(mockedUseAssessmentAttempts).toHaveBeenCalledWith("assessment-1");
   });
 
@@ -5289,7 +5351,7 @@ describe("mobile rendered screen flows", () => {
       .join(" ");
 
     expect(mockedUseSchoolEvents).not.toHaveBeenCalled();
-    expect(renderedText).toContain("Student Home");
+    expect(renderedText).toContain("Home");
   });
 
   it("does not query school events when the student has no classes", () => {

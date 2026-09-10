@@ -52,6 +52,7 @@ type DerivedClassItem = {
   id: string;
   subjectName: string;
   subjectCode: string;
+  subjectGradeLevel: string;
   sectionName: string;
   teacherName: string;
   badgeText: string;
@@ -59,6 +60,9 @@ type DerivedClassItem = {
   progress: number;
   completedLessons: number;
   totalLessons: number;
+  classmatesCount: number;
+  totalAssessments: number;
+  pendingCount: number;
   assessmentsCount: number;
   announcementsCount: number;
   calendarCount: number;
@@ -319,11 +323,13 @@ export function LessonsScreen({ navigation }: Props) {
       const calendarCount =
         (classItem.schedules?.length ?? 0) +
         assessments.filter((assessment) => Boolean(assessment.dueDate)).length;
+      const enrolledLearners = classItem.enrollments?.length ?? classItem.enrollmentCount ?? 0;
 
       return {
         id: classItem.id,
         subjectName: resolveSubjectName(classItem),
         subjectCode: resolveSubjectCode(classItem),
+        subjectGradeLevel: classItem.subjectGradeLevel || classItem.section?.gradeLevel || "—",
         sectionName: resolveSectionName(classItem),
         teacherName: resolveTeacherName(classItem),
         badgeText: resolveBadgeText(classItem, index),
@@ -331,6 +337,9 @@ export function LessonsScreen({ navigation }: Props) {
         progress,
         completedLessons,
         totalLessons,
+        classmatesCount: Math.max(0, enrolledLearners - 1),
+        totalAssessments: assessments.length,
+        pendingCount: Math.max(totalLessons - completedLessons, 0) + assessments.length,
         assessmentsCount: assessments.length,
         announcementsCount: announcements.length,
         calendarCount,

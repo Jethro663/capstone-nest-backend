@@ -33,6 +33,7 @@ export function StudentScreen({
   rightAction,
   refreshing,
   onRefresh,
+  showRefreshAction = true,
   bottomAction,
   children,
 }: PropsWithChildren<{
@@ -42,6 +43,7 @@ export function StudentScreen({
   rightAction?: ReactNode;
   refreshing?: boolean;
   onRefresh?: () => void;
+  showRefreshAction?: boolean;
   bottomAction?: ReactNode;
 }>) {
   const insets = useSafeAreaInsets();
@@ -78,7 +80,7 @@ export function StudentScreen({
             {title}
           </Text>
           {rightAction}
-          {onRefresh ? (
+          {onRefresh && showRefreshAction ? (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`Refresh ${title}`}
