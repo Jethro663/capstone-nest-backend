@@ -37,6 +37,9 @@ async function main() {
       await client.query('INSERT INTO _applied_migrations(filename) VALUES ($1)', [filename]);
       await client.query('COMMIT');
     }
+    // Production predates the Drizzle baseline and uses PostgreSQL's default
+    // foreign-key name. Keep the upgrade rehearsal faithful to that schema.
+    await client.query('ALTER TABLE audit_logs RENAME CONSTRAINT audit_logs_actor_id_users_id_fk TO audit_logs_actor_id_fkey');
     const student = (await client.query("INSERT INTO users(email,password,first_name,last_name) VALUES ('migration@example.test','invented-test-only','Legacy','Learner') RETURNING id")).rows[0].id;
     const section = (await client.query("INSERT INTO sections(name,grade_level,school_year) VALUES ('Upgrade fixture','8','2026-2027') RETURNING id")).rows[0].id;
     const cls = (await client.query("INSERT INTO classes(section_id,subject_name,subject_code,subject_grade_level,school_year) VALUES ($1,'Mathematics','MATH8','8','2026-2027') RETURNING id", [section])).rows[0].id;
@@ -59,6 +62,8 @@ async function main() {
     assert.equal((await client.query('SELECT count(*)::int AS count FROM academic_system_states')).rows[0].count, 2);
     assert.equal((await client.query('SELECT count(*)::int AS count FROM subject_annual_grades')).rows[0].count, 0);
     assert.equal((await client.query('SELECT count(*)::int AS count FROM academic_year_policies')).rows[0].count, 0);
+    assert.deepEqual((await client.query("SELECT conname, confdeltype FROM pg_constraint WHERE conrelid='public.audit_logs'::regclass AND contype='f'")).rows, [{ conname: 'audit_logs_actor_id_users_id_fk', confdeltype: 'n' }]);
+    assert.equal((await client.query("SELECT is_nullable FROM information_schema.columns WHERE table_schema='public' AND table_name='audit_logs' AND column_name='actor_id'")).rows[0].is_nullable, 'YES');
     assert.equal((await client.query('SELECT count(*)::int AS count FROM _applied_migrations')).rows[0].count, journal.entries.length);
     console.log('Upgrade and replay passed: exact legacy grade, explicit zero, incompatible Q4, duplicate state and unknown roster preserved; no annual result fabricated.');
   } finally { await client.end(); }

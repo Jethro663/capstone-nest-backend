@@ -48,7 +48,33 @@ CREATE TABLE "enrollment_lifecycle_events" (
 	CONSTRAINT "enrollment_lifecycle_event_outcome_valid" CHECK ("enrollment_lifecycle_events"."outcome" IN ('corrected','withdrawn','transferred_section','transferred_class','completed','archived'))
 );
 --> statement-breakpoint
-ALTER TABLE "audit_logs" DROP CONSTRAINT "audit_logs_actor_id_users_id_fk";
+DO $$
+DECLARE
+	"actor_fk_name" text;
+BEGIN
+	SELECT "constraint"."conname"
+	INTO "actor_fk_name"
+	FROM "pg_constraint" AS "constraint"
+	WHERE "constraint"."conrelid" = 'public.audit_logs'::regclass
+		AND "constraint"."confrelid" = 'public.users'::regclass
+		AND "constraint"."contype" = 'f'
+		AND "constraint"."conkey" = ARRAY[
+			(
+				SELECT "attribute"."attnum"
+				FROM "pg_attribute" AS "attribute"
+				WHERE "attribute"."attrelid" = 'public.audit_logs'::regclass
+					AND "attribute"."attname" = 'actor_id'
+			)
+		]::smallint[]
+	LIMIT 1;
+
+	IF "actor_fk_name" IS NOT NULL THEN
+		EXECUTE format(
+			'ALTER TABLE public.audit_logs DROP CONSTRAINT %I',
+			"actor_fk_name"
+		);
+	END IF;
+END $$;
 --> statement-breakpoint
 ALTER TABLE "audit_logs" ALTER COLUMN "actor_id" DROP NOT NULL;--> statement-breakpoint
 ALTER TABLE "admin_lifecycle_operations" ADD CONSTRAINT "admin_lifecycle_operations_actor_id_users_id_fk" FOREIGN KEY ("actor_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
