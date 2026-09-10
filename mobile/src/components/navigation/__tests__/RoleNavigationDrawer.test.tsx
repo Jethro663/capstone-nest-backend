@@ -13,6 +13,8 @@ import {
   RoleMenuButton,
 } from "../RoleNavigationDrawer";
 
+const mockLogout = jest.fn().mockResolvedValue(undefined);
+
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
 
 jest.mock("react-native", () => {
@@ -23,6 +25,7 @@ jest.mock("react-native", () => {
     };
 
   return {
+    Alert: { alert: jest.fn() },
     Image: component("Image"),
     Modal: ({ visible, children, ...props }: Record<string, unknown>) =>
       visible ? ReactRuntime.createElement("Modal", props, children) : null,
@@ -192,5 +195,57 @@ describe("RoleDrawerProvider", () => {
     expect(renderer!.root.findByProps({ testID: "role-navigation-drawer" })).toBeTruthy();
     expect(renderer!.root.findAllByProps({ accessibilityLabel: "Back" })).toHaveLength(0);
     expect(onBackPress).not.toHaveBeenCalled();
+  });
+
+  it("puts Profile beside a confirmed Log out action only in the student drawer", async () => {
+    const { Alert } = require("react-native") as {
+      Alert: { alert: jest.Mock };
+    };
+    let studentRenderer: TestRenderer.ReactTestRenderer;
+
+    act(() => {
+      studentRenderer = TestRenderer.create(
+        <RoleDrawerProvider
+          role="student"
+          activeRouteName="Dashboard"
+          onNavigate={jest.fn()}
+          onLogout={mockLogout}
+        >
+          <RoleMenuButton />
+        </RoleDrawerProvider>,
+      );
+    });
+    act(() => studentRenderer!.root.findByProps({ accessibilityLabel: "Open navigation menu" }).props.onPress());
+
+    const footer = studentRenderer!.root.findByProps({ testID: "student-drawer-footer" });
+    expect(footer.props.style).toMatchObject({ flexDirection: "row" });
+    expect(studentRenderer!.root.findByProps({ accessibilityLabel: "Go to Profile" })).toBeTruthy();
+
+    act(() => studentRenderer!.root.findByProps({ accessibilityLabel: "Log out" }).props.onPress());
+    expect(Alert.alert).toHaveBeenCalledWith(
+      "Log out?",
+      "You will need to sign in again to continue learning.",
+      expect.any(Array),
+    );
+
+    const actions = Alert.alert.mock.calls.at(-1)?.[2] as Array<{
+      text: string;
+      onPress?: () => Promise<void>;
+    }>;
+    await act(async () => {
+      await actions.find((button) => button.text === "Log out")?.onPress?.();
+    });
+    expect(mockLogout).toHaveBeenCalledTimes(1);
+
+    let teacherRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      teacherRenderer = TestRenderer.create(
+        <RoleDrawerProvider role="teacher" activeRouteName="Home" onNavigate={jest.fn()}>
+          <RoleMenuButton />
+        </RoleDrawerProvider>,
+      );
+    });
+    act(() => teacherRenderer!.root.findByProps({ accessibilityLabel: "Open navigation menu" }).props.onPress());
+    expect(teacherRenderer!.root.findAllByProps({ accessibilityLabel: "Log out" })).toHaveLength(0);
   });
 });

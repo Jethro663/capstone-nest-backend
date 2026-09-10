@@ -680,12 +680,14 @@ function AuthNavigator() {
 }
 
 function StudentTabs() {
+  const { logout } = useAuth();
   const [activeRouteName, setActiveRouteName] = useState("Dashboard");
   return (
     <RoleDrawerProvider
       role="student"
       activeRouteName={activeRouteName}
       onNavigate={navigateFromRoleDrawer}
+      onLogout={logout}
     >
       <Tab.Navigator
         backBehavior="history"

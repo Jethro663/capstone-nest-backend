@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import type { PropsWithChildren, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Pressable, Text, View } from "react-native";
@@ -10,7 +10,13 @@ import {
 } from "../api/hooks";
 import { peekAppError, toAppError } from "../api/http";
 import { assessmentsApi } from "../api/services/assessments";
-import { Refreshable, ScreenScroll } from "../components/ui/primitives";
+import {
+  StudentBottomActionBar,
+  StudentContextStrip,
+  StudentFlatSection,
+  StudentInlineNotice,
+  StudentScreen,
+} from "../components/student/StudentWorkspacePrimitives";
 import type { RootStackParamList } from "../navigation/types";
 import { navigateStudentDetailBack } from "../navigation/student-detail-back";
 import { studentDarkTheme as theme, stripRichText } from "../theme/studentDark";
@@ -139,26 +145,6 @@ function resolvePassingRequirement(
   };
 }
 
-function DarkPanel({ children, style }: PropsWithChildren<{ style?: object }>) {
-  return (
-    <View
-      style={[
-        {
-          borderRadius: 14,
-          borderWidth: 1,
-          borderColor: theme.border,
-          backgroundColor: theme.surface,
-          paddingHorizontal: 14,
-          paddingVertical: 14,
-        },
-        style,
-      ]}
-    >
-      {children}
-    </View>
-  );
-}
-
 function ToneTag({ label, tone }: { label: string; tone: Tone }) {
   const toneStyle = resolveToneStyle(tone);
 
@@ -178,84 +164,73 @@ function ToneTag({ label, tone }: { label: string; tone: Tone }) {
   );
 }
 
-function SectionHeading({
-  title,
-  subtitle,
+function AssessmentFactsLedger({
+  dueDate,
+  totalPoints,
+  passingRequirement,
+  timeLimitMinutes,
+  maxAttempts,
+  attemptsRemaining,
 }: {
-  title: string;
-  subtitle?: string;
+  dueDate?: string | null;
+  totalPoints: number;
+  passingRequirement: { headline: string; supporting: string };
+  timeLimitMinutes?: number | null;
+  maxAttempts: number;
+  attemptsRemaining: number;
 }) {
-  return (
-    <View>
-      <Text style={{ fontSize: 16, fontWeight: "800", color: theme.text }}>
-        {title}
-      </Text>
-      {subtitle ? (
-        <Text
-          style={{
-            marginTop: 4,
-            fontSize: 11,
-            lineHeight: 17,
-            color: theme.muted,
-          }}
-        >
-          {subtitle}
-        </Text>
-      ) : null}
-    </View>
-  );
-}
-
-function MetricTile({
-  eyebrow,
-  value,
-  caption,
-  tone = "blue",
-}: {
-  eyebrow: string;
-  value: string;
-  caption: string;
-  tone?: Tone;
-}) {
-  const toneStyle = resolveToneStyle(tone);
+  const facts = [
+    {
+      label: "Due",
+      value: formatDisplayDate(dueDate),
+      supporting: dueDate ? "Submit before the deadline" : "No deadline set",
+    },
+    {
+      label: "Points",
+      value: totalPoints > 0 ? `${totalPoints} pts` : "Not set",
+      supporting: passingRequirement.supporting,
+    },
+    {
+      label: "Time",
+      value: formatTimeLimit(timeLimitMinutes),
+      supporting: timeLimitMinutes ? "Timer starts when you begin" : "Work at your own pace",
+    },
+    {
+      label: "Attempts",
+      value: `${attemptsRemaining} left`,
+      supporting: `${maxAttempts} total attempt${maxAttempts === 1 ? "" : "s"}`,
+    },
+  ];
 
   return (
     <View
-      style={{
-        minWidth: 132,
-        flex: 1,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: theme.border,
-        backgroundColor: theme.active,
-        paddingHorizontal: 12,
-        paddingVertical: 12,
-      }}
+      testID="assessment-facts-ledger"
+      style={{ flexDirection: "row", flexWrap: "wrap", borderTopWidth: 1, borderTopColor: theme.border }}
     >
-      <Text style={{ fontSize: 10, fontWeight: "700", color: theme.muted }}>
-        {eyebrow}
-      </Text>
-      <Text
-        style={{
-          marginTop: 8,
-          fontSize: 24,
-          lineHeight: 28,
-          fontWeight: "900",
-          color: toneStyle.color,
-        }}
-      >
-        {value}
-      </Text>
-      <Text
-        style={{
-          marginTop: 6,
-          fontSize: 11,
-          lineHeight: 16,
-          color: theme.subtext,
-        }}
-      >
-        {caption}
-      </Text>
+      {facts.map((fact, index) => (
+        <View
+          key={fact.label}
+          style={{
+            width: "50%",
+            minHeight: 82,
+            borderRightWidth: index % 2 === 0 ? 1 : 0,
+            borderBottomWidth: 1,
+            borderColor: theme.border,
+            paddingHorizontal: 14,
+            paddingVertical: 11,
+          }}
+        >
+          <Text style={{ color: theme.muted, fontSize: 9, fontWeight: "900", letterSpacing: 0.7, textTransform: "uppercase" }}>
+            {fact.label}
+          </Text>
+          <Text numberOfLines={2} style={{ marginTop: 5, color: theme.text, fontSize: 15, lineHeight: 19, fontWeight: "900" }}>
+            {fact.value}
+          </Text>
+          <Text numberOfLines={2} style={{ marginTop: 3, color: theme.muted, fontSize: 9, lineHeight: 13 }}>
+            {fact.supporting}
+          </Text>
+        </View>
+      ))}
     </View>
   );
 }
@@ -274,12 +249,11 @@ function FileRow({
   return (
     <View
       style={{
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: theme.border,
-        backgroundColor: theme.active,
-        paddingHorizontal: 12,
-        paddingVertical: 11,
+        borderTopWidth: 1,
+        borderTopColor: theme.border,
+        backgroundColor: theme.surface,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
       }}
     >
       <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
@@ -631,15 +605,6 @@ export function AssessmentDetailScreen({ route, navigation }: Props) {
       : !latestSubmittedAttempt && attemptsRemaining > 0
         ? "Open Upload Workspace"
         : null;
-  const normalHeaderActionLabel = !academicAllowed
-    ? null
-    : latestAttempt?.isSubmitted === false
-      ? "Continue"
-      : attemptsRemaining > 0
-        ? latestSubmittedAttempt
-          ? "Retake"
-          : "Take"
-        : null;
   const fileHeaderAction =
     latestAttempt?.isSubmitted === false
       ? {
@@ -669,729 +634,330 @@ export function AssessmentDetailScreen({ route, navigation }: Props) {
             }
           : null;
 
+  const refreshing =
+    detailQuery.isRefetching || attemptsQuery.isRefetching || classQuery.isRefetching;
+
   if (!assessment && !hasQueryError) {
     return (
-      <ScreenScroll
-        backgroundColor={theme.bg}
-        refreshControl={
-          <Refreshable
-            refreshing={detailQuery.isRefetching || attemptsQuery.isRefetching}
-            onRefresh={handleRefresh}
-          />
-        }
-      >
-        <View style={{ paddingHorizontal: 16, paddingTop: 32 }}>
-          <DarkPanel>
-            <Text
-              style={{ color: theme.text, fontSize: 13, fontWeight: "700" }}
-            >
-              Loading assessment
-            </Text>
-            <Text
-              style={{
-                marginTop: 6,
-                color: theme.muted,
-                fontSize: 12,
-                lineHeight: 18,
-              }}
-            >
-              Preparing the assessment details now.
-            </Text>
-          </DarkPanel>
-        </View>
-      </ScreenScroll>
+      <StudentScreen title="Assessment" showBackButton onBackPress={handleBack} refreshing={refreshing} onRefresh={handleRefresh}>
+        <StudentInlineNotice
+          title="Loading assessment"
+          description="Preparing the assessment details now."
+          icon="progress-clock"
+          tone="blue"
+        />
+      </StudentScreen>
     );
   }
 
   if (!assessment) {
     return (
-      <ScreenScroll
-        backgroundColor={theme.bg}
-        refreshControl={
-          <Refreshable
-            refreshing={detailQuery.isRefetching || attemptsQuery.isRefetching}
-            onRefresh={handleRefresh}
-          />
-        }
-      >
-        <View style={{ paddingHorizontal: 16, paddingTop: 32 }}>
-          <DarkPanel>
-            <Text
-              style={{ color: theme.text, fontSize: 13, fontWeight: "700" }}
-            >
-              Assessment unavailable
-            </Text>
-            <Text
-              style={{
-                marginTop: 6,
-                color: theme.muted,
-                fontSize: 12,
-                lineHeight: 18,
-              }}
-            >
-              {peekAppError(hasQueryError).message}
-            </Text>
-          </DarkPanel>
-        </View>
-      </ScreenScroll>
+      <StudentScreen title="Assessment" showBackButton onBackPress={handleBack} refreshing={refreshing} onRefresh={handleRefresh}>
+        <StudentInlineNotice
+          title="Assessment unavailable"
+          description={peekAppError(hasQueryError).message}
+          icon="alert-circle-outline"
+          tone="amber"
+        />
+      </StudentScreen>
     );
   }
 
+  const bottomAction = isFileUploadAssessment
+    ? fileHeaderAction
+      ? (
+          <StudentBottomActionBar
+            primaryLabel={fileHeaderAction.label}
+            onPrimary={fileHeaderAction.onPress}
+            primaryIcon={fileHeaderAction.label === "Unsubmit" ? "undo-variant" : "arrow-right"}
+            disabled={fileHeaderAction.disabled}
+          />
+        )
+      : null
+    : normalPrimaryLabel
+      ? <StudentBottomActionBar primaryLabel={normalPrimaryLabel} onPrimary={openAssessment} />
+      : latestSubmittedAttempt
+        ? (
+            <StudentBottomActionBar
+              primaryLabel="View Results"
+              primaryIcon="chart-box-outline"
+              onPrimary={() => openResults(latestSubmittedAttempt.id)}
+            />
+          )
+        : null;
+
   return (
-    <ScreenScroll
-      backgroundColor={theme.bg}
-      refreshControl={
-        <Refreshable
-          refreshing={
-            detailQuery.isRefetching ||
-            attemptsQuery.isRefetching ||
-            classQuery.isRefetching
-          }
-          onRefresh={handleRefresh}
-        />
-      }
+    <StudentScreen
+      title="Assessment"
+      showBackButton
+      onBackPress={handleBack}
+      refreshing={refreshing}
+      onRefresh={handleRefresh}
+      bottomAction={bottomAction}
     >
-      <View
-        style={{
-          backgroundColor: theme.header,
-          borderBottomWidth: 1,
-          borderBottomColor: theme.border,
-        }}
-      >
-        <View
-          style={{ paddingHorizontal: 16, paddingTop: 44, paddingBottom: 14 }}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <Pressable
-              onPress={handleBack}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 999,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: theme.active,
-              }}
-            >
-              <MaterialCommunityIcons
-                name="chevron-left"
-                size={20}
-                color={theme.text}
-              />
-            </Pressable>
+      <StudentContextStrip
+        title={heading.code}
+        subtitle={heading.name}
+        status={latestState.label}
+        icon="clipboard-text-outline"
+      />
 
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text
-                numberOfLines={1}
-                style={{ color: theme.text, fontSize: 11, fontWeight: "700" }}
-              >
-                {heading.code}
-              </Text>
-              <Text
-                numberOfLines={1}
-                style={{ marginTop: 3, color: theme.muted, fontSize: 11 }}
-              >
-                {heading.name}
-              </Text>
-            </View>
-
-            {!isFileUploadAssessment && normalHeaderActionLabel ? (
-              <Pressable
-                onPress={openAssessment}
-                style={{
-                  borderRadius: 999,
-                  backgroundColor: theme.red,
-                  paddingHorizontal: 14,
-                  paddingVertical: 10,
-                }}
-              >
-                <Text
-                  style={{ color: "#FFFFFF", fontSize: 11, fontWeight: "800" }}
-                >
-                  {normalHeaderActionLabel}
-                </Text>
-              </Pressable>
-            ) : null}
-
-            {isFileUploadAssessment && fileHeaderAction ? (
-              <Pressable
-                disabled={fileHeaderAction.disabled}
-                onPress={fileHeaderAction.onPress}
-                style={{
-                  borderRadius: 999,
-                  backgroundColor:
-                    fileHeaderAction.label === "Unsubmit"
-                      ? theme.active
-                      : theme.red,
-                  borderWidth: fileHeaderAction.label === "Unsubmit" ? 1 : 0,
-                  borderColor:
-                    fileHeaderAction.label === "Unsubmit"
-                      ? theme.border
-                      : "transparent",
-                  paddingHorizontal: 14,
-                  paddingVertical: 10,
-                  opacity: fileHeaderAction.disabled ? 0.6 : 1,
-                }}
-              >
-                <Text
-                  style={{
-                    color:
-                      fileHeaderAction.label === "Unsubmit"
-                        ? theme.text
-                        : "#FFFFFF",
-                    fontSize: 11,
-                    fontWeight: "800",
-                  }}
-                >
-                  {fileHeaderAction.label}
-                </Text>
-              </Pressable>
-            ) : null}
-          </View>
-        </View>
-
-        <View
-          style={{
-            borderTopWidth: 1,
-            borderTopColor: theme.border,
-            backgroundColor: theme.active,
-            paddingHorizontal: 16,
-            paddingVertical: 10,
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
-          }}
-        >
-          <Text
-            style={{
-              flex: 1,
-              color: theme.text,
-              fontSize: 12,
-              fontWeight: "700",
-            }}
-          >
-            {latestState.label}
-          </Text>
-          <Text style={{ color: theme.muted, fontSize: 11 }}>
-            {formatDisplayDate(assessment.dueDate)}
-          </Text>
+      <View style={{ paddingHorizontal: 16, paddingTop: 18, paddingBottom: 10, backgroundColor: theme.surface }}>
+        <Text style={{ color: theme.text, fontSize: 26, lineHeight: 33, fontWeight: "900" }}>
+          {assessment.title || "Assessment"}
+        </Text>
+        <Text style={{ marginTop: 6, color: theme.muted, fontSize: 12, lineHeight: 18 }}>
+          {assessment.dueDate ? `Due ${formatDisplayDate(assessment.dueDate)}` : "No due date"}
+        </Text>
+        <View style={{ marginTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          <ToneTag label={formatAssessmentType(assessment.type)} tone="blue" />
+          <ToneTag
+            label={isFileUploadAssessment ? "Upload workspace" : `${questionCount} question${questionCount === 1 ? "" : "s"}`}
+            tone="purple"
+          />
+          <ToneTag
+            label={`${attemptsRemaining} attempt${attemptsRemaining === 1 ? "" : "s"} left`}
+            tone={attemptsRemaining > 0 ? "amber" : "red"}
+          />
         </View>
       </View>
 
-      <View style={{ paddingHorizontal: 16, paddingTop: 18, gap: 10 }}>
-        <View>
-          <Text
-            style={{
-              color: theme.text,
-              fontSize: 28,
-              lineHeight: 36,
-              fontWeight: "800",
-            }}
-          >
-            {assessment.title || "Assessment"}
+      {hasQueryError ? (
+        <StudentInlineNotice
+          title="Some assessment data is unavailable"
+          description={peekAppError(hasQueryError).message}
+          icon="cloud-alert-outline"
+          tone="amber"
+        />
+      ) : null}
+
+      {notice ? (
+        <StudentInlineNotice title="Assessment update" description={notice} icon="information-outline" tone="blue" />
+      ) : null}
+
+      <StudentFlatSection title="Assessment details" subtitle="What you need to know before you begin.">
+        <AssessmentFactsLedger
+          dueDate={assessment.dueDate}
+          totalPoints={totalPoints}
+          passingRequirement={passingRequirement}
+          timeLimitMinutes={assessment.timeLimitMinutes}
+          maxAttempts={assessment.maxAttempts ?? 1}
+          attemptsRemaining={attemptsRemaining}
+        />
+        <View style={{ paddingHorizontal: 16, paddingVertical: 15 }}>
+          <Text style={{ color: theme.text, fontSize: 12, fontWeight: "900" }}>Instructions</Text>
+          <Text style={{ marginTop: 6, color: theme.subtext, fontSize: 13, lineHeight: 21 }}>
+            {instructions || "No instructions were provided for this assessment."}
           </Text>
-          <Text
-            style={{
-              marginTop: 8,
-              color: theme.muted,
-              fontSize: 12,
-              lineHeight: 18,
-            }}
-          >
-            {assessment.dueDate
-              ? `Due ${formatDisplayDate(assessment.dueDate)}`
-              : "No due date"}
+          <Text style={{ marginTop: 8, color: theme.muted, fontSize: 10, lineHeight: 15 }}>
+            Pass target: {passingRequirement.headline}
           </Text>
-          <View
-            style={{
-              marginTop: 12,
-              flexDirection: "row",
-              flexWrap: "wrap",
-              gap: 8,
-            }}
-          >
-            <ToneTag
-              label={formatAssessmentType(assessment.type)}
-              tone="blue"
-            />
-            <ToneTag
-              label={
-                isFileUploadAssessment
-                  ? "Upload workspace"
-                  : `${questionCount} question${questionCount === 1 ? "" : "s"}`
-              }
-              tone="purple"
-            />
-            <ToneTag
-              label={`${attemptsRemaining} attempt${attemptsRemaining === 1 ? "" : "s"} left`}
-              tone={attemptsRemaining > 0 ? "amber" : "red"}
-            />
-          </View>
         </View>
+      </StudentFlatSection>
 
-        {hasQueryError ? (
-          <DarkPanel>
-            <Text
-              style={{ fontSize: 13, fontWeight: "700", color: theme.text }}
-            >
-              Some assessment data is unavailable
-            </Text>
-            <Text
-              style={{
-                marginTop: 6,
-                fontSize: 12,
-                lineHeight: 18,
-                color: theme.muted,
-              }}
-            >
-              {peekAppError(hasQueryError).message}
-            </Text>
-          </DarkPanel>
-        ) : null}
-
-        {notice ? (
-          <DarkPanel style={{ backgroundColor: theme.active }}>
-            <Text style={{ fontSize: 12, lineHeight: 18, color: theme.text }}>
-              {notice}
-            </Text>
-          </DarkPanel>
-        ) : null}
-
-        <DarkPanel>
-          <SectionHeading
-            title="Overview"
-            subtitle="Instructions, score target, and the rules for this assessment."
+      {isFileUploadAssessment && assessment.teacherAttachmentFile ? (
+        <StudentFlatSection title="Reference material" subtitle="Teacher-provided file for this upload task.">
+          <FileRow
+            file={assessment.teacherAttachmentFile}
+            accent="amber"
+            actions={
+              <>
+                {isImageFile(assessment.teacherAttachmentFile) ? (
+                  <ActionButton
+                    label="Open"
+                    compact
+                    variant="ghost"
+                    disabled={busyAction === "open-reference"}
+                    onPress={() =>
+                      void runFileAction("open-reference", () =>
+                        assessmentsApi.openTeacherAttachment(
+                          assessmentId,
+                          assessment.teacherAttachmentFile?.originalName || "teacher-attachment",
+                        ).then(() => undefined),
+                      )
+                    }
+                  />
+                ) : null}
+                <ActionButton
+                  label="Download"
+                  compact
+                  variant="secondary"
+                  disabled={busyAction === "download-reference"}
+                  onPress={() =>
+                    void runFileAction(
+                      "download-reference",
+                      () => assessmentsApi.downloadTeacherAttachment(
+                        assessmentId,
+                        assessment.teacherAttachmentFile?.originalName || "teacher-attachment",
+                      ).then(() => undefined),
+                      "Reference material saved to this device.",
+                    )
+                  }
+                />
+              </>
+            }
           />
-          <View
-            style={{
-              marginTop: 14,
-              flexDirection: "row",
-              flexWrap: "wrap",
-              gap: 10,
-            }}
-          >
-            <MetricTile
-              eyebrow="TOTAL POINTS"
-              value={totalPoints > 0 ? `${totalPoints}` : "--"}
-              caption={
-                totalPoints > 0
-                  ? "Maximum points available in this assessment."
-                  : "Points are not set yet."
-              }
-              tone="blue"
-            />
-            <MetricTile
-              eyebrow="PASS TARGET"
-              value={passingRequirement.headline}
-              caption={passingRequirement.supporting}
-              tone="amber"
-            />
-            <MetricTile
-              eyebrow="TIME LIMIT"
-              value={formatTimeLimit(assessment.timeLimitMinutes)}
-              caption={
-                assessment.timeLimitMinutes
-                  ? "Timed assessment."
-                  : "Work at your own pace."
-              }
-              tone="green"
-            />
-            <MetricTile
-              eyebrow="ATTEMPTS"
-              value={`${assessment.maxAttempts ?? 1}`}
-              caption={`${attemptsRemaining} remaining right now.`}
-              tone={attemptsRemaining > 0 ? "purple" : "red"}
-            />
-          </View>
+        </StudentFlatSection>
+      ) : null}
 
-          <Text
-            style={{
-              marginTop: 14,
-              fontSize: 13,
-              lineHeight: 21,
-              color: theme.subtext,
-            }}
-          >
-            {instructions ||
-              "No instructions were provided for this assessment."}
-          </Text>
-        </DarkPanel>
+      {isFileUploadAssessment ? (
+        <StudentFlatSection
+          title="My work"
+          subtitle={latestAttemptFiles.length > 0
+            ? `${latestAttemptFiles.length} attachment${latestAttemptFiles.length === 1 ? "" : "s"} currently included.`
+            : "No attachments have been added yet."}
+        >
+          {fileWorkspaceLabel ? (
+            <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
+              <ActionButton label={fileWorkspaceLabel} onPress={openAssessment} />
+            </View>
+          ) : !fileWorkspaceLabel && latestSubmittedAttempt ? (
+            <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
+              <ActionButton label="View Results" onPress={() => openResults(latestSubmittedAttempt.id)} variant="secondary" />
+            </View>
+          ) : null}
 
-        {isFileUploadAssessment && assessment.teacherAttachmentFile ? (
-          <DarkPanel>
-            <SectionHeading
-              title="Reference material"
-              subtitle="Teacher-provided file for this upload task."
-            />
-            <View style={{ marginTop: 12 }}>
+          {latestAttemptFiles.length > 0 ? latestAttemptFiles.map((file, index) => {
+            const canRemove = latestAttempt?.isSubmitted === false;
+            return (
               <FileRow
-                file={assessment.teacherAttachmentFile}
-                accent="amber"
-                actions={
+                key={`${file.id || file.originalName || "file"}-${index}`}
+                file={file}
+                actions={latestFileAttemptId ? (
                   <>
-                    {isImageFile(assessment.teacherAttachmentFile) ? (
+                    {isImageFile(file) ? (
                       <ActionButton
                         label="Open"
                         compact
                         variant="ghost"
-                        disabled={busyAction === "open-reference"}
-                        onPress={() =>
-                          void runFileAction("open-reference", () =>
-                            assessmentsApi
-                              .openTeacherAttachment(
-                                assessmentId,
-                                assessment.teacherAttachmentFile
-                                  ?.originalName || "teacher-attachment",
-                              )
-                              .then(() => undefined),
-                          )
-                        }
+                        disabled={busyAction === `open-${file.id}`}
+                        onPress={() => void runFileAction(`open-${file.id}`, () =>
+                          assessmentsApi.openAttemptSubmissionAttachmentFile(
+                            latestFileAttemptId,
+                            file.id,
+                            file.originalName || "submission-file",
+                          ).then(() => undefined),
+                        )}
                       />
                     ) : null}
                     <ActionButton
                       label="Download"
                       compact
                       variant="secondary"
-                      disabled={busyAction === "download-reference"}
-                      onPress={() =>
-                        void runFileAction(
-                          "download-reference",
-                          () =>
-                            assessmentsApi
-                              .downloadTeacherAttachment(
-                                assessmentId,
-                                assessment.teacherAttachmentFile
-                                  ?.originalName || "teacher-attachment",
-                              )
-                              .then(() => undefined),
-                          "Reference material saved to this device.",
-                        )
-                      }
+                      disabled={busyAction === `download-${file.id}`}
+                      onPress={() => void runFileAction(
+                        `download-${file.id}`,
+                        () => assessmentsApi.downloadAttemptSubmissionAttachmentFile(
+                          latestFileAttemptId,
+                          file.id,
+                          file.originalName || "submission-file",
+                        ).then(() => undefined),
+                        "Submission file saved to this device.",
+                      )}
                     />
+                    {canRemove ? (
+                      <ActionButton
+                        label="Remove"
+                        compact
+                        variant="secondary"
+                        disabled={busyAction === `remove-${file.id}`}
+                        onPress={() => void removeDraftFile(file.id)}
+                      />
+                    ) : null}
                   </>
-                }
+                ) : null}
               />
-            </View>
-          </DarkPanel>
-        ) : null}
+            );
+          }) : (
+            <Text style={{ paddingHorizontal: 16, paddingBottom: 15, fontSize: 12, lineHeight: 18, color: theme.muted }}>
+              Open the upload workspace to attach files from your device, review them, or remove them before submitting.
+            </Text>
+          )}
+        </StudentFlatSection>
+      ) : null}
 
-        {isFileUploadAssessment ? (
-          <DarkPanel>
-            <SectionHeading
-              title="My work"
-              subtitle={
-                latestAttemptFiles.length > 0
-                  ? `${latestAttemptFiles.length} attachment${latestAttemptFiles.length === 1 ? "" : "s"} currently included.`
-                  : "No attachments have been added yet."
-              }
-            />
-
-            <View
-              style={{
-                marginTop: 12,
-                flexDirection: "row",
-                flexWrap: "wrap",
-                gap: 10,
-              }}
-            >
-              {fileWorkspaceLabel ? (
-                <ActionButton
-                  label={fileWorkspaceLabel}
-                  onPress={openAssessment}
-                />
-              ) : null}
-              {!fileWorkspaceLabel && latestSubmittedAttempt ? (
-                <ActionButton
-                  label="View Results"
-                  onPress={() => openResults(latestSubmittedAttempt.id)}
-                  variant="secondary"
-                />
-              ) : null}
-            </View>
-
-            {latestAttemptFiles.length > 0 ? (
-              <View style={{ marginTop: 14, gap: 8 }}>
-                {latestAttemptFiles.map((file, index) => {
-                  const canRemove = latestAttempt?.isSubmitted === false;
-                  return (
-                    <FileRow
-                      key={`${file.id || file.originalName || "file"}-${index}`}
-                      file={file}
-                      actions={
-                        latestFileAttemptId ? (
-                          <>
-                            {isImageFile(file) ? (
-                              <ActionButton
-                                label="Open"
-                                compact
-                                variant="ghost"
-                                disabled={busyAction === `open-${file.id}`}
-                                onPress={() =>
-                                  void runFileAction(`open-${file.id}`, () =>
-                                    assessmentsApi
-                                      .openAttemptSubmissionAttachmentFile(
-                                        latestFileAttemptId,
-                                        file.id,
-                                        file.originalName || "submission-file",
-                                      )
-                                      .then(() => undefined),
-                                  )
-                                }
-                              />
-                            ) : null}
-                            <ActionButton
-                              label="Download"
-                              compact
-                              variant="secondary"
-                              disabled={busyAction === `download-${file.id}`}
-                              onPress={() =>
-                                void runFileAction(
-                                  `download-${file.id}`,
-                                  () =>
-                                    assessmentsApi
-                                      .downloadAttemptSubmissionAttachmentFile(
-                                        latestFileAttemptId,
-                                        file.id,
-                                        file.originalName || "submission-file",
-                                      )
-                                      .then(() => undefined),
-                                  "Submission file saved to this device.",
-                                )
-                              }
-                            />
-                            {canRemove ? (
-                              <ActionButton
-                                label="Remove"
-                                compact
-                                variant="secondary"
-                                disabled={busyAction === `remove-${file.id}`}
-                                onPress={() => void removeDraftFile(file.id)}
-                              />
-                            ) : null}
-                          </>
-                        ) : null
-                      }
-                    />
-                  );
-                })}
-              </View>
-            ) : (
-              <Text
-                style={{
-                  marginTop: 14,
-                  fontSize: 12,
-                  lineHeight: 18,
-                  color: theme.muted,
-                }}
-              >
-                Open the upload workspace to attach files from your device,
-                review them, or remove them before submitting.
-              </Text>
-            )}
-          </DarkPanel>
-        ) : null}
-
-        <DarkPanel>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "flex-start",
-              justifyContent: "space-between",
-              gap: 10,
-            }}
-          >
-            <SectionHeading
-              title="Latest activity"
-              subtitle={
-                latestAttempt
-                  ? `Attempt #${latestAttempt.attemptNumber ?? submittedAttempts.length ?? 1}`
-                  : "No attempt has been started yet."
-              }
-            />
-            <ToneTag label={latestState.label} tone={latestState.tone} />
-          </View>
-
-          <Text
-            style={{
-              marginTop: 12,
-              fontSize: 13,
-              lineHeight: 20,
-              color: theme.subtext,
-            }}
-          >
-            {latestState.summary}
-          </Text>
-
+      <StudentFlatSection
+        title="Latest activity"
+        subtitle={latestAttempt
+          ? `Attempt #${latestAttempt.attemptNumber ?? submittedAttempts.length ?? 1}`
+          : "No attempt has been started yet."}
+        action={<ToneTag label={latestState.label} tone={latestState.tone} />}
+      >
+        <View style={{ paddingHorizontal: 16, paddingBottom: 15 }}>
+          <Text style={{ fontSize: 13, lineHeight: 20, color: theme.subtext }}>{latestState.summary}</Text>
           {latestSubmittedAttempt?.submittedAt ? (
-            <Text style={{ marginTop: 10, fontSize: 11, color: theme.muted }}>
-              Latest submission:{" "}
-              {formatAttemptDate(latestSubmittedAttempt.submittedAt)}
+            <Text style={{ marginTop: 9, fontSize: 11, color: theme.muted }}>
+              Latest submission: {formatAttemptDate(latestSubmittedAttempt.submittedAt)}
             </Text>
           ) : latestAttempt?.startedAt ? (
-            <Text style={{ marginTop: 10, fontSize: 11, color: theme.muted }}>
+            <Text style={{ marginTop: 9, fontSize: 11, color: theme.muted }}>
               Started: {formatAttemptDate(latestAttempt.startedAt)}
             </Text>
           ) : null}
-
-          <View
-            style={{
-              marginTop: 14,
-              flexDirection: "row",
-              flexWrap: "wrap",
-              gap: 10,
-            }}
-          >
+          <View style={{ marginTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
             {isFileUploadAssessment ? (
-              <>
-                {fileWorkspaceLabel ? (
-                  <ActionButton
-                    label={fileWorkspaceLabel}
-                    onPress={openAssessment}
-                  />
-                ) : latestSubmittedAttempt ? (
-                  <ActionButton
-                    label="View Results"
-                    onPress={() => openResults(latestSubmittedAttempt.id)}
-                  />
-                ) : null}
-              </>
+              latestSubmittedAttempt ? (
+                <ActionButton label="View Results" onPress={() => openResults(latestSubmittedAttempt.id)} variant="secondary" />
+              ) : null
             ) : (
               <>
-                {normalPrimaryLabel ? (
-                  <ActionButton
-                    label={normalPrimaryLabel}
-                    onPress={openAssessment}
-                  />
+                {latestSubmittedAttempt ? (
+                  <ActionButton label="View Results" onPress={() => openResults(latestSubmittedAttempt.id)} variant="secondary" />
                 ) : null}
-                {!fileWorkspaceLabel && latestSubmittedAttempt ? (
-                  <ActionButton
-                    label="View Results"
-                    onPress={() => openResults(latestSubmittedAttempt.id)}
-                    variant={normalPrimaryLabel ? "secondary" : "primary"}
-                  />
-                ) : null}
-                <ActionButton
-                  label="Open History"
-                  onPress={openHistory}
-                  variant="secondary"
-                />
+                <ActionButton label="Open History" onPress={openHistory} variant="secondary" />
               </>
             )}
           </View>
-        </DarkPanel>
+        </View>
+      </StudentFlatSection>
 
-        {!isFileUploadAssessment && submittedAttempts.length > 0 ? (
-          <DarkPanel>
+      {!isFileUploadAssessment && submittedAttempts.length > 0 ? (
+        <StudentFlatSection
+          title="Attempt history"
+          subtitle={`${submittedAttempts.length} submitted attempt${submittedAttempts.length === 1 ? "" : "s"} recorded.`}
+          action={
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Attempt history"
+              accessibilityState={{ expanded: historyExpanded }}
               onPress={() => setHistoryExpanded((current) => !current)}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 12,
-              }}
+              style={{ width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: theme.active }}
             >
-              <SectionHeading
-                title="Attempt history"
-                subtitle={`${submittedAttempts.length} submitted attempt${submittedAttempts.length === 1 ? "" : "s"} recorded.`}
-              />
-              <MaterialCommunityIcons
-                name={historyExpanded ? "chevron-up" : "chevron-down"}
-                size={18}
-                color={theme.text}
-              />
+              <MaterialCommunityIcons name={historyExpanded ? "chevron-up" : "chevron-down"} size={18} color={theme.text} />
             </Pressable>
-
-            {historyExpanded ? (
-              <View style={{ marginTop: 12, gap: 8 }}>
-                {submittedAttempts.map((attempt, index) => {
-                  const statusTone = attempt.isReturned ? "green" : "amber";
-                  const statusLabel = attempt.isReturned
-                    ? "Reviewed"
-                    : "Awaiting review";
-
-                  return (
-                    <View
-                      key={attempt.id}
-                      style={{
-                        borderTopWidth: index === 0 ? 0 : 1,
-                        borderTopColor: theme.border,
-                        paddingTop: index === 0 ? 0 : 10,
-                      }}
-                    >
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          gap: 10,
-                        }}
-                      >
-                        <View style={{ flex: 1 }}>
-                          <Text
-                            style={{
-                              fontSize: 12,
-                              fontWeight: "700",
-                              color: theme.text,
-                            }}
-                          >
-                            Attempt #{attempt.attemptNumber ?? index + 1}
-                          </Text>
-                          <Text
-                            style={{
-                              marginTop: 3,
-                              fontSize: 10,
-                              color: theme.muted,
-                            }}
-                          >
-                            {formatAttemptDate(
-                              attempt.submittedAt || attempt.createdAt,
-                            )}
-                          </Text>
-                        </View>
-                        <ToneTag label={statusLabel} tone={statusTone} />
-                      </View>
-
-                      {attempt.score !== undefined && attempt.score !== null ? (
-                        <Text
-                          style={{
-                            marginTop: 8,
-                            fontSize: 12,
-                            color: theme.subtext,
-                          }}
-                        >
-                          Score:{" "}
-                          <Text
-                            style={{ color: theme.text, fontWeight: "700" }}
-                          >
-                            {Math.round(attempt.score)}%
-                          </Text>
-                        </Text>
-                      ) : null}
-
-                      <View
-                        style={{
-                          marginTop: 10,
-                          flexDirection: "row",
-                          flexWrap: "wrap",
-                          gap: 10,
-                        }}
-                      >
-                        <ActionButton
-                          label="Open Attempt"
-                          onPress={() => openResults(attempt.id)}
-                          variant="secondary"
-                        />
-                      </View>
-                    </View>
-                  );
-                })}
+          }
+        >
+          {historyExpanded ? submittedAttempts.map((attempt, index) => {
+            const statusTone = attempt.isReturned ? "green" : "amber";
+            const statusLabel = attempt.isReturned ? "Reviewed" : "Awaiting review";
+            return (
+              <View key={attempt.id} style={{ borderTopWidth: 1, borderTopColor: theme.border, paddingHorizontal: 16, paddingVertical: 12 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 12, fontWeight: "800", color: theme.text }}>
+                      Attempt #{attempt.attemptNumber ?? index + 1}
+                    </Text>
+                    <Text style={{ marginTop: 3, fontSize: 10, color: theme.muted }}>
+                      {formatAttemptDate(attempt.submittedAt || attempt.createdAt)}
+                    </Text>
+                  </View>
+                  <ToneTag label={statusLabel} tone={statusTone} />
+                </View>
+                {attempt.score !== undefined && attempt.score !== null ? (
+                  <Text style={{ marginTop: 8, fontSize: 12, color: theme.subtext }}>
+                    Score: <Text style={{ color: theme.text, fontWeight: "800" }}>{Math.round(attempt.score)}%</Text>
+                  </Text>
+                ) : null}
+                <View style={{ marginTop: 10, flexDirection: "row" }}>
+                  <ActionButton label="Open Attempt" onPress={() => openResults(attempt.id)} variant="secondary" />
+                </View>
               </View>
-            ) : null}
-          </DarkPanel>
-        ) : null}
-      </View>
-    </ScreenScroll>
+            );
+          }) : null}
+        </StudentFlatSection>
+      ) : null}
+
+      <View style={{ height: 24 }} />
+    </StudentScreen>
   );
 }

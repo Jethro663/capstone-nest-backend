@@ -61,31 +61,33 @@ export function StudentClassCard({
 
   return (
     <View style={styles.card}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Open ${classItem.subjectName}`}
-        onPress={onOpenClass}
-        style={({ pressed }) => [styles.hero, { backgroundColor: heroColor }, pressed ? styles.heroPressed : null]}
-      >
-        <View style={styles.heroTopRow}>
-          <Text style={styles.subjectCode}>{classItem.subjectCode}</Text>
-          <View style={[styles.statusPill, isComplete ? styles.statusPillComplete : null]}>
-            <View style={[styles.statusDot, isComplete ? styles.statusDotComplete : null]} />
-            <Text style={styles.statusText}>{statusLabel}</Text>
+      <View testID="student-class-hero-surface" style={[styles.hero, { backgroundColor: heroColor }]}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${classItem.subjectName}`}
+          onPress={onOpenClass}
+          style={({ pressed }) => [styles.heroPressTarget, pressed ? styles.heroPressed : null]}
+        >
+          <View style={styles.heroTopRow}>
+            <Text style={styles.subjectCode}>{classItem.subjectCode}</Text>
+            <View style={[styles.statusPill, isComplete ? styles.statusPillComplete : null]}>
+              <View style={[styles.statusDot, isComplete ? styles.statusDotComplete : null]} />
+              <Text style={styles.statusText}>{statusLabel}</Text>
+            </View>
           </View>
-        </View>
-        <Text numberOfLines={2} style={styles.subjectName}>{classItem.subjectName}</Text>
-        <View style={styles.classMetaList}>
-          <View style={styles.classMetaRow}>
-            <MaterialCommunityIcons name="school-outline" size={16} color="#E2E8F0" />
-            <Text style={styles.classMetaText}>Grade {classItem.subjectGradeLevel} · {classItem.sectionName}</Text>
+          <Text numberOfLines={2} style={styles.subjectName}>{classItem.subjectName}</Text>
+          <View style={styles.classMetaList}>
+            <View style={styles.classMetaRow}>
+              <MaterialCommunityIcons name="school-outline" size={16} color="#E2E8F0" />
+              <Text style={styles.classMetaText}>Grade {classItem.subjectGradeLevel} · {classItem.sectionName}</Text>
+            </View>
+            <View style={styles.classMetaRow}>
+              <MaterialCommunityIcons name="account-tie-outline" size={16} color="#E2E8F0" />
+              <Text numberOfLines={1} style={styles.classMetaText}>{classItem.teacherName}</Text>
+            </View>
           </View>
-          <View style={styles.classMetaRow}>
-            <MaterialCommunityIcons name="account-tie-outline" size={16} color="#E2E8F0" />
-            <Text numberOfLines={1} style={styles.classMetaText}>{classItem.teacherName}</Text>
-          </View>
-        </View>
-      </Pressable>
+        </Pressable>
+      </View>
 
       <View style={styles.body}>
         <View style={styles.metricsRow}>
@@ -125,22 +127,26 @@ export function StudentClassCard({
         </View>
 
         <View style={styles.actionRow}>
-          <Pressable
-            accessibilityRole="button"
-            onPress={onOpenTasks}
-            style={({ pressed }) => [styles.secondaryButton, pressed ? styles.pressed : null]}
-          >
-            <MaterialCommunityIcons name="clipboard-text-outline" size={17} color={theme.redText} />
-            <Text style={styles.secondaryButtonText}>View Tasks</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            onPress={onOpenClass}
-            style={({ pressed }) => [styles.primaryButton, pressed ? styles.pressed : null]}
-          >
-            <Text style={styles.primaryButtonText}>{isComplete ? "Open Class" : "Continue Learning"}</Text>
-            <MaterialCommunityIcons name="arrow-right" size={17} color="#FFFFFF" />
-          </Pressable>
+          <View style={[styles.actionSurface, styles.secondarySurface]}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={onOpenTasks}
+              style={({ pressed }) => [styles.secondaryButton, pressed ? styles.pressed : null]}
+            >
+              <MaterialCommunityIcons name="clipboard-text-outline" size={17} color={theme.redText} />
+              <Text numberOfLines={2} style={styles.secondaryButtonText}>View Tasks</Text>
+            </Pressable>
+          </View>
+          <View style={[styles.actionSurface, styles.primarySurface]}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={onOpenClass}
+              style={({ pressed }) => [styles.primaryButton, pressed ? styles.pressed : null]}
+            >
+              <Text numberOfLines={2} style={styles.primaryButtonText}>{isComplete ? "Open Class" : "Continue Learning"}</Text>
+              <MaterialCommunityIcons name="arrow-right" size={17} color="#FFFFFF" />
+            </Pressable>
+          </View>
         </View>
 
         <Pressable
@@ -165,7 +171,8 @@ const styles = StyleSheet.create({
     borderColor: theme.border,
     backgroundColor: theme.surface,
   },
-  hero: { minHeight: 190, padding: 18, justifyContent: "space-between" },
+  hero: { minHeight: 164 },
+  heroPressTarget: { minHeight: 164, padding: 16, justifyContent: "space-between" },
   heroPressed: { opacity: 0.9 },
   heroTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
   subjectCode: { color: "#FECACA", fontSize: 10, fontWeight: "900", letterSpacing: 1, textTransform: "uppercase" },
@@ -174,17 +181,17 @@ const styles = StyleSheet.create({
   statusDot: { width: 7, height: 7, borderRadius: 999, backgroundColor: "#FDE68A" },
   statusDotComplete: { backgroundColor: "#86EFAC" },
   statusText: { color: "#FFFFFF", fontSize: 9, fontWeight: "900", letterSpacing: 0.4, textTransform: "uppercase" },
-  subjectName: { color: "#FFFFFF", fontSize: 27, lineHeight: 33, fontWeight: "900" },
+  subjectName: { color: "#FFFFFF", fontSize: 24, lineHeight: 29, fontWeight: "900" },
   classMetaList: { gap: 7 },
   classMetaRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   classMetaText: { flex: 1, color: "#E2E8F0", fontSize: 11, lineHeight: 16, fontWeight: "700" },
-  body: { padding: 15 },
-  metricsRow: { minHeight: 62, flexDirection: "row", alignItems: "stretch" },
+  body: { padding: 14 },
+  metricsRow: { minHeight: 58, flexDirection: "row", alignItems: "stretch" },
   metric: { flex: 1, alignItems: "center", justifyContent: "center" },
   metricDivider: { width: 1, marginVertical: 8, backgroundColor: theme.border },
   metricValue: { marginTop: 2, color: theme.text, fontSize: 18, fontWeight: "900" },
   metricLabel: { marginTop: 1, color: theme.muted, fontSize: 9, fontWeight: "800" },
-  progressPanel: { marginTop: 13, borderRadius: 15, backgroundColor: theme.bg, padding: 13 },
+  progressPanel: { marginTop: 11, borderRadius: 14, backgroundColor: theme.bg, padding: 12 },
   progressHeading: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 },
   progressLabel: { color: theme.text, fontSize: 12, fontWeight: "900" },
   progressMeta: { marginTop: 3, color: theme.muted, fontSize: 9, lineHeight: 13 },
@@ -194,11 +201,14 @@ const styles = StyleSheet.create({
   contextRow: { marginTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 7 },
   contextChip: { minHeight: 30, borderRadius: 999, backgroundColor: theme.bg, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 6 },
   contextText: { color: theme.subtext, fontSize: 9, fontWeight: "800" },
-  actionRow: { marginTop: 14, flexDirection: "row", gap: 9 },
-  secondaryButton: { flex: 0.85, minHeight: 46, borderRadius: 13, borderWidth: 1, borderColor: theme.border2, backgroundColor: theme.surface, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingHorizontal: 10 },
-  secondaryButtonText: { color: theme.redText, fontSize: 11, fontWeight: "900" },
-  primaryButton: { flex: 1.15, minHeight: 46, borderRadius: 13, backgroundColor: theme.redText, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingHorizontal: 10 },
-  primaryButtonText: { color: "#FFFFFF", fontSize: 11, fontWeight: "900" },
+  actionRow: { marginTop: 13, flexDirection: "row", alignItems: "stretch", gap: 9 },
+  actionSurface: { flex: 1, minWidth: 0, minHeight: 52, overflow: "hidden", borderRadius: 13 },
+  secondarySurface: { borderWidth: 1, borderColor: theme.border2, backgroundColor: theme.surface },
+  primarySurface: { backgroundColor: theme.redText },
+  secondaryButton: { minHeight: 52, paddingHorizontal: 8, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
+  secondaryButtonText: { flexShrink: 1, textAlign: "center", color: theme.redText, fontSize: 11, lineHeight: 14, fontWeight: "900" },
+  primaryButton: { minHeight: 52, paddingHorizontal: 8, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
+  primaryButtonText: { flexShrink: 1, textAlign: "center", color: "#FFFFFF", fontSize: 11, lineHeight: 14, fontWeight: "900" },
   scheduleButton: { minHeight: 46, marginTop: 8, borderRadius: 13, backgroundColor: theme.bg, paddingHorizontal: 13, flexDirection: "row", alignItems: "center", gap: 8 },
   scheduleButtonText: { flex: 1, color: theme.subtext, fontSize: 11, fontWeight: "800" },
   pressed: { opacity: 0.72 },

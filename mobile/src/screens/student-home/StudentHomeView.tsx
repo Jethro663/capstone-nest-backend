@@ -267,32 +267,38 @@ export function StudentHomeView({
 
       <View style={styles.section}>
         <SectionHeading eyebrow="Start here" title="Your next move" />
-        <Pressable
-          accessibilityRole="button"
-          onPress={openPriority}
-          style={({ pressed }) => [styles.priorityCard, pressed ? styles.priorityPressed : null]}
-        >
-          <View style={styles.priorityTopRow}>
-            <View style={styles.priorityIcon}>
-              <MaterialCommunityIcons
-                name={nextAssessment ? "clipboard-text-outline" : nextLesson ? "book-open-page-variant-outline" : nextClass ? "google-classroom" : "check-circle-outline"}
-                size={23}
-                color="#FFFFFF"
-              />
+        <View testID="student-home-priority-surface" style={styles.priorityCard}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={openPriority}
+            style={({ pressed }) => [styles.priorityPressTarget, pressed ? styles.priorityPressed : null]}
+          >
+            <View style={styles.priorityRail}>
+              <View style={styles.priorityIcon}>
+                <MaterialCommunityIcons
+                  name={nextAssessment ? "clipboard-text-outline" : nextLesson ? "book-open-page-variant-outline" : nextClass ? "google-classroom" : "check-circle-outline"}
+                  size={23}
+                  color="#FFFFFF"
+                />
+              </View>
+              <Text style={styles.priorityKicker}>
+                {nextAssessment ? "Needs attention" : nextLesson ? "Pick up here" : nextClass ? "Coming up" : "All clear"}
+              </Text>
             </View>
-            <Text style={styles.priorityKicker}>
-              {nextAssessment ? "Needs attention" : nextLesson ? "Pick up here" : nextClass ? "Coming up" : "All clear"}
-            </Text>
-          </View>
-          <Text style={styles.priorityTitle}>{priorityTitle}</Text>
-          <Text style={styles.priorityContext}>{priorityContext}</Text>
-          <View style={styles.priorityAction}>
-            <Text style={styles.priorityActionText}>{priorityLabel}</Text>
-            <MaterialCommunityIcons name="arrow-right" size={17} color={theme.text} />
-          </View>
-        </Pressable>
+
+            <View style={styles.priorityBody}>
+              <Text style={styles.priorityTitle}>{priorityTitle}</Text>
+              <Text style={styles.priorityContext}>{priorityContext}</Text>
+              <View style={styles.priorityAction}>
+                <Text style={styles.priorityActionText}>{priorityLabel}</Text>
+                <MaterialCommunityIcons name="arrow-right" size={17} color={theme.redText} />
+              </View>
+            </View>
+          </Pressable>
+        </View>
       </View>
 
+      <View testID="student-home-section-divider" style={styles.sectionDivider} />
       <View style={styles.section}>
         <SectionHeading
           eyebrow="Today"
@@ -339,6 +345,7 @@ export function StudentHomeView({
         </View>
       </View>
 
+      <View testID="student-home-section-divider" style={styles.sectionDivider} />
       <View style={styles.section}>
         <SectionHeading eyebrow="Small steps" title="Keep moving" />
         <View style={styles.moveGrid}>
@@ -389,6 +396,7 @@ export function StudentHomeView({
         </View>
       </View>
 
+      <View testID="student-home-section-divider" style={styles.sectionDivider} />
       <View style={styles.section}>
         <SectionHeading
           eyebrow="From school"
@@ -462,7 +470,8 @@ const styles = StyleSheet.create({
   },
   welcomeTitle: { marginTop: 5, color: theme.text, fontSize: 26, lineHeight: 32, fontWeight: "900" },
   welcomeSubtitle: { marginTop: 5, color: theme.subtext, fontSize: 13, lineHeight: 19 },
-  section: { paddingHorizontal: 16, paddingTop: 18 },
+  section: { paddingHorizontal: 16, paddingTop: 20 },
+  sectionDivider: { height: 1, marginHorizontal: 16, marginTop: 22, backgroundColor: theme.border },
   sectionHeading: {
     minHeight: 44,
     flexDirection: "row",
@@ -475,15 +484,17 @@ const styles = StyleSheet.create({
   sectionTitle: { marginTop: 2, color: theme.text, fontSize: 19, lineHeight: 24, fontWeight: "900" },
   sectionAction: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 4, paddingLeft: 8 },
   sectionActionText: { color: theme.redText, fontSize: 11, fontWeight: "900" },
-  priorityCard: { borderRadius: 22, backgroundColor: theme.deepNavy, padding: 18 },
+  priorityCard: { overflow: "hidden", borderRadius: 20, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.surface },
+  priorityPressTarget: { minHeight: 188 },
   priorityPressed: { opacity: 0.9, transform: [{ scale: 0.995 }] },
-  priorityTopRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  priorityIcon: { width: 42, height: 42, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: theme.redText },
-  priorityKicker: { color: "#FECACA", fontSize: 10, fontWeight: "900", letterSpacing: 0.8, textTransform: "uppercase" },
-  priorityTitle: { marginTop: 15, color: "#FFFFFF", fontSize: 22, lineHeight: 28, fontWeight: "900" },
-  priorityContext: { marginTop: 5, color: "#CBD5E1", fontSize: 12, lineHeight: 18 },
-  priorityAction: { alignSelf: "flex-start", minHeight: 44, marginTop: 17, borderRadius: 13, backgroundColor: "#FFFFFF", paddingHorizontal: 15, flexDirection: "row", alignItems: "center", gap: 8 },
-  priorityActionText: { color: theme.text, fontSize: 12, fontWeight: "900" },
+  priorityRail: { minHeight: 66, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", gap: 11, backgroundColor: theme.deepNavy },
+  priorityIcon: { width: 40, height: 40, borderRadius: 13, alignItems: "center", justifyContent: "center", backgroundColor: theme.redText },
+  priorityKicker: { flex: 1, color: "#FFFFFF", fontSize: 11, fontWeight: "900", letterSpacing: 0.8, textTransform: "uppercase" },
+  priorityBody: { paddingHorizontal: 16, paddingTop: 15, paddingBottom: 14 },
+  priorityTitle: { color: theme.text, fontSize: 20, lineHeight: 26, fontWeight: "900" },
+  priorityContext: { marginTop: 5, color: theme.subtext, fontSize: 12, lineHeight: 18 },
+  priorityAction: { alignSelf: "flex-start", minHeight: 44, marginTop: 13, borderRadius: 12, borderWidth: 1, borderColor: theme.redLine, backgroundColor: theme.redSoft, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", gap: 8 },
+  priorityActionText: { color: theme.redText, fontSize: 12, fontWeight: "900" },
   dayCard: { overflow: "hidden", borderRadius: 18, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.surface },
   scheduleRow: { minHeight: 76, flexDirection: "row", alignItems: "center", paddingHorizontal: 14 },
   scheduleDivider: { borderBottomWidth: 1, borderBottomColor: theme.border },

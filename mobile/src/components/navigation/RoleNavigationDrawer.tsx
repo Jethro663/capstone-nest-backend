@@ -7,6 +7,7 @@ import {
 } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import {
+  Alert,
   Image,
   Modal,
   Pressable,
@@ -102,11 +103,13 @@ export function RoleDrawerProvider({
   role,
   activeRouteName,
   onNavigate,
+  onLogout,
   children,
 }: PropsWithChildren<{
   role: RoleDrawerRole;
   activeRouteName: string;
   onNavigate: (destination: RoleDrawerDestination) => void;
+  onLogout?: () => Promise<void> | void;
 }>) {
   const [visible, setVisible] = useState(false);
   const contextValue = useMemo(
@@ -128,6 +131,7 @@ export function RoleDrawerProvider({
         visible={visible}
         onClose={() => setVisible(false)}
         onNavigate={handleNavigate}
+        onLogout={onLogout}
       />
     </RoleDrawerContext.Provider>
   );
@@ -139,17 +143,37 @@ function RoleNavigationDrawer({
   visible,
   onClose,
   onNavigate,
+  onLogout,
 }: {
   role: RoleDrawerRole;
   activeRouteName: string;
   visible: boolean;
   onClose: () => void;
   onNavigate: (destination: RoleDrawerDestination) => void;
+  onLogout?: () => Promise<void> | void;
 }) {
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const groups = ROLE_DRAWER_GROUPS[role];
   const drawerWidth = Math.min(windowWidth * 0.84, 380);
+
+  const confirmLogout = () => {
+    Alert.alert(
+      "Log out?",
+      "You will need to sign in again to continue learning.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Log out",
+          style: "destructive",
+          onPress: async () => {
+            onClose();
+            await onLogout?.();
+          },
+        },
+      ],
+    );
+  };
 
   const renderDestination = (destination: RoleDrawerDestination) => {
     const active = activeRouteName === destination.route;
@@ -266,9 +290,50 @@ function RoleNavigationDrawer({
             ))}
           </ScrollView>
 
-          <View style={{ padding: 12, borderTopWidth: 1, borderTopColor: theme.border }}>
-            {renderDestination(ROLE_DRAWER_PROFILE_DESTINATION)}
-          </View>
+          {role === "student" && onLogout ? (
+            <View
+              testID="student-drawer-footer"
+              style={{
+                padding: 12,
+                borderTopWidth: 1,
+                borderTopColor: theme.border,
+                flexDirection: "row",
+                alignItems: "stretch",
+                gap: 8,
+              }}
+            >
+              <View style={{ flex: 1, minWidth: 0 }}>
+                {renderDestination(ROLE_DRAWER_PROFILE_DESTINATION)}
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Log out"
+                onPress={confirmLogout}
+                style={{
+                  minWidth: 88,
+                  minHeight: 48,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: theme.redLine,
+                  backgroundColor: theme.redSoft,
+                  paddingHorizontal: 10,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexDirection: "row",
+                  gap: 6,
+                }}
+              >
+                <MaterialCommunityIcons name="logout" size={18} color={theme.redText} />
+                <Text numberOfLines={1} style={{ color: theme.redText, fontSize: 11, fontWeight: "900" }}>
+                  Log out
+                </Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={{ padding: 12, borderTopWidth: 1, borderTopColor: theme.border }}>
+              {renderDestination(ROLE_DRAWER_PROFILE_DESTINATION)}
+            </View>
+          )}
         </View>
         <Pressable
           accessibilityRole="button"

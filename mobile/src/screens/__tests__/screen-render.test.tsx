@@ -6500,6 +6500,9 @@ describe("mobile rendered screen flows", () => {
       );
     });
 
+    expect(testRenderer!.root.findByProps({ testID: "assessment-facts-ledger" })).toBeTruthy();
+    expect(testRenderer!.root.findByProps({ testID: "student-bottom-action-bar" })).toBeTruthy();
+
     const resultButton = findPressableByText(
       testRenderer!.root,
       "View Results",
@@ -6585,6 +6588,8 @@ describe("mobile rendered screen flows", () => {
       .findAll((node) => node.type === "Text")
       .map((node) => flattenText(node));
 
+    expect(testRenderer!.root.findByProps({ testID: "assessment-facts-ledger" })).toBeTruthy();
+    expect(testRenderer!.root.findByProps({ testID: "student-bottom-action-bar" })).toBeTruthy();
     expect(texts).toContain("Reference material");
     expect(texts).toContain("My work");
     expect(texts).toContain("MOA-SIT-FORM-006.pdf");
@@ -6643,10 +6648,9 @@ describe("mobile rendered screen flows", () => {
       findPressableByText(testRenderer!.root, "Open Attempt"),
     ).toThrow();
 
-    const historyToggle = findPressableByText(
-      testRenderer!.root,
-      "Attempt history",
-    );
+    const historyToggle = testRenderer!.root.findByProps({
+      accessibilityLabel: "Attempt history",
+    });
     act(() => {
       historyToggle.props.onPress();
     });
