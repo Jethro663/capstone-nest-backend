@@ -1,12 +1,12 @@
 {
   "platform": "android",
-  "versionCode": 31,
-  "minSupportedVersionCode": 31,
-  "nativeVersion": "0.1.30",
-  "otaRuntimeVersion": "0.1.30",
+  "versionCode": 32,
+  "minSupportedVersionCode": 32,
+  "nativeVersion": "0.1.31",
+  "otaRuntimeVersion": "0.1.31",
   "apkDownloadUrl": "https://next-frontend-v2-production.up.railway.app/downloads/nexora-student-mobile-release.apk",
   "requiresFullApk": true,
-  "releaseNotes": "Fixes student Home readability and sectioning, restores responsive web-style class cards, modernizes assessment work, and adds drawer logout beside Profile.",
-  "apkSha256": "d45063ff77b1c068eba4c1c9c2d6ea2e6be560a72e3f082ba9c09f74f3487dac",
-  "apkSizeBytes": 41048595
+  "releaseNotes": "Fixes student class cards so their padded navy headers, status, subject, grade and teacher hierarchy match the web design cleanly on mobile.",
+  "apkSha256": "8b95f0ebd0b4910c53f6c53d324849f39154983536399397807ba9fc3643918c",
+  "apkSizeBytes": 41048471
 }

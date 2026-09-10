@@ -1,4 +1,5 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { studentDarkTheme as theme } from "../../theme/studentDark";
 
@@ -40,13 +41,11 @@ function Metric({
 
 export function StudentClassCard({
   classItem,
-  index,
   onOpenClass,
   onOpenTasks,
   onOpenSchedule,
 }: {
   classItem: StudentClassRow;
-  index: number;
   onOpenClass: () => void;
   onOpenTasks: () => void;
   onOpenSchedule: () => void;
@@ -54,40 +53,63 @@ export function StudentClassCard({
   const isComplete = classItem.status === "completed";
   const statusLabel = isComplete
     ? "Completed"
-    : classItem.totalLessons === 0
-      ? "Ready"
-      : "In progress";
-  const heroColor = index % 2 === 0 ? theme.deepNavy : theme.redText;
+    : classItem.progress > 0
+      ? "In Progress"
+      : "Ready";
+  const isReady = statusLabel === "Ready";
 
   return (
     <View style={styles.card}>
-      <View testID="student-class-hero-surface" style={[styles.hero, { backgroundColor: heroColor }]}>
+      <LinearGradient
+        testID="student-class-hero-surface"
+        colors={["#0C1D3A", "#172944"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.hero}
+      >
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Open ${classItem.subjectName}`}
           onPress={onOpenClass}
           style={({ pressed }) => [styles.heroPressTarget, pressed ? styles.heroPressed : null]}
         >
-          <View style={styles.heroTopRow}>
-            <Text style={styles.subjectCode}>{classItem.subjectCode}</Text>
-            <View style={[styles.statusPill, isComplete ? styles.statusPillComplete : null]}>
-              <View style={[styles.statusDot, isComplete ? styles.statusDotComplete : null]} />
-              <Text style={styles.statusText}>{statusLabel}</Text>
+          <View style={styles.heroStatusRow}>
+            <View
+              style={[
+                styles.statusPill,
+                isComplete
+                  ? styles.statusPillComplete
+                  : isReady
+                    ? styles.statusPillReady
+                    : null,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.statusText,
+                  isComplete
+                    ? styles.statusTextComplete
+                    : isReady
+                      ? styles.statusTextReady
+                      : null,
+                ]}
+              >
+                {statusLabel}
+              </Text>
             </View>
           </View>
-          <Text numberOfLines={2} style={styles.subjectName}>{classItem.subjectName}</Text>
-          <View style={styles.classMetaList}>
-            <View style={styles.classMetaRow}>
-              <MaterialCommunityIcons name="school-outline" size={16} color="#E2E8F0" />
-              <Text style={styles.classMetaText}>Grade {classItem.subjectGradeLevel} · {classItem.sectionName}</Text>
-            </View>
-            <View style={styles.classMetaRow}>
-              <MaterialCommunityIcons name="account-tie-outline" size={16} color="#E2E8F0" />
-              <Text numberOfLines={1} style={styles.classMetaText}>{classItem.teacherName}</Text>
-            </View>
+
+          <View style={styles.heroIdentity}>
+            <Text numberOfLines={2} style={styles.subjectName}>{classItem.subjectName}</Text>
+            <Text numberOfLines={1} style={styles.gradeLine}>
+              Grade {classItem.subjectGradeLevel} • {classItem.sectionName}
+            </Text>
+            <Text numberOfLines={1} style={styles.teacherLine}>
+              with {classItem.teacherName}
+            </Text>
           </View>
         </Pressable>
-      </View>
+      </LinearGradient>
 
       <View style={styles.body}>
         <View style={styles.metricsRow}>
@@ -171,20 +193,34 @@ const styles = StyleSheet.create({
     borderColor: theme.border,
     backgroundColor: theme.surface,
   },
-  hero: { minHeight: 164 },
-  heroPressTarget: { minHeight: 164, padding: 16, justifyContent: "space-between" },
+  hero: {
+    minHeight: 154,
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 18,
+  },
+  heroPressTarget: { flex: 1, justifyContent: "space-between" },
   heroPressed: { opacity: 0.9 },
-  heroTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
-  subjectCode: { color: "#FECACA", fontSize: 10, fontWeight: "900", letterSpacing: 1, textTransform: "uppercase" },
-  statusPill: { minHeight: 28, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.14)", paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 6 },
-  statusPillComplete: { backgroundColor: "rgba(220,252,231,0.18)" },
-  statusDot: { width: 7, height: 7, borderRadius: 999, backgroundColor: "#FDE68A" },
-  statusDotComplete: { backgroundColor: "#86EFAC" },
-  statusText: { color: "#FFFFFF", fontSize: 9, fontWeight: "900", letterSpacing: 0.4, textTransform: "uppercase" },
-  subjectName: { color: "#FFFFFF", fontSize: 24, lineHeight: 29, fontWeight: "900" },
-  classMetaList: { gap: 7 },
-  classMetaRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  classMetaText: { flex: 1, color: "#E2E8F0", fontSize: 11, lineHeight: 16, fontWeight: "700" },
+  heroStatusRow: { flexDirection: "row", alignItems: "flex-start" },
+  statusPill: {
+    minHeight: 27,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    backgroundColor: "#FEE2E2",
+    paddingHorizontal: 11,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  statusPillComplete: { borderColor: "#BBF7D0", backgroundColor: "#DCFCE7" },
+  statusPillReady: { borderColor: "#E2E8F0", backgroundColor: "#F8FAFC" },
+  statusText: { color: theme.redText, fontSize: 9, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" },
+  statusTextComplete: { color: "#166534" },
+  statusTextReady: { color: theme.subtext },
+  heroIdentity: { marginTop: 18 },
+  subjectName: { color: "#FFFFFF", fontSize: 29, lineHeight: 32, fontWeight: "800", letterSpacing: -0.35 },
+  gradeLine: { marginTop: 8, color: "rgba(255,255,255,0.92)", fontSize: 13, lineHeight: 18, fontWeight: "700" },
+  teacherLine: { marginTop: 2, color: "rgba(255,255,255,0.80)", fontSize: 12, lineHeight: 17, fontWeight: "600" },
   body: { padding: 14 },
   metricsRow: { minHeight: 58, flexDirection: "row", alignItems: "stretch" },
   metric: { flex: 1, alignItems: "center", justifyContent: "center" },

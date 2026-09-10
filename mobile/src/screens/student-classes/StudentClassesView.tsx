@@ -123,11 +123,10 @@ export function StudentClassesView({
           </View>
         ) : (
           <View style={styles.cardList}>
-            {classes.map((classItem, index) => (
+            {classes.map((classItem) => (
               <StudentClassCard
                 key={classItem.id}
                 classItem={classItem}
-                index={index}
                 onOpenClass={() => navigation.navigate("ClassDetail", {
                   classId: classItem.id,
                   source: "classes",
