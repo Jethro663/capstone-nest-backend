@@ -3,37 +3,104 @@ import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import { Text, View } from "react-native";
 import { adminApi } from "../api/services/admin";
 import { toAppError } from "../api/http";
-import type { MainTabParamList, RootStackParamList } from "../navigation/types";
-import { TeacherActionButton, TeacherEmpty, TeacherPanel, TeacherRow, TeacherScreen, TeacherStats, teacherTheme as theme } from "../components/teacher/TeacherMobilePrimitives";
+import type { MainTabParamList } from "../navigation/types";
+import {
+  AdminDataRow,
+  AdminEmpty,
+  AdminMetricStrip,
+  AdminScreen,
+  AdminSection,
+  adminTheme as theme,
+} from "../components/admin/AdminMobilePrimitives";
 
 type Props = BottomTabScreenProps<MainTabParamList, "Home">;
 
 export function AdminHomeScreen({ navigation }: Props) {
-  const overview = useQuery({ queryKey: ["admin-overview"], queryFn: () => adminApi.getOverview() });
-  const rootNavigation = navigation.getParent() as unknown as { navigate: (name: keyof RootStackParamList, params?: unknown) => void };
-  const openTool = (section: RootStackParamList["AdminTools"]["section"]) => rootNavigation?.navigate("AdminTools", { section });
+  const overview = useQuery({
+    queryKey: ["admin-overview"],
+    queryFn: () => adminApi.getOverview(),
+  });
   const stats = overview.data?.stats;
+  const dependencies = overview.data
+    ? Object.entries(overview.data.readiness.dependencies)
+    : [];
+  const attentionCount = dependencies.filter(([, status]) => !status.ok || status.degraded).length;
 
   return (
-    <TeacherScreen title="Administrator" workspaceLabel="Admin workspace" subtitle="Live operational overview backed by the administrator dashboard contract." icon="shield-account-outline" refreshing={overview.isRefetching} onRefresh={() => void overview.refetch()}>
-      {overview.isError ? <TeacherEmpty title="Overview unavailable" subtitle={toAppError(overview.error).message} icon="alert-circle-outline" /> : null}
-      {stats ? <TeacherStats items={[
-        { label: "Users", value: stats.totalUsers, tone: "red" },
-        { label: "Students", value: stats.totalStudents, tone: "blue" },
-        { label: "Teachers", value: stats.totalTeachers, tone: "green" },
-        { label: "Classes", value: stats.totalClasses, tone: "amber" },
-      ]} /> : null}
-      <TeacherPanel title="System readiness" subtitle="Backend-owned dependency health, not a client-side guess.">
-        {overview.data ? Object.entries(overview.data.readiness.dependencies).map(([name, status]) => <TeacherRow key={name} title={name} subtitle={status.ok ? status.degraded ? "Degraded" : "Ready" : status.message || "Unavailable"} />) : <View style={{ padding: 14 }}><Text style={{ color: theme.muted }}>Loading readiness...</Text></View>}
-      </TeacherPanel>
-      <TeacherPanel title="Administration modules" subtitle="Open a real RBAC workspace for each basic web administration domain.">
-        <View style={{ padding: 14, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          <TeacherActionButton label="Announcements" icon="bullhorn-outline" tone="blue" onPress={() => rootNavigation?.navigate("AdminAnnouncements")} />
-          {([
-            ["users", "Users", "account-multiple-outline"], ["evaluations", "Evaluations", "clipboard-check-outline"], ["calendar", "Calendar", "calendar-month-outline"], ["library", "Library", "folder-open-outline"], ["reports", "Reports", "chart-box-outline"], ["audit", "Audit log", "shield-star-outline"], ["diagnostics", "Diagnostics", "heart-pulse"], ["roster", "Roster import", "account-arrow-right-outline"], ["templates", "Class templates", "content-copy"], ["settings", "System settings", "cog-outline"], ["records", "Academic records", "book-check-outline"],
-          ] as const).map(([key, label, icon]) => <TeacherActionButton key={key} label={label} icon={icon} tone="blue" onPress={() => openTool(key)} />)}
-        </View>
-      </TeacherPanel>
-    </TeacherScreen>
+    <AdminScreen
+      title="Admin overview"
+      subtitle="School operations, people, and system readiness"
+      refreshing={overview.isRefetching}
+      onRefresh={() => void overview.refetch()}
+    >
+      {overview.isError ? (
+        <AdminEmpty
+          title="Overview unavailable"
+          subtitle={toAppError(overview.error).message}
+          icon="alert-circle-outline"
+          actionLabel="Try again"
+          onAction={() => void overview.refetch()}
+        />
+      ) : null}
+
+      {stats ? (
+        <AdminMetricStrip
+          items={[
+            { label: "Users", value: stats.totalUsers },
+            { label: "Students", value: stats.totalStudents },
+            { label: "Teachers", value: stats.totalTeachers },
+            { label: "Classes", value: stats.totalClasses },
+          ]}
+        />
+      ) : null}
+
+      <AdminSection
+        title="Review and act"
+        subtitle="The most common administration workspaces"
+      >
+        <AdminDataRow
+          title="People and access"
+          subtitle="Create accounts and review account status"
+          meta={stats ? `${stats.totalUsers} accounts` : "Open user administration"}
+          onPress={() => navigation.navigate("AdminUsers")}
+        />
+        <AdminDataRow
+          title="Classes and sections"
+          subtitle="Inspect assignments, rosters, and schedules"
+          meta={stats ? `${stats.totalClasses} classes` : "Open class administration"}
+          onPress={() => navigation.navigate("Classes")}
+        />
+        <AdminDataRow
+          title="Academic controls"
+          subtitle="Periods, records, readiness, and recovery"
+          onPress={() => navigation.navigate("Academic")}
+        />
+        <AdminDataRow
+          title="System diagnostics"
+          subtitle="API, database, cache, and AI dependencies"
+          status={attentionCount ? `${attentionCount} to review` : "Ready"}
+          statusTone={attentionCount ? "amber" : "green"}
+          onPress={() => navigation.navigate("AdminDiagnostics")}
+        />
+      </AdminSection>
+
+      <AdminSection title="System readiness" subtitle="Live backend dependency checks">
+        {dependencies.length ? (
+          dependencies.map(([name, status]) => (
+            <AdminDataRow
+              key={name}
+              title={name}
+              subtitle={status.ok ? status.degraded ? "Available with reduced capability" : "Operating normally" : status.message || "Unavailable"}
+              status={status.ok ? status.degraded ? "Degraded" : "Ready" : "Issue"}
+              statusTone={status.ok ? status.degraded ? "amber" : "green" : "red"}
+            />
+          ))
+        ) : (
+          <View style={{ paddingHorizontal: 16, paddingVertical: 18 }}>
+            <Text style={{ fontSize: 12, color: theme.muted }}>Loading system readiness…</Text>
+          </View>
+        )}
+      </AdminSection>
+    </AdminScreen>
   );
 }

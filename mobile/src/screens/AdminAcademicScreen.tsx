@@ -15,15 +15,24 @@ import type {
 import { AcademicWorkbook } from "../components/academic/AcademicWorkbook";
 import { AcademicRecoveryPanel } from "../components/academic/AcademicRecoveryPanel";
 import {
-  TeacherActionButton as Action,
-  TeacherChip as Chip,
-  TeacherInlineField as Field,
-  TeacherPanel as Panel,
-  TeacherScreen,
-  teacherTheme as theme,
-} from "../components/teacher/TeacherMobilePrimitives";
+  AdminButton as Action,
+  AdminChip as Chip,
+  AdminField as Field,
+  AdminSection as Panel,
+  AdminScreen,
+  adminTheme as theme,
+} from "../components/admin/AdminMobilePrimitives";
 const textStyle = { color: theme.text, fontSize: 13, lineHeight: 20 };
-export function AdminAcademicScreen() {
+
+type Props = {
+  navigation?: {
+    getState?: () => { type?: string };
+    goBack: () => void;
+  };
+};
+
+export function AdminAcademicScreen({ navigation }: Props = {}) {
+  const legacyStackEntry = navigation?.getState?.().type === "stack";
   const client = useQueryClient();
   const current = useQuery({
     queryKey: ["academic", "current"],
@@ -129,10 +138,11 @@ export function AdminAcademicScreen() {
     setTransition(null);
   };
   return (
-    <TeacherScreen
+    <AdminScreen
       title="Academic administration"
-      workspaceLabel="Admin workspace"
       subtitle="Verified policy periods, year transition, recovery, remediation and grade evidence."
+      showBackButton={legacyStackEntry}
+      onBackPress={legacyStackEntry ? navigation?.goBack : undefined}
       onRefresh={() => void refresh()}
       refreshing={current.isFetching || readiness.isFetching}
     >
@@ -604,6 +614,6 @@ export function AdminAcademicScreen() {
           />
         )}
       </View>
-    </TeacherScreen>
+    </AdminScreen>
   );
 }

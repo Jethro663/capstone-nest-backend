@@ -7,12 +7,17 @@ import type {
   AcademicPeriodKey,
 } from "../../types/academic-grading";
 import {
-  TeacherActionButton as Action,
-  TeacherChip as Chip,
-  TeacherInlineField as Field,
-  teacherTheme as theme,
+  TeacherActionButton,
+  TeacherChip,
+  TeacherInlineField,
+  teacherTheme,
 } from "../teacher/TeacherMobilePrimitives";
-const style = { color: theme.text, fontSize: 13, lineHeight: 20 };
+import {
+  AdminButton,
+  AdminChip,
+  AdminField,
+  adminTheme,
+} from "../admin/AdminMobilePrimitives";
 export function AcademicAnnualPanel({
   summary,
   admin,
@@ -22,6 +27,11 @@ export function AcademicAnnualPanel({
   admin: boolean;
   refresh: () => Promise<unknown>;
 }) {
+  const Action = admin ? AdminButton : TeacherActionButton;
+  const Chip = admin ? AdminChip : TeacherChip;
+  const Field = admin ? AdminField : TeacherInlineField;
+  const theme = admin ? adminTheme : teacherTheme;
+  const style = { color: theme.text, fontSize: 13, lineHeight: 20 };
   const [studentId, setStudentId] = useState("");
   const [period, setPeriod] = useState<AcademicPeriodKey>(
     summary.periods[0].key,

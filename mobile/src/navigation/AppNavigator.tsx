@@ -856,7 +856,7 @@ function RoleTabs({ role }: { role: "teacher" | "admin" }) {
   return <AdminNavigator />;
 }
 
-function AdminTabs() {
+function AdminDrawerNavigator() {
   const [activeRouteName, setActiveRouteName] = useState("Home");
   return (
     <RoleDrawerProvider
@@ -865,6 +865,7 @@ function AdminTabs() {
       onNavigate={navigateFromRoleDrawer}
     >
       <Tab.Navigator
+        backBehavior="history"
         screenOptions={{ headerShown: false }}
         tabBar={() => null}
         screenListeners={{
@@ -872,9 +873,20 @@ function AdminTabs() {
         }}
       >
         <Tab.Screen name="Home" component={AdminHomeScreen} />
+        <Tab.Screen name="AdminUsers" component={AdminToolsScreen} initialParams={{ section: "users" }} />
         <Tab.Screen name="Classes" component={AdminClassesScreen} />
+        <Tab.Screen name="AdminRoster" component={AdminToolsScreen} initialParams={{ section: "roster" }} />
         <Tab.Screen name="Assessments" component={AdminAssessmentsScreen} />
+        <Tab.Screen name="AdminAnnouncements" component={AdminAnnouncementsScreen} />
+        <Tab.Screen name="AdminEvaluations" component={AdminToolsScreen} initialParams={{ section: "evaluations" }} />
         <Tab.Screen name="Academic" component={AdminAcademicScreen} />
+        <Tab.Screen name="AdminCalendar" component={AdminToolsScreen} initialParams={{ section: "calendar" }} />
+        <Tab.Screen name="AdminTemplates" component={AdminToolsScreen} initialParams={{ section: "templates" }} />
+        <Tab.Screen name="AdminLibrary" component={AdminToolsScreen} initialParams={{ section: "library" }} />
+        <Tab.Screen name="AdminReports" component={AdminToolsScreen} initialParams={{ section: "reports" }} />
+        <Tab.Screen name="AdminAudit" component={AdminToolsScreen} initialParams={{ section: "audit" }} />
+        <Tab.Screen name="AdminDiagnostics" component={AdminToolsScreen} initialParams={{ section: "diagnostics" }} />
+        <Tab.Screen name="AdminSettings" component={AdminToolsScreen} initialParams={{ section: "settings" }} />
         <Tab.Screen name="Profile" component={AdminProfileScreen} />
       </Tab.Navigator>
     </RoleDrawerProvider>
@@ -884,7 +896,7 @@ function AdminTabs() {
 function AdminNavigator() {
   return (
     <RootStack.Navigator screenOptions={{ headerShown: false }}>
-      <RootStack.Screen name="MainTabs" component={AdminTabs} />
+      <RootStack.Screen name="MainTabs" component={AdminDrawerNavigator} />
       <RootStack.Screen name="Notifications" component={NotificationsInboxScreen} />
       <RootStack.Screen name="AdminTools" component={AdminToolsScreen} />
       <RootStack.Screen name="AdminAcademic" component={AdminAcademicScreen} />

@@ -43,6 +43,19 @@ export type StudentModuleDetailSource = "class";
 export type StudentLessonDetailSource = "module" | "class" | "home" | "ja";
 export type StudentAssessmentDetailSource = "assessments" | "class" | "home" | "calendar" | "history";
 
+export type AdminToolSection =
+  | "users"
+  | "evaluations"
+  | "calendar"
+  | "library"
+  | "reports"
+  | "audit"
+  | "diagnostics"
+  | "roster"
+  | "templates"
+  | "settings"
+  | "records";
+
 export type JaRouteParams = {
   panel?: JaPanel;
   classId?: string;
@@ -55,7 +68,7 @@ export type RootStackParamList = {
   MainTabs: NavigatorScreenParams<MainTabParamList> | undefined;
   TeacherDrawer: NavigatorScreenParams<MainTabParamList> | undefined;
   Notifications: undefined;
-  AdminTools: { section?: "users" | "evaluations" | "calendar" | "library" | "reports" | "audit" | "diagnostics" | "roster" | "templates" | "settings" | "records" };
+  AdminTools: { section?: AdminToolSection };
   AdminAcademic: undefined;
   AdminAnnouncements: undefined;
   ClassWorkspace: { classId: string };
@@ -154,6 +167,17 @@ export type RootStackParamList = {
 export type MainTabParamList = {
   Academic: undefined;
   Home: undefined;
+  AdminUsers: { section?: AdminToolSection } | undefined;
+  AdminRoster: { section?: AdminToolSection } | undefined;
+  AdminAnnouncements: undefined;
+  AdminEvaluations: { section?: AdminToolSection } | undefined;
+  AdminCalendar: { section?: AdminToolSection } | undefined;
+  AdminTemplates: { section?: AdminToolSection } | undefined;
+  AdminLibrary: { section?: AdminToolSection } | undefined;
+  AdminReports: { section?: AdminToolSection } | undefined;
+  AdminAudit: { section?: AdminToolSection } | undefined;
+  AdminDiagnostics: { section?: AdminToolSection } | undefined;
+  AdminSettings: { section?: AdminToolSection } | undefined;
   Dashboard: undefined;
   StudentCalendar: undefined;
   Classes: undefined;

@@ -86,7 +86,7 @@ describe("role drawer destination contracts", () => {
     expect(flattenRoleDrawerDestinations("teacher").every((item) => item.kind === "tab")).toBe(true);
   });
 
-  it("preserves the existing student and admin tab destinations", () => {
+  it("preserves student destinations and exposes the complete grouped admin workspace", () => {
     expect(flattenRoleDrawerDestinations("student").map((item) => item.route)).toEqual([
       "Dashboard",
       "Classes",
@@ -95,12 +95,19 @@ describe("role drawer destination contracts", () => {
       "JA",
       "Announcements",
     ]);
-    expect(flattenRoleDrawerDestinations("admin").map((item) => item.route)).toEqual([
-      "Home",
-      "Classes",
-      "Assessments",
-      "Academic",
+    expect(ROLE_DRAWER_GROUPS.admin.map((group) => group.label)).toEqual([
+      "Overview",
+      "People & learning",
+      "School operations",
+      "Oversight",
     ]);
+    expect(flattenRoleDrawerDestinations("admin").map((item) => item.route)).toEqual([
+      "Home", "AdminUsers", "Classes", "AdminRoster", "Assessments",
+      "AdminAnnouncements", "AdminEvaluations", "Academic", "AdminCalendar",
+      "AdminTemplates", "AdminLibrary", "AdminReports", "AdminAudit",
+      "AdminDiagnostics", "AdminSettings",
+    ]);
+    expect(flattenRoleDrawerDestinations("admin").every((item) => item.kind === "tab")).toBe(true);
     expect(ROLE_DRAWER_PROFILE_DESTINATION).toMatchObject({
       label: "Profile",
       route: "Profile",

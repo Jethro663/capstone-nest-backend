@@ -36,6 +36,18 @@ jest.mock("../../teacher/TeacherMobilePrimitives", () => {
     teacherTheme: { text: "#142B4F" },
   };
 });
+jest.mock("../../admin/AdminMobilePrimitives", () => {
+  const ReactRuntime = require("react");
+  const c = (name: string) => (props: any) =>
+    ReactRuntime.createElement(name, props, props.children);
+  return {
+    AdminButton: c("Action"),
+    AdminChip: c("Chip"),
+    AdminField: c("Field"),
+    AdminSection: c("Panel"),
+    adminTheme: { text: "#172033" },
+  };
+});
 jest.mock("../../teacher/MobileClassRecordWorkbook", () => ({
   MobileClassRecordWorkbook: () => null,
 }));

@@ -6,12 +6,12 @@ import { classRecordApi } from "../../api/services/class-record";
 import { toAppError } from "../../api/http";
 import type { AcademicPeriodKey } from "../../types/academic-grading";
 import {
-  TeacherActionButton as Action,
-  TeacherChip as Chip,
-  TeacherInlineField as Field,
-  TeacherPanel as Panel,
-  teacherTheme as theme,
-} from "../teacher/TeacherMobilePrimitives";
+  AdminButton as Action,
+  AdminChip as Chip,
+  AdminField as Field,
+  AdminSection as Panel,
+  adminTheme as theme,
+} from "../admin/AdminMobilePrimitives";
 const styles = { color: theme.text, fontSize: 13, lineHeight: 20 };
 const actions = [
   "preserve-legacy",

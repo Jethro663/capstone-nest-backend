@@ -1,0 +1,25 @@
+import { colors } from "./tokens";
+
+export const adminTheme = {
+  bg: "#F4F6F8",
+  surface: "#FFFFFF",
+  surfaceMuted: "#F8FAFC",
+  selection: "#E8EEF8",
+  border: "#DDE3EA",
+  borderStrong: "#C7D0DC",
+  text: "#172033",
+  subtext: "#526174",
+  muted: "#708094",
+  dim: "#98A4B3",
+  primary: "#24466F",
+  primaryPressed: "#1B3758",
+  primarySoft: "#E8EEF8",
+  green: colors.green,
+  greenSoft: colors.paleGreen,
+  amber: colors.amber,
+  amberSoft: colors.paleAmber,
+  red: colors.red,
+  redSoft: colors.paleRed,
+  purple: colors.purple,
+  purpleSoft: colors.palePurple,
+} as const;

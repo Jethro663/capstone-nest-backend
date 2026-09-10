@@ -64,12 +64,38 @@ export const ROLE_DRAWER_GROUPS = {
   ],
   admin: [
     {
-      label: "Administration",
+      label: "Overview",
       items: [
         { label: "Home", route: "Home", kind: "tab", icon: "home-outline" },
-        { label: "Classes", route: "Classes", kind: "tab", icon: "book-open-variant-outline" },
+      ],
+    },
+    {
+      label: "People & learning",
+      items: [
+        { label: "Users", route: "AdminUsers", kind: "tab", icon: "account-multiple-outline" },
+        { label: "Classes & sections", route: "Classes", kind: "tab", icon: "book-open-variant-outline" },
+        { label: "Roster import", route: "AdminRoster", kind: "tab", icon: "account-arrow-right-outline" },
         { label: "Assessments", route: "Assessments", kind: "tab", icon: "clipboard-text-outline" },
+        { label: "Announcements", route: "AdminAnnouncements", kind: "tab", icon: "bullhorn-outline" },
+        { label: "Evaluations", route: "AdminEvaluations", kind: "tab", icon: "clipboard-check-outline" },
+      ],
+    },
+    {
+      label: "School operations",
+      items: [
         { label: "Academic", route: "Academic", kind: "tab", icon: "school-outline" },
+        { label: "Calendar", route: "AdminCalendar", kind: "tab", icon: "calendar-month-outline" },
+        { label: "Class templates", route: "AdminTemplates", kind: "tab", icon: "content-copy" },
+        { label: "Library", route: "AdminLibrary", kind: "tab", icon: "folder-open-outline" },
+      ],
+    },
+    {
+      label: "Oversight",
+      items: [
+        { label: "Reports", route: "AdminReports", kind: "tab", icon: "chart-box-outline" },
+        { label: "Audit log", route: "AdminAudit", kind: "tab", icon: "shield-star-outline" },
+        { label: "Diagnostics", route: "AdminDiagnostics", kind: "tab", icon: "heart-pulse" },
+        { label: "System settings", route: "AdminSettings", kind: "tab", icon: "cog-outline" },
       ],
     },
   ],

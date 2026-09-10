@@ -6,17 +6,23 @@ import { classesApi } from "../../api/services/classes";
 import { academicStateService } from "../../api/services/academic-state";
 import { toAppError } from "../../api/http";
 import {
-  TeacherActionButton as Action,
-  TeacherChip as Chip,
-  TeacherInlineField as Field,
-  TeacherPanel as Panel,
-  teacherTheme as theme,
+  TeacherActionButton,
+  TeacherChip,
+  TeacherInlineField,
+  TeacherPanel,
+  teacherTheme,
 } from "../teacher/TeacherMobilePrimitives";
+import {
+  AdminButton,
+  AdminChip,
+  AdminField,
+  AdminSection,
+  adminTheme,
+} from "../admin/AdminMobilePrimitives";
 import { MobileClassRecordWorkbook } from "../teacher/MobileClassRecordWorkbook";
 import { exportAcademicCsv } from "../../lib/academic-workbook-export";
 import { AcademicAnnualPanel } from "./AcademicAnnualPanel";
 import type { PeriodEligibility } from "../../types/academic-grading";
-const textStyle = { color: theme.text, fontSize: 13, lineHeight: 20 };
 export function AcademicWorkbook({
   classId,
   admin = false,
@@ -26,6 +32,12 @@ export function AcademicWorkbook({
   admin?: boolean;
   registerRefetch?: (refetch: () => Promise<unknown>) => void;
 }) {
+  const Action = admin ? AdminButton : TeacherActionButton;
+  const Chip = admin ? AdminChip : TeacherChip;
+  const Field = admin ? AdminField : TeacherInlineField;
+  const Panel = admin ? AdminSection : TeacherPanel;
+  const theme = admin ? adminTheme : teacherTheme;
+  const textStyle = { color: theme.text, fontSize: 13, lineHeight: 20 };
   const client = useQueryClient();
   const context = useQuery({
     queryKey: ["academic", "class", classId],

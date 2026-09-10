@@ -44,6 +44,30 @@ jest.mock("../../components/teacher/TeacherMobilePrimitives", () => {
     TeacherChip: ({ label, ...props }) => React.createElement("Pressable", props, React.createElement("Text", {}, label)),
   };
 });
+jest.mock("../../components/admin/AdminMobilePrimitives", () => {
+  const React = require("react");
+  const container = ({ children }) => React.createElement("View", {}, children);
+  return {
+    adminTheme: {
+      text: "#111",
+      subtext: "#555",
+      muted: "#777",
+      primary: "#246",
+      amber: "#a60",
+      red: "#b00",
+      border: "#ddd",
+      surface: "#fff",
+    },
+    AdminSection: container,
+    AdminScreen: container,
+    AdminMetricStrip: () => null,
+    AdminEmpty: () => null,
+    AdminFilterBar: () => null,
+    AdminButton: ({ label, ...props }) => React.createElement("Pressable", props, React.createElement("Text", {}, label)),
+    AdminChip: ({ label, ...props }) => React.createElement("Pressable", props, React.createElement("Text", {}, label)),
+    AdminField: ({ label, value, onChangeText, ...props }) => React.createElement("TextInput", { ...props, accessibilityLabel: label, value, onChangeText }),
+  };
+});
 jest.mock("@tanstack/react-query", () => ({
   useQuery: () => ({ data: [{ id: "class-1", subjectCode: "MATH" }], refetch: jest.fn() }),
   useQueries: () => [{ data: [mockNotice], refetch: jest.fn() }],
