@@ -824,7 +824,7 @@ git commit -m "test(admin): cover demo mode across clients"
 
 - Every check is tied to the unchanged implementation input before packaging.
 
-- [ ] **Step 1: Run backend gates**
+- [x] **Step 1: Run backend gates**
 
 ```bash
 npm --prefix backend run lint
@@ -836,7 +836,7 @@ npm --prefix backend run test:production-start
 
 Expected: all commands exit 0 within the repository warning budget.
 
-- [ ] **Step 2: Run web gates**
+- [x] **Step 2: Run web gates**
 
 ```bash
 npm --prefix next-frontend run lint
@@ -848,7 +848,7 @@ npm --prefix next-frontend run dev:smoke
 
 Expected: all commands exit 0.
 
-- [ ] **Step 3: Run mobile gates**
+- [x] **Step 3: Run mobile gates**
 
 ```bash
 npm --prefix mobile run typecheck
@@ -858,11 +858,11 @@ npm --prefix mobile run test:release
 
 Expected: all commands exit 0.
 
-- [ ] **Step 4: Run migration/runtime checks**
+- [x] **Step 4: Run migration/runtime checks**
 
 Run the repository’s fresh and legacy migration rehearsal used by CI for PostgreSQL/pgvector. At minimum, `npm --prefix backend run check:migrations` and a disposable-database `node backend/run-migrations.js` must prove `0021` applies and replays safely. Never point a destructive rehearsal at production.
 
-- [ ] **Step 5: Review the complete diff against the design**
+- [x] **Step 5: Review the complete diff against the design**
 
 Check every relaxed code has one owner and paired active/inactive tests. Search for unintended broad bypasses:
 
@@ -875,11 +875,11 @@ git diff --stat HEAD~10..HEAD
 
 Manually verify that all permanent-rule tests remain present and no credentials, `.env`, reports, screenshots, `test-results/`, or `playwright-report/` are tracked.
 
-- [ ] **Step 6: Fix only task-caused failures and rerun affected plus mandatory gates**
+- [x] **Step 6: Fix only task-caused failures and rerun affected plus mandatory gates**
 
 Do not weaken warning budgets, skip tests, or expand into unrelated cleanup.
 
-- [ ] **Step 7: Commit verification-only corrections if needed**
+- [x] **Step 7: Commit verification-only corrections if needed**
 
 ```bash
 git add backend/src/modules/admin-demo-mode next-frontend/src/providers/AdminDemoModeProvider.tsx mobile/src/hooks/useAdminDemoMode.ts

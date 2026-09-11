@@ -56,11 +56,11 @@
 - [x] 6.1 Extend the administrator contract gate for endpoints, fields, rule codes, routes, and forbidden client-authoritative bypasses.
 - [x] 6.2 Add backend E2E for non-admin rejection, activation validation, one relaxed reversible mutation, one permanent blocker, expiry, and deactivation.
 - [x] 6.3 Add local Playwright coverage for activation gating, active banner, navigation, deactivation, and 1440/390 viewports.
-- [ ] 6.4 Run complete backend lint/unit/E2E/build/production-start gates.
-- [ ] 6.5 Run complete web lint/type/unit/build/dev-smoke gates.
-- [ ] 6.6 Run complete mobile type/unit/release-script gates.
-- [ ] 6.7 Rehearse fresh and legacy migration paths and replay.
-- [ ] 6.8 Review all Demo branches against the allowlist/permanent catalog and fix only task-caused gaps.
+- [x] 6.4 Run complete backend lint/unit/E2E/build/production-start gates.
+- [x] 6.5 Run complete web lint/type/unit/build/dev-smoke gates.
+- [x] 6.6 Run complete mobile type/unit/release-script gates.
+- [x] 6.7 Rehearse fresh and legacy migration paths and replay.
+- [x] 6.8 Review all Demo branches against the allowlist/permanent catalog and fix only task-caused gaps.
 
 ## 7. Android package and release
 
