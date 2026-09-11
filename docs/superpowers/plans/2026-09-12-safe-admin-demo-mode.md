@@ -334,7 +334,7 @@ git commit -m "feat(admin): relax demo user lifecycle sequence"
 - Consumes `AdminDemoModeContext` once per top-level mutation.
 - Produces no HTTP shape changes; affected audits gain Demo metadata only when a rule is skipped.
 
-- [ ] **Step 1: Characterize permanent invariants first**
+- [x] **Step 1: Characterize permanent invariants first**
 
 Add/retain tests proving active Demo mode still rejects:
 
@@ -347,7 +347,7 @@ Add/retain tests proving active Demo mode still rejects:
 - class/section identity changes with linked academic evidence;
 - direct evidence-bearing purge.
 
-- [ ] **Step 2: Add relaxed-rule RED cases**
+- [x] **Step 2: Add relaxed-rule RED cases**
 
 For an active admin, prove:
 
@@ -361,7 +361,7 @@ For an active admin, prove:
 
 Duplicate each with inactive mode and assert the current error remains.
 
-- [ ] **Step 3: Run RED**
+- [x] **Step 3: Run RED**
 
 ```bash
 npm --prefix backend test -- --runInBand src/modules/classes/classes.service.spec.ts src/modules/sections/sections.service.spec.ts src/modules/roster-import/roster-import.service.spec.ts
@@ -369,7 +369,7 @@ npm --prefix backend test -- --runInBand src/modules/classes/classes.service.spe
 
 Expected: permanent-invariant tests pass; new relaxation cases fail.
 
-- [ ] **Step 4: Integrate one policy resolution per mutation**
+- [x] **Step 4: Integrate one policy resolution per mutation**
 
 At each top-level method:
 
@@ -385,15 +385,15 @@ if (conflictFound) {
 
 Do not skip the complete validation method when it contains both relaxable and permanent checks. Split collision discovery from invalid time-shape validation so start/end rules always run. Split section capacity from student-role/grade/graduation validation. Keep transactions unchanged.
 
-- [ ] **Step 5: Implement archived-class restoration explicitly**
+- [x] **Step 5: Implement archived-class restoration explicitly**
 
 When `toggleActive` sees an inactive class, require active admin Demo mode, set only `classes.isActive=true`, retain completed enrollment statuses, and audit `restore_archived_class`. Do not reconstruct deleted schedules, records, lessons, assessments, or memberships.
 
-- [ ] **Step 6: Preserve safe archival cascades**
+- [x] **Step 6: Preserve safe archival cascades**
 
 When `archive_active_memberships` is allowed, continue into the existing class/section transaction so enrolled rows become completed and linked targets become inactive. Never bypass by directly deleting a target row.
 
-- [ ] **Step 7: Run GREEN and contract gate**
+- [x] **Step 7: Run GREEN and contract gate**
 
 ```bash
 npm --prefix backend test -- --runInBand src/modules/classes/classes.service.spec.ts src/modules/sections/sections.service.spec.ts src/modules/roster-import/roster-import.service.spec.ts
@@ -402,7 +402,7 @@ npm --prefix backend run contract:admin
 
 Expected: focused suites and the admin contract gate exit 0.
 
-- [ ] **Step 8: Commit the school-data slice**
+- [x] **Step 8: Commit the school-data slice**
 
 ```bash
 git add backend/src/modules/classes backend/src/modules/sections backend/src/modules/roster-import

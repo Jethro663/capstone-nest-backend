@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { RosterImportService } from './roster-import.service';
 import { DatabaseService } from '../../database/database.service';
+import { AdminDemoModeService } from '../admin-demo-mode/admin-demo-mode.service';
 
 // --- mock parsers ---
 jest.mock('./parsers/xlsx.parser', () => ({
@@ -86,12 +87,25 @@ const onboardingEvents = {
   emit: jest.fn(),
   emitAsync: jest.fn().mockResolvedValue([]),
 };
+const mockAuditService = { log: jest.fn().mockResolvedValue(undefined) };
+const inactiveDemoContext = {
+  active: false,
+  version: 0,
+  expiresAt: null,
+  allows: jest.fn().mockReturnValue(false),
+  audit: jest.fn().mockReturnValue(undefined),
+};
+const mockAdminDemoModeService = { resolveForActor: jest.fn() };
 let committedEffects: Array<() => unknown>;
 
 beforeEach(() => {
   jest.clearAllMocks();
   dbStub = createDbStub();
   committedEffects = [];
+  mockAuditService.log.mockResolvedValue(undefined);
+  mockAdminDemoModeService.resolveForActor.mockResolvedValue(
+    inactiveDemoContext,
+  );
   const databaseService = {
     db: dbStub,
     academicTransaction: async (work: () => Promise<unknown>) => work(),
@@ -100,13 +114,14 @@ beforeEach(() => {
       return Promise.resolve();
     },
   } as unknown as DatabaseService;
-  service = new RosterImportService(
+  service = new (RosterImportService as any)(
     databaseService,
     {
       currentState: jest.fn().mockResolvedValue({ schoolYear: '2026-2027' }),
     } as never,
-    { log: jest.fn() } as never,
+    mockAuditService as never,
     onboardingEvents as never,
+    mockAdminDemoModeService as AdminDemoModeService,
   );
 });
 
@@ -139,6 +154,32 @@ describe('parseAndPreview', () => {
         ADMIN_USER,
       ),
     ).rejects.toThrow(/does not match the target section/i);
+  });
+
+  it('lets an active Demo administrator reach parsing for an inactive section', async () => {
+    mockAdminDemoModeService.resolveForActor.mockResolvedValue({
+      active: true,
+      version: 2,
+      expiresAt: new Date('2026-09-12T04:30:00.000Z'),
+      allows: jest.fn((rule) => rule === 'section_membership_window'),
+      audit: jest.fn(),
+    });
+    dbStub.query.sections.findFirst.mockResolvedValue({
+      id: SECTION_ID,
+      gradeLevel: '7',
+      name: 'HUMSS-A',
+      isActive: false,
+      schoolYear: '2025-2026',
+    });
+    (parseCsv as jest.Mock).mockReturnValue([]);
+
+    await expect(
+      service.parseAndPreview(
+        SECTION_ID,
+        makeFileObj('roster.csv', 'text/csv'),
+        ADMIN_USER,
+      ),
+    ).rejects.toThrow('uploaded file is empty');
   });
 
   it('correctly separates registered vs pending and errors', async () => {
@@ -220,6 +261,39 @@ describe('commitRoster', () => {
     ).rejects.toThrow(/inactive/i);
   });
 
+  it('commits an empty historical roster only for an active Demo administrator and audits the bypass', async () => {
+    const demoMode = {
+      demoModeVersion: 3,
+      demoModeExpiresAt: '2026-09-12T04:30:00.000Z',
+      bypassedRules: ['section_membership_window'],
+    };
+    mockAdminDemoModeService.resolveForActor.mockResolvedValue({
+      active: true,
+      version: 3,
+      expiresAt: new Date('2026-09-12T04:30:00.000Z'),
+      allows: jest.fn((rule) => rule === 'section_membership_window'),
+      audit: jest.fn().mockReturnValue(demoMode),
+    });
+    dbStub.query.sections.findFirst.mockResolvedValue({
+      id: SECTION_ID,
+      isActive: false,
+      schoolYear: '2025-2026',
+      gradeLevel: '7',
+      name: 'HUMSS',
+      capacity: 1,
+    });
+    const dto = { sectionId: SECTION_ID, enrolledRows: [], pendingRows: [] };
+
+    await expect(
+      service.commitRoster(SECTION_ID, dto as any, ADMIN_USER),
+    ).resolves.toMatchObject({ summary: { total: 0 } });
+    expect(mockAuditService.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({ demoMode }),
+      }),
+    );
+  });
+
   it('rejects when teacher not adviser', async () => {
     dbStub.query.sections.findFirst.mockResolvedValue({
       id: SECTION_ID,
@@ -276,6 +350,117 @@ describe('commitRoster', () => {
     await expect(
       service.commitRoster(SECTION_ID, dto as any, ADMIN_USER),
     ).rejects.toThrow(/exceed the section capacity/i);
+  });
+
+  it('allows capacity overbooking for an active Demo administrator while retaining role and grade checks', async () => {
+    const demoMode = {
+      demoModeVersion: 4,
+      demoModeExpiresAt: '2026-09-12T04:30:00.000Z',
+      bypassedRules: ['section_capacity'],
+    };
+    mockAdminDemoModeService.resolveForActor.mockResolvedValue({
+      active: true,
+      version: 4,
+      expiresAt: new Date('2026-09-12T04:30:00.000Z'),
+      allows: jest.fn((rule) => rule === 'section_capacity'),
+      audit: jest.fn().mockReturnValue(demoMode),
+    });
+    dbStub.query.sections.findFirst.mockResolvedValue({
+      id: SECTION_ID,
+      isActive: true,
+      schoolYear: '2026-2027',
+      gradeLevel: '7',
+      name: 'HUMSS',
+      capacity: 1,
+    });
+    dbStub.select
+      .mockReturnValueOnce({
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockResolvedValue([{ count: 1 }]),
+      })
+      .mockReturnValueOnce({
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockResolvedValue([]),
+      })
+      .mockReturnValueOnce({
+        from: jest.fn().mockReturnThis(),
+        innerJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockResolvedValue([{ userId: STUDENT_USER_ID }]),
+      });
+    const dto = {
+      sectionId: SECTION_ID,
+      enrolledRows: [
+        {
+          userId: STUDENT_USER_ID,
+          name: { lastName: 'Dela Cruz', firstName: 'Juan', middleName: '' },
+          gradeLevel: '7',
+          lrn: '123456780001',
+          email: 'a@b.com',
+        },
+      ],
+      pendingRows: [],
+    };
+
+    await expect(
+      service.commitRoster(SECTION_ID, dto as any, ADMIN_USER),
+    ).resolves.toBeDefined();
+    expect(mockAuditService.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({ demoMode }),
+      }),
+    );
+  });
+
+  it('still rejects a grade-mismatched learner while Demo mode is active', async () => {
+    mockAdminDemoModeService.resolveForActor.mockResolvedValue({
+      active: true,
+      version: 4,
+      expiresAt: new Date('2026-09-12T04:30:00.000Z'),
+      allows: jest.fn().mockReturnValue(true),
+      audit: jest.fn(),
+    });
+    dbStub.query.sections.findFirst.mockResolvedValue({
+      id: SECTION_ID,
+      isActive: true,
+      schoolYear: '2026-2027',
+      gradeLevel: '7',
+      name: 'HUMSS',
+      capacity: 10,
+    });
+    dbStub.select
+      .mockReturnValueOnce({
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockResolvedValue([{ count: 0 }]),
+      })
+      .mockReturnValueOnce({
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockResolvedValue([]),
+      })
+      .mockReturnValueOnce({
+        from: jest.fn().mockReturnThis(),
+        innerJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockResolvedValue([{ userId: STUDENT_USER_ID }]),
+      });
+    dbStub.query.studentProfiles.findMany.mockResolvedValue([
+      { userId: STUDENT_USER_ID, gradeLevel: '8', graduatedAt: null },
+    ]);
+    const dto = {
+      sectionId: SECTION_ID,
+      enrolledRows: [
+        {
+          userId: STUDENT_USER_ID,
+          name: { lastName: 'Dela Cruz', firstName: 'Juan', middleName: '' },
+          gradeLevel: '8',
+          lrn: '123456780001',
+          email: 'a@b.com',
+        },
+      ],
+      pendingRows: [],
+    };
+
+    await expect(
+      service.commitRoster(SECTION_ID, dto as any, ADMIN_USER),
+    ).rejects.toThrow('matching grade level');
   });
 
   it('successfully enrolls and inserts pending rows', async () => {

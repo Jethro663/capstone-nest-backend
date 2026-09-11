@@ -28,6 +28,8 @@ import type { TransitionBlocker } from '../academic-state/academic-transition-re
 import { DatabaseService } from '../../database/database.service';
 import { AuditService } from '../audit/audit.service';
 import { ClassRecordService } from '../class-record/class-record.service';
+import { AdminDemoModeService } from '../admin-demo-mode/admin-demo-mode.service';
+import type { AdminDemoModeRelaxedRuleCode } from '../admin-demo-mode/admin-demo-mode.policy';
 import {
   sections,
   classes,
@@ -88,6 +90,7 @@ export class SectionsService {
     private readonly classRecordService: ClassRecordService,
     private readonly readinessService: AcademicTransitionReadinessService,
     private readonly policyService: AcademicPolicyService,
+    private readonly adminDemoModeService: AdminDemoModeService,
   ) {}
 
   private get db() {
@@ -139,8 +142,9 @@ export class SectionsService {
   private async ensureRoomIsAvailable(
     roomNumber: string | null,
     excludeSectionId?: string,
-  ): Promise<void> {
-    if (!roomNumber) return;
+    allowConflict = false,
+  ): Promise<boolean> {
+    if (!roomNumber) return false;
 
     const roomConditions: SQL<unknown>[] = [
       eq(sections.roomNumber, roomNumber),
@@ -162,16 +166,19 @@ export class SectionsService {
     });
 
     if (roomOwner) {
+      if (allowConflict) return true;
       throw new ConflictException(
         `Room ${roomNumber} is already assigned to Grade ${roomOwner.gradeLevel} - ${roomOwner.name} (${roomOwner.schoolYear}). Choose another room.`,
       );
     }
+    return false;
   }
 
   private async ensureAdviserAvailable(
     adviserId: string,
     excludeSectionId?: string,
-  ): Promise<void> {
+    allowConflict = false,
+  ): Promise<boolean> {
     const adviserConditions: SQL<unknown>[] = [
       eq(sections.adviserId, adviserId),
       eq(sections.isActive, true),
@@ -192,10 +199,12 @@ export class SectionsService {
     });
 
     if (assignedSection) {
+      if (allowConflict) return true;
       throw new ConflictException(
         `Teacher is already assigned as adviser to Grade ${assignedSection.gradeLevel} - ${assignedSection.name} (${assignedSection.schoolYear}). Select another teacher.`,
       );
     }
+    return false;
   }
 
   private ensureTeacherCanAccessSection(
@@ -695,13 +704,22 @@ export class SectionsService {
     requestingUser?: RequestingUser,
   ) {
     const section = await this.findById(sectionId, requestingUser);
+    const demo = await this.adminDemoModeService.resolveForActor(
+      requestingUser?.userId,
+      requestingUser?.roles,
+    );
+    const bypassedRules: AdminDemoModeRelaxedRuleCode[] = [];
     const state = await this.policyService.currentState();
-    if (!section.isActive || section.schoolYear !== state.schoolYear)
-      throw new ConflictException(
-        'Student membership can be changed only in the active school year',
-      );
+    if (!section.isActive || section.schoolYear !== state.schoolYear) {
+      if (!demo.allows('section_membership_window')) {
+        throw new ConflictException(
+          'Student membership can be changed only in the active school year',
+        );
+      }
+      bypassedRules.push('section_membership_window');
+    }
 
-    return await this.db.transaction(async (tx) => {
+    const result = await this.db.transaction(async (tx) => {
       // 1. Capacity check — count DISTINCT enrolled students regardless of classId.
       // A student whose section-only row was promoted to a class row still occupies a
       // seat; counting only classId=NULL rows would silently under-report occupancy.
@@ -717,9 +735,12 @@ export class SectionsService {
 
       const currentCount = Number(rosterResult?.count ?? 0);
       if (currentCount + dto.studentIds.length > section.capacity) {
-        throw new BadRequestException(
-          `Adding ${dto.studentIds.length} student(s) would exceed the section's capacity of ${section.capacity} (currently ${currentCount} enrolled)`,
-        );
+        if (!demo.allows('section_capacity')) {
+          throw new BadRequestException(
+            `Adding ${dto.studentIds.length} student(s) would exceed the section's capacity of ${section.capacity} (currently ${currentCount} enrolled)`,
+          );
+        }
+        bypassedRules.push('section_capacity');
       }
 
       // 2. Validate all provided student IDs exist in one query
@@ -830,6 +851,18 @@ export class SectionsService {
         skipped: alreadyEnrolledIds.size,
       };
     });
+
+    const demoMode = demo.audit(bypassedRules);
+    if (demoMode && requestingUser?.userId) {
+      await this.auditService.log({
+        actorId: requestingUser.userId,
+        action: 'section.roster.added',
+        targetType: 'section',
+        targetId: sectionId,
+        metadata: { studentIds: dto.studentIds, demoMode },
+      });
+    }
+    return result;
   }
 
   // ─── removeStudentFromSection ─────────────────────────────────────────────
@@ -841,16 +874,25 @@ export class SectionsService {
     requestingUser?: RequestingUser,
   ) {
     const section = await this.findById(sectionId, requestingUser);
+    const demo = await this.adminDemoModeService.resolveForActor(
+      requestingUser?.userId,
+      requestingUser?.roles,
+    );
+    const bypassedRules: AdminDemoModeRelaxedRuleCode[] = [];
     const state = await this.policyService.currentState();
-    if (!section.isActive || section.schoolYear !== state.schoolYear)
-      throw new ConflictException(
-        'Student membership can be changed only in the active school year',
-      );
+    if (!section.isActive || section.schoolYear !== state.schoolYear) {
+      if (!demo.allows('section_membership_window')) {
+        throw new ConflictException(
+          'Student membership can be changed only in the active school year',
+        );
+      }
+      bypassedRules.push('section_membership_window');
+    }
 
     // Wrap the guard check and the delete in a transaction to prevent a TOCTOU race
     // where a concurrent class-enrollment insert lands between the guard read and the
     // delete, leaving the student with a class row but no section row.
-    return await this.db.transaction(async (tx) => {
+    const result = await this.db.transaction(async (tx) => {
       // Guard: if the student has any class-associated enrollment in this section,
       // those must be cleared first. Use plain select (not relational query API) so
       // both checks run inside the same transaction object.
@@ -899,6 +941,17 @@ export class SectionsService {
 
       return { removed: true };
     });
+    const demoMode = demo.audit(bypassedRules);
+    if (demoMode && requestingUser?.userId) {
+      await this.auditService.log({
+        actorId: requestingUser.userId,
+        action: 'section.roster.removed',
+        targetType: 'section',
+        targetId: sectionId,
+        metadata: { studentId, demoMode },
+      });
+    }
+    return result;
   }
 
   // ─── createSection ────────────────────────────────────────────────────────
@@ -913,6 +966,11 @@ export class SectionsService {
       createSectionDto.roomNumber,
     );
     this.assertAllowedRoomNumber(normalizedRoomNumber);
+    const demo = await this.adminDemoModeService.resolveForActor(
+      actorId,
+      actorRoles,
+    );
+    const bypassedRules: AdminDemoModeRelaxedRuleCode[] = [];
 
     const existingSection = await this.db.query.sections.findFirst({
       where: and(
@@ -941,10 +999,22 @@ export class SectionsService {
 
       // Ensure the assigned adviser actually holds the teacher role
       await this.verifyAdviserHasTeacherRole(createSectionDto.adviserId);
-      await this.ensureAdviserAvailable(createSectionDto.adviserId);
+      const adviserConflict = await this.ensureAdviserAvailable(
+        createSectionDto.adviserId,
+        undefined,
+        demo.allows('room_adviser_exclusivity'),
+      );
+      if (adviserConflict) bypassedRules.push('room_adviser_exclusivity');
     }
 
-    await this.ensureRoomIsAvailable(normalizedRoomNumber);
+    const roomConflict = await this.ensureRoomIsAvailable(
+      normalizedRoomNumber,
+      undefined,
+      demo.allows('room_adviser_exclusivity'),
+    );
+    if (roomConflict && !bypassedRules.includes('room_adviser_exclusivity')) {
+      bypassedRules.push('room_adviser_exclusivity');
+    }
 
     try {
       const [newSection] = await this.db
@@ -960,6 +1030,7 @@ export class SectionsService {
         })
         .returning();
 
+      const demoMode = demo.audit(bypassedRules);
       await this.auditService.log({
         actorId: actorId ?? createSectionDto.adviserId ?? 'system',
         action: 'section.created',
@@ -971,6 +1042,7 @@ export class SectionsService {
           schoolYear: createSectionDto.schoolYear,
           adviserId: createSectionDto.adviserId ?? null,
           capacity: createSectionDto.capacity,
+          ...(demoMode ? { demoMode } : {}),
         },
       });
 
@@ -1006,6 +1078,11 @@ export class SectionsService {
     }
 
     const existingSection = await this.findById(id);
+    const demo = await this.adminDemoModeService.resolveForActor(
+      actorId,
+      actorRoles,
+    );
+    const bypassedRules: AdminDemoModeRelaxedRuleCode[] = [];
     if (
       updateSectionDto.isActive !== undefined &&
       updateSectionDto.isActive !== existingSection.isActive
@@ -1072,9 +1149,12 @@ export class SectionsService {
         );
       const currentHeadcount = Number(headcountResult?.count ?? 0);
       if (updateSectionDto.capacity < currentHeadcount) {
-        throw new BadRequestException(
-          `Cannot reduce capacity to ${updateSectionDto.capacity}: ${currentHeadcount} student(s) are currently enrolled`,
-        );
+        if (!demo.allows('section_capacity')) {
+          throw new BadRequestException(
+            `Cannot reduce capacity to ${updateSectionDto.capacity}: ${currentHeadcount} student(s) are currently enrolled`,
+          );
+        }
+        bypassedRules.push('section_capacity');
       }
     }
 
@@ -1095,11 +1175,23 @@ export class SectionsService {
 
       // Ensure the new adviser holds the teacher role
       await this.verifyAdviserHasTeacherRole(updateSectionDto.adviserId);
-      await this.ensureAdviserAvailable(updateSectionDto.adviserId, id);
+      const adviserConflict = await this.ensureAdviserAvailable(
+        updateSectionDto.adviserId,
+        id,
+        demo.allows('room_adviser_exclusivity'),
+      );
+      if (adviserConflict) bypassedRules.push('room_adviser_exclusivity');
     }
 
     if (normalizedRoomNumber !== undefined) {
-      await this.ensureRoomIsAvailable(normalizedRoomNumber, id);
+      const roomConflict = await this.ensureRoomIsAvailable(
+        normalizedRoomNumber,
+        id,
+        demo.allows('room_adviser_exclusivity'),
+      );
+      if (roomConflict && !bypassedRules.includes('room_adviser_exclusivity')) {
+        bypassedRules.push('room_adviser_exclusivity');
+      }
     }
 
     const updateData: Partial<{
@@ -1134,6 +1226,7 @@ export class SectionsService {
       const changedFields = Object.keys(updateData).filter(
         (key) => key !== 'updatedAt',
       );
+      const demoMode = demo.audit(bypassedRules);
       await this.auditService.log({
         actorId: actorId ?? existingSection.adviserId ?? 'system',
         action: 'section.updated',
@@ -1145,6 +1238,7 @@ export class SectionsService {
           adviserId: updateSectionDto.adviserId ?? existingSection.adviserId,
           gradeLevel: updateSectionDto.gradeLevel ?? existingSection.gradeLevel,
           schoolYear: updateSectionDto.schoolYear ?? existingSection.schoolYear,
+          ...(demoMode ? { demoMode } : {}),
         },
       });
 
@@ -1284,6 +1378,11 @@ export class SectionsService {
     actorRoles: string[] = [],
   ) {
     const section = await this.findById(id);
+    const demo = await this.adminDemoModeService.resolveForActor(
+      actorId,
+      actorRoles,
+    );
+    const bypassedRules: AdminDemoModeRelaxedRuleCode[] = [];
     const activeMembership = await this.db.query.enrollments.findFirst({
       where: and(
         eq(enrollments.sectionId, id),
@@ -1291,10 +1390,14 @@ export class SectionsService {
       ),
       columns: { id: true },
     });
-    if (activeMembership)
-      throw new ConflictException(
-        'A section with active students must use academic transition or explicit student withdrawal before archival',
-      );
+    if (activeMembership) {
+      if (!demo.allows('archive_active_memberships')) {
+        throw new ConflictException(
+          'A section with active students must use academic transition or explicit student withdrawal before archival',
+        );
+      }
+      bypassedRules.push('archive_active_memberships');
+    }
     const now = new Date();
 
     await this.db.transaction(async (tx) => {
@@ -1324,6 +1427,7 @@ export class SectionsService {
         .where(eq(sections.id, id));
     });
 
+    const demoMode = demo.audit(bypassedRules);
     await this.auditService.log({
       actorId: actorId ?? section.adviserId ?? 'system',
       action: 'section.archived',
@@ -1335,6 +1439,7 @@ export class SectionsService {
         preservedAdviserId: section.adviserId,
         completedEnrollmentStatus: 'completed',
         linkedClassTeacherStatus: 'preserved_for_history',
+        ...(demoMode ? { demoMode } : {}),
       },
     });
   }

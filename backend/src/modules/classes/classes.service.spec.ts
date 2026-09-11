@@ -10,6 +10,7 @@ import { DatabaseService } from '../../database/database.service';
 import { AuditService } from '../audit/audit.service';
 import { ClassRecordService } from '../class-record/class-record.service';
 import { AcademicStateService } from '../academic-state/academic-state.service';
+import { AdminDemoModeService } from '../admin-demo-mode/admin-demo-mode.service';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -164,9 +165,20 @@ describe('ClassesService', () => {
     getCanonicalStudentStanding: jest.fn(),
   };
   const mockAcademicStateService = { getCurrentState: jest.fn() };
+  const inactiveDemoContext = {
+    active: false,
+    version: 0,
+    expiresAt: null,
+    allows: jest.fn().mockReturnValue(false),
+    audit: jest.fn().mockReturnValue(undefined),
+  };
+  const mockAdminDemoModeService = { resolveForActor: jest.fn() };
 
   beforeEach(async () => {
     jest.resetAllMocks();
+    mockAdminDemoModeService.resolveForActor.mockResolvedValue(
+      inactiveDemoContext,
+    );
     mockDb.transaction.mockImplementation(
       async (callback: (tx: any) => Promise<any>) => callback(mockDb),
     );
@@ -224,6 +236,10 @@ describe('ClassesService', () => {
         { provide: AuditService, useValue: mockAuditService },
         { provide: ClassRecordService, useValue: mockClassRecordService },
         { provide: AcademicStateService, useValue: mockAcademicStateService },
+        {
+          provide: AdminDemoModeService,
+          useValue: mockAdminDemoModeService,
+        },
       ],
     }).compile();
 
@@ -907,6 +923,84 @@ describe('ClassesService', () => {
       );
     });
 
+    it('allows an otherwise valid collision for an active Demo administrator and audits the bypass', async () => {
+      const demoMode = {
+        demoModeVersion: 2,
+        demoModeExpiresAt: '2026-09-12T04:30:00.000Z',
+        bypassedRules: ['schedule_collision'],
+      };
+      mockAdminDemoModeService.resolveForActor.mockResolvedValue({
+        active: true,
+        version: 2,
+        expiresAt: new Date('2026-09-12T04:30:00.000Z'),
+        allows: jest.fn((rule) => rule === 'schedule_collision'),
+        audit: jest.fn().mockReturnValue(demoMode),
+      });
+      mockDb.query.sections.findFirst.mockResolvedValue({
+        id: SECTION_ID,
+        name: 'Sampaguita',
+        gradeLevel: '7',
+        roomNumber: '101',
+      });
+      mockDb.query.users.findFirst.mockResolvedValue(makeTeacher());
+      mockDb.query.classes.findMany.mockResolvedValue([]);
+      mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
+      mockDb.insert
+        .mockReturnValueOnce(makeInsertChain([{ id: CLASS_ID }]))
+        .mockReturnValueOnce(makeInsertChain([{ id: 'slot-uuid-1' }]));
+      mockDb.select.mockReturnValue(
+        makeSelectChain([
+          {
+            slotId: 'existing-slot',
+            classId: 'other-class-uuid',
+            days: ['M'],
+            startTime: '09:00',
+            endTime: '10:00',
+            subjectName: 'English',
+            classSectionId: SECTION_ID,
+            classTeacherId: 'other-teacher',
+            classRoom: null,
+          },
+        ]),
+      );
+
+      await service.create(dtoWithSlots as any, 'admin-actor-1', ['admin']);
+
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({ demoMode }),
+        }),
+      );
+    });
+
+    it('keeps invalid time shape rejected under active Demo mode', async () => {
+      mockAdminDemoModeService.resolveForActor.mockResolvedValue({
+        ...inactiveDemoContext,
+        active: true,
+        allows: jest.fn().mockReturnValue(true),
+      });
+      mockDb.query.sections.findFirst.mockResolvedValue({
+        id: SECTION_ID,
+        name: 'Sampaguita',
+        gradeLevel: '7',
+        roomNumber: '101',
+      });
+      mockDb.query.users.findFirst.mockResolvedValue(makeTeacher());
+      mockDb.query.classes.findMany.mockResolvedValue([]);
+      mockDb.insert.mockReturnValueOnce(makeInsertChain([{ id: CLASS_ID }]));
+
+      await expect(
+        service.create(
+          {
+            ...dtoWithSlots,
+            schedules: [{ days: ['M'], startTime: '10:00', endTime: '09:00' }],
+          } as any,
+          'admin-actor-1',
+          ['admin'],
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
     it('rejects class creation when schedules are absent from the DTO', async () => {
       const dtoNoSlots = {
         subjectName: 'Science',
@@ -1550,6 +1644,59 @@ describe('ClassesService', () => {
   // =========================================================================
 
   describe('enrollStudent', () => {
+    it('keeps historical class enrollment blocked in normal mode', async () => {
+      mockDb.query.classes.findFirst.mockResolvedValue(
+        makeClass({ isActive: false, schoolYear: '2025-2026' }),
+      );
+      await expect(
+        service.enrollStudent(CLASS_ID, STUDENT_ID, 'admin-actor-1', ['admin']),
+      ).rejects.toThrow(
+        'Class enrollment is allowed only in the active school year',
+      );
+    });
+
+    it('allows historical class enrollment for an active Demo administrator while retaining student checks', async () => {
+      const demoMode = {
+        demoModeVersion: 3,
+        demoModeExpiresAt: '2026-09-12T04:30:00.000Z',
+        bypassedRules: ['class_membership_window'],
+      };
+      mockAdminDemoModeService.resolveForActor.mockResolvedValue({
+        active: true,
+        version: 3,
+        expiresAt: new Date('2026-09-12T04:30:00.000Z'),
+        allows: jest.fn((rule) => rule === 'class_membership_window'),
+        audit: jest.fn().mockReturnValue(demoMode),
+      });
+      const txMock: any = {
+        query: { enrollments: { findFirst: jest.fn() } },
+        update: jest.fn(),
+        insert: jest.fn(),
+      };
+      mockDb.query.classes.findFirst.mockResolvedValue(
+        makeClass({ isActive: false, schoolYear: '2025-2026' }),
+      );
+      mockDb.query.users.findFirst.mockResolvedValue({
+        id: STUDENT_ID,
+        profile: { gradeLevel: '7', graduatedAt: null },
+      });
+      txMock.query.enrollments.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(makeEnrollment({ classId: null }));
+      txMock.update.mockReturnValue(makeUpdateChain());
+      mockDb.transaction.mockImplementation((cb: Function) => cb(txMock));
+      mockDb.query.enrollments.findFirst.mockResolvedValue(makeEnrollment());
+
+      await service.enrollStudent(CLASS_ID, STUDENT_ID, 'admin-actor-1', [
+        'admin',
+      ]);
+
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({ demoMode }),
+        }),
+      );
+    });
     it('promotes a section-only enrollment row when student has no class yet', async () => {
       const txMock: any = {
         query: { enrollments: { findFirst: jest.fn() } },
@@ -2169,6 +2316,74 @@ describe('ClassesService', () => {
         'Archived classes cannot be restored. Purge the archived class instead.',
       );
       expect(mockDb.update).not.toHaveBeenCalled();
+    });
+
+    it('restores only the archived class shell for an active Demo administrator', async () => {
+      const demoMode = {
+        demoModeVersion: 4,
+        demoModeExpiresAt: '2026-09-12T04:30:00.000Z',
+        bypassedRules: ['restore_archived_class'],
+      };
+      mockAdminDemoModeService.resolveForActor.mockResolvedValue({
+        active: true,
+        version: 4,
+        expiresAt: new Date('2026-09-12T04:30:00.000Z'),
+        allows: jest.fn((rule) => rule === 'restore_archived_class'),
+        audit: jest.fn().mockReturnValue(demoMode),
+      });
+      mockDb.query.classes.findFirst
+        .mockResolvedValueOnce(makeClass({ isActive: false }))
+        .mockResolvedValueOnce(makeClass({ isActive: true }));
+      const update = makeUpdateChain();
+      mockDb.update.mockReturnValue(update);
+
+      await expect(
+        service.toggleActive(CLASS_ID, 'admin-actor-1', ['admin']),
+      ).resolves.toMatchObject({ isActive: true });
+
+      expect(mockDb.transaction).not.toHaveBeenCalled();
+      expect(update.set).toHaveBeenCalledWith(
+        expect.objectContaining({ isActive: true }),
+      );
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({ demoMode }),
+        }),
+      );
+    });
+
+    it('archives active memberships through the existing transaction for an active Demo administrator', async () => {
+      const demoMode = {
+        demoModeVersion: 4,
+        demoModeExpiresAt: '2026-09-12T04:30:00.000Z',
+        bypassedRules: ['archive_active_memberships'],
+      };
+      mockAdminDemoModeService.resolveForActor.mockResolvedValue({
+        active: true,
+        version: 4,
+        expiresAt: new Date('2026-09-12T04:30:00.000Z'),
+        allows: jest.fn((rule) => rule === 'archive_active_memberships'),
+        audit: jest.fn().mockReturnValue(demoMode),
+      });
+      mockDb.query.classes.findFirst
+        .mockResolvedValueOnce(makeClass({ isActive: true }))
+        .mockResolvedValueOnce(makeClass({ isActive: false }));
+      mockDb.query.enrollments.findFirst.mockResolvedValue(makeEnrollment());
+      const update = makeUpdateChain();
+      mockDb.update.mockReturnValue(update);
+
+      await service.toggleActive(CLASS_ID, 'admin-actor-1', ['admin']);
+
+      expect(mockDb.transaction).toHaveBeenCalledTimes(1);
+      expect(update.set.mock.calls[0][0]).toEqual({ status: 'completed' });
+      expect(update.set.mock.calls[1][0]).toEqual(
+        expect.objectContaining({ isActive: false }),
+      );
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({ demoMode }),
+        }),
+      );
     });
 
     it('writes an audit log with actor context when status is toggled', async () => {

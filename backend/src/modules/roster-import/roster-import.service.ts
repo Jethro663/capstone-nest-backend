@@ -29,6 +29,11 @@ import { parseXlsx } from './parsers/xlsx.parser';
 import { parseCsv } from './parsers/csv.parser';
 import { PasswordGenerator } from '../users/utils/password-generator';
 import {
+  AdminDemoModeService,
+  type AdminDemoModeContext,
+} from '../admin-demo-mode/admin-demo-mode.service';
+import type { AdminDemoModeRelaxedRuleCode } from '../admin-demo-mode/admin-demo-mode.policy';
+import {
   findSectionHeaderRow,
   findColumnHeaderRow,
   validateLrn,
@@ -66,6 +71,7 @@ export class RosterImportService {
     private readonly policyService: AcademicPolicyService,
     private readonly auditService: AuditService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly adminDemoModeService: AdminDemoModeService,
   ) {}
 
   private get db() {
@@ -104,11 +110,17 @@ export class RosterImportService {
       throw new NotFoundException(`Section with ID "${sectionId}" not found`);
     }
 
+    const demo = await this.adminDemoModeService.resolveForActor(
+      requestingUser.id,
+      requestingUser.roles,
+    );
     if (!section.isActive) {
-      await this.cleanupFile(file.path);
-      throw new BadRequestException(
-        `Section "${section.name}" is inactive and cannot receive new enrollments`,
-      );
+      if (!demo.allows('section_membership_window')) {
+        await this.cleanupFile(file.path);
+        throw new BadRequestException(
+          `Section "${section.name}" is inactive and cannot receive new enrollments`,
+        );
+      }
     }
 
     const isTeacherOnly =
@@ -394,6 +406,10 @@ export class RosterImportService {
     dto: RosterImportCommitDto,
     requestingUser: RosterRequestingUser,
   ): Promise<RosterImportCommitResponseDto> {
+    const demo = await this.adminDemoModeService.resolveForActor(
+      requestingUser.id,
+      requestingUser.roles,
+    );
     const issuedPasswords = new Set<string>();
     const preparedCredentials: PreparedAccountCredential[] = [];
     for (const row of dto.pendingRows) {
@@ -416,6 +432,7 @@ export class RosterImportService {
       dto,
       requestingUser,
       preparedCredentials,
+      demo,
     );
   }
 
@@ -425,7 +442,9 @@ export class RosterImportService {
     dto: RosterImportCommitDto,
     requestingUser: RosterRequestingUser,
     preparedCredentials: PreparedAccountCredential[],
+    demo: AdminDemoModeContext,
   ): Promise<RosterImportCommitResponseDto> {
+    const bypassedRules: AdminDemoModeRelaxedRuleCode[] = [];
     // 1. Verify section
     const section = await this.db.query.sections.findFirst({
       where: eq(sections.id, sectionId),
@@ -434,7 +453,10 @@ export class RosterImportService {
     if (!section)
       throw new NotFoundException(`Section with ID "${sectionId}" not found`);
     if (!section.isActive) {
-      throw new BadRequestException(`Section "${section.name}" is inactive`);
+      if (!demo.allows('section_membership_window')) {
+        throw new BadRequestException(`Section "${section.name}" is inactive`);
+      }
+      bypassedRules.push('section_membership_window');
     }
 
     const isTeacherOnly =
@@ -455,10 +477,16 @@ export class RosterImportService {
     }
 
     const state = await this.policyService.currentState();
-    if (section.schoolYear !== state.schoolYear)
-      throw new BadRequestException(
-        'Roster imports can enroll students only in the active school year',
-      );
+    if (section.schoolYear !== state.schoolYear) {
+      if (!demo.allows('section_membership_window')) {
+        throw new BadRequestException(
+          'Roster imports can enroll students only in the active school year',
+        );
+      }
+      if (!bypassedRules.includes('section_membership_window')) {
+        bypassedRules.push('section_membership_window');
+      }
+    }
 
     const enrolledUserIds: string[] = [];
     let alreadyEnrolledSkipped = 0;
@@ -508,10 +536,13 @@ export class RosterImportService {
 
         if (newIds.length > 0) {
           if (currentCount + newIds.length > section.capacity) {
-            throw new BadRequestException(
-              `Adding ${newIds.length} student(s) would exceed the section capacity of ${section.capacity} ` +
-                `(currently ${currentCount} enrolled)`,
-            );
+            if (!demo.allows('section_capacity')) {
+              throw new BadRequestException(
+                `Adding ${newIds.length} student(s) would exceed the section capacity of ${section.capacity} ` +
+                  `(currently ${currentCount} enrolled)`,
+              );
+            }
+            bypassedRules.push('section_capacity');
           }
 
           // Verify all IDs are valid registered students with the student role
@@ -608,10 +639,15 @@ export class RosterImportService {
 
         const currentCount = Number(cap?.count ?? 0);
         if (currentCount + dto.pendingRows.length > section.capacity) {
-          throw new BadRequestException(
-            `Adding ${dto.pendingRows.length} new student(s) would exceed the section capacity of ${section.capacity} ` +
-              `(currently ${currentCount} enrolled)`,
-          );
+          if (!demo.allows('section_capacity')) {
+            throw new BadRequestException(
+              `Adding ${dto.pendingRows.length} new student(s) would exceed the section capacity of ${section.capacity} ` +
+                `(currently ${currentCount} enrolled)`,
+            );
+          }
+          if (!bypassedRules.includes('section_capacity')) {
+            bypassedRules.push('section_capacity');
+          }
         }
 
         const pendingEmails = dto.pendingRows.map((r) => r.email.toLowerCase());
@@ -789,6 +825,7 @@ export class RosterImportService {
       }
     });
 
+    const demoMode = demo.audit(bypassedRules);
     await this.auditService.log({
       actorId: requestingUser.id,
       action: 'academic.roster.imported',
@@ -799,6 +836,7 @@ export class RosterImportService {
         enrolledStudentIds: enrolledUserIds,
         createdStudentIds: pendingRosterIds,
         alreadyEnrolledSkipped,
+        ...(demoMode ? { demoMode } : {}),
       },
     });
     for (const account of createdAccounts) {
