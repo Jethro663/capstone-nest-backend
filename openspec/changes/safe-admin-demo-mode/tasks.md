@@ -36,9 +36,9 @@
 - [x] 4.3 Add compact admin active-mode banner and DashboardLayout integration.
 - [x] 4.4 Add route-backed Demo mode System Settings navigation.
 - [x] 4.5 Implement responsive accessible activation/deactivation states and tests.
-- [ ] 4.6 Make class/section conflict choices capability-aware while keeping required/permanent constraints.
-- [ ] 4.7 Add web archived-class restore and Demo user lifecycle/edit controls without changing permanent purge confirmation.
-- [ ] 4.8 Run focused web tests, lint, and typecheck.
+- [x] 4.6 Make class/section conflict choices capability-aware while keeping required/permanent constraints.
+- [x] 4.7 Add web archived-class restore and Demo user lifecycle/edit controls without changing permanent purge confirmation.
+- [x] 4.8 Run focused web tests, lint, and typecheck.
 
 ## 5. Mobile controls and consumers
 

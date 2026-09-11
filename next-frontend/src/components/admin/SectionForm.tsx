@@ -7,6 +7,8 @@ import { Label } from '@/components/ui/label';
 import { sanitizeSectionNameInput } from '@/lib/input-policy';
 import { ROOM_OPTIONS, ROOM_OPTIONS_HELP_TEXT } from '@/lib/room-options';
 import type { User } from '@/types/user';
+import { useAdminDemoMode } from '@/providers/AdminDemoModeProvider';
+import { hasAdminDemoModeRule } from '@/types/admin-demo-mode';
 
 const SELECT_CLS =
   'admin-select flex h-10 w-full rounded-xl px-3.5 py-2 text-sm shadow-sm disabled:cursor-not-allowed disabled:opacity-50';
@@ -56,6 +58,11 @@ export default function SectionForm({
   onCancel,
   submitLabel,
 }: SectionFormProps) {
+  const { status: demoModeStatus } = useAdminDemoMode();
+  const canRelaxRoomAndAdviser = hasAdminDemoModeRule(
+    demoModeStatus,
+    'room_adviser_exclusivity',
+  );
   const [form, setForm] = useState<SectionFormValues>(initialValues);
   const roomOptions = useMemo(() => {
     if (!form.roomNumber) return [...ROOM_OPTIONS];
@@ -181,11 +188,18 @@ export default function SectionForm({
             <option value="">Select room</option>
             {roomOptions.map((room) => {
               const disabledReason = roomDisabledReasonByNumber[room];
-              const disabled = Boolean(disabledReason) && room !== form.roomNumber;
+              const disabled =
+                Boolean(disabledReason) &&
+                room !== form.roomNumber &&
+                !canRelaxRoomAndAdviser;
               return (
                 <option key={room} value={room} disabled={disabled}>
                   Room {room}
-                  {disabledReason ? ` - ${disabledReason}` : ''}
+                  {disabledReason
+                    ? canRelaxRoomAndAdviser
+                      ? ' - conflict allowed in Demo mode'
+                      : ` - ${disabledReason}`
+                    : ''}
                 </option>
               );
             })}
@@ -211,11 +225,17 @@ export default function SectionForm({
             <option
               key={teacher.id}
               value={teacher.id}
-              disabled={Boolean(adviserDisabledReasonById[teacher.id]) && teacher.id !== form.adviserId}
+              disabled={
+                Boolean(adviserDisabledReasonById[teacher.id]) &&
+                teacher.id !== form.adviserId &&
+                !canRelaxRoomAndAdviser
+              }
             >
               {teacher.firstName} {teacher.lastName}
               {adviserDisabledReasonById[teacher.id]
-                ? ` - ${adviserDisabledReasonById[teacher.id]}`
+                ? canRelaxRoomAndAdviser
+                  ? ' - conflict allowed in Demo mode'
+                  : ` - ${adviserDisabledReasonById[teacher.id]}`
                 : ''}
             </option>
           ))}

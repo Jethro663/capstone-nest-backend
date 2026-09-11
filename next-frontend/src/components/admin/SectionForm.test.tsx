@@ -3,6 +3,19 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import SectionForm, { createEmptySectionForm } from './SectionForm';
 
+let demoModeActive = false;
+
+jest.mock('@/providers/AdminDemoModeProvider', () => ({
+  useAdminDemoMode: () => ({
+    status: demoModeActive
+      ? {
+          active: true,
+          relaxedRules: [{ code: 'room_adviser_exclusivity' }],
+        }
+      : { active: false, relaxedRules: [] },
+  }),
+}));
+
 describe('SectionForm', () => {
   const baseProps = {
     initialValues: createEmptySectionForm('2026-2027'),
@@ -15,6 +28,7 @@ describe('SectionForm', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    demoModeActive = false;
   });
 
   it('sanitizes section name and submits selected room', async () => {
@@ -33,5 +47,75 @@ describe('SectionForm', () => {
         roomNumber: '201',
       }),
     );
+  });
+
+  it('keeps conflicting room and adviser choices disabled in normal mode', () => {
+    render(
+      <SectionForm
+        {...baseProps}
+        teachers={[
+          {
+            id: 'teacher-1',
+            firstName: 'Ana',
+            lastName: 'Reyes',
+            email: 'ana@example.com',
+            roles: ['teacher'],
+            status: 'ACTIVE',
+            isEmailVerified: true,
+          },
+        ]}
+        roomDisabledReasonByNumber={{ '201': 'Assigned to Grade 7 - Rizal' }}
+        adviserDisabledReasonById={{
+          'teacher-1': 'Already assigned to Grade 7 - Rizal',
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByRole('option', {
+        name: 'Room 201 - Assigned to Grade 7 - Rizal',
+      }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('option', {
+        name: 'Ana Reyes - Already assigned to Grade 7 - Rizal',
+      }),
+    ).toBeDisabled();
+  });
+
+  it('keeps conflicts visible but selectable when the exact Demo mode rule is active', () => {
+    demoModeActive = true;
+    render(
+      <SectionForm
+        {...baseProps}
+        teachers={[
+          {
+            id: 'teacher-1',
+            firstName: 'Ana',
+            lastName: 'Reyes',
+            email: 'ana@example.com',
+            roles: ['teacher'],
+            status: 'ACTIVE',
+            isEmailVerified: true,
+          },
+        ]}
+        roomDisabledReasonByNumber={{ '201': 'Assigned to Grade 7 - Rizal' }}
+        adviserDisabledReasonById={{
+          'teacher-1': 'Already assigned to Grade 7 - Rizal',
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByRole('option', {
+        name: 'Room 201 - conflict allowed in Demo mode',
+      }),
+    ).toBeEnabled();
+    expect(
+      screen.getByRole('option', {
+        name: 'Ana Reyes - conflict allowed in Demo mode',
+      }),
+    ).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Create Section' })).toBeDisabled();
   });
 });

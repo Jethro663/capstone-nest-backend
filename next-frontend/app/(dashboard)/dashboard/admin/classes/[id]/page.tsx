@@ -26,6 +26,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useDiscussionRealtimeRefresh } from '@/hooks/use-discussion-realtime-refresh';
+import { useAdminDemoMode } from '@/providers/AdminDemoModeProvider';
+import { hasAdminDemoModeRule } from '@/types/admin-demo-mode';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -254,6 +256,11 @@ export default function AdminClassDetailPage() {
   const classId = String(params?.id ?? '');
   const viewParam = searchParams.get('view');
   const activeTab: WorkspaceTab = isWorkspaceTab(viewParam) ? viewParam : 'modules';
+  const { status: demoModeStatus, refresh: refreshDemoMode } = useAdminDemoMode();
+  const canRestoreArchivedClass = hasAdminDemoModeRule(
+    demoModeStatus,
+    'restore_archived_class',
+  );
 
   const [classItem, setClassItem] = useState<ClassItem | null>(null);
   const [modules, setModules] = useState<ClassModule[]>([]);
@@ -480,7 +487,28 @@ export default function AdminClassDetailPage() {
     if (!classItem) return;
 
     if (!classItem.isActive) {
-      toast.info('Archived classes can only be purged from the Classes archive list.');
+      if (!canRestoreArchivedClass) {
+        toast.info('Archived classes can only be purged from the Classes archive list.');
+        return;
+      }
+      setConfirmation({
+        title: 'Restore archived class?',
+        description:
+          'Demo mode permits this reversible lifecycle exception. Permanent evidence safeguards remain active.',
+        confirmLabel: 'Restore class',
+        tone: 'default',
+        onConfirm: async () => {
+          try {
+            await executeControlledAction('class-status', async () => {
+              await classService.toggleStatus(classItem.id);
+              toast.success('Class restored');
+            });
+          } catch (error) {
+            await refreshDemoMode();
+            toast.error(getApiErrorMessage(error, 'Failed to restore class'));
+          }
+        },
+      });
       return;
     }
 
@@ -1086,6 +1114,16 @@ export default function AdminClassDetailPage() {
               >
                 <Power className="h-4 w-4" />
                 Archive
+              </Button>
+            ) : canRestoreArchivedClass ? (
+              <Button
+                type="button"
+                className="admin-button-solid rounded-xl font-black"
+                onClick={toggleClassStatus}
+                disabled={busyAction === 'class-status'}
+              >
+                <Power className="h-4 w-4" />
+                Restore class
               </Button>
             ) : (
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-bold text-amber-800">

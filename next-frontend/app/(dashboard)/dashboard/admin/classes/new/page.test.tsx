@@ -2,6 +2,7 @@ import { render, waitFor, act } from '@testing-library/react';
 import CreateClassPage from './page';
 
 const push = jest.fn();
+const refreshDemoMode = jest.fn();
 
 const searchParams = new URLSearchParams({
   templateId: 'template-123',
@@ -17,6 +18,10 @@ const classFormMock = jest.fn<React.ReactNode, [Record<string, unknown>]>(
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
   useSearchParams: () => searchParams,
+}));
+
+jest.mock('@/providers/AdminDemoModeProvider', () => ({
+  useAdminDemoMode: () => ({ refresh: refreshDemoMode }),
 }));
 
 jest.mock('@/components/admin/ClassForm', () => {
@@ -226,5 +231,39 @@ describe('CreateClassPage', () => {
       };
       expect(latestProps.initialValues.gradingProfile).toEqual(initialProfile);
     });
+  });
+
+  it('refreshes Demo mode without retrying when the backend rejects a stale capability', async () => {
+    classService.create.mockRejectedValueOnce({
+      response: { data: { message: 'Schedule conflicts detected.' } },
+    });
+    render(<CreateClassPage />);
+
+    await waitFor(() => expect(classFormMock).toHaveBeenCalled());
+    const latestProps = classFormMock.mock.calls.at(-1)?.[0] as {
+      onSubmit: (values: Record<string, unknown>) => Promise<void>;
+    };
+
+    await act(async () => {
+      await latestProps.onSubmit({
+        subjectName: 'Mathematics',
+        subjectCode: 'MATH-7',
+        subjectGradeLevel: '7',
+        sectionId: 'section-1',
+        teacherId: 'teacher-1',
+        schoolYear: '2026-2027',
+        room: '201',
+        schedules: [{ days: ['M'], startTime: '08:00', endTime: '09:00' }],
+        gradingProfile: {
+          writtenWork: 30,
+          performanceTask: 50,
+          quarterlyAssessment: 20,
+        },
+      });
+    });
+
+    expect(refreshDemoMode).toHaveBeenCalledTimes(1);
+    expect(classService.create).toHaveBeenCalledTimes(1);
+    expect(push).not.toHaveBeenCalled();
   });
 });

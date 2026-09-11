@@ -9,11 +9,24 @@ import { extractionService } from '@/services/extraction-service';
 import { moduleService } from '@/services/module-service';
 
 let currentView: string | null = null;
+let demoModeActive = false;
 
 jest.mock('next/navigation', () => ({
   useParams: () => ({ id: 'class-1' }),
   useSearchParams: () => ({
     get: (key: string) => (key === 'view' ? currentView : null),
+  }),
+}));
+
+jest.mock('@/providers/AdminDemoModeProvider', () => ({
+  useAdminDemoMode: () => ({
+    status: demoModeActive
+      ? {
+          active: true,
+          relaxedRules: [{ code: 'restore_archived_class' }],
+        }
+      : { active: false, relaxedRules: [] },
+    refresh: jest.fn(),
   }),
 }));
 
@@ -104,6 +117,7 @@ const mockedDiscussionBoardService = discussionBoardService as jest.Mocked<
 describe('AdminClassDetailPage', () => {
   beforeEach(() => {
     currentView = null;
+    demoModeActive = false;
     jest.clearAllMocks();
 
     mockedClassService.getById.mockResolvedValue({
@@ -242,6 +256,65 @@ describe('AdminClassDetailPage', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: /Full Calendar/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps an archived class terminal when Demo mode is not active', async () => {
+    mockedClassService.getById.mockResolvedValueOnce({
+      success: true,
+      message: 'Fixture response',
+      data: {
+        id: 'class-1',
+        subjectName: 'Mathematics 9',
+        subjectCode: 'MATH-9',
+        subjectGradeLevel: '9',
+        sectionId: 'section-1',
+        section: { id: 'section-1', name: 'Section A', gradeLevel: '9' },
+        teacherId: 'teacher-1',
+        schoolYear: '2026-2027',
+        room: '402',
+        isActive: false,
+        isHidden: false,
+        schedules: [],
+      },
+    } as Awaited<ReturnType<typeof classService.getById>>);
+
+    render(<AdminClassDetailPage />);
+
+    expect(await screen.findByText('Mathematics 9')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /Restore class/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/Archived classes can only be purged/i),
+    ).toBeInTheDocument();
+  });
+
+  it('exposes archived-class restoration only with the exact Demo mode capability', async () => {
+    demoModeActive = true;
+    mockedClassService.getById.mockResolvedValueOnce({
+      success: true,
+      message: 'Fixture response',
+      data: {
+        id: 'class-1',
+        subjectName: 'Mathematics 9',
+        subjectCode: 'MATH-9',
+        subjectGradeLevel: '9',
+        sectionId: 'section-1',
+        section: { id: 'section-1', name: 'Section A', gradeLevel: '9' },
+        teacherId: 'teacher-1',
+        schoolYear: '2026-2027',
+        room: '402',
+        isActive: false,
+        isHidden: false,
+        schedules: [],
+      },
+    } as Awaited<ReturnType<typeof classService.getById>>);
+
+    render(<AdminClassDetailPage />);
+
+    expect(
+      await screen.findByRole('button', { name: /Restore class/i }),
     ).toBeInTheDocument();
   });
 });

@@ -75,3 +75,12 @@ export type ApiEnvelope<T> = {
   message: string;
   data: T;
 };
+
+export function hasAdminDemoModeRule(
+  status: AdminDemoModeStatus | null | undefined,
+  code: AdminDemoModeRelaxedRuleCode,
+) {
+  return Boolean(
+    status?.active && status.relaxedRules.some((rule) => rule.code === code),
+  );
+}

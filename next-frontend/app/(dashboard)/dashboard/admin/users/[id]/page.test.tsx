@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 
 const backMock = jest.fn();
 const pushMock = jest.fn();
+let demoModeActive = false;
 
 jest.mock('next/navigation', () => ({
   useParams: () => ({ id: 'student-1' }),
@@ -23,11 +24,26 @@ jest.mock('sonner', () => ({
   },
 }));
 
+jest.mock('@/providers/AdminDemoModeProvider', () => ({
+  useAdminDemoMode: () => ({
+    status: demoModeActive
+      ? {
+          active: true,
+          relaxedRules: [{ code: 'user_lifecycle_sequence' }],
+        }
+      : { active: false, relaxedRules: [] },
+    refresh: jest.fn(),
+  }),
+}));
+
 jest.mock('@/services/user-service', () => ({
   userService: {
     getById: jest.fn(),
     update: jest.fn(),
     resetPassword: jest.fn(),
+    reactivate: jest.fn(),
+    softDelete: jest.fn(),
+    purge: jest.fn(),
   },
 }));
 
@@ -57,6 +73,7 @@ const studentUser = {
 describe('AdminUserDetailPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    demoModeActive = false;
     mockedUserService.getById.mockResolvedValue({
       success: true,
       data: { user: studentUser },
@@ -139,5 +156,73 @@ describe('AdminUserDetailPage', () => {
         }),
       ),
     );
+  });
+
+  it('keeps a deleted account read-only while retaining guarded purge in normal mode', async () => {
+    mockedUserService.getById.mockResolvedValueOnce({
+      success: true,
+      data: { user: { ...studentUser, status: 'DELETED' } },
+    } as Awaited<ReturnType<typeof userService.getById>>);
+
+    render(<AdminUserDetailPage />);
+
+    await screen.findByRole('heading', { name: 'Liam Navarro' });
+    expect(screen.getByDisplayValue('Liam')).toBeDisabled();
+    expect(
+      screen.queryByRole('button', { name: /Reactivate user/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Purge user/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('allows editing and direct reactivation of a deleted account only in Demo mode', async () => {
+    demoModeActive = true;
+    mockedUserService.getById.mockResolvedValueOnce({
+      success: true,
+      data: { user: { ...studentUser, status: 'DELETED' } },
+    } as Awaited<ReturnType<typeof userService.getById>>);
+
+    render(<AdminUserDetailPage />);
+
+    await screen.findByRole('heading', { name: 'Liam Navarro' });
+    expect(screen.getByDisplayValue('Liam')).toBeEnabled();
+    expect(
+      screen.getByRole('button', { name: /Reactivate user/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Purge user/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('exposes direct archive for an active account only in Demo mode', async () => {
+    demoModeActive = true;
+    render(<AdminUserDetailPage />);
+
+    await screen.findByRole('heading', { name: 'Liam Navarro' });
+    expect(
+      screen.getByRole('button', { name: /Archive user/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps permanent purge behind deleted status and exact full-name confirmation', async () => {
+    mockedUserService.getById.mockResolvedValueOnce({
+      success: true,
+      data: { user: { ...studentUser, status: 'DELETED' } },
+    } as Awaited<ReturnType<typeof userService.getById>>);
+    render(<AdminUserDetailPage />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Purge user/i }),
+    );
+    const confirmButton = screen.getAllByRole('button', {
+      name: /^Purge user$/i,
+    }).at(-1)!;
+    expect(confirmButton).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText('Type Liam Navarro'), {
+      target: { value: 'Liam Navarro' },
+    });
+    expect(confirmButton).toBeEnabled();
   });
 });

@@ -5,6 +5,11 @@ import ClassForm, { createEmptyClassForm } from './ClassForm';
 import { toast } from 'sonner';
 import { classService } from '@/services/class-service';
 
+let demoModeActive = false;
+const scheduleCalendarMock = jest.fn<React.ReactNode, [Record<string, unknown>]>(
+  () => <div data-testid="schedule-calendar" />,
+);
+
 jest.mock('sonner', () => ({
   toast: {
     error: jest.fn(),
@@ -17,8 +22,20 @@ jest.mock('@/services/class-service', () => ({
   },
 }));
 
+jest.mock('@/providers/AdminDemoModeProvider', () => ({
+  useAdminDemoMode: () => ({
+    status: demoModeActive
+      ? {
+          active: true,
+          relaxedRules: [{ code: 'schedule_collision' }],
+        }
+      : { active: false, relaxedRules: [] },
+  }),
+}));
+
 jest.mock('@/components/admin/ScheduleCalendarCreator', () => ({
-  ScheduleCalendarCreator: () => <div data-testid="schedule-calendar" />,
+  ScheduleCalendarCreator: (props: Record<string, unknown>) =>
+    scheduleCalendarMock(props),
 }));
 
 const mockedToast = toast as jest.Mocked<typeof toast>;
@@ -58,6 +75,7 @@ describe('ClassForm', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    demoModeActive = false;
     (classService.getAll as jest.Mock).mockResolvedValue({
       data: { data: [] },
     });
@@ -442,5 +460,65 @@ describe('ClassForm', () => {
     expect(
       screen.getByText('1 teacher is already assigned here and disabled.'),
     ).toBeInTheDocument();
+  });
+
+  it('keeps duplicate subjects protected but makes assigned teachers and schedule collisions selectable in Demo mode', async () => {
+    demoModeActive = true;
+    (classService.getAll as jest.Mock).mockImplementation(
+      async (query?: { sectionId?: string }) => {
+        if (query?.sectionId === 'section-1') {
+          return {
+            data: {
+              data: [
+                {
+                  id: 'class-existing',
+                  subjectName: 'Science',
+                  subjectCode: 'SCI-7',
+                  subjectGradeLevel: '7',
+                  sectionId: 'section-1',
+                  teacherId: 'teacher-1',
+                  schoolYear: '2026-2027',
+                  room: '201',
+                  isActive: true,
+                },
+              ],
+            },
+          };
+        }
+
+        return { data: { data: [] } };
+      },
+    );
+
+    render(
+      <ClassForm
+        {...baseProps}
+        initialValues={{
+          ...createEmptyClassForm('2026-2027'),
+          subjectGradeLevel: '7',
+          sectionId: 'section-1',
+          room: '201',
+        }}
+      />,
+    );
+
+    await waitForClassLookups(1);
+
+    expect(
+      screen.getByRole('option', {
+        name: 'Science (already in this section)',
+      }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('option', {
+        name: 'Tina Teacher (conflict allowed in Demo mode)',
+      }),
+    ).toBeEnabled();
+    expect(
+      screen.getByText('1 teacher conflict is selectable while Demo mode is active.'),
+    ).toBeInTheDocument();
+    expect(scheduleCalendarMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ allowExistingConflicts: true }),
+    );
   });
 });

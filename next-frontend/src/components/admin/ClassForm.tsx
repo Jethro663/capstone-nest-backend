@@ -16,6 +16,8 @@ import {
 import type { ClassItem } from "@/types/class";
 import type { ClassTemplate } from "@/types/class-template";
 import type { Section } from "@/types/section";
+import { useAdminDemoMode } from "@/providers/AdminDemoModeProvider";
+import { hasAdminDemoModeRule } from "@/types/admin-demo-mode";
 import type { User } from "@/types/user";
 
 const SUBJECTS = [
@@ -159,6 +161,11 @@ export default function ClassForm({
   onValuesChange,
   showGradingProfile = false,
 }: ClassFormProps) {
+  const { status: demoModeStatus } = useAdminDemoMode();
+  const canRelaxScheduleCollisions = hasAdminDemoModeRule(
+    demoModeStatus,
+    "schedule_collision",
+  );
   const [form, setForm] = useState<ClassFormValues>(initialValues);
   const [existingSlots, setExistingSlots] = useState<ExistingScheduleSlot[]>(
     [],
@@ -339,7 +346,9 @@ export default function ClassForm({
     form.subjectName && isSubjectUnavailable(form.subjectName),
   );
   const selectedTeacherUnavailable = Boolean(
-    form.teacherId && isTeacherUnavailable(form.teacherId),
+    !canRelaxScheduleCollisions &&
+      form.teacherId &&
+      isTeacherUnavailable(form.teacherId),
   );
   const sectionRoomNumber = selectedSection?.roomNumber?.trim() ?? "";
   const sectionHasAssignedRoom = Boolean(sectionRoomNumber);
@@ -746,10 +755,14 @@ export default function ClassForm({
                 <option
                   key={teacher.id}
                   value={teacher.id}
-                  disabled={unavailable}
+                  disabled={unavailable && !canRelaxScheduleCollisions}
                 >
                   {getTeacherDisplayName(teacher)}
-                  {unavailable ? " (already assigned in this section)" : ""}
+                  {unavailable
+                    ? canRelaxScheduleCollisions
+                      ? " (conflict allowed in Demo mode)"
+                      : " (already assigned in this section)"
+                    : ""}
                 </option>
               );
             })}
@@ -767,7 +780,9 @@ export default function ClassForm({
                 : selectedTeacherUnavailable
                   ? "This teacher already has a class in the selected section."
                   : assignedTeacherIds.size > 0
-                    ? `${assignedTeacherIds.size} teacher${assignedTeacherIds.size === 1 ? " is" : "s are"} already assigned here and disabled.`
+                    ? canRelaxScheduleCollisions
+                      ? `${assignedTeacherIds.size} teacher conflict${assignedTeacherIds.size === 1 ? " is" : "s are"} selectable while Demo mode is active.`
+                      : `${assignedTeacherIds.size} teacher${assignedTeacherIds.size === 1 ? " is" : "s are"} already assigned here and disabled.`
                     : "All teachers are available for this section."}
             </p>
           ) : null}
@@ -915,6 +930,7 @@ export default function ClassForm({
             setForm((current) => ({ ...current, schedules }))
           }
           existingSlots={existingSlots}
+          allowExistingConflicts={canRelaxScheduleCollisions}
           disabled={!isScheduleReady || loadingSection}
         />
       </div>

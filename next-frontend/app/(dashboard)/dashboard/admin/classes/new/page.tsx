@@ -27,6 +27,7 @@ import type { Section } from "@/types/section";
 import type { ClassTemplate } from "@/types/class-template";
 import type { User } from "@/types/user";
 import { toast } from "sonner";
+import { useAdminDemoMode } from "@/providers/AdminDemoModeProvider";
 
 type TemplateSeed = {
   templateId: string;
@@ -45,6 +46,7 @@ function getFallbackSchoolYear() {
 export default function CreateClassPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { refresh: refreshDemoMode } = useAdminDemoMode();
   const [activeSchoolYear, setActiveSchoolYear] = useState<string | null>(null);
   const templateSeed = useMemo<TemplateSeed>(
     () => ({
@@ -245,6 +247,7 @@ export default function CreateClassPage() {
       toast.success("Class created");
       router.push("/dashboard/admin/classes");
     } catch (error) {
+      await refreshDemoMode();
       toast.error(getApiErrorMessage(error, "Failed to create class"));
     } finally {
       setSaving(false);

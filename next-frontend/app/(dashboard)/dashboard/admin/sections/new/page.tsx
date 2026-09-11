@@ -17,6 +17,7 @@ import type { Section } from '@/types/section';
 import type { User } from '@/types/user';
 import { toast } from 'sonner';
 import { getApiErrorMessage } from '@/lib/api-error';
+import { useAdminDemoMode } from '@/providers/AdminDemoModeProvider';
 
 function getFallbackSchoolYear() {
   const now = new Date();
@@ -27,6 +28,7 @@ function getFallbackSchoolYear() {
 
 export default function CreateSectionPage() {
   const router = useRouter();
+  const { refresh: refreshDemoMode } = useAdminDemoMode();
   const [activeSchoolYear, setActiveSchoolYear] = useState<string | null>(null);
   const [teachers, setTeachers] = useState<User[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
@@ -106,6 +108,7 @@ export default function CreateSectionPage() {
       toast.success('Section created');
       router.push('/dashboard/admin/sections');
     } catch (error) {
+      await refreshDemoMode();
       toast.error(getApiErrorMessage(error, 'Failed to create section'));
     } finally {
       setSaving(false);

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Copy, KeyRound } from 'lucide-react';
+import { Archive, Copy, KeyRound, RotateCcw, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { userService } from '@/services/user-service';
 import {
@@ -24,6 +24,12 @@ import {
 } from '@/lib/input-policy';
 import { formatDate, getRoleName } from '@/utils/helpers';
 import type { UpdateUserDto, User } from '@/types/user';
+import {
+  ConfirmationDialog,
+  type ConfirmationDialogConfig,
+} from '@/components/shared/ConfirmationDialog';
+import { useAdminDemoMode } from '@/providers/AdminDemoModeProvider';
+import { hasAdminDemoModeRule } from '@/types/admin-demo-mode';
 
 type UserFormState = {
   firstName: string;
@@ -111,6 +117,11 @@ export default function AdminUserDetailPage() {
   const params = useParams();
   const router = useRouter();
   const userId = params.id as string;
+  const { status: demoModeStatus, refresh: refreshDemoMode } = useAdminDemoMode();
+  const canRelaxUserLifecycle = hasAdminDemoModeRule(
+    demoModeStatus,
+    'user_lifecycle_sequence',
+  );
 
   const [user, setUser] = useState<User | null>(null);
   const [form, setForm] = useState<UserFormState>(EMPTY_FORM);
@@ -121,9 +132,17 @@ export default function AdminUserDetailPage() {
   const [showResetResult, setShowResetResult] = useState(false);
   const [generatedPassword, setGeneratedPassword] = useState('');
   const [resetEmailWarning, setResetEmailWarning] = useState('');
+  const [confirmation, setConfirmation] =
+    useState<ConfirmationDialogConfig | null>(null);
+  const [showPurgeConfirm, setShowPurgeConfirm] = useState(false);
+  const [purgeConfirmName, setPurgeConfirmName] = useState('');
+  const [lifecycleBusy, setLifecycleBusy] = useState(false);
 
   const role = useMemo(() => form.role, [form.role]);
   const isStudent = role === 'student';
+  const isDeleted = user?.status === 'DELETED';
+  const isDeletedReadOnly = isDeleted && !canRelaxUserLifecycle;
+  const fullName = `${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim();
 
   const loadUser = async () => {
     try {
@@ -194,6 +213,10 @@ export default function AdminUserDetailPage() {
   };
 
   const handleSave = async () => {
+    if (isDeletedReadOnly) {
+      toast.error('Deleted accounts can only be edited while Demo mode is active.');
+      return;
+    }
     if (!form.firstName.trim() || !form.lastName.trim() || !form.email.trim()) {
       toast.error('First name, last name, and email are required');
       return;
@@ -266,6 +289,70 @@ export default function AdminUserDetailPage() {
     }
   };
 
+  const runLifecycleAction = async (
+    action: 'archive' | 'reactivate',
+  ) => {
+    try {
+      setLifecycleBusy(true);
+      if (action === 'archive') {
+        await userService.softDelete(userId);
+        toast.success('User archived');
+      } else {
+        await userService.reactivate(userId);
+        toast.success('User reactivated');
+      }
+      await loadUser();
+    } catch (error) {
+      await refreshDemoMode();
+      toast.error(
+        getApiErrorMessage(
+          error,
+          action === 'archive'
+            ? 'Failed to archive user'
+            : 'Failed to reactivate user',
+        ),
+      );
+    } finally {
+      setLifecycleBusy(false);
+    }
+  };
+
+  const openLifecycleConfirmation = (action: 'archive' | 'reactivate') => {
+    setConfirmation({
+      title: action === 'archive' ? 'Archive user directly?' : 'Reactivate user directly?',
+      description:
+        'Demo mode permits this lifecycle sequence exception. Identity, audit, and evidence safeguards remain active.',
+      confirmLabel: action === 'archive' ? 'Archive user' : 'Reactivate user',
+      tone: action === 'archive' ? 'danger' : 'default',
+      details: <p className="font-semibold">{fullName}</p>,
+      onConfirm: async () => runLifecycleAction(action),
+    });
+  };
+
+  const handlePurge = async () => {
+    if (!user || user.status !== 'DELETED') {
+      toast.error('Only deleted accounts can be permanently purged.');
+      return;
+    }
+    if (purgeConfirmName !== fullName) {
+      toast.error('Name does not match');
+      return;
+    }
+
+    try {
+      setLifecycleBusy(true);
+      await userService.purge(userId);
+      toast.success('User permanently deleted');
+      setShowPurgeConfirm(false);
+      setPurgeConfirmName('');
+      router.push('/dashboard/admin/users');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to purge user'));
+    } finally {
+      setLifecycleBusy(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -290,10 +377,43 @@ export default function AdminUserDetailPage() {
           <Button variant="outline" className="admin-button-outline h-9 rounded-lg px-4 text-sm font-semibold" onClick={() => router.back()}>
             Back
           </Button>
-          <Button variant="outline" className="admin-button-outline h-9 rounded-lg px-4 text-sm font-semibold" onClick={() => setShowResetConfirm(true)} disabled={resetting}>
+          <Button variant="outline" className="admin-button-outline h-9 rounded-lg px-4 text-sm font-semibold" onClick={() => setShowResetConfirm(true)} disabled={resetting || isDeletedReadOnly}>
             <KeyRound className="h-4 w-4" />
             {resetting ? 'Resetting...' : 'Reset Password'}
           </Button>
+          {canRelaxUserLifecycle && !isDeleted ? (
+            <Button
+              variant="outline"
+              className="h-9 rounded-lg border-rose-200 px-4 text-sm font-semibold text-rose-700 hover:bg-rose-50"
+              onClick={() => openLifecycleConfirmation('archive')}
+              disabled={lifecycleBusy}
+            >
+              <Archive className="h-4 w-4" />
+              Archive user
+            </Button>
+          ) : null}
+          {canRelaxUserLifecycle && isDeleted ? (
+            <Button
+              variant="outline"
+              className="admin-button-outline h-9 rounded-lg px-4 text-sm font-semibold"
+              onClick={() => openLifecycleConfirmation('reactivate')}
+              disabled={lifecycleBusy}
+            >
+              <RotateCcw className="h-4 w-4" />
+              Reactivate user
+            </Button>
+          ) : null}
+          {isDeleted ? (
+            <Button
+              variant="outline"
+              className="h-9 rounded-lg border-rose-200 px-4 text-sm font-semibold text-rose-700 hover:bg-rose-50"
+              onClick={() => setShowPurgeConfirm(true)}
+              disabled={lifecycleBusy}
+            >
+              <Trash2 className="h-4 w-4" />
+              Purge user
+            </Button>
+          ) : null}
         </>
       )}
       meta={(
@@ -305,6 +425,7 @@ export default function AdminUserDetailPage() {
         </>
       )}
     >
+      <fieldset disabled={isDeletedReadOnly} className="contents">
       <AdminSectionCard
         title="Account Details"
         description="Core identity, email, and role assignment."
@@ -412,6 +533,7 @@ export default function AdminUserDetailPage() {
           {saving ? 'Saving...' : 'Save Changes'}
         </Button>
       </div>
+      </fieldset>
 
       <Dialog open={showResetConfirm} onOpenChange={setShowResetConfirm}>
         <DialogContent variant="admin" className="rounded-[1.1rem] border border-[var(--admin-outline)] bg-white shadow-xl">
@@ -464,6 +586,49 @@ export default function AdminUserDetailPage() {
             </Button>
             <Button className="admin-button-solid h-9 rounded-lg px-4 text-sm font-semibold" onClick={() => setShowResetResult(false)}>
               Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmationDialog
+        config={confirmation}
+        onClose={() => setConfirmation(null)}
+      />
+
+      <Dialog
+        open={showPurgeConfirm}
+        onOpenChange={(open) => {
+          setShowPurgeConfirm(open);
+          if (!open) setPurgeConfirmName('');
+        }}
+      >
+        <DialogContent variant="admin" className="rounded-[1.1rem] border border-[var(--admin-outline)] bg-white shadow-xl">
+          <DialogHeader>
+            <DialogTitle>Permanently purge user?</DialogTitle>
+            <DialogDescription>
+              This remains evidence-aware and cannot be reversed. Type the full name exactly to continue.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="purge-confirm-name">Type {fullName}</Label>
+            <Input
+              id="purge-confirm-name"
+              value={purgeConfirmName}
+              onChange={(event) => setPurgeConfirmName(event.target.value)}
+              autoComplete="off"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPurgeConfirm(false)} disabled={lifecycleBusy}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handlePurge}
+              disabled={lifecycleBusy || purgeConfirmName !== fullName}
+            >
+              {lifecycleBusy ? 'Purging...' : 'Purge user'}
             </Button>
           </DialogFooter>
         </DialogContent>

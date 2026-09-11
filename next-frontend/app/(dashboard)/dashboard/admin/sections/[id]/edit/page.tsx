@@ -27,6 +27,7 @@ import { toast } from 'sonner';
 import type { Section } from '@/types/section';
 import type { User } from '@/types/user';
 import type { AcademicPeriodKey } from '@/types/admin-lifecycle';
+import { useAdminDemoMode } from '@/providers/AdminDemoModeProvider';
 
 function getInitials(firstName?: string, lastName?: string) {
   const firstInitial = firstName?.trim()?.charAt(0) || '';
@@ -38,6 +39,7 @@ export default function EditSectionPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const sectionId = params?.id;
+  const { refresh: refreshDemoMode } = useAdminDemoMode();
 
   const [section, setSection] = useState<Section | null>(null);
   const [roster, setRoster] = useState<RosterStudent[]>([]);
@@ -144,6 +146,7 @@ export default function EditSectionPage() {
       toast.success('Section updated');
       fetchData();
     } catch (error) {
+      await refreshDemoMode();
       toast.error(getApiErrorMessage(error, 'Failed to update section'));
     } finally {
       setSaving(false);

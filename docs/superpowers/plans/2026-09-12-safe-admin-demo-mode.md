@@ -602,17 +602,17 @@ git commit -m "feat(admin): add web demo mode controls"
 - Consumes `useAdminDemoMode().status.active` and the relaxed rule codes.
 - UI relaxation is advisory; backend remains authoritative if status expires before submit.
 
-- [ ] **Step 1: Write RED form tests**
+- [x] **Step 1: Write RED form tests**
 
 Assert normal mode preserves every current disabled option. Under active Demo mode, conflicting schedule, room, adviser, and assigned teacher choices remain visibly annotated but selectable. Historical section/year choices become available only when they remain class/section-consistent. Required room/schedule/teacher/section fields remain required. Add archived-class cases proving Demo mode exposes `Restore class` while normal mode keeps archived classes terminal. Add user-detail cases proving editing a DELETED account and direct Archive/Reactivate become available only in Demo mode while permanent purge keeps full-name confirmation and the DELETED prerequisite.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```bash
 npm --prefix next-frontend test -- --runInBand src/components/admin/ClassForm.test.tsx src/components/admin/SectionForm.test.tsx 'app/(dashboard)/dashboard/admin/classes/new/page.test.tsx' 'app/(dashboard)/dashboard/admin/classes/[id]/page.test.tsx' 'app/(dashboard)/dashboard/admin/users/[id]/page.test.tsx'
 ```
 
-- [ ] **Step 3: Use capability checks, not one broad UI boolean**
+- [x] **Step 3: Use capability checks, not one broad UI boolean**
 
 ```ts
 const canRelax = (rule: AdminDemoModeRule) =>
@@ -622,11 +622,11 @@ const canRelax = (rule: AdminDemoModeRule) =>
 
 Use the matching capability for each option. Keep conflict labels such as `(conflict allowed in Demo mode)` so the user sees the consequence.
 
-- [ ] **Step 4: Preserve failure recovery**
+- [x] **Step 4: Preserve failure recovery**
 
 If the backend returns the existing conflict because mode expired, keep all entered form values, refresh status, and show the server message. Do not silently retry the mutation.
 
-- [ ] **Step 5: Run GREEN**
+- [x] **Step 5: Run GREEN**
 
 ```bash
 npm --prefix next-frontend test -- --runInBand src/components/admin/ClassForm.test.tsx src/components/admin/SectionForm.test.tsx 'app/(dashboard)/dashboard/admin/classes/new/page.test.tsx' 'app/(dashboard)/dashboard/admin/classes/[id]/page.test.tsx' 'app/(dashboard)/dashboard/admin/users/[id]/page.test.tsx'

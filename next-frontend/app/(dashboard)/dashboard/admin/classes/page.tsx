@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Archive, BookOpen, ChevronDown, Eye, Pencil, Search, Trash2 } from 'lucide-react';
+import { Archive, BookOpen, ChevronDown, Eye, Pencil, RotateCcw, Search, Trash2 } from 'lucide-react';
 import {
   type BulkClassLifecycleAction,
   classService,
@@ -11,6 +11,10 @@ import { academicStateService } from '@/services/academic-state-service';
 import { adminLifecycleService } from '@/services/admin-lifecycle-service';
 import { AdminEmptyState, AdminPageShell, AdminSectionCard } from '@/components/admin/AdminPageShell';
 import { AdminLifecycleDialog } from '@/components/admin/AdminLifecycleDialog';
+import {
+  ConfirmationDialog,
+  type ConfirmationDialogConfig,
+} from '@/components/shared/ConfirmationDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -19,6 +23,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { toast } from 'sonner';
 import type { ClassItem } from '@/types/class';
 import type { AcademicPeriodKey, ClassLifecycleResolution } from '@/types/admin-lifecycle';
+import { useAdminDemoMode } from '@/providers/AdminDemoModeProvider';
+import { hasAdminDemoModeRule } from '@/types/admin-demo-mode';
+import { getApiErrorMessage } from '@/lib/api-error';
 
 type StatusTab = 'active' | 'archived';
 
@@ -72,6 +79,11 @@ function getBulkActions(tab: StatusTab): BulkActionOption[] {
 
 export default function ClassManagementPage() {
   const router = useRouter();
+  const { status: demoModeStatus, refresh: refreshDemoMode } = useAdminDemoMode();
+  const canRestoreArchivedClass = hasAdminDemoModeRule(
+    demoModeStatus,
+    'restore_archived_class',
+  );
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [initialLoading, setInitialLoading] = useState(true);
   const [tableLoading, setTableLoading] = useState(false);
@@ -83,6 +95,8 @@ export default function ClassManagementPage() {
   const [lifecycleTarget, setLifecycleTarget] = useState<ClassItem | null>(null);
   const [replacementClassId, setReplacementClassId] = useState('');
   const [activePeriod, setActivePeriod] = useState<AcademicPeriodKey>('Q1');
+  const [confirmation, setConfirmation] =
+    useState<ConfirmationDialogConfig | null>(null);
 
   const fetchData = useCallback(async (mode: 'initial' | 'table') => {
     try {
@@ -198,6 +212,26 @@ export default function ClassManagementPage() {
   const openSingleActionConfirmation = (classItem: ClassItem) => {
     setReplacementClassId('');
     setLifecycleTarget(classItem);
+  };
+
+  const openRestoreConfirmation = (classItem: ClassItem) => {
+    setConfirmation({
+      title: 'Restore archived class?',
+      description:
+        'Demo mode permits this reversible lifecycle exception. Permanent evidence safeguards remain active.',
+      confirmLabel: 'Restore class',
+      tone: 'default',
+      onConfirm: async () => {
+        try {
+          await classService.toggleStatus(classItem.id);
+          toast.success('Class restored');
+          await refreshTable();
+        } catch (error) {
+          await refreshDemoMode();
+          toast.error(getApiErrorMessage(error, 'Failed to restore class'));
+        }
+      },
+    });
   };
 
   const openBulkConfirmation = (option: BulkActionOption) => {
@@ -491,17 +525,29 @@ export default function ClassManagementPage() {
                             </button>
                           ) : null}
                           {!classItem.isActive ? (
-                            <button
-                              type="button"
-                              className="admin-icon-button"
-                              onClick={() => {
-                                setReplacementClassId('');
-                                setLifecycleTarget(classItem);
-                              }}
-                              title="Purge class"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                            <>
+                              {canRestoreArchivedClass ? (
+                                <button
+                                  type="button"
+                                  className="admin-icon-button"
+                                  onClick={() => openRestoreConfirmation(classItem)}
+                                  title="Restore class"
+                                >
+                                  <RotateCcw className="h-4 w-4" />
+                                </button>
+                              ) : null}
+                              <button
+                                type="button"
+                                className="admin-icon-button"
+                                onClick={() => {
+                                  setReplacementClassId('');
+                                  setLifecycleTarget(classItem);
+                                }}
+                                title="Purge class"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </>
                           ) : null}
                         </div>
                       </TableCell>
@@ -637,6 +683,10 @@ export default function ClassManagementPage() {
           }}
         />
       ) : null}
+      <ConfirmationDialog
+        config={confirmation}
+        onClose={() => setConfirmation(null)}
+      />
     </AdminPageShell>
   );
 }

@@ -29,6 +29,7 @@ interface ScheduleCalendarCreatorProps {
   onChange: (slots: ScheduleSlot[]) => void;
   existingSlots?: ExistingScheduleSlot[];
   disabled?: boolean;
+  allowExistingConflicts?: boolean;
 }
 
 const DAY_LABELS: Record<ScheduleDay, string> = {
@@ -177,6 +178,7 @@ export function ScheduleCalendarCreator({
   onChange,
   existingSlots = [],
   disabled = false,
+  allowExistingConflicts = false,
 }: ScheduleCalendarCreatorProps) {
   const [activeCell, setActiveCell] = useState<{ day: ScheduleDay; time: string } | null>(null);
   const [customStart, setCustomStart] = useState('');
@@ -258,6 +260,10 @@ export function ScheduleCalendarCreator({
         return true;
       }
 
+      if (allowExistingConflicts) {
+        return false;
+      }
+
       return existingDayMap[day].some(({ slot }) =>
         rangesOverlap(
           startMinutes,
@@ -267,7 +273,7 @@ export function ScheduleCalendarCreator({
         ),
       );
     },
-    [existingDayMap, userDayMap],
+    [allowExistingConflicts, existingDayMap, userDayMap],
   );
 
   const resetComposer = useCallback(() => {
@@ -305,7 +311,12 @@ export function ScheduleCalendarCreator({
 
   const handleCellSelect = useCallback(
     (day: ScheduleDay, time: string) => {
-      if (disabled || cellStateMap[day][time]) {
+      const cellState = cellStateMap[day][time];
+      if (
+        disabled ||
+        cellState === 'user' ||
+        (cellState === 'existing' && !allowExistingConflicts)
+      ) {
         return;
       }
 
@@ -318,7 +329,7 @@ export function ScheduleCalendarCreator({
       setCustomStart(time);
       setCustomEnd(getDefaultEndTime(time));
     },
-    [activeCell, cellStateMap, disabled, resetComposer],
+    [activeCell, allowExistingConflicts, cellStateMap, disabled, resetComposer],
   );
 
   const handleQuickAdd = useCallback(
@@ -428,7 +439,11 @@ export function ScheduleCalendarCreator({
                 height: `${GRID_INTERVAL_MINUTES * PIXELS_PER_MINUTE}px`,
               }}
               onClick={() => handleCellSelect(day, time)}
-              disabled={disabled || state !== null}
+              disabled={
+                disabled ||
+                state === 'user' ||
+                (state === 'existing' && !allowExistingConflicts)
+              }
               aria-label={`Select ${DAY_LABELS[day]} at ${formatTime12h(time)}`}
             >
               {state === null ? (
@@ -562,7 +577,7 @@ export function ScheduleCalendarCreator({
         <Tooltip key={`existing-${day}-${idx}`}>
           <TooltipTrigger asChild>
             <div
-              className="absolute inset-x-1 z-[5] rounded-lg border border-slate-300/90 bg-slate-100/90 px-1.5 py-1 text-center shadow-sm"
+              className={`absolute inset-x-1 z-[5] rounded-lg border border-slate-300/90 bg-slate-100/90 px-1.5 py-1 text-center shadow-sm ${allowExistingConflicts ? 'pointer-events-none' : ''}`}
               style={getSlotStyle(slot)}
             >
               <p className="truncate text-[10px] font-bold uppercase tracking-[0.08em] text-slate-600">
@@ -696,7 +711,9 @@ export function ScheduleCalendarCreator({
         {!disabled && existingSlots.length > 0 ? (
           <div className="flex items-center gap-2 text-xs text-[var(--admin-text-muted)]">
             <span className="inline-block h-3 w-4 rounded border border-slate-300 bg-slate-100" />
-            Existing room schedules are shown in gray.
+            {allowExistingConflicts
+              ? 'Existing schedules are shown in gray; overlaps are allowed while Demo mode is active.'
+              : 'Existing room schedules are shown in gray.'}
           </div>
         ) : null}
 
