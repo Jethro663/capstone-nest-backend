@@ -24,10 +24,10 @@
 - [x] 3.4 Integrate class rules while preserving time shape, identity/evidence, duplicates, transactions, and class-record capture.
 - [x] 3.5 Integrate section rules while preserving role/grade/graduation, duplicates, cross-section reconciliation, and audit.
 - [x] 3.6 Integrate roster rules while preserving email/LRN/role/grade and membership reconciliation.
-- [ ] 3.7 Add actor-scoped `admin_academic_window` tests across academic policy, assessments, and class record.
-- [ ] 3.8 Integrate admin academic-window relaxation while preserving valid policy period, workbooks, attempts, publication readiness, and score invariants.
-- [ ] 3.9 Let Demo mode satisfy governed-lifecycle availability only; retain all reviewed execution evidence and purge safeguards.
-- [ ] 3.10 Run focused backend suites and the administrator contract gate.
+- [x] 3.7 Add actor-scoped `admin_academic_window` tests across academic policy, assessments, and class record.
+- [x] 3.8 Integrate admin academic-window relaxation while preserving valid policy period, workbooks, attempts, publication readiness, and score invariants.
+- [x] 3.9 Let Demo mode satisfy governed-lifecycle availability only; retain all reviewed execution evidence and purge safeguards.
+- [x] 3.10 Run focused backend suites and the administrator contract gate.
 
 ## 4. Web controls and consumers
 

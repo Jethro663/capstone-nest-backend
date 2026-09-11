@@ -23,7 +23,10 @@ function chain(result: unknown[] = []) {
   };
 }
 
-function setup(enabled = true) {
+function setup(
+  enabled = true,
+  demoAllowsGovernedExecutionAvailability = false,
+) {
   const operationRows: any[] = [];
   const insertChain = chain([{ id: operationId }]);
   const updateChain = chain([]);
@@ -75,6 +78,7 @@ function setup(enabled = true) {
       affectedUserIds: [],
     }),
   };
+  const audit = { log: jest.fn().mockResolvedValue({ id: 'audit-id' }) };
   const service = new AdminLifecycleService(
     database,
     { get: jest.fn().mockReturnValue(enabled) } as any,
@@ -82,8 +86,24 @@ function setup(enabled = true) {
     {} as any,
     {} as any,
     {} as any,
-    { log: jest.fn().mockResolvedValue({ id: 'audit-id' }) } as any,
+    audit as any,
     { createBulkDeduped: jest.fn().mockResolvedValue([]) } as any,
+    {
+      resolveForActor: jest.fn().mockResolvedValue({
+        allows: jest
+          .fn()
+          .mockReturnValue(demoAllowsGovernedExecutionAvailability),
+        audit: jest.fn().mockReturnValue(
+          demoAllowsGovernedExecutionAvailability
+            ? {
+                demoModeVersion: 9,
+                demoModeExpiresAt: '2026-09-12T05:00:00.000Z',
+                bypassedRules: ['governed_execution_availability'],
+              }
+            : undefined,
+        ),
+      }),
+    } as any,
   );
   const dto = {
     studentId: targetId,
@@ -98,7 +118,7 @@ function setup(enabled = true) {
     confirmations: [...manifest.requiredConfirmations],
     idempotencyKey,
   };
-  return { service, dto, db, database, student, operationRows };
+  return { service, dto, db, database, student, audit, operationRows };
 }
 
 describe('AdminLifecycleService execution', () => {
@@ -113,6 +133,45 @@ describe('AdminLifecycleService execution', () => {
       ServiceUnavailableException,
     );
     expect(db.insert).not.toHaveBeenCalled();
+  });
+
+  it('lets active Demo mode satisfy only the lifecycle availability gate', async () => {
+    const { service, dto, db, student, audit } = setup(false, true);
+
+    await expect(service.executeStudent(dto, actorId)).resolves.toEqual(
+      expect.objectContaining({ action: 'STUDENT_RESOLUTION' }),
+    );
+    expect(student.prepare).toHaveBeenCalledTimes(1);
+    expect(db.insert).toHaveBeenCalled();
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          demoMode: expect.objectContaining({
+            bypassedRules: ['governed_execution_availability'],
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('still requires the current password after Demo mode opens availability', async () => {
+    (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+    const { service, dto, db } = setup(false, true);
+
+    await expect(service.executeStudent(dto, actorId)).rejects.toThrow(
+      ForbiddenException,
+    );
+    expect(db.insert).not.toHaveBeenCalled();
+  });
+
+  it('still requires exact reviewed confirmations after Demo mode opens availability', async () => {
+    const { service, dto, student } = setup(false, true);
+    dto.confirmations = [];
+
+    await expect(service.executeStudent(dto, actorId)).rejects.toThrow(
+      'Confirm every reviewed lifecycle effect exactly once',
+    );
+    expect(student.apply).not.toHaveBeenCalled();
   });
 
   it('rejects an incorrect current password before claiming an operation', async () => {

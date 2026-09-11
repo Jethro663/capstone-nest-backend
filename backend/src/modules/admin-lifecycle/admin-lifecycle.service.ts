@@ -53,6 +53,7 @@ import {
   type LifecycleExecutionContext,
   type StudentLifecyclePrepared,
 } from './student-lifecycle.service';
+import { AdminDemoModeService } from '../admin-demo-mode/admin-demo-mode.service';
 
 type ExecutionDto =
   | ExecuteStudentLifecycleDto
@@ -89,6 +90,7 @@ export class AdminLifecycleService {
     private readonly purgeLifecycleService: PurgeLifecycleService,
     private readonly auditService: AuditService,
     private readonly notificationsService: NotificationsService,
+    private readonly adminDemoModeService: AdminDemoModeService,
   ) {}
 
   private get db() {
@@ -368,7 +370,15 @@ export class AdminLifecycleService {
     actorId: string,
     domain: ExecutionDomain<P>,
   ): Promise<AdminLifecycleExecutionResult> {
-    if (!this.configService.get<boolean>('adminLifecycle.enabled')) {
+    const lifecycleEnabled = this.configService.get<boolean>(
+      'adminLifecycle.enabled',
+    );
+    const demo = await this.adminDemoModeService.resolveForActor(actorId, [
+      'admin',
+    ]);
+    const demoAvailability =
+      !lifecycleEnabled && demo.allows('governed_execution_availability');
+    if (!lifecycleEnabled && !demoAvailability) {
       throw new ServiceUnavailableException(
         'Governed lifecycle execution is not enabled. Preview remains available.',
       );
@@ -428,6 +438,11 @@ export class AdminLifecycleService {
             manifestHash: dto.manifestHash,
             changed: applied.changed,
             preserved: applied.preserved,
+            ...(demoAvailability
+              ? {
+                  demoMode: demo.audit(['governed_execution_availability']),
+                }
+              : {}),
           },
         });
         const result: AdminLifecycleExecutionResult = {

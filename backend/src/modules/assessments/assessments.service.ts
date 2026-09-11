@@ -377,11 +377,16 @@ export class AssessmentsService {
     assessment: { id?: string; classId: string; quarter?: string | null },
     action: AssessmentAcademicAction,
     existingAttempt = false,
+    currentUser?: any,
   ) {
+    const actor = this.assessmentAccessService.resolveActor(
+      currentUser as CurrentUserLike | undefined,
+    );
     const context = await this.academicPolicyService.assertAssessmentAction(
       assessment,
       action,
       existingAttempt,
+      actor.userId ? { userId: actor.userId, roles: [actor.role] } : undefined,
     );
     const record = await this.db.query.classRecords.findFirst({
       where: and(
@@ -2185,9 +2190,11 @@ export class AssessmentsService {
       (classRecord.schoolYear === state.schoolYear
         ? state.quarter
         : policy.periods[0].key);
-    await this.assertAcademicMutation(
+    const academicContext = await this.assertAcademicMutation(
       { classId: createAssessmentDto.classId, quarter },
       'prepare',
+      false,
+      currentUser,
     );
     this.ensureValidFileUploadSettings({
       type: createAssessmentDto.type,
@@ -2288,6 +2295,9 @@ export class AssessmentsService {
         classId: assessment.classId,
         type: assessment.type,
         isPublished: assessment.isPublished,
+        ...(academicContext.demoMode
+          ? { demoMode: academicContext.demoMode }
+          : {}),
       },
     });
 
@@ -2390,7 +2400,12 @@ export class AssessmentsService {
       });
     }
 
-    await this.assertAcademicMutation(existingAssessment, 'prepare');
+    await this.assertAcademicMutation(
+      existingAssessment,
+      'prepare',
+      false,
+      currentUser,
+    );
     const nextQuarter =
       updateAssessmentDto.quarter !== undefined
         ? updateAssessmentDto.quarter
@@ -2424,9 +2439,11 @@ export class AssessmentsService {
           existingAssessment.rubricSourceFileId);
     if (placementChanged || contentChanged)
       await this.assertNoAssessmentAttempts(assessmentId);
-    await this.assertAcademicMutation(
+    const academicContext = await this.assertAcademicMutation(
       { ...existingAssessment, quarter: nextQuarter },
       updateAssessmentDto.isPublished === true ? 'release' : 'prepare',
+      false,
+      currentUser,
     );
     const nextType = existingAssessment.type;
     const nextIsFileUpload = nextType === AssessmentType.FILE_UPLOAD;
@@ -2673,6 +2690,9 @@ export class AssessmentsService {
         classId: assessment.classId,
         type: assessment.type,
         isPublished: assessment.isPublished,
+        ...(academicContext.demoMode
+          ? { demoMode: academicContext.demoMode }
+          : {}),
       },
     });
 
@@ -2729,9 +2749,11 @@ export class AssessmentsService {
     );
 
     const assessment = await this.getAssessmentById(assessmentId);
-    await this.assertAcademicMutation(
+    const academicContext = await this.assertAcademicMutation(
       assessment,
       dto.isPublished ? 'release' : 'prepare',
+      false,
+      currentUser,
     );
 
     this.assertTeacherClassOwnership(
@@ -2764,6 +2786,9 @@ export class AssessmentsService {
       metadata: {
         classId: updated.classId,
         isPublished: updated.isPublished,
+        ...(academicContext.demoMode
+          ? { demoMode: academicContext.demoMode }
+          : {}),
       },
     });
 
@@ -2805,7 +2830,12 @@ export class AssessmentsService {
     );
 
     const assessment = await this.getAssessmentById(assessmentId);
-    await this.assertAcademicMutation(assessment, 'prepare');
+    const academicContext = await this.assertAcademicMutation(
+      assessment,
+      'prepare',
+      false,
+      currentUser,
+    );
     await this.assertNoAssessmentAttempts(assessment.id);
 
     this.ensureAssessmentNotCoreTemplateAsset(assessment, 'delete');
@@ -2825,6 +2855,9 @@ export class AssessmentsService {
       metadata: {
         classId: assessment.classId,
         title: assessment.title,
+        ...(academicContext.demoMode
+          ? { demoMode: academicContext.demoMode }
+          : {}),
       },
     });
 
@@ -2855,7 +2888,12 @@ export class AssessmentsService {
     const assessment = await this.getAssessmentById(
       createQuestionDto.assessmentId,
     );
-    await this.assertAcademicMutation(assessment, 'prepare');
+    const academicContext = await this.assertAcademicMutation(
+      assessment,
+      'prepare',
+      false,
+      currentUser,
+    );
     await this.assertNoAssessmentAttempts(assessment.id);
 
     if (role === 'teacher' && assessment.class?.teacherId !== userId) {
@@ -2932,6 +2970,9 @@ export class AssessmentsService {
         classId: assessment.classId,
         type: createdQuestion.type,
         points: createdQuestion.points,
+        ...(academicContext.demoMode
+          ? { demoMode: academicContext.demoMode }
+          : {}),
       },
     });
 
@@ -2976,7 +3017,12 @@ export class AssessmentsService {
 
     const question = await this.getQuestionById(questionId);
     const assessment = await this.getAssessmentById(question.assessmentId);
-    await this.assertAcademicMutation(assessment, 'prepare');
+    const academicContext = await this.assertAcademicMutation(
+      assessment,
+      'prepare',
+      false,
+      currentUser,
+    );
     await this.assertNoAssessmentAttempts(assessment.id);
 
     if (role === 'teacher' && assessment.class?.teacherId !== userId) {
@@ -3095,6 +3141,9 @@ export class AssessmentsService {
         classId: assessment.classId,
         points: updatedQuestion.points,
         optionsReplaced: updateQuestionDto.options !== undefined,
+        ...(academicContext.demoMode
+          ? { demoMode: academicContext.demoMode }
+          : {}),
       },
     });
 
@@ -3126,7 +3175,12 @@ export class AssessmentsService {
 
     const question = await this.getQuestionById(option.questionId);
     const assessment = await this.getAssessmentById(question.assessmentId);
-    await this.assertAcademicMutation(assessment, 'prepare');
+    const academicContext = await this.assertAcademicMutation(
+      assessment,
+      'prepare',
+      false,
+      currentUser,
+    );
     await this.assertNoAssessmentAttempts(assessment.id);
 
     if (role === 'teacher' && assessment.class?.teacherId !== userId) {
@@ -3169,6 +3223,9 @@ export class AssessmentsService {
         assessmentId: question.assessmentId,
         classId: assessment.classId,
         imageUrl,
+        ...(academicContext.demoMode
+          ? { demoMode: academicContext.demoMode }
+          : {}),
       },
     });
 
@@ -3189,7 +3246,12 @@ export class AssessmentsService {
 
     const question = await this.getQuestionById(questionId);
     const assessment = await this.getAssessmentById(question.assessmentId);
-    await this.assertAcademicMutation(assessment, 'prepare');
+    const academicContext = await this.assertAcademicMutation(
+      assessment,
+      'prepare',
+      false,
+      currentUser,
+    );
     await this.assertNoAssessmentAttempts(assessment.id);
 
     if (role === 'teacher' && assessment.class?.teacherId !== userId) {
@@ -3231,6 +3293,9 @@ export class AssessmentsService {
         classId: assessment.classId,
         type: question.type,
         order: question.order,
+        ...(academicContext.demoMode
+          ? { demoMode: academicContext.demoMode }
+          : {}),
       },
     });
 
@@ -3852,7 +3917,12 @@ export class AssessmentsService {
     }
 
     const assessment = await this.getAssessmentById(assessmentId);
-    await this.assertAcademicMutation(assessment, 'prepare');
+    const academicContext = await this.assertAcademicMutation(
+      assessment,
+      'prepare',
+      false,
+      currentUser,
+    );
 
     if (role === 'teacher' && assessment.class?.teacherId !== userId) {
       throw new ForbiddenException(
@@ -3892,6 +3962,9 @@ export class AssessmentsService {
         fileId: record.id,
         mimeType: record.mimeType,
         sizeBytes: record.sizeBytes,
+        ...(academicContext.demoMode
+          ? { demoMode: academicContext.demoMode }
+          : {}),
       },
     });
 
@@ -3963,7 +4036,12 @@ export class AssessmentsService {
     }
 
     const assessment = await this.getAssessmentById(assessmentId);
-    await this.assertAcademicMutation(assessment, 'prepare');
+    const academicContext = await this.assertAcademicMutation(
+      assessment,
+      'prepare',
+      false,
+      currentUser,
+    );
     await this.assertNoAssessmentAttempts(assessment.id);
 
     if (role === 'teacher' && assessment.class?.teacherId !== userId) {
@@ -4019,6 +4097,9 @@ export class AssessmentsService {
         fileId: record.id,
         rubricParseStatus,
         criteriaCount: updatedAssessment.rubricCriteria?.length ?? 0,
+        ...(academicContext.demoMode
+          ? { demoMode: academicContext.demoMode }
+          : {}),
       },
     });
 
@@ -4045,7 +4126,12 @@ export class AssessmentsService {
     }
 
     const assessment = await this.getAssessmentById(assessmentId);
-    await this.assertAcademicMutation(assessment, 'prepare');
+    const academicContext = await this.assertAcademicMutation(
+      assessment,
+      'prepare',
+      false,
+      currentUser,
+    );
     await this.assertNoAssessmentAttempts(assessment.id);
 
     if (role === 'teacher' && assessment.class?.teacherId !== userId) {
@@ -4085,6 +4171,9 @@ export class AssessmentsService {
         classId: assessment.classId,
         criteriaCount: normalizedCriteria.length,
         totalPoints: updatedAssessment.totalPoints,
+        ...(academicContext.demoMode
+          ? { demoMode: academicContext.demoMode }
+          : {}),
       },
     });
 
@@ -5428,7 +5517,12 @@ export class AssessmentsService {
       throw new NotFoundException(`Attempt with ID "${attemptId}" not found`);
     }
 
-    await this.assertAcademicMutation(attempt.assessment, 'grade');
+    const academicContext = await this.assertAcademicMutation(
+      attempt.assessment,
+      'grade',
+      false,
+      currentUser,
+    );
     if (!attempt.isSubmitted) {
       throw new BadRequestException(
         'Cannot return grade for an unsubmitted attempt',
@@ -5743,6 +5837,9 @@ export class AssessmentsService {
         manualResponseScores: dto.manualResponseScores ?? [],
         previousScoreBreakdown: this.scoreContract(attempt).scoreBreakdown,
         scoreBreakdown: this.scoreContract(updated).scoreBreakdown,
+        ...(academicContext.demoMode
+          ? { demoMode: academicContext.demoMode }
+          : {}),
       },
     });
 
@@ -5783,7 +5880,12 @@ export class AssessmentsService {
       );
     }
 
-    await this.assertAcademicMutation(attempt.assessment, 'grade');
+    const academicContext = await this.assertAcademicMutation(
+      attempt.assessment,
+      'grade',
+      false,
+      currentUser,
+    );
     if (!attempt.isReturned) {
       throw new BadRequestException('This attempt has no posted grade to undo');
     }
@@ -5833,6 +5935,9 @@ export class AssessmentsService {
         attemptNumber: attempt.attemptNumber,
         score: attempt.score,
         passed: attempt.passed,
+        ...(academicContext.demoMode
+          ? { demoMode: academicContext.demoMode }
+          : {}),
       },
     });
 
@@ -5877,10 +5982,17 @@ export class AssessmentsService {
     }
 
     const checked = new Set<string>();
+    let demoMode: unknown;
     for (const attempt of selectedAttempts) {
       if (!attempt.isSubmitted || attempt.isReturned) continue;
       if (!checked.has(attempt.assessmentId)) {
-        await this.assertAcademicMutation(attempt.assessment, 'grade');
+        const academicContext = await this.assertAcademicMutation(
+          attempt.assessment,
+          'grade',
+          false,
+          currentUser,
+        );
+        demoMode ??= academicContext.demoMode;
         checked.add(attempt.assessmentId);
       }
       if (
@@ -5930,6 +6042,7 @@ export class AssessmentsService {
             score: result.score ?? sourceAttempt?.score,
             passed: result.passed ?? sourceAttempt?.passed,
             bulk: true,
+            ...(demoMode ? { demoMode } : {}),
           },
         };
       });
@@ -5947,6 +6060,7 @@ export class AssessmentsService {
           assessmentIds: [
             ...new Set(selectedAttempts.map((attempt) => attempt.assessmentId)),
           ],
+          ...(demoMode ? { demoMode } : {}),
         },
       });
     }
@@ -6105,7 +6219,12 @@ export class AssessmentsService {
       );
     }
 
-    await this.assertAcademicMutation(assessment, 'grade');
+    const academicContext = await this.assertAcademicMutation(
+      assessment,
+      'grade',
+      false,
+      currentUser,
+    );
     if (
       assessment.type === AssessmentType.FILE_UPLOAD ||
       (assessment.questions ?? []).some((q) => q.type === 'short_answer')
@@ -6144,6 +6263,9 @@ export class AssessmentsService {
           score: result.score,
           passed: result.passed,
           bulk: true,
+          ...(academicContext.demoMode
+            ? { demoMode: academicContext.demoMode }
+            : {}),
         },
       });
     }
@@ -6156,6 +6278,9 @@ export class AssessmentsService {
       metadata: {
         classId: assessment.classId,
         returned: results.length,
+        ...(academicContext.demoMode
+          ? { demoMode: academicContext.demoMode }
+          : {}),
       },
     });
 

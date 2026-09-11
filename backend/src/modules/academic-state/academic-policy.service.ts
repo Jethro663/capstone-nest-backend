@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { desc, eq } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
@@ -14,6 +15,8 @@ import {
 } from '../../drizzle/schema';
 import { getDefaultAcademicPolicy } from './academic-policy';
 import type { AcademicPolicy } from './academic-policy';
+import { AdminDemoModeService } from '../admin-demo-mode/admin-demo-mode.service';
+import type { AdminDemoModeRelaxedRuleCode } from '../admin-demo-mode/admin-demo-mode.policy';
 
 export const ACADEMIC_STATE_ID = '00000000-0000-0000-0000-000000000001';
 export type AssessmentAcademicAction =
@@ -24,9 +27,18 @@ export type AssessmentAcademicAction =
   | 'complete'
   | 'grade';
 
+export type AcademicPolicyActor = {
+  userId: string;
+  roles: string[];
+};
+
 @Injectable()
 export class AcademicPolicyService {
-  constructor(private readonly databaseService: DatabaseService) {}
+  constructor(
+    private readonly databaseService: DatabaseService,
+    @Optional()
+    private readonly adminDemoModeService?: AdminDemoModeService,
+  ) {}
   private get db() {
     return this.databaseService.db;
   }
@@ -114,6 +126,7 @@ export class AcademicPolicyService {
     assessment: { classId: string; quarter?: string | null },
     action: AssessmentAcademicAction,
     existingAttempt = false,
+    actor?: AcademicPolicyActor,
   ) {
     const { cls, policy } = await this.forClass(assessment.classId);
     const current = await this.currentState();
@@ -132,40 +145,88 @@ export class AcademicPolicyService {
       (sameYear &&
         policy.periods.findIndex((p) => p.key === period.key) >
           policy.periods.findIndex((p) => p.key === current.quarter));
+    const demo = this.adminDemoModeService
+      ? await this.adminDemoModeService.resolveForActor(
+          actor?.userId,
+          actor?.roles,
+        )
+      : {
+          allows: () => false,
+          audit: () => undefined,
+        };
+    const canRelaxAcademicWindow = Boolean(
+      actor?.roles.includes('admin') &&
+      (action === 'prepare' || action === 'release' || action === 'grade') &&
+      demo.allows('admin_academic_window'),
+    );
+    const bypassedRules: AdminDemoModeRelaxedRuleCode[] = [];
+    const bypassAcademicWindow = () => {
+      if (!bypassedRules.includes('admin_academic_window')) {
+        bypassedRules.push('admin_academic_window');
+      }
+    };
     if (action === 'prepare') {
       if (
         !cls.isActive ||
         Number(cls.schoolYear.slice(0, 4)) <
           Number(current.schoolYear.slice(0, 4))
-      )
-        throw new ConflictException(
-          'Cannot edit assessments in a closed school year',
-        );
+      ) {
+        if (!canRelaxAcademicWindow) {
+          throw new ConflictException(
+            'Cannot edit assessments in a closed school year',
+          );
+        }
+        bypassAcademicWindow();
+      }
     } else if (action === 'view') {
       if (future && !existingAttempt)
         throw new ConflictException(
           'Future-period assessments are not available to students',
         );
     } else {
-      if (!sameYear)
-        throw new ConflictException(
-          'This school year is not active for assessment work',
-        );
-      if (action === 'complete' && existingAttempt)
-        return { cls, policy, current, period };
-      if (action === 'grade') {
-        if (future)
+      if (!sameYear) {
+        if (!canRelaxAcademicWindow) {
           throw new ConflictException(
-            'Future-period assessments cannot receive grades',
+            'This school year is not active for assessment work',
           );
-      } else if (!samePeriod)
-        throw new ConflictException({
-          code: 'inactive_academic_period',
-          message: 'New student work and release require the active period',
-          activeQuarter: current.quarter,
-          schoolYear: current.schoolYear,
-        });
+        }
+        bypassAcademicWindow();
+      }
+      if (action === 'complete' && existingAttempt)
+        return {
+          cls,
+          policy,
+          current,
+          period,
+          demoMode: demo.audit(bypassedRules),
+        };
+      if (action === 'grade') {
+        if (future) {
+          if (!canRelaxAcademicWindow) {
+            throw new ConflictException(
+              'Future-period assessments cannot receive grades',
+            );
+          }
+          bypassAcademicWindow();
+        }
+      } else if (!samePeriod) {
+        if (!canRelaxAcademicWindow) {
+          throw new ConflictException({
+            code: 'inactive_academic_period',
+            message: 'New student work and release require the active period',
+            activeQuarter: current.quarter,
+            schoolYear: current.schoolYear,
+          });
+        }
+        bypassAcademicWindow();
+      }
     }
-    return { cls, policy, current, period };
+    return {
+      cls,
+      policy,
+      current,
+      period,
+      demoMode: demo.audit(bypassedRules),
+    };
   }
 }

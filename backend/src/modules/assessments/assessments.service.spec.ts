@@ -203,6 +203,9 @@ describe('AssessmentsService', () => {
     rescheduleAssessmentDueReminder: jest.Mock;
     removeAssessmentDueReminder: jest.Mock;
   };
+  let academicPolicyService: {
+    assertAssessmentAction: jest.Mock;
+  };
   const mockAuditService = {
     log: jest.fn(),
     logBulk: jest.fn(),
@@ -305,6 +308,7 @@ describe('AssessmentsService', () => {
     }).compile();
 
     service = module.get<AssessmentsService>(AssessmentsService);
+    academicPolicyService = module.get(AcademicPolicyService);
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -365,6 +369,69 @@ describe('AssessmentsService', () => {
 
       expect(result.maxAttempts).toBe(3);
       expect(result.timeLimitMinutes).toBe(30);
+    });
+
+    it('passes authenticated admin context and records Demo academic-window metadata', async () => {
+      const demoMode = {
+        demoModeVersion: 8,
+        demoModeExpiresAt: '2026-09-12T05:00:00.000Z',
+        bypassedRules: ['admin_academic_window'],
+      };
+      academicPolicyService.assertAssessmentAction.mockResolvedValueOnce({
+        period: { key: 'Q1' },
+        demoMode,
+      });
+      const created = { ...MOCK_ASSESSMENT, totalPoints: 0 };
+      db.query.classes.findFirst.mockResolvedValue({
+        id: CLASS_ID,
+        teacherId: 'teacher-1',
+      });
+      mockInsert(db, [created]);
+      db.query.assessments.findFirst.mockResolvedValue(created);
+
+      await service.createAssessment(
+        { title: 'Demo Quiz', classId: CLASS_ID } as any,
+        { userId: 'admin-1', roles: ['admin'] },
+      );
+
+      expect(academicPolicyService.assertAssessmentAction).toHaveBeenCalledWith(
+        { classId: CLASS_ID, quarter: 'Q1' },
+        'prepare',
+        false,
+        { userId: 'admin-1', roles: ['admin'] },
+      );
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'assessment.created',
+          metadata: expect.objectContaining({ demoMode }),
+        }),
+      );
+    });
+
+    it('keeps finalized workbook evidence protected during Demo mode', async () => {
+      academicPolicyService.assertAssessmentAction.mockResolvedValueOnce({
+        period: { key: 'Q1' },
+        demoMode: {
+          demoModeVersion: 8,
+          demoModeExpiresAt: '2026-09-12T05:00:00.000Z',
+          bypassedRules: ['admin_academic_window'],
+        },
+      });
+      db.query.classes.findFirst.mockResolvedValue({
+        id: CLASS_ID,
+        teacherId: 'teacher-1',
+      });
+      db.query.classRecords.findFirst.mockResolvedValue({
+        status: 'finalized',
+      });
+
+      await expect(
+        service.createAssessment(
+          { title: 'Protected Evidence', classId: CLASS_ID } as any,
+          { userId: 'admin-1', roles: ['admin'] },
+        ),
+      ).rejects.toThrow('finalized or locked');
+      expect(db.insert).not.toHaveBeenCalled();
     });
 
     it('should reject createAssessment for non-owner teacher class', async () => {
@@ -3113,6 +3180,32 @@ describe('AssessmentsService', () => {
           roles: ['teacher'],
         }),
       ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('keeps assessment attempts protected during Demo mode', async () => {
+      academicPolicyService.assertAssessmentAction.mockResolvedValueOnce({
+        period: { key: 'Q1' },
+        demoMode: {
+          demoModeVersion: 8,
+          demoModeExpiresAt: '2026-09-12T05:00:00.000Z',
+          bypassedRules: ['admin_academic_window'],
+        },
+      });
+      db.query.assessments.findFirst.mockResolvedValue({
+        ...MOCK_ASSESSMENT,
+        class: { teacherId: 'teacher-1' },
+      });
+      db.query.assessmentAttempts.findFirst.mockResolvedValue({
+        id: ATTEMPT_ID,
+      });
+
+      await expect(
+        service.deleteAssessment(ASSESSMENT_ID, {
+          userId: 'admin-1',
+          roles: ['admin'],
+        }),
+      ).rejects.toThrow('already has an attempt');
+      expect(db.delete).not.toHaveBeenCalled();
     });
   });
 

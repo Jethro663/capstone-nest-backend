@@ -299,10 +299,13 @@ export class AcademicRepairService {
       throw new ConflictException(
         'Reopen this record with a reason before repairing its policy configuration',
       );
-    const { policy, cls } = await this.policyService.assertAssessmentAction(
+    const academicContext = await this.policyService.assertAssessmentAction(
       { classId: record.classId, quarter: record.gradingPeriod },
       'prepare',
+      false,
+      { userId: actorId, roles },
     );
+    const { policy, cls } = academicContext;
     const weights = getSubjectWeights(
       policy,
       cls.subjectCode,
@@ -372,16 +375,14 @@ export class AcademicRepairService {
     let order = Math.max(0, ...exam.items.map((i) => i.itemOrder));
     for (const component of policy.examComponents) {
       if ([...mapping.values()].includes(component.key)) continue;
-      await this.db
-        .insert(classRecordItems)
-        .values({
-          classRecordId,
-          categoryId: exam.id,
-          title: component.key,
-          examComponent: component.key,
-          maxScore: '0',
-          itemOrder: ++order,
-        });
+      await this.db.insert(classRecordItems).values({
+        classRecordId,
+        categoryId: exam.id,
+        title: component.key,
+        examComponent: component.key,
+        maxScore: '0',
+        itemOrder: ++order,
+      });
     }
     await this.audit.log({
       actorId,
@@ -394,6 +395,9 @@ export class AcademicRepairService {
         previous: categories,
         examinations: dto.examinations,
         scoreValuesUnchanged: true,
+        ...(academicContext.demoMode
+          ? { demoMode: academicContext.demoMode }
+          : {}),
       },
     });
     return { classRecordId, policyId: policy.id, scoreValuesUnchanged: true };
@@ -484,9 +488,11 @@ export class AcademicRepairService {
       throw new ConflictException(
         'Result-bearing historical periods must be preserved, not reassigned to another term',
       );
-    await this.policyService.assertAssessmentAction(
+    const academicContext = await this.policyService.assertAssessmentAction(
       { classId: assessment.classId, quarter: dto.quarter },
       attempt ? 'grade' : 'prepare',
+      false,
+      { userId: actorId, roles },
     );
     const placement = await this.db.query.classRecordItems.findMany({
       where: eq(classRecordItems.assessmentId, assessmentId),
@@ -512,6 +518,9 @@ export class AcademicRepairService {
         quarter: dto.quarter,
         hadAttempts: Boolean(attempt),
         placementIds: placement.map((p) => p.id),
+        ...(academicContext.demoMode
+          ? { demoMode: academicContext.demoMode }
+          : {}),
       },
     });
     return updated;

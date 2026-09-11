@@ -167,10 +167,13 @@ export class ClassRecordService {
     userId: string,
     roles: string[],
   ) {
-    await this.academicPolicyService.assertAssessmentAction(
-      { classId: dto.classId, quarter: dto.gradingPeriod },
-      'prepare',
-    );
+    const academicContext =
+      await this.academicPolicyService.assertAssessmentAction(
+        { classId: dto.classId, quarter: dto.gradingPeriod },
+        'prepare',
+        false,
+        { userId, roles },
+      );
     const { cls, policy } = await this.academicPolicyService.forClass(
       dto.classId,
     );
@@ -316,6 +319,9 @@ export class ClassRecordService {
         classId: dto.classId,
         gradingPeriod: dto.gradingPeriod,
         categoryCount: DEFAULT_CATEGORIES.length,
+        ...(academicContext?.demoMode
+          ? { demoMode: academicContext.demoMode }
+          : {}),
       },
     });
 
@@ -338,10 +344,13 @@ export class ClassRecordService {
       cls.schoolYear === state.schoolYear
         ? state.quarter
         : policy.periods[0].key;
-    await this.academicPolicyService.assertAssessmentAction(
-      { classId, quarter: period },
-      'prepare',
-    );
+    const academicContext =
+      await this.academicPolicyService.assertAssessmentAction(
+        { classId, quarter: period },
+        'prepare',
+        false,
+        { userId: actorId, roles },
+      );
     let current = await this.db.query.classRecords.findFirst({
       where: and(
         eq(classRecords.classId, classId),
@@ -400,6 +409,9 @@ export class ClassRecordService {
         period,
         studentIds,
         affectedRecordIds: affected.map((record) => record.id),
+        ...(academicContext?.demoMode
+          ? { demoMode: academicContext.demoMode }
+          : {}),
       },
     });
   }
@@ -845,13 +857,16 @@ export class ClassRecordService {
     await this.assertClassOwnership(item.classRecord.classId, userId, roles);
 
     this.assertEditable(item.classRecord);
-    await this.academicPolicyService.assertAssessmentAction(
-      {
-        classId: item.classRecord.classId,
-        quarter: item.classRecord.gradingPeriod,
-      },
-      'prepare',
-    );
+    const academicContext =
+      await this.academicPolicyService.assertAssessmentAction(
+        {
+          classId: item.classRecord.classId,
+          quarter: item.classRecord.gradingPeriod,
+        },
+        'prepare',
+        false,
+        { userId, roles },
+      );
 
     if (item.assessmentId) {
       throw new BadRequestException(
@@ -890,6 +905,9 @@ export class ClassRecordService {
         classRecordId: item.classRecord.id,
         classId: item.classRecord.classId,
         maxScore: dto.maxScore,
+        ...(academicContext?.demoMode
+          ? { demoMode: academicContext.demoMode }
+          : {}),
       },
     });
 
@@ -928,13 +946,16 @@ export class ClassRecordService {
     if (!item) throw new NotFoundException('Class record item not found');
     await this.assertClassOwnership(item.classRecord.classId, userId, roles);
     this.assertEditable(item.classRecord);
-    await this.academicPolicyService.assertAssessmentAction(
-      {
-        classId: item.classRecord.classId,
-        quarter: item.classRecord.gradingPeriod,
-      },
-      'grade',
-    );
+    const academicContext =
+      await this.academicPolicyService.assertAssessmentAction(
+        {
+          classId: item.classRecord.classId,
+          quarter: item.classRecord.gradingPeriod,
+        },
+        'grade',
+        false,
+        { userId, roles },
+      );
     await this.rosterService.assertEligible(
       item.classRecord.id,
       dto.scores.map((s) => s.studentId),
@@ -1033,6 +1054,9 @@ export class ClassRecordService {
         classRecordId: item.classRecord.id,
         classId: item.classRecord.classId,
         scores: values,
+        ...(academicContext?.demoMode
+          ? { demoMode: academicContext.demoMode }
+          : {}),
       },
     });
     await this.databaseService.afterAcademicCommit(() => {
@@ -1102,13 +1126,16 @@ export class ClassRecordService {
     if (!item) throw new NotFoundException('Class record item not found');
     await this.assertClassOwnership(item.classRecord.classId, userId, roles);
     this.assertEditable(item.classRecord);
-    await this.academicPolicyService.assertAssessmentAction(
-      {
-        classId: item.classRecord.classId,
-        quarter: item.classRecord.gradingPeriod,
-      },
-      'grade',
-    );
+    const academicContext =
+      await this.academicPolicyService.assertAssessmentAction(
+        {
+          classId: item.classRecord.classId,
+          quarter: item.classRecord.gradingPeriod,
+        },
+        'grade',
+        false,
+        { userId, roles },
+      );
     await this.rosterService.assertEligible(item.classRecord.id, [studentId]);
     if (!item.assessmentId || !reason.trim())
       throw new BadRequestException(
@@ -1139,6 +1166,9 @@ export class ClassRecordService {
         reason: reason.trim(),
         previous,
         synced: result.synced,
+        ...(academicContext?.demoMode
+          ? { demoMode: academicContext.demoMode }
+          : {}),
       },
     });
     await this.databaseService.afterAcademicCommit(() => {
@@ -1344,10 +1374,13 @@ export class ClassRecordService {
       throw new ConflictException(
         'Only finalized class records can be reopened; locked records cannot be reopened',
       );
-    await this.academicPolicyService.assertAssessmentAction(
-      { classId: record.classId, quarter: record.gradingPeriod },
-      'grade',
-    );
+    const academicContext =
+      await this.academicPolicyService.assertAssessmentAction(
+        { classId: record.classId, quarter: record.gradingPeriod },
+        'grade',
+        false,
+        { userId, roles },
+      );
     await this.annualGradesService.invalidateRecordSources(
       classRecordId,
       userId,
@@ -1372,6 +1405,9 @@ export class ClassRecordService {
         reason,
         revision: record.revision,
         previousStatus: record.status,
+        ...(academicContext?.demoMode
+          ? { demoMode: academicContext.demoMode }
+          : {}),
       },
     });
     return updated;

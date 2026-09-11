@@ -111,9 +111,11 @@ export class ClassRecordRosterService {
       throw new ConflictException(
         'Reopen the class record before changing eligibility',
       );
-    await this.policyService.assertAssessmentAction(
+    const academicContext = await this.policyService.assertAssessmentAction(
       { classId: record.classId, quarter: record.gradingPeriod },
       'prepare',
+      false,
+      { userId: actorId, roles },
     );
     if (!dto.reason?.trim())
       throw new BadRequestException(
@@ -178,6 +180,9 @@ export class ClassRecordRosterService {
         reason: dto.reason,
         before: current.participants,
         after: dto.participants,
+        ...(academicContext?.demoMode
+          ? { demoMode: academicContext.demoMode }
+          : {}),
       },
     });
     return this.getRoster(id, actorId, roles);

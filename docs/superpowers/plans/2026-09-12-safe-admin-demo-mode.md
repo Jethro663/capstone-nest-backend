@@ -417,10 +417,13 @@ git commit -m "feat(admin): relax demo school data workflows"
 
 - Modify: `backend/src/modules/academic-state/academic-policy.service.ts`
 - Modify: `backend/src/modules/academic-state/academic-policy.service.spec.ts`
+- Modify: `backend/src/modules/academic-state/academic-repair.service.ts`
 - Modify: `backend/src/modules/assessments/assessments.service.ts`
 - Modify: `backend/src/modules/assessments/assessments.service.spec.ts`
 - Modify: `backend/src/modules/class-record/class-record.service.ts`
 - Modify: `backend/src/modules/class-record/class-record.service.spec.ts`
+- Modify: `backend/src/modules/class-record/class-record-roster.service.ts`
+- Modify: `backend/src/modules/class-record/class-record-sync.service.ts`
 - Modify: `backend/src/modules/admin-lifecycle/admin-lifecycle.service.ts`
 - Modify: `backend/src/modules/admin-lifecycle/admin-lifecycle.service.spec.ts`
 
@@ -430,7 +433,7 @@ git commit -m "feat(admin): relax demo school data workflows"
 - Demo relaxation applies only to admin `prepare`, `release`, and `grade` actions.
 - Lifecycle execution availability becomes `adminLifecycle.enabled || demo.allows('governed_execution_availability')`.
 
-- [ ] **Step 1: Add RED tests for actor-scoped academic behavior**
+- [x] **Step 1: Add RED tests for actor-scoped academic behavior**
 
 ```ts
 await expect(
@@ -443,25 +446,25 @@ await expect(
 
 Add paired cases proving the same request rejects for teacher, student, expired mode, and unavailable mode. Prove invalid policy period, finalized/locked workbook, assessment attempts, immutable assessment type, and score caps still reject under active mode.
 
-- [ ] **Step 2: Add lifecycle availability RED tests**
+- [x] **Step 2: Add lifecycle availability RED tests**
 
 Prove active Demo mode can pass the execution-availability gate while `ADMIN_LIFECYCLE_ENABLED=false`, but still requires current password, fresh matching manifest, exact confirmations, safe manifest, idempotency, and evidence-aware purge.
 
-- [ ] **Step 3: Run RED**
+- [x] **Step 3: Run RED**
 
 ```bash
 npm --prefix backend test -- --runInBand src/modules/academic-state/academic-policy.service.spec.ts src/modules/assessments/assessments.service.spec.ts src/modules/class-record/class-record.service.spec.ts src/modules/admin-lifecycle/admin-lifecycle.service.spec.ts
 ```
 
-- [ ] **Step 4: Pass actor context through existing service boundaries**
+- [x] **Step 4: Pass actor context through existing service boundaries**
 
 Construct actor context from the already-authenticated `currentUser`/`roles`. Do not add a request header or body field. Let `AcademicPolicyService` validate that the period exists before considering the admin relaxation. Student `view`, `start`, and `complete` never receive the relaxation.
 
-- [ ] **Step 5: Keep workbook/evidence guards after policy resolution**
+- [x] **Step 5: Keep workbook/evidence guards after policy resolution**
 
 The assessment and class-record services continue to check record status and attempts after the policy window check. Add Demo audit metadata to their existing audit calls when the academic window was the only bypass.
 
-- [ ] **Step 6: Compose lifecycle availability only**
+- [x] **Step 6: Compose lifecycle availability only**
 
 Replace the operational flag condition with:
 
@@ -477,7 +480,7 @@ if (
 
 Leave every line after that gate—password, claim, transaction, manifest evidence, apply, notification, audit, result, and failure persistence—intact.
 
-- [ ] **Step 7: Run GREEN**
+- [x] **Step 7: Run GREEN**
 
 ```bash
 npm --prefix backend test -- --runInBand src/modules/academic-state/academic-policy.service.spec.ts src/modules/assessments/assessments.service.spec.ts src/modules/class-record/class-record.service.spec.ts src/modules/admin-lifecycle/admin-lifecycle.service.spec.ts
@@ -485,7 +488,7 @@ npm --prefix backend test -- --runInBand src/modules/academic-state/academic-pol
 
 Expected: all focused suites exit 0 with paired normal/Demo cases.
 
-- [ ] **Step 8: Commit the academic composition slice**
+- [x] **Step 8: Commit the academic composition slice**
 
 ```bash
 git add backend/src/modules/academic-state backend/src/modules/assessments backend/src/modules/class-record backend/src/modules/admin-lifecycle

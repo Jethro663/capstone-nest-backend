@@ -3,7 +3,7 @@ import { getDefaultAcademicPolicy } from './academic-policy';
 
 describe('AcademicPolicyService', () => {
   const policy = getDefaultAcademicPolicy('2026-2027');
-  const make = () => {
+  const make = (demoOverrides: Record<string, unknown> = {}) => {
     const db = {
       query: {
         academicYearPolicies: {
@@ -26,7 +26,19 @@ describe('AcademicPolicyService', () => {
         },
       },
     };
-    return { db, service: new AcademicPolicyService({ db } as never) };
+    const demo = {
+      resolveForActor: jest.fn().mockResolvedValue({
+        active: false,
+        allows: jest.fn().mockReturnValue(false),
+        audit: jest.fn().mockReturnValue(undefined),
+        ...demoOverrides,
+      }),
+    };
+    return {
+      db,
+      demo,
+      service: new AcademicPolicyService({ db } as never, demo as never),
+    };
   };
   it('returns a stored policy without replacing its history', async () => {
     const { db, service } = make();
@@ -134,5 +146,116 @@ describe('AcademicPolicyService', () => {
         'view',
       ),
     ).resolves.toBeDefined();
+  });
+
+  it('relaxes historical prepare, release, and grade windows only for an active administrator', async () => {
+    const demoMode = {
+      demoModeVersion: 8,
+      demoModeExpiresAt: '2026-09-12T05:00:00.000Z',
+      bypassedRules: ['admin_academic_window'],
+    };
+    const audit = jest.fn().mockReturnValue(demoMode);
+    const { service, db, demo } = make({
+      active: true,
+      allows: jest.fn().mockReturnValue(true),
+      audit,
+    });
+    db.query.classes.findFirst.mockResolvedValue({
+      id: 'class',
+      schoolYear: '2025-2026',
+      isActive: false,
+    });
+    db.query.academicYearPolicies.findFirst.mockResolvedValue({
+      policy: getDefaultAcademicPolicy('2025-2026'),
+    });
+
+    for (const action of ['prepare', 'release', 'grade'] as const) {
+      await expect(
+        service.assertAssessmentAction(
+          { classId: 'class', quarter: 'Q1' },
+          action,
+          false,
+          { userId: 'admin', roles: ['admin'] },
+        ),
+      ).resolves.toEqual(expect.objectContaining({ demoMode }));
+    }
+
+    expect(demo.resolveForActor).toHaveBeenCalledWith('admin', ['admin']);
+    expect(audit).toHaveBeenCalledWith(['admin_academic_window']);
+  });
+
+  it.each([
+    ['teacher', ['teacher']],
+    ['student', ['student']],
+  ])(
+    'keeps the historical window closed for %s actors',
+    async (_label, roles) => {
+      const { service, db } = make({
+        active: true,
+        allows: jest.fn().mockReturnValue(true),
+      });
+      db.query.classes.findFirst.mockResolvedValue({
+        id: 'class',
+        schoolYear: '2025-2026',
+        isActive: false,
+      });
+      db.query.academicYearPolicies.findFirst.mockResolvedValue({
+        policy: getDefaultAcademicPolicy('2025-2026'),
+      });
+
+      await expect(
+        service.assertAssessmentAction(
+          { classId: 'class', quarter: 'Q1' },
+          'prepare',
+          false,
+          { userId: _label, roles },
+        ),
+      ).rejects.toThrow('closed school year');
+    },
+  );
+
+  it('keeps expired or unavailable Demo mode fail-closed', async () => {
+    const { service, db } = make();
+    db.query.classes.findFirst.mockResolvedValue({
+      id: 'class',
+      schoolYear: '2025-2026',
+      isActive: false,
+    });
+    db.query.academicYearPolicies.findFirst.mockResolvedValue({
+      policy: getDefaultAcademicPolicy('2025-2026'),
+    });
+
+    await expect(
+      service.assertAssessmentAction(
+        { classId: 'class', quarter: 'Q1' },
+        'prepare',
+        false,
+        { userId: 'admin', roles: ['admin'] },
+      ),
+    ).rejects.toThrow('closed school year');
+  });
+
+  it('keeps invalid policy periods and student work rules protected while Demo mode is active', async () => {
+    const { service } = make({
+      active: true,
+      allows: jest.fn().mockReturnValue(true),
+    });
+
+    await expect(
+      service.assertAssessmentAction(
+        { classId: 'class', quarter: 'Q9' },
+        'prepare',
+        false,
+        { userId: 'admin', roles: ['admin'] },
+      ),
+    ).rejects.toThrow('period');
+    await expect(
+      service.assertAssessmentAction(
+        { classId: 'class', quarter: 'Q1' },
+        'start',
+        false,
+        { userId: 'admin', roles: ['admin'] },
+      ),
+    ).rejects.toThrow('active period');
   });
 });

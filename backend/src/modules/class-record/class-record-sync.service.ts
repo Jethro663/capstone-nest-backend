@@ -62,12 +62,14 @@ export class ClassRecordSyncService {
       );
     if (!item.assessmentId)
       throw new BadRequestException('This item is not linked to an assessment');
-    await this.policyService.assertAssessmentAction(
+    const academicContext = await this.policyService.assertAssessmentAction(
       {
         classId: item.classRecord.classId,
         quarter: item.classRecord.gradingPeriod,
       },
       'grade',
+      false,
+      { userId, roles },
     );
     const studentIds = await this.syncItem(item);
     if (studentIds.length) {
@@ -80,6 +82,9 @@ export class ClassRecordSyncService {
           classRecordId: item.classRecord.id,
           assessmentId: item.assessmentId,
           studentIds,
+          ...(academicContext?.demoMode
+            ? { demoMode: academicContext.demoMode }
+            : {}),
         },
       });
       await this.databaseService.afterAcademicCommit(() => {
