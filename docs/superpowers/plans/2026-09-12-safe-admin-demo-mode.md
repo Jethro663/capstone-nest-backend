@@ -518,15 +518,15 @@ git commit -m "feat(admin): compose demo mode with academic policies"
 - `useAdminDemoMode()` returns `{ status, loading, error, refresh, activate, deactivate, mutating }`.
 - Provider mounts only for the admin shell, refetches on window focus and every 30 seconds, and uses backend `serverTime`/`expiresAt` for display.
 
-- [ ] **Step 1: Write provider and banner RED tests**
+- [x] **Step 1: Write provider and banner RED tests**
 
 Prove: active renders one compact notice and Manage link; disabled/expired renders no global banner; role non-admin makes no request; focus refetches; 30-second poll refetches; API error does not claim disabled; expiry removes the active banner on the next local tick/refetch.
 
-- [ ] **Step 2: Write route RED tests**
+- [x] **Step 2: Write route RED tests**
 
 Cover available-disabled, unavailable, active, expired, loading, API error, wrong password, stale version, and deactivation. Assert the Activate button remains disabled until all fields match. Assert password is cleared after every submission result.
 
-- [ ] **Step 3: Run RED**
+- [x] **Step 3: Run RED**
 
 ```bash
 npm --prefix next-frontend test -- --runInBand src/providers/AdminDemoModeProvider.test.tsx src/components/admin/AdminDemoModeBanner.test.tsx 'app/(dashboard)/dashboard/admin/system-settings/demo-mode/page.test.tsx' src/components/admin/system-settings/SystemSettingsShell.test.tsx
@@ -534,7 +534,7 @@ npm --prefix next-frontend test -- --runInBand src/providers/AdminDemoModeProvid
 
 Expected: FAIL because new contract and route are absent.
 
-- [ ] **Step 4: Implement the typed service**
+- [x] **Step 4: Implement the typed service**
 
 ```ts
 export const adminDemoModeService = {
@@ -548,19 +548,19 @@ export const adminDemoModeService = {
 
 Normalize axios responses inside the service so components receive `data.data` consistently.
 
-- [ ] **Step 5: Implement provider and shell banner**
+- [x] **Step 5: Implement provider and shell banner**
 
 Wrap admin children inside `AdminDemoModeProvider` in the existing dashboard layout and render `AdminDemoModeBanner` immediately above admin page content. Do not affect teacher/student shells or auth redirects.
 
-- [ ] **Step 6: Implement the settings route**
+- [x] **Step 6: Implement the settings route**
 
 Use existing admin fields, checkboxes, and button/dialog primitives. Keep relaxed and protected lists visible. Use `aria-live` for status/error, associate every field, return focus after confirmation, support 390px without horizontal scrolling, and honor reduced motion.
 
-- [ ] **Step 7: Add route-backed navigation**
+- [x] **Step 7: Add route-backed navigation**
 
 Add `Demo mode` under `Advanced` in `SystemSettingsShell` with a flask/shield icon. Existing browser Back/Forward and mobile select navigation stay source-aware.
 
-- [ ] **Step 8: Run GREEN, lint, and typecheck**
+- [x] **Step 8: Run GREEN, lint, and typecheck**
 
 ```bash
 npm --prefix next-frontend test -- --runInBand src/providers/AdminDemoModeProvider.test.tsx src/components/admin/AdminDemoModeBanner.test.tsx 'app/(dashboard)/dashboard/admin/system-settings/demo-mode/page.test.tsx' src/components/admin/system-settings/SystemSettingsShell.test.tsx
@@ -568,7 +568,7 @@ npm --prefix next-frontend run lint
 npm --prefix next-frontend run typecheck
 ```
 
-- [ ] **Step 9: Commit the web feature surface**
+- [x] **Step 9: Commit the web feature surface**
 
 ```bash
 git add next-frontend/src/types/admin-demo-mode.ts next-frontend/src/services/admin-demo-mode-service.ts next-frontend/src/providers/AdminDemoModeProvider.tsx next-frontend/src/providers/AdminDemoModeProvider.test.tsx next-frontend/src/components/admin/AdminDemoModeBanner.tsx next-frontend/src/components/admin/AdminDemoModeBanner.test.tsx 'next-frontend/app/(dashboard)/layout.tsx' 'next-frontend/app/(dashboard)/dashboard/admin/system-settings/demo-mode' next-frontend/src/components/admin/system-settings

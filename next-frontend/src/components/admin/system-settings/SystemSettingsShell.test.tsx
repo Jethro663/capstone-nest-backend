@@ -32,9 +32,10 @@ describe("SystemSettingsShell", () => {
       "href",
       "/dashboard/admin/system-settings",
     );
-    expect(
-      screen.getByRole("link", { name: "Academic year" }),
-    ).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Academic year" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
     expect(
       screen.getByRole("link", { name: "Assessments & grading" }),
     ).toHaveAttribute(
@@ -44,6 +45,10 @@ describe("SystemSettingsShell", () => {
     expect(
       screen.getByRole("link", { name: "Audit & recovery" }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Demo mode" })).toHaveAttribute(
+      "href",
+      "/dashboard/admin/system-settings/demo-mode",
+    );
     expect(screen.getByText("Academic year content")).toBeInTheDocument();
   });
 

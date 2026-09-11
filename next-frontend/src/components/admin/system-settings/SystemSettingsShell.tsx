@@ -8,6 +8,7 @@ import {
   CalendarRange,
   ClipboardCheck,
   GraduationCap,
+  FlaskConical,
   LayoutDashboard,
   ShieldAlert,
 } from "lucide-react";
@@ -76,6 +77,12 @@ const settingsSections: Array<{
     group: "Advanced",
     items: [
       {
+        label: "Demo mode",
+        description: "Controlled presentation window",
+        href: "/dashboard/admin/system-settings/demo-mode",
+        icon: FlaskConical,
+      },
+      {
         label: "Audit & recovery",
         description: "Evidence-based repair tools",
         href: "/dashboard/admin/system-settings/audit-recovery",
@@ -126,7 +133,10 @@ export function SystemSettingsShell({ children }: { children: ReactNode }) {
           {settingsSections.map((section, sectionIndex) => (
             <div
               key={section.group}
-              className={cn(sectionIndex > 0 && "mt-4 border-t border-[var(--admin-outline)] pt-4")}
+              className={cn(
+                sectionIndex > 0 &&
+                  "mt-4 border-t border-[var(--admin-outline)] pt-4",
+              )}
             >
               <p className="px-2 text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-[var(--admin-text-muted)]">
                 {section.group}
@@ -148,7 +158,10 @@ export function SystemSettingsShell({ children }: { children: ReactNode }) {
                           : "text-[var(--admin-text-muted)] hover:bg-[var(--admin-surface-soft)] hover:text-[var(--admin-text-strong)]",
                       )}
                     >
-                      <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                      <Icon
+                        className="mt-0.5 h-4 w-4 shrink-0"
+                        aria-hidden="true"
+                      />
                       <span className="min-w-0">
                         <span className="block text-sm font-semibold text-current">
                           {item.label}

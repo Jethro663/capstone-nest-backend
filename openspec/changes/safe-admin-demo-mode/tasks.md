@@ -31,11 +31,11 @@
 
 ## 4. Web controls and consumers
 
-- [ ] 4.1 Add shared web types and service for the three new endpoints.
-- [ ] 4.2 Add admin-only provider with focus/poll refresh, server-time expiry handling, and error tests.
-- [ ] 4.3 Add compact admin active-mode banner and DashboardLayout integration.
-- [ ] 4.4 Add route-backed Demo mode System Settings navigation.
-- [ ] 4.5 Implement responsive accessible activation/deactivation states and tests.
+- [x] 4.1 Add shared web types and service for the three new endpoints.
+- [x] 4.2 Add admin-only provider with focus/poll refresh, server-time expiry handling, and error tests.
+- [x] 4.3 Add compact admin active-mode banner and DashboardLayout integration.
+- [x] 4.4 Add route-backed Demo mode System Settings navigation.
+- [x] 4.5 Implement responsive accessible activation/deactivation states and tests.
 - [ ] 4.6 Make class/section conflict choices capability-aware while keeping required/permanent constraints.
 - [ ] 4.7 Add web archived-class restore and Demo user lifecycle/edit controls without changing permanent purge confirmation.
 - [ ] 4.8 Run focused web tests, lint, and typecheck.
