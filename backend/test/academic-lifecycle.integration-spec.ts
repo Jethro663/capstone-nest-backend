@@ -50,6 +50,7 @@ import { AcademicRepairService } from '../src/modules/academic-state/academic-re
 import { AcademicStateAlignmentService } from '../src/modules/academic-state/academic-state-alignment.service';
 import { ProfilesService } from '../src/modules/profiles/profiles.service';
 import { RosterImportService } from '../src/modules/roster-import/roster-import.service';
+import { AdminDemoModeService } from '../src/modules/admin-demo-mode/admin-demo-mode.service';
 
 // This suite exercises the approved import transaction, not spreadsheet parsing.
 // Parser behavior has separate fixtures; avoiding ExcelJS also avoids its ESM
@@ -733,10 +734,19 @@ describe('academic lifecycle PostgreSQL integration', () => {
       roleId: role!.id,
       assignedBy: f.actor.id,
     });
+    const auditService = new AuditService(database);
+    const adminDemoModeService = new AdminDemoModeService(
+      database,
+      new ConfigService({ adminDemoMode: { available: false } }),
+      auditService,
+      () => new Date(),
+    );
     const importer = new RosterImportService(
       database,
-      new AcademicPolicyService(database),
-      new AuditService(database),
+      new AcademicPolicyService(database, adminDemoModeService),
+      auditService,
+      new EventEmitter2(),
+      adminDemoModeService,
     );
     await importer.commitRoster(
       f.cls.sectionId,
