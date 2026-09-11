@@ -8,13 +8,13 @@
 
 ## 2. Activation and status API
 
-- [ ] 2.1 Add concrete activation/deactivation DTOs with exact validation tests.
-- [ ] 2.2 Implement server-time status derivation for missing, disabled, active, expired, unavailable, and read-failure states.
-- [ ] 2.3 Implement password step-up plus atomic optimistic activation.
-- [ ] 2.4 Implement immediate optimistic deactivation that remains available behind the operational kill switch.
-- [ ] 2.5 Implement actor-scoped, fail-closed Demo policy context and audit metadata helper.
-- [ ] 2.6 Add admin-only status/activate/deactivate controller with standard envelopes.
-- [ ] 2.7 Register the global module/config and pass focused service/controller/build checks.
+- [x] 2.1 Add concrete activation/deactivation DTOs with exact validation tests.
+- [x] 2.2 Implement server-time status derivation for missing, disabled, active, expired, unavailable, and read-failure states.
+- [x] 2.3 Implement password step-up plus atomic optimistic activation.
+- [x] 2.4 Implement immediate optimistic deactivation that remains available behind the operational kill switch.
+- [x] 2.5 Implement actor-scoped, fail-closed Demo policy context and audit metadata helper.
+- [x] 2.6 Add admin-only status/activate/deactivate controller with standard envelopes.
+- [x] 2.7 Register the global module/config and pass focused service/controller/build checks.
 
 ## 3. Backend workflow integrations
 

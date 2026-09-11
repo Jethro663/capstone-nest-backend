@@ -47,7 +47,9 @@ import jwtConfig from './config/jwt.config';
 import redisConfig from './config/redis.config';
 import ollamaConfig from './config/ollama.config';
 import adminLifecycleConfig from './config/admin-lifecycle.config';
+import adminDemoModeConfig from './config/admin-demo-mode.config';
 import { AdminLifecycleModule } from './modules/admin-lifecycle/admin-lifecycle.module';
+import { AdminDemoModeModule } from './modules/admin-demo-mode/admin-demo-mode.module';
 
 @Module({
   imports: [
@@ -59,6 +61,7 @@ import { AdminLifecycleModule } from './modules/admin-lifecycle/admin-lifecycle.
         redisConfig,
         ollamaConfig,
         adminLifecycleConfig,
+        adminDemoModeConfig,
       ],
     }),
     BullModule.forRootAsync({
@@ -118,6 +121,7 @@ import { AdminLifecycleModule } from './modules/admin-lifecycle/admin-lifecycle.
     AcademicStateModule,
     AppVersionModule,
     AdminLifecycleModule,
+    AdminDemoModeModule,
   ],
   providers: [
     {

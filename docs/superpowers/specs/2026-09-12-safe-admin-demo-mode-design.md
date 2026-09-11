@@ -153,7 +153,7 @@ Returns:
 type AdminDemoModeStatus = {
   available: boolean;
   active: boolean;
-  state: 'disabled' | 'active' | 'expired';
+  state: 'unavailable' | 'disabled' | 'active' | 'expired';
   version: number;
   serverTime: string;
   activatedAt: string | null;

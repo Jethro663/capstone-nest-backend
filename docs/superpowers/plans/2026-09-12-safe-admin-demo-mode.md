@@ -147,6 +147,7 @@ git commit -m "feat(admin): add durable demo mode state"
 **Files:**
 
 - Create: `backend/src/modules/admin-demo-mode/DTO/admin-demo-mode.dto.ts`
+- Create: `backend/src/modules/admin-demo-mode/DTO/admin-demo-mode.dto.spec.ts`
 - Create: `backend/src/modules/admin-demo-mode/admin-demo-mode.service.ts`
 - Create: `backend/src/modules/admin-demo-mode/admin-demo-mode.controller.ts`
 - Create: `backend/src/modules/admin-demo-mode/admin-demo-mode.module.ts`
@@ -163,7 +164,7 @@ git commit -m "feat(admin): add durable demo mode state"
 - `AdminDemoModeContext.allows(rule): boolean`
 - `AdminDemoModeContext.audit(bypassedRules)` returns version/expiry/rule metadata only when at least one rule was bypassed.
 
-- [ ] **Step 1: Write service RED tests**
+- [x] **Step 1: Write service RED tests**
 
 Cover these exact scenarios with a fixed clock:
 
@@ -181,11 +182,11 @@ it.each([
 
 Also prove: unavailable activation is `503`; bad password is `403`; bad version is `409`; valid activation sets an exact future expiry and increments version; deactivation works while unavailable; audit receives no password; a non-admin actor context never allows a rule; a DB read error returns a fail-closed inactive context for mutations.
 
-- [ ] **Step 2: Write controller RED tests**
+- [x] **Step 2: Write controller RED tests**
 
 Assert `@Roles(RoleName.Admin)` protects the controller, all three methods retain the response envelope, and `@CurrentUser()` actor identity is passed to activate/deactivate.
 
-- [ ] **Step 3: Run RED**
+- [x] **Step 3: Run RED**
 
 ```bash
 npm --prefix backend test -- --runInBand src/modules/admin-demo-mode/admin-demo-mode.service.spec.ts src/modules/admin-demo-mode/admin-demo-mode.controller.spec.ts
@@ -193,7 +194,7 @@ npm --prefix backend test -- --runInBand src/modules/admin-demo-mode/admin-demo-
 
 Expected: FAIL because the module is not implemented.
 
-- [ ] **Step 4: Implement concrete DTO validation**
+- [x] **Step 4: Implement concrete DTO validation**
 
 Use `class-validator` classes, not erased unions:
 
@@ -217,33 +218,33 @@ export class DeactivateAdminDemoModeDto {
 
 The service compares the acknowledgement set against the exact required set, so missing or extra entries fail.
 
-- [ ] **Step 5: Implement atomic versioned activation/deactivation**
+- [x] **Step 5: Implement atomic versioned activation/deactivation**
 
 Use fixed singleton ID `00000000-0000-4000-8000-000000000002`. Verify bcrypt password before the state transaction. Insert the disabled version-0 row if absent, then update with `WHERE id = singleton AND version = expectedVersion`; require exactly one returned row or throw `409`. Calculate expiry from the injected/current clock only once.
 
 `deactivate` sets `enabled=false`, clears `expiresAt`, records deactivation actor/time, increments version, and never checks the availability flag.
 
-- [ ] **Step 6: Implement actor-scoped fail-closed policy resolution**
+- [x] **Step 6: Implement actor-scoped fail-closed policy resolution**
 
 ```ts
 export type AdminDemoModeContext = {
   active: boolean;
   version: number;
   expiresAt: Date | null;
-  allows: (rule: AdminDemoModeRule) => boolean;
-  audit: (bypassedRules: readonly AdminDemoModeRule[]) =>
-    | { version: number; expiresAt: string; bypassedRules: AdminDemoModeRule[] }
+  allows: (rule: AdminDemoModeRelaxedRuleCode) => boolean;
+  audit: (bypassedRules: readonly AdminDemoModeRelaxedRuleCode[]) =>
+    | { demoModeVersion: number; demoModeExpiresAt: string; bypassedRules: AdminDemoModeRelaxedRuleCode[] }
     | undefined;
 };
 ```
 
 Return active only when state is effective and roles include `admin`. If roles are omitted, query the actor roles once. Catch state-read failure, log a warning without PII, and return the inactive context.
 
-- [ ] **Step 7: Register the global module and controller**
+- [x] **Step 7: Register the global module and controller**
 
 Mark `AdminDemoModeModule` global, import `DatabaseModule` and `AuditModule`, export the service, and import it once in `AppModule`. Add `adminDemoModeConfig` to `ConfigModule.forRoot({ load })`.
 
-- [ ] **Step 8: Run GREEN and build**
+- [x] **Step 8: Run GREEN and build**
 
 ```bash
 npm --prefix backend test -- --runInBand src/modules/admin-demo-mode/admin-demo-mode.service.spec.ts src/modules/admin-demo-mode/admin-demo-mode.controller.spec.ts
@@ -252,7 +253,7 @@ npm --prefix backend run build
 
 Expected: focused tests and build exit 0.
 
-- [ ] **Step 9: Commit the API**
+- [x] **Step 9: Commit the API**
 
 ```bash
 git add backend/src/modules/admin-demo-mode backend/src/app.module.ts
