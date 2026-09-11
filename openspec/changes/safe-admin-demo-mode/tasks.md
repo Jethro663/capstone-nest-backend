@@ -1,10 +1,10 @@
 ## 1. Durable state and policy contract
 
-- [ ] 1.1 Add fail-closed `ADMIN_DEMO_MODE_AVAILABLE` configuration and tests.
-- [ ] 1.2 Add the immutable relaxed/protected rule catalogs and disjointness tests.
-- [ ] 1.3 Add `admin_demo_mode_states` Drizzle schema and export.
-- [ ] 1.4 Add forward-only migration `0021_admin_demo_mode.sql` and environment-template documentation.
-- [ ] 1.5 Run focused config/policy tests and migration integrity.
+- [x] 1.1 Add fail-closed `ADMIN_DEMO_MODE_AVAILABLE` configuration and tests.
+- [x] 1.2 Add the immutable relaxed/protected rule catalogs and disjointness tests.
+- [x] 1.3 Add `admin_demo_mode_states` Drizzle schema and export.
+- [x] 1.4 Add forward-only migration `0021_admin_demo_mode.sql` and environment-template documentation.
+- [x] 1.5 Run focused config/policy tests and migration integrity.
 
 ## 2. Activation and status API
 

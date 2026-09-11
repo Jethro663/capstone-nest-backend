@@ -17,3 +17,4 @@ export * from './transmutation.schema';
 export * from './academic-grading.schema';
 export * from './assessment-editor.schema';
 export * from './admin-lifecycle.schema';
+export * from './admin-demo-mode.schema';

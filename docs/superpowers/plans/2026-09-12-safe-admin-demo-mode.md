@@ -31,6 +31,8 @@
 
 - Create: `backend/src/drizzle/schema/admin-demo-mode.schema.ts`
 - Create: `backend/drizzle/0021_admin_demo_mode.sql`
+- Create: `backend/drizzle/meta/0021_snapshot.json`
+- Modify: `backend/drizzle/meta/_journal.json`
 - Modify: `backend/src/drizzle/schema/index.ts`
 - Create: `backend/src/config/admin-demo-mode.config.ts`
 - Create: `backend/src/config/admin-demo-mode.config.spec.ts`
@@ -44,7 +46,7 @@
 - Produces `AdminDemoModeRule`, `ADMIN_DEMO_MODE_RELAXED_RULES`, and `ADMIN_DEMO_MODE_PROTECTED_RULES`.
 - Produces config key `adminDemoMode.available: boolean`.
 
-- [ ] **Step 1: Write the failing config and policy tests**
+- [x] **Step 1: Write the failing config and policy tests**
 
 Create `admin-demo-mode.config.spec.ts` with these assertions:
 
@@ -71,7 +73,7 @@ describe('admin demo mode config', () => {
 
 Add a policy test asserting the exact relaxed and protected codes from the design and asserting no code appears in both sets.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run:
 
@@ -81,7 +83,7 @@ npm --prefix backend test -- --runInBand src/config/admin-demo-mode.config.spec.
 
 Expected: FAIL because the config, policy, and tests do not yet have implementations.
 
-- [ ] **Step 3: Add the schema and forward-only migration**
+- [x] **Step 3: Add the schema and forward-only migration**
 
 Implement the schema with this shape:
 
@@ -106,9 +108,9 @@ export const adminDemoModeStates = pgTable('admin_demo_mode_states', {
 });
 ```
 
-Migration `0021_admin_demo_mode.sql` creates the table, foreign keys with `ON DELETE SET NULL`, and an index on `expires_at`. It inserts no active state and contains no destructive down operation.
+Generate migration `0021_admin_demo_mode.sql` with Drizzle Kit so the SQL, `0021_snapshot.json`, and `_journal.json` entry stay consistent. The migration creates the table, foreign keys with `ON DELETE SET NULL`, and an index on `expires_at`. It inserts no active state and contains no destructive down operation.
 
-- [ ] **Step 4: Add fail-closed config and the immutable catalog**
+- [x] **Step 4: Add fail-closed config and the immutable catalog**
 
 ```ts
 export default registerAs('adminDemoMode', () => ({
@@ -118,11 +120,11 @@ export default registerAs('adminDemoMode', () => ({
 
 Define the ten relaxed rule codes and twelve protected rule codes verbatim from the design, each with a stable code, short label, and plain-language description. Export read-only arrays so controller responses and tests share one source.
 
-- [ ] **Step 5: Update examples and migration exports**
+- [x] **Step 5: Update examples and migration exports**
 
 Export the schema from `schema/index.ts`. Add `ADMIN_DEMO_MODE_AVAILABLE=false` with a warning comment to both environment templates. Do not edit committed or local secret values.
 
-- [ ] **Step 6: Run GREEN and migration integrity**
+- [x] **Step 6: Run GREEN and migration integrity**
 
 ```bash
 npm --prefix backend test -- --runInBand src/config/admin-demo-mode.config.spec.ts src/modules/admin-demo-mode/admin-demo-mode.policy.spec.ts
@@ -131,10 +133,10 @@ npm --prefix backend run check:migrations
 
 Expected: both commands exit 0; config tests prove only exact `true` enables availability.
 
-- [ ] **Step 7: Commit the foundational contract**
+- [x] **Step 7: Commit the foundational contract**
 
 ```bash
-git add backend/src/drizzle/schema/admin-demo-mode.schema.ts backend/drizzle/0021_admin_demo_mode.sql backend/src/drizzle/schema/index.ts backend/src/config/admin-demo-mode.config.ts backend/src/config/admin-demo-mode.config.spec.ts backend/src/modules/admin-demo-mode/admin-demo-mode.policy.ts backend/src/modules/admin-demo-mode/admin-demo-mode.policy.spec.ts backend/.env.example .env.compose.example
+git add backend/src/drizzle/schema/admin-demo-mode.schema.ts backend/drizzle/0021_admin_demo_mode.sql backend/drizzle/meta/0021_snapshot.json backend/drizzle/meta/_journal.json backend/src/drizzle/schema/index.ts backend/src/config/admin-demo-mode.config.ts backend/src/config/admin-demo-mode.config.spec.ts backend/src/modules/admin-demo-mode/admin-demo-mode.policy.ts backend/src/modules/admin-demo-mode/admin-demo-mode.policy.spec.ts backend/.env.example .env.compose.example
 git commit -m "feat(admin): add durable demo mode state"
 ```
 
