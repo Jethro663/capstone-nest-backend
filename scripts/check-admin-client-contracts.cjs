@@ -3,6 +3,49 @@ const path = require("node:path");
 
 const MANIFEST = "contract-fixtures/admin-client-contracts.v1.json";
 const LAYERS = ["backend", "web", "mobile"];
+const CLIENT_SOURCE_ROOTS = [
+  "next-frontend/src",
+  "next-frontend/app",
+  "mobile/src",
+];
+
+const FORBIDDEN_CLIENT_BYPASSES = [
+  {
+    label: "demo query flag",
+    pattern: /[?&]demo(?:Mode)?=(?:true|1)(?:\b|&)/i,
+  },
+  {
+    label: "demo mode header",
+    pattern: /["']x-demo-mode["']\s*:/i,
+  },
+  {
+    label: "demo request-body authority",
+    pattern: /\bdemoMode\s*:\s*true\b/i,
+  },
+];
+
+function findForbiddenClientBypasses(source) {
+  return FORBIDDEN_CLIENT_BYPASSES.filter(({ pattern }) =>
+    pattern.test(source),
+  ).map(({ label }) => label);
+}
+
+function sourceFiles(directory) {
+  if (!fs.existsSync(directory)) return [];
+  const files = [];
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    const fullPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name === "__tests__") continue;
+      files.push(...sourceFiles(fullPath));
+      continue;
+    }
+    if (!/\.(?:[cm]?[jt]sx?)$/.test(entry.name)) continue;
+    if (/\.(?:test|spec)\.[cm]?[jt]sx?$/.test(entry.name)) continue;
+    files.push(fullPath);
+  }
+  return files;
+}
 
 function hasToken(source, token) {
   return source.includes(token);
@@ -66,9 +109,25 @@ function validateAdminContracts(rootDirectory) {
         errors.push(
           `${contract.id}/${layer}: endpoint token ${definition.endpoint} is missing`,
         );
+      for (const token of definition.tokens ?? []) {
+        if (!hasToken(combined, token))
+          errors.push(`${contract.id}/${layer}: token ${token} is missing`);
+      }
       for (const field of contract.fields ?? []) {
         if (!hasField(combined, field))
           errors.push(`${contract.id}/${layer}: field ${field} is missing`);
+      }
+    }
+  }
+  for (const sourceRoot of CLIENT_SOURCE_ROOTS) {
+    for (const sourcePath of sourceFiles(
+      path.join(rootDirectory, sourceRoot),
+    )) {
+      const source = fs.readFileSync(sourcePath, "utf8");
+      for (const violation of findForbiddenClientBypasses(source)) {
+        errors.push(
+          `${path.relative(rootDirectory, sourcePath)}: forbidden ${violation}`,
+        );
       }
     }
   }
@@ -91,4 +150,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { validateAdminContracts };
+module.exports = { validateAdminContracts, findForbiddenClientBypasses };

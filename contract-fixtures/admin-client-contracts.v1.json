@@ -738,6 +738,129 @@
           "endpoint": "fieldErrors"
         }
       }
+    },
+    {
+      "id": "admin-demo-mode.status",
+      "fields": [
+        "available",
+        "active",
+        "state",
+        "version",
+        "serverTime",
+        "activatedAt",
+        "expiresAt",
+        "reason",
+        "activatedBy",
+        "relaxedRules",
+        "protectedRules",
+        "user_lifecycle_sequence",
+        "class_membership_window",
+        "section_membership_window",
+        "section_capacity",
+        "schedule_collision",
+        "room_adviser_exclusivity",
+        "archive_active_memberships",
+        "restore_archived_class",
+        "admin_academic_window",
+        "governed_execution_availability"
+      ],
+      "layers": {
+        "backend": {
+          "sources": [
+            "backend/src/modules/admin-demo-mode/DTO/admin-demo-mode.dto.ts",
+            "backend/src/modules/admin-demo-mode/admin-demo-mode.controller.ts",
+            "backend/src/modules/admin-demo-mode/admin-demo-mode.policy.ts"
+          ],
+          "endpoint": "admin/demo-mode",
+          "tokens": ["@Roles(RoleName.Admin)"]
+        },
+        "web": {
+          "sources": [
+            "next-frontend/src/types/admin-demo-mode.ts",
+            "next-frontend/src/services/admin-demo-mode-service.ts",
+            "next-frontend/src/components/admin/system-settings/SystemSettingsShell.tsx",
+            "next-frontend/app/(dashboard)/dashboard/admin/system-settings/demo-mode/page.tsx"
+          ],
+          "endpoint": "/admin/demo-mode",
+          "tokens": ["/dashboard/admin/system-settings/demo-mode"]
+        },
+        "mobile": {
+          "sources": [
+            "mobile/src/types/admin-demo-mode.ts",
+            "mobile/src/api/services/admin-demo-mode.ts",
+            "mobile/src/navigation/types.ts",
+            "mobile/src/navigation/AppNavigator.tsx",
+            "mobile/src/screens/AdminDemoModeSettingsScreen.tsx"
+          ],
+          "endpoint": "/admin/demo-mode",
+          "tokens": ["AdminSettingsDemoMode"]
+        }
+      }
+    },
+    {
+      "id": "admin-demo-mode.activate",
+      "fields": [
+        "currentPassword",
+        "confirmation",
+        "reason",
+        "durationMinutes",
+        "expectedVersion",
+        "acknowledgements"
+      ],
+      "layers": {
+        "backend": {
+          "sources": [
+            "backend/src/modules/admin-demo-mode/DTO/admin-demo-mode.dto.ts",
+            "backend/src/modules/admin-demo-mode/admin-demo-mode.controller.ts"
+          ],
+          "endpoint": "activate"
+        },
+        "web": {
+          "sources": [
+            "next-frontend/src/types/admin-demo-mode.ts",
+            "next-frontend/src/services/admin-demo-mode-service.ts",
+            "next-frontend/app/(dashboard)/dashboard/admin/system-settings/demo-mode/page.tsx"
+          ],
+          "endpoint": "/admin/demo-mode/activate"
+        },
+        "mobile": {
+          "sources": [
+            "mobile/src/types/admin-demo-mode.ts",
+            "mobile/src/api/services/admin-demo-mode.ts",
+            "mobile/src/screens/AdminDemoModeSettingsScreen.tsx"
+          ],
+          "endpoint": "/admin/demo-mode/activate"
+        }
+      }
+    },
+    {
+      "id": "admin-demo-mode.deactivate",
+      "fields": ["confirmation", "expectedVersion"],
+      "layers": {
+        "backend": {
+          "sources": [
+            "backend/src/modules/admin-demo-mode/DTO/admin-demo-mode.dto.ts",
+            "backend/src/modules/admin-demo-mode/admin-demo-mode.controller.ts"
+          ],
+          "endpoint": "deactivate"
+        },
+        "web": {
+          "sources": [
+            "next-frontend/src/types/admin-demo-mode.ts",
+            "next-frontend/src/services/admin-demo-mode-service.ts",
+            "next-frontend/app/(dashboard)/dashboard/admin/system-settings/demo-mode/page.tsx"
+          ],
+          "endpoint": "/admin/demo-mode/deactivate"
+        },
+        "mobile": {
+          "sources": [
+            "mobile/src/types/admin-demo-mode.ts",
+            "mobile/src/api/services/admin-demo-mode.ts",
+            "mobile/src/screens/AdminDemoModeSettingsScreen.tsx"
+          ],
+          "endpoint": "/admin/demo-mode/deactivate"
+        }
+      }
     }
   ]
 }

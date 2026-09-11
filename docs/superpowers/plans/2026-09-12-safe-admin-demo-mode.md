@@ -774,11 +774,11 @@ git commit -m "feat(admin): align mobile forms with demo capabilities"
 - The contract gate verifies backend DTO/controller paths plus matching web/mobile types/services.
 - E2E proves server ownership, role isolation, expiry, and immediate restoration.
 
-- [ ] **Step 1: Add contract-gate RED cases**
+- [x] **Step 1: Add contract-gate RED cases**
 
 Require the three endpoint paths, exact activation fields, exact rule code literals, web service, mobile service, web route, and mobile route. Require absence of `demo=true`, `X-Demo-Mode`, or equivalent client-authoritative bypass patterns.
 
-- [ ] **Step 2: Add backend E2E**
+- [x] **Step 2: Add backend E2E**
 
 With an isolated seeded database and fixed/short expiry:
 
@@ -789,11 +789,11 @@ With an isolated seeded database and fixed/short expiry:
 5. One permanent safeguard remains blocked.
 6. Expiry or deactivation makes the original normal guard reject again.
 
-- [ ] **Step 3: Add Playwright E2E without destructive production assumptions**
+- [x] **Step 3: Add Playwright E2E without destructive production assumptions**
 
 Against local seeded services, log in as admin, open the route, validate activation form gating, activate a short window, observe the global banner on Users and Classes, return via browser history, deactivate, and confirm the banner disappears. Test 1440x900 and 390x844.
 
-- [ ] **Step 4: Run focused cross-surface tests**
+- [x] **Step 4: Run focused cross-surface tests**
 
 ```bash
 node --test scripts/check-admin-client-contracts.test.cjs
@@ -804,7 +804,7 @@ npm --prefix next-frontend run test:e2e -- admin-demo-mode.spec.ts
 
 Expected: all exit 0; Playwright artifacts remain untracked.
 
-- [ ] **Step 5: Commit cross-surface proof**
+- [x] **Step 5: Commit cross-surface proof**
 
 ```bash
 git add scripts/check-admin-client-contracts.cjs scripts/check-admin-client-contracts.test.cjs backend/test/admin-demo-mode.e2e-spec.ts next-frontend/tests/e2e/admin-demo-mode.spec.ts .github/workflows/ci.yml

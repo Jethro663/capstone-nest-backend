@@ -53,9 +53,9 @@
 
 ## 6. Cross-surface proof
 
-- [ ] 6.1 Extend the administrator contract gate for endpoints, fields, rule codes, routes, and forbidden client-authoritative bypasses.
-- [ ] 6.2 Add backend E2E for non-admin rejection, activation validation, one relaxed reversible mutation, one permanent blocker, expiry, and deactivation.
-- [ ] 6.3 Add local Playwright coverage for activation gating, active banner, navigation, deactivation, and 1440/390 viewports.
+- [x] 6.1 Extend the administrator contract gate for endpoints, fields, rule codes, routes, and forbidden client-authoritative bypasses.
+- [x] 6.2 Add backend E2E for non-admin rejection, activation validation, one relaxed reversible mutation, one permanent blocker, expiry, and deactivation.
+- [x] 6.3 Add local Playwright coverage for activation gating, active banner, navigation, deactivation, and 1440/390 viewports.
 - [ ] 6.4 Run complete backend lint/unit/E2E/build/production-start gates.
 - [ ] 6.5 Run complete web lint/type/unit/build/dev-smoke gates.
 - [ ] 6.6 Run complete mobile type/unit/release-script gates.
