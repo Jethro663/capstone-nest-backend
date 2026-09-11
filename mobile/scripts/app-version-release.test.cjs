@@ -1,7 +1,13 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createHash } = require("node:crypto");
-const { appendFile, mkdtemp, readFile, rm, writeFile } = require("node:fs/promises");
+const {
+  appendFile,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 const {
@@ -87,11 +93,21 @@ test("normal releases require their exact published Android build by default", a
 test("a lower release floor requires an explicit recovery override", async () => {
   const options = { ...(await fixtureOptions()), minSupportedVersionCode: 1 };
   await assert.rejects(buildReleasePayload(options), /recovery/i);
-  assert.equal((await buildReleasePayload({ ...options, allowSupportedOlderBuilds: true })).minSupportedVersionCode, 1);
+  assert.equal(
+    (await buildReleasePayload({ ...options, allowSupportedOlderBuilds: true }))
+      .minSupportedVersionCode,
+    1,
+  );
 });
 
 test("the minimum supported build can never exceed the packaged build", async () => {
-  await assert.rejects(buildReleasePayload({ ...(await fixtureOptions()), minSupportedVersionCode: 15 }), /exceed/i);
+  await assert.rejects(
+    buildReleasePayload({
+      ...(await fixtureOptions()),
+      minSupportedVersionCode: 15,
+    }),
+    /exceed/i,
+  );
 });
 
 test("rejects app.json and Gradle version drift", async () => {
@@ -144,7 +160,7 @@ test("verifyManifest rejects a changed APK", async () => {
   );
 });
 
-test("mobile administrator overhaul release keeps Expo and Gradle at 0.1.32 build 33", async () => {
+test("administrator Demo mode release keeps Expo and Gradle at 0.1.33 build 34", async () => {
   const appJson = JSON.parse(
     await readFile(path.join(__dirname, "..", "app.json"), "utf8"),
   );
@@ -153,9 +169,9 @@ test("mobile administrator overhaul release keeps Expo and Gradle at 0.1.32 buil
     "utf8",
   );
 
-  assert.equal(appJson.expo.version, "0.1.32");
-  assert.equal(appJson.expo.android.versionCode, 33);
-  assert.match(buildGradle, /\bversionCode\s+33\b/);
-  assert.match(buildGradle, /\bversionName\s+["']0\.1\.32["']/);
+  assert.equal(appJson.expo.version, "0.1.33");
+  assert.equal(appJson.expo.android.versionCode, 34);
+  assert.match(buildGradle, /\bversionCode\s+34\b/);
+  assert.match(buildGradle, /\bversionName\s+["']0\.1\.33["']/);
   assert.equal(appJson.expo.ios.buildNumber, "3");
 });

@@ -904,15 +904,15 @@ Stage only whichever listed task-owned paths were actually corrected; omit uncha
 - Consumes the verified mobile source and production API URL.
 - Produces the next Android `versionCode` after 33, matching semantic version, release APK, byte size, SHA-256, and manifest.
 
-- [ ] **Step 1: Read and follow finish-and-ship mobile packaging instructions**
+- [x] **Step 1: Read and follow finish-and-ship mobile packaging instructions**
 
 Confirm the current version, release script behavior, JDK 17, Android SDK, signing configuration, ABI target, and production API/WS URLs before changing version metadata.
 
-- [ ] **Step 2: Prepare the monotonic release**
+- [x] **Step 2: Prepare the monotonic release**
 
 Run the repository release preparation command from `mobile/`; require the next code to be greater than 33. Do not modify the iOS `buildNumber`.
 
-- [ ] **Step 3: Build the exact production APK**
+- [x] **Step 3: Build the exact production APK**
 
 Use:
 
@@ -928,11 +928,11 @@ cd mobile
 
 The JDK path is currently verified as Temurin 17.0.10+7. Re-run `/home/jethro/.jdks/jdk-17.0.10+7/bin/java -version` immediately before packaging and stop packaging if that executable no longer reports Java 17.
 
-- [ ] **Step 4: Publish locally and verify artifact metadata**
+- [x] **Step 4: Publish locally and verify artifact metadata**
 
 Use `npm run release:prepare`/`release:verify` exactly as documented by the current script. Verify `aapt dump badging`, byte size, SHA-256, package name, version code/name, ABI, signing certificate, embedded production URL, served-copy equality, and JSON metadata consistency.
 
-- [ ] **Step 5: Rerun mobile and frontend checks invalidated by packaging**
+- [x] **Step 5: Rerun mobile and frontend checks invalidated by packaging**
 
 ```bash
 npm --prefix mobile run typecheck
@@ -941,7 +941,7 @@ npm --prefix mobile run test:release
 npm --prefix next-frontend run build
 ```
 
-- [ ] **Step 6: Commit the release artifact**
+- [x] **Step 6: Commit the release artifact**
 
 ```bash
 git add mobile/app.json next-frontend/public/downloads

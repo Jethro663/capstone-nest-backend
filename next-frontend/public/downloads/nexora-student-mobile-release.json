@@ -1,12 +1,12 @@
 {
   "platform": "android",
-  "versionCode": 33,
-  "minSupportedVersionCode": 33,
-  "nativeVersion": "0.1.32",
-  "otaRuntimeVersion": "0.1.32",
+  "versionCode": 34,
+  "minSupportedVersionCode": 34,
+  "nativeVersion": "0.1.33",
+  "otaRuntimeVersion": "0.1.33",
   "apkDownloadUrl": "https://next-frontend-v2-production.up.railway.app/downloads/nexora-student-mobile-release.apk",
   "requiresFullApk": true,
-  "releaseNotes": "Redesigns the mobile administrator workspace with web-parity navigation, paginated task views, governed lifecycle review, complete contracts, reports, library tools, and accessible controls.",
-  "apkSha256": "19153c4f79dc9e0be746aa0eec91aa8bbb5f29feb98e69581f83df632def13d0",
-  "apkSizeBytes": 41267135
+  "releaseNotes": "Adds controlled, time-bound administrator Demo mode with validated activation, visible status, and capability-aware web and mobile school setup workflows.",
+  "apkSha256": "9161f27e858e0aa3749180eaa2fe225ff404517b708fd75303d42673e4e449b3",
+  "apkSizeBytes": 41041179
 }

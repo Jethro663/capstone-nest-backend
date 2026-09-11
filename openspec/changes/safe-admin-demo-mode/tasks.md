@@ -64,11 +64,11 @@
 
 ## 7. Android package and release
 
-- [ ] 7.1 Read current packaging inputs and verify Temurin JDK 17, Android SDK, production endpoints, signing, version 33 baseline, and release scripts.
-- [ ] 7.2 Prepare the next monotonic Android version without modifying iOS build number.
-- [ ] 7.3 Build the production ARM64 release APK from the verified mobile source.
-- [ ] 7.4 Verify package/version/ABI/signing/embedded URL/size/SHA and committed manifest equality.
-- [ ] 7.5 Rerun mobile and frontend checks invalidated by packaging and commit the artifact.
+- [x] 7.1 Read current packaging inputs and verify Temurin JDK 17, Android SDK, production endpoints, signing, version 33 baseline, and release scripts.
+- [x] 7.2 Prepare the next monotonic Android version without modifying iOS build number.
+- [x] 7.3 Build the production ARM64 release APK from the verified mobile source.
+- [x] 7.4 Verify package/version/ABI/signing/embedded URL/size/SHA and committed manifest equality.
+- [x] 7.5 Rerun mobile and frontend checks invalidated by packaging and commit the artifact.
 - [ ] 7.6 Push `developement`, prove exact local/remote SHA and `0 0` divergence, and observe exact-SHA CI to terminal success.
 - [ ] 7.7 Observe exact-SHA Railway backend/frontend deployments and health to terminal success.
 - [ ] 7.8 Enable `ADMIN_DEMO_MODE_AVAILABLE=true` only after healthy migration/deployment and verify the resulting backend deployment.
