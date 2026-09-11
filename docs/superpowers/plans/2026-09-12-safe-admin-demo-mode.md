@@ -1045,6 +1045,6 @@ Run `/home/jethro/Android/Sdk/platform-tools/adb devices -l`. If a target exists
 
 Confirm Demo mode is disabled through API/UI, no disposable production records were created, the working tree is clean, divergence is `0 0`, and final local/remote SHA still matches the CI/deployed SHA. Ensure local browser/test output remains untracked.
 
-- [ ] **Step 8: Complete the active goal only after evidence is final**
+- [x] **Step 8: Complete the active goal only after evidence is final**
 
 Summarize for a beginner: the safety conflict, chosen rule catalog, backend contract, web/mobile experience, checks, commit/branch, exact-SHA CI, Railway deployments, APK link/version/hash/signing, live browser evidence, and any explicit device limitation. Mark the goal complete only when no required outcome remains.

@@ -83,7 +83,7 @@
 - [x] 8.5 Deactivate immediately and prove normal controls/status return after refresh.
 - [x] 8.6 Install and test the exact APK on an attached Android target when available; otherwise record the device boundary.
 - [x] 8.7 Confirm disabled production state, no disposable data, clean worktree, exact SHA, successful CI/deployments, and `0 0` divergence.
-- [ ] 8.8 Update task evidence and complete the active goal only when every required outcome is proven or explicitly bounded.
+- [x] 8.8 Update task evidence and complete the active goal only when every required outcome is proven or explicitly bounded.
 
 ## Release evidence recorded 2026-09-12
 
