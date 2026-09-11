@@ -34,6 +34,8 @@ jobs:
       - name: Verify deployment status gating
         run: node --test ../.github/scripts/wait-railway-deployment.test.cjs
       - run: npm ci
+      - name: Verify administrator client contracts
+        run: npm run contract:admin
       - name: Run non-mutating lint baseline
         run: npm run lint
       - run: npm run test -- --ci
