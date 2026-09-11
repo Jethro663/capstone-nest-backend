@@ -1,3 +1,5 @@
+import type { StudentProfile, TeacherProfile } from "./profile";
+
 export type UserRole = string | { id?: string; name?: string };
 
 export interface User {
@@ -21,7 +23,14 @@ export interface User {
   phone?: string;
   address?: string;
   gradeLevel?: string;
+  graduatedAt?: string | null;
   familyName?: string;
   familyRelationship?: string;
   familyContact?: string;
+  contactNumber?: string;
+  department?: string;
+  specialization?: string;
+  employeeId?: string;
+  profile?: StudentProfile | null;
+  teacherProfile?: TeacherProfile | null;
 }

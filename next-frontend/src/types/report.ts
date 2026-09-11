@@ -1,24 +1,24 @@
-import type { ClassItem } from './class';
+import type { ClassItem } from "./class";
 
 export type ReportTab =
-  | 'classRecord'
-  | 'studentMasterList'
-  | 'classEnrollment'
-  | 'studentPerformance'
-  | 'interventionParticipation'
-  | 'assessmentSummary'
-  | 'systemUsage';
+  | "classRecord"
+  | "studentMasterList"
+  | "classEnrollment"
+  | "studentPerformance"
+  | "interventionParticipation"
+  | "assessmentSummary"
+  | "systemUsage";
 
 export interface ReportQuery {
   classId?: string;
   sectionId?: string;
-  gradingPeriod?: 'Q1' | 'Q2' | 'Q3' | 'Q4';
+  gradingPeriod?: "Q1" | "Q2" | "Q3" | "Q4";
   studentId?: string;
   dateFrom?: string;
   dateTo?: string;
   page?: number;
   limit?: number;
-  export?: 'csv';
+  export?: "csv";
 }
 
 export interface PaginatedReportResponse<T> {
@@ -26,10 +26,11 @@ export interface PaginatedReportResponse<T> {
   data: T;
   filters: ReportQuery;
   generatedAt: string;
-  page?: number;
-  limit?: number;
-  total?: number;
-  totalPages?: number;
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  csv: string;
 }
 
 export interface StudentMasterListRow {
@@ -53,8 +54,8 @@ export interface ClassEnrollmentRow {
   subjectName: string;
   subjectCode: string;
   schoolYear: string;
-  section: ClassItem['section'] | null;
-  teacher: ClassItem['teacher'] | null;
+  section: ClassItem["section"] | null;
+  teacher: ClassItem["teacher"] | null;
   enrollmentCount: number;
   students: {
     id: string;

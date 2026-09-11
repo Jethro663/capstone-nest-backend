@@ -1,177 +1,318 @@
-import { useMemo, useState } from "react";
-import { useQueries, useQuery } from "@tanstack/react-query";
-import { Alert, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { Alert, Text, View } from "react-native";
+import DateTimePicker, {
+  type DateTimePickerEvent,
+} from "@react-native-community/datetimepicker";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { announcementsApi } from "../api/services/announcements";
 import { classesApi } from "../api/services/classes";
 import { toAppError } from "../api/http";
+import { AdminPaginatedList } from "../components/admin/AdminPaginatedList";
+import {
+  mergeAdminPages,
+  nextAdminPage,
+} from "../components/admin/admin-pagination";
+import { AdminAnnouncementRow } from "../components/admin/AdminAnnouncementRow";
 import {
   AdminButton,
   AdminChip,
-  AdminEmpty,
   AdminField,
   AdminFilterBar,
-  AdminMetricStrip,
-  AdminScreen,
+  AdminListHeader,
+  AdminNotice,
   AdminSection,
+  adminTheme as theme,
 } from "../components/admin/AdminMobilePrimitives";
-import { AdminAnnouncementRow } from "../components/admin/AdminAnnouncementRow";
 import { AssessmentRichTextEditor } from "../components/ui/AssessmentRichTextEditor";
-import { announcementPreview, normalizeAnnouncementContent } from "../utils/announcementContent";
+import type { AdminAnnouncement } from "../types/announcement";
+import {
+  announcementPreview,
+  normalizeAnnouncementContent,
+} from "../utils/announcementContent";
 
-type AnnouncementFilter = "all" | "pinned" | "scheduled" | "published";
+type Filter = "all" | "pinned" | "scheduled" | "published";
+type Props = { navigation?: unknown };
 
-type Props = {
-  navigation?: {
-    getState?: () => { type?: string };
-    goBack: () => void;
-  };
-};
-
-export function AdminAnnouncementsScreen({ navigation }: Props = {}) {
-  const legacyStackEntry = navigation?.getState?.().type === "stack";
+export function AdminAnnouncementsScreen(_props: Props) {
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<AnnouncementFilter>("all");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
   const [showComposer, setShowComposer] = useState(false);
   const [classId, setClassId] = useState("");
+  const [editing, setEditing] = useState<AdminAnnouncement | null>(null);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [isPinned, setIsPinned] = useState(false);
-  const [scheduledAt, setScheduledAt] = useState("");
-  const classes = useQuery({ queryKey: ["admin-announcement-classes"], queryFn: () => classesApi.getAll() });
-  const queries = useQueries({ queries: (classes.data ?? []).map((entry) => ({ queryKey: ["admin-announcements", entry.id], queryFn: () => announcementsApi.getByClass(entry.id) })) });
-  const rows = useMemo(
-    () => queries.flatMap((query, index) => (query.data ?? []).map((announcement) => ({ announcement, classItem: classes.data?.[index] }))).sort((left, right) => Date.parse(right.announcement.createdAt ?? "") - Date.parse(left.announcement.createdAt ?? "")),
-    [classes.data, queries],
+  const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
+  const [schedulePicker, setSchedulePicker] = useState<"date" | "time" | null>(
+    null,
   );
-  const visibleRows = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    const now = Date.now();
-    return rows.filter(({ announcement, classItem }) => {
-      const preview = announcementPreview(announcement.content);
-      const matchesSearch = !needle || `${announcement.title} ${preview} ${classItem?.subjectCode ?? ""}`.toLowerCase().includes(needle);
-      const scheduled = Boolean(announcement.scheduledAt && Date.parse(announcement.scheduledAt) > now);
-      const matchesStatus = filter === "all" || (filter === "pinned" ? announcement.isPinned : filter === "scheduled" ? scheduled : !scheduled);
-      return matchesSearch && matchesStatus;
-    });
-  }, [filter, rows, search]);
-  const hasFilters = Boolean(search.trim()) || filter !== "all";
-  const clearFilters = () => { setSearch(""); setFilter("all"); };
-  const resetComposer = () => {
-    setEditingId(null);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+  const feed = useInfiniteQuery({
+    queryKey: ["admin-announcement-inventory", filter, debouncedSearch],
+    initialPageParam: 1,
+    queryFn: ({ pageParam }) =>
+      announcementsApi.getAdminPage({
+        page: pageParam,
+        limit: 25,
+        search: debouncedSearch || undefined,
+        state: filter,
+      }),
+    getNextPageParam: nextAdminPage,
+  });
+  const classes = useQuery({
+    queryKey: ["admin-announcement-class-options"],
+    queryFn: () => classesApi.getPage({ page: 1, limit: 100 }),
+  });
+  const rows = useMemo(
+    () => mergeAdminPages(feed.data?.pages ?? [], (entry) => entry.id),
+    [feed.data?.pages],
+  );
+  const reset = () => {
+    setShowComposer(false);
+    setEditing(null);
+    setClassId("");
     setTitle("");
     setContent("");
     setIsPinned(false);
-    setScheduledAt("");
-    setShowComposer(false);
+    setScheduledAt(null);
+    setSchedulePicker(null);
   };
-
-  const publish = async () => {
+  const save = async () => {
     if (!classId || !title.trim() || !announcementPreview(content)) {
-      Alert.alert("Missing fields", "Choose a class and enter a title and message.");
+      Alert.alert(
+        "Missing fields",
+        "Choose a class and enter a title and message.",
+      );
       return;
     }
     try {
       setSaving(true);
-      const payload = { title: title.trim(), content: content.trim(), isPinned, ...(scheduledAt.trim() ? { scheduledAt: scheduledAt.trim() } : {}) };
-      if (editingId) await announcementsApi.update(classId, editingId, payload);
+      const payload = {
+        title: title.trim(),
+        content: content.trim(),
+        isPinned,
+        ...(scheduledAt ? { scheduledAt: scheduledAt.toISOString() } : {}),
+      };
+      if (editing) await announcementsApi.update(classId, editing.id, payload);
       else await announcementsApi.create(classId, payload);
-      resetComposer();
-      await Promise.all(queries.map((query) => query.refetch()));
+      reset();
+      await feed.refetch();
     } catch (error) {
       Alert.alert("Unable to publish", toAppError(error).message);
     } finally {
       setSaving(false);
     }
   };
-
+  const beginEdit = (entry: AdminAnnouncement) => {
+    setEditing(entry);
+    setClassId(entry.classId);
+    setTitle(entry.title);
+    setContent(normalizeAnnouncementContent(entry.content));
+    setIsPinned(entry.isPinned);
+    setScheduledAt(entry.scheduledAt ? new Date(entry.scheduledAt) : null);
+    setShowComposer(true);
+  };
+  const changeSchedule = (_event: DateTimePickerEvent, value?: Date) => {
+    if (!schedulePicker || !value) {
+      setSchedulePicker(null);
+      return;
+    }
+    const next = new Date(scheduledAt ?? Date.now() + 3_600_000);
+    if (schedulePicker === "date")
+      next.setFullYear(value.getFullYear(), value.getMonth(), value.getDate());
+    else next.setHours(value.getHours(), value.getMinutes(), 0, 0);
+    setScheduledAt(next);
+    setSchedulePicker(null);
+  };
+  const remove = (entry: AdminAnnouncement) =>
+    Alert.alert(
+      "Archive announcement?",
+      "This follows the existing class announcement delete procedure.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Archive",
+          style: "destructive",
+          onPress: () =>
+            void announcementsApi
+              .delete(entry.classId, entry.id)
+              .then(() => feed.refetch())
+              .catch((error) =>
+                Alert.alert("Archive rejected", toAppError(error).message),
+              ),
+        },
+      ],
+    );
   return (
-    <AdminScreen
-      title="Announcements"
-      subtitle="Publish and inspect messages across classes"
-      showBackButton={legacyStackEntry}
-      onBackPress={legacyStackEntry ? navigation?.goBack : undefined}
-      refreshing={classes.isRefetching || queries.some((query) => query.isRefetching)}
-      onRefresh={() => void Promise.all([classes.refetch(), ...queries.map((query) => query.refetch())])}
-    >
-      <AdminMetricStrip items={[
-        { label: "Classes", value: classes.data?.length ?? 0 },
-        { label: "Posts", value: rows.length },
-        { label: "Pinned", value: rows.filter(({ announcement }) => announcement.isPinned).length, tone: "amber" },
-      ]} />
-
-      <AdminFilterBar
-        search={search}
-        onSearchChange={setSearch}
-        placeholder="Search announcements"
-        segments={[
-          { key: "all", label: "All" },
-          { key: "pinned", label: "Pinned" },
-          { key: "scheduled", label: "Scheduled" },
-          { key: "published", label: "Published" },
-        ]}
-        activeSegment={filter}
-        onSegmentChange={setFilter}
-        resultCount={visibleRows.length}
-      />
-
-      <AdminSection
-        title={editingId ? "Edit announcement" : "Announcement feed"}
-        subtitle="Every current class is included"
-        action={<AdminButton label={showComposer ? "Close" : "Compose"} icon={showComposer ? "close" : "plus"} variant={showComposer ? "soft" : "solid"} onPress={() => showComposer ? resetComposer() : setShowComposer(true)} />}
-      >
-        {showComposer ? (
-          <View style={{ padding: 16, gap: 10, borderTopWidth: 1, borderTopColor: "#DDE3EA" }}>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-              {(classes.data ?? []).map((entry) => <AdminChip key={entry.id} label={entry.subjectCode} active={classId === entry.id} onPress={() => setClassId(entry.id)} />)}
-            </View>
-            <AdminField label="Announcement title" value={title} onChangeText={setTitle} placeholder="Title" />
-            <AssessmentRichTextEditor label="Announcement content" value={content} onChange={setContent} disabled={saving} extendedFormatting />
-            <AdminField label="Schedule" value={scheduledAt} onChangeText={setScheduledAt} autoCapitalize="none" placeholder="Optional ISO date and time" />
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <AdminChip label="Pinned" active={isPinned} onPress={() => setIsPinned((value) => !value)} />
-              <View style={{ flex: 1 }} />
-              {editingId ? <AdminButton label="Cancel edit" tone="neutral" onPress={resetComposer} /> : null}
-              <AdminButton label={saving ? "Saving…" : editingId ? "Save" : "Publish"} icon="send" tone="green" variant="solid" disabled={saving} onPress={() => void publish()} />
-            </View>
-          </View>
-        ) : null}
-
-        {visibleRows.map(({ announcement, classItem }) => (
-          <AdminAnnouncementRow
-            key={announcement.id}
-            announcement={announcement}
-            contextLabel={classItem?.subjectCode ?? "Class"}
-            onEdit={(entry) => {
-              setClassId(entry.classId);
-              setEditingId(entry.id);
-              setTitle(entry.title);
-              setContent(normalizeAnnouncementContent(entry.content));
-              setIsPinned(entry.isPinned);
-              setScheduledAt(entry.scheduledAt ?? "");
-              setShowComposer(true);
-            }}
-            onDelete={(entry) => Alert.alert(
-              "Delete announcement?",
-              "This removes the announcement from its class.",
-              [
-                { text: "Cancel", style: "cancel" },
-                { text: "Delete", style: "destructive", onPress: () => void announcementsApi.delete(entry.classId, entry.id).then(() => Promise.all(queries.map((query) => query.refetch()))).catch((error) => Alert.alert("Delete rejected", toAppError(error).message)) },
-              ],
-            )}
+    <AdminPaginatedList
+      data={rows}
+      keyExtractor={(entry) => entry.id}
+      renderItem={({ item }) => (
+        <AdminAnnouncementRow
+          announcement={item}
+          contextLabel={`${item.class?.subjectCode ?? "Class"}${item.class?.section?.name ? ` · ${item.class.section.name}` : ""}`}
+          onEdit={item.canEdit === false ? undefined : beginEdit}
+          onDelete={item.canDelete === false ? undefined : remove}
+        />
+      )}
+      header={
+        <>
+          <AdminListHeader
+            title="Announcements"
+            subtitle="One bounded cross-class page; editing keeps the class procedure"
+            rightAction={
+              <AdminButton
+                label={showComposer ? "Close" : "Compose"}
+                icon={showComposer ? "close" : "plus"}
+                onPress={() => (showComposer ? reset() : setShowComposer(true))}
+              />
+            }
           />
-        ))}
-        {!visibleRows.length ? (
-          <AdminEmpty
-            title={hasFilters ? "No matching announcements" : "No announcements"}
-            subtitle={hasFilters ? "Clear filters to return to the complete feed." : "Compose the first class announcement."}
-            icon="bullhorn-outline"
-            actionLabel={hasFilters ? "Clear filters" : undefined}
-            onAction={hasFilters ? clearFilters : undefined}
+          <AdminFilterBar
+            search={search}
+            onSearchChange={setSearch}
+            placeholder="Search announcement content"
+            segments={[
+              { key: "all", label: "All" },
+              { key: "pinned", label: "Pinned" },
+              { key: "scheduled", label: "Scheduled" },
+              { key: "published", label: "Published" },
+            ]}
+            activeSegment={filter}
+            onSegmentChange={setFilter}
+            resultCount={feed.data?.pages[0]?.total ?? rows.length}
           />
-        ) : null}
-      </AdminSection>
-    </AdminScreen>
+          {feed.isError ? (
+            <AdminNotice
+              title="Announcement feed unavailable"
+              description={toAppError(feed.error).message}
+              tone="red"
+            />
+          ) : null}
+          {showComposer ? (
+            <AdminSection
+              title={
+                editing ? "Edit in class context" : "Compose in class context"
+              }
+              subtitle="The backend class route remains the canonical mutation contract"
+            >
+              <View style={{ padding: 16, gap: 10 }}>
+                <View
+                  style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}
+                >
+                  {(classes.data?.data ?? []).map((entry) => (
+                    <AdminChip
+                      key={entry.id}
+                      label={entry.subjectCode}
+                      active={classId === entry.id}
+                      onPress={() => setClassId(entry.id)}
+                    />
+                  ))}
+                </View>
+                <AdminField
+                  label="Title"
+                  value={title}
+                  onChangeText={setTitle}
+                />
+                <AssessmentRichTextEditor
+                  label="Announcement content"
+                  value={content}
+                  onChange={setContent}
+                  disabled={saving}
+                  extendedFormatting
+                />
+                <Text style={{ color: theme.text, fontWeight: "800" }}>
+                  Schedule:{" "}
+                  {scheduledAt?.toLocaleString() ?? "Publish immediately"}
+                </Text>
+                <View
+                  style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}
+                >
+                  <AdminButton
+                    label="Schedule date"
+                    onPress={() => setSchedulePicker("date")}
+                  />
+                  <AdminButton
+                    label="Schedule time"
+                    onPress={() => setSchedulePicker("time")}
+                  />
+                  <AdminButton
+                    label="Publish immediately"
+                    disabled={!scheduledAt}
+                    onPress={() => setScheduledAt(null)}
+                  />
+                </View>
+                {schedulePicker ? (
+                  <DateTimePicker
+                    value={scheduledAt ?? new Date(Date.now() + 3_600_000)}
+                    mode={schedulePicker}
+                    onChange={changeSchedule}
+                  />
+                ) : null}
+                <View
+                  style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+                >
+                  <AdminChip
+                    label="Pinned"
+                    active={isPinned}
+                    onPress={() => setIsPinned((value) => !value)}
+                  />
+                  <View style={{ flex: 1 }} />
+                  <AdminButton
+                    label={
+                      saving
+                        ? "Saving…"
+                        : editing
+                          ? "Save"
+                          : scheduledAt
+                            ? "Schedule"
+                            : "Publish"
+                    }
+                    icon="send"
+                    tone="green"
+                    disabled={saving}
+                    onPress={() => void save()}
+                  />
+                </View>
+              </View>
+            </AdminSection>
+          ) : null}
+        </>
+      }
+      emptyTitle={
+        search.trim() || filter !== "all"
+          ? "No matching announcements"
+          : "No announcements"
+      }
+      emptySubtitle={
+        search.trim() || filter !== "all"
+          ? "Clear filters to return to the complete announcement inventory."
+          : "No announcements have been created yet."
+      }
+      emptyActionLabel={
+        search.trim() || filter !== "all" ? "Clear filters" : undefined
+      }
+      onEmptyAction={
+        search.trim() || filter !== "all"
+          ? () => {
+              setSearch("");
+              setFilter("all");
+            }
+          : undefined
+      }
+      error={feed.isError ? toAppError(feed.error).message : null}
+      initialLoading={feed.isPending}
+      lastUpdatedAt={feed.dataUpdatedAt}
+      refreshing={feed.isRefetching && !feed.isFetchingNextPage}
+      onRefresh={() => void feed.refetch()}
+      hasNextPage={feed.hasNextPage}
+      isFetchingNextPage={feed.isFetchingNextPage}
+      fetchNextPage={() => void feed.fetchNextPage()}
+    />
   );
 }

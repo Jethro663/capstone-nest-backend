@@ -144,7 +144,7 @@ test("verifyManifest rejects a changed APK", async () => {
   );
 });
 
-test("student mobile class-header hotfix release keeps Expo and Gradle at 0.1.31 build 32", async () => {
+test("mobile administrator overhaul release keeps Expo and Gradle at 0.1.32 build 33", async () => {
   const appJson = JSON.parse(
     await readFile(path.join(__dirname, "..", "app.json"), "utf8"),
   );
@@ -153,9 +153,9 @@ test("student mobile class-header hotfix release keeps Expo and Gradle at 0.1.31
     "utf8",
   );
 
-  assert.equal(appJson.expo.version, "0.1.31");
-  assert.equal(appJson.expo.android.versionCode, 32);
-  assert.match(buildGradle, /\bversionCode\s+32\b/);
-  assert.match(buildGradle, /\bversionName\s+["']0\.1\.31["']/);
+  assert.equal(appJson.expo.version, "0.1.32");
+  assert.equal(appJson.expo.android.versionCode, 33);
+  assert.match(buildGradle, /\bversionCode\s+33\b/);
+  assert.match(buildGradle, /\bversionName\s+["']0\.1\.32["']/);
   assert.equal(appJson.expo.ios.buildNumber, "3");
 });

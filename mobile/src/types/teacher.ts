@@ -1,4 +1,10 @@
-export type TeacherSectionVisibilityStatus = "all" | "active" | "archived" | "hidden";
+import type { AcademicBlocker, AcademicOutcome } from "./academic-grading";
+
+export type TeacherSectionVisibilityStatus =
+  | "all"
+  | "active"
+  | "archived"
+  | "hidden";
 
 export interface TeacherSection {
   id: string;
@@ -21,8 +27,28 @@ export interface TeacherSection {
   cardBannerUrl?: string | null;
 }
 
-export interface CreateSectionDto { name: string; gradeLevel: "7" | "8" | "9" | "10"; schoolYear: string; capacity: number; roomNumber?: string; adviserId?: string }
-export interface UpdateSectionDto { name?: string; gradeLevel?: string; schoolYear?: string; capacity?: number; roomNumber?: string; adviserId?: string | null; isActive?: boolean }
+export interface CreateSectionDto {
+  name: string;
+  gradeLevel: "7" | "8" | "9" | "10";
+  schoolYear: string;
+  capacity: number;
+  roomNumber?: string;
+  adviserId?: string;
+}
+export interface UpdateSectionDto {
+  name?: string;
+  gradeLevel?: string;
+  schoolYear?: string;
+  capacity?: number;
+  roomNumber?: string;
+  adviserId?: string | null;
+  isActive?: boolean;
+}
+export type BulkSectionLifecycleAction = "archive" | "restore" | "purge";
+export interface BulkSectionLifecycleDto {
+  action: BulkSectionLifecycleAction;
+  sectionIds: string[];
+}
 
 export interface TeacherSectionsListResponse {
   success?: boolean;
@@ -33,6 +59,66 @@ export interface TeacherSectionsListResponse {
     total: number;
     totalPages: number;
   };
+}
+
+export interface AccessStudentsOverviewQuery {
+  schoolYear?: string;
+  gradeLevel?: "7" | "8" | "9" | "10";
+  sectionId?: string;
+  search?: string;
+}
+
+export interface AccessStudentsOverviewStudent {
+  outcome: AcademicOutcome;
+  blockers: AcademicBlocker[];
+  outcomeManagedByTransition: boolean;
+  id: string;
+  firstName: string | null;
+  middleName: string | null;
+  lastName: string | null;
+  email: string;
+  lrn: string | null;
+  gradeLevel: string | null;
+  finalGrade: number | null;
+  finalGradePercentage: number | null;
+  gradeStatus: "pending" | "passing" | "failing";
+  isFinalized: boolean;
+  isPassing: boolean;
+  isFailing: boolean;
+  requiredClassRecordCount: number;
+  finalizedClassRecordCount: number;
+  finalGradeRecordCount: number;
+  missingFinalGradeCount: number;
+  finalizationLabel: string;
+}
+
+export interface AccessStudentsOverviewSection {
+  id: string;
+  name: string;
+  gradeLevel: string;
+  schoolYear: string;
+  roomNumber: string | null;
+  capacity: number;
+  adviser: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string;
+  } | null;
+  classRecordCount: number;
+  finalizedClassRecordCount: number;
+  studentCount: number;
+  students: AccessStudentsOverviewStudent[];
+}
+
+export interface AccessStudentsOverviewResponse {
+  success: boolean;
+  data: Array<{
+    gradeLevel: string;
+    sections: AccessStudentsOverviewSection[];
+  }>;
+  totalStudents: number;
+  totalSections: number;
 }
 
 export interface TeacherSectionRosterStudent {
@@ -187,7 +273,12 @@ export interface GuidedAssessmentQuestionOption {
 
 export interface GuidedAssessmentQuestion {
   id: string;
-  type: "multiple_choice" | "multiple_select" | "true_false" | "dropdown" | string;
+  type:
+    | "multiple_choice"
+    | "multiple_select"
+    | "true_false"
+    | "dropdown"
+    | string;
   stem: string;
   explanation?: string | null;
   hint?: string | null;
@@ -227,14 +318,24 @@ export interface TeacherPathScore {
 export interface TeacherInterventionAssignment {
   id?: string;
   assignmentId?: string;
-  type?: "lesson_review" | "assessment_retry" | "generated_lesson_review" | "guided_assessment" | string;
+  type?:
+    | "lesson_review"
+    | "assessment_retry"
+    | "generated_lesson_review"
+    | "guided_assessment"
+    | string;
   label?: string;
   order?: number;
   status?: string;
   isCompleted?: boolean;
   completedAt?: string | null;
   xpAwarded?: number;
-  lesson?: { id: string; title?: string | null; description?: string | null; order?: number } | null;
+  lesson?: {
+    id: string;
+    title?: string | null;
+    description?: string | null;
+    order?: number;
+  } | null;
   assessment?: {
     id: string;
     title?: string | null;
@@ -482,7 +583,10 @@ export interface LxpClassReport {
   }>;
 }
 
-export type TeacherEvaluationType = "teacher_class" | "ja_hub" | "learners_path";
+export type TeacherEvaluationType =
+  | "teacher_class"
+  | "ja_hub"
+  | "learners_path";
 
 export interface TeacherEvaluationCategoryAverage {
   key: string;

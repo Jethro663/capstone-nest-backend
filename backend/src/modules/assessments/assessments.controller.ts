@@ -35,7 +35,6 @@ import {
   CreateQuestionDto,
   UpdateQuestionDto,
   SubmitAssessmentDto,
-  StartAssessmentDto,
   UpdateAttemptProgressDto,
   ReturnGradeDto,
   BulkReturnGradesDto,
@@ -98,6 +97,43 @@ export class AssessmentsController {
     private assessmentsService: AssessmentsService,
     private readonly editor: AssessmentEditorService,
   ) {}
+
+  @Get('admin/inventory')
+  @Roles(RoleName.Admin)
+  async getAdminInventory(
+    @Query()
+    query: {
+      page?: string;
+      limit?: string;
+      classId?: string;
+      search?: string;
+      publication?: 'all' | 'published' | 'draft';
+    },
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const page = await this.assessmentsService.getAdminInventory(
+      {
+        page: query.page
+          ? Math.max(Number.parseInt(query.page, 10) || 1, 1)
+          : 1,
+        limit: query.limit
+          ? Math.min(Math.max(Number.parseInt(query.limit, 10) || 25, 1), 100)
+          : 25,
+        classId: query.classId,
+        search: query.search,
+        publication:
+          query.publication === 'published' || query.publication === 'draft'
+            ? query.publication
+            : 'all',
+      },
+      user,
+    );
+    return {
+      success: true,
+      message: 'Administrator assessment inventory retrieved',
+      ...page,
+    };
+  }
 
   @Post('editor')
   @Roles(RoleName.Admin, RoleName.Teacher)

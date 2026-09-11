@@ -1,8 +1,13 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Gauge, MessageSquareQuote, SlidersHorizontal, Star } from 'lucide-react';
-import { lxpService } from '@/services/lxp-service';
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Gauge,
+  MessageSquareQuote,
+  SlidersHorizontal,
+  Star,
+} from "lucide-react";
+import { lxpService } from "@/services/lxp-service";
 import type {
   CreateSystemEvaluationCampaignPayload,
   SystemEvaluationCampaign,
@@ -11,8 +16,8 @@ import type {
   SystemEvaluationAudienceRole,
   SystemEvaluationFormType,
   SystemEvaluationTargetModule,
-} from '@/types/lxp';
-import { Skeleton } from '@/components/ui/skeleton';
+} from "@/types/lxp";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -20,36 +25,36 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
+} from "@/components/ui/table";
 import {
   AdminEmptyState,
   AdminPageShell,
   AdminSectionCard,
   AdminStatCard,
-} from '@/components/admin/AdminPageShell';
+} from "@/components/admin/AdminPageShell";
 import {
   TeacherEmptyState,
   TeacherPageShell,
   TeacherSectionCard,
   TeacherStatCard,
-} from '@/components/teacher/TeacherPageShell';
-import { toast } from 'sonner';
+} from "@/components/teacher/TeacherPageShell";
+import { toast } from "sonner";
 
 const MODULE_OPTIONS: Array<{
   label: string;
-  value: '' | SystemEvaluationTargetModule;
+  value: "" | SystemEvaluationTargetModule;
 }> = [
-  { label: 'All modules', value: '' },
-  { label: 'LMS', value: 'lms' },
-  { label: 'Learners Path', value: 'lxp' },
-  { label: 'AI Mentor', value: 'ai_mentor' },
-  { label: 'Intervention', value: 'intervention' },
-  { label: 'Overall', value: 'overall' },
+  { label: "All modules", value: "" },
+  { label: "LMS", value: "lms" },
+  { label: "Learners Path", value: "lxp" },
+  { label: "AI Mentor", value: "ai_mentor" },
+  { label: "Intervention", value: "intervention" },
+  { label: "Overall", value: "overall" },
 ];
 
 function formatSubmitter(row: SystemEvaluationRow): string {
-  const first = row.submitter?.firstName?.trim() ?? '';
-  const last = row.submitter?.lastName?.trim() ?? '';
+  const first = row.submitter?.firstName?.trim() ?? "";
+  const last = row.submitter?.lastName?.trim() ?? "";
   if (first && last) return `${last}, ${first}`;
   if (last) return last;
   if (first) return first;
@@ -57,42 +62,47 @@ function formatSubmitter(row: SystemEvaluationRow): string {
 }
 
 function formatModuleName(value: string): string {
-  if (value === 'lxp') return 'Learners Path';
-  if (value === 'ai_mentor') return 'AI Mentor';
+  if (value === "lxp") return "Learners Path";
+  if (value === "ai_mentor") return "AI Mentor";
   return value
-    .split('_')
+    .split("_")
     .map((part) => part[0].toUpperCase() + part.slice(1))
-    .join(' ');
+    .join(" ");
 }
 
 interface SystemEvaluationsPageProps {
   heading: string;
   description: string;
-  variant?: 'teacher' | 'admin';
+  variant?: "teacher" | "admin";
 }
 
 export function SystemEvaluationsPage({
   heading,
   description,
-  variant = 'teacher',
+  variant = "teacher",
 }: SystemEvaluationsPageProps) {
-  const isAdmin = variant === 'admin';
-  const [targetModule, setTargetModule] = useState<'' | SystemEvaluationTargetModule>('');
+  const isAdmin = variant === "admin";
+  const [targetModule, setTargetModule] = useState<
+    "" | SystemEvaluationTargetModule
+  >("");
   const [rows, setRows] = useState<SystemEvaluationRow[]>([]);
   const [campaigns, setCampaigns] = useState<SystemEvaluationCampaign[]>([]);
+  const [campaignPage, setCampaignPage] = useState(1);
+  const [campaignTotal, setCampaignTotal] = useState(0);
+  const [campaignTotalPages, setCampaignTotalPages] = useState(1);
   const [count, setCount] = useState(0);
   const [summary, setSummary] = useState<
-    SystemEvaluationListResponse['summary'] | null
+    SystemEvaluationListResponse["summary"] | null
   >(null);
   const [loading, setLoading] = useState(true);
   const [campaignSubmitting, setCampaignSubmitting] = useState(false);
   const [campaignForm, setCampaignForm] = useState({
-    formType: 'system' as SystemEvaluationFormType,
-    audienceRole: 'student' as SystemEvaluationAudienceRole,
-    title: '',
-    classId: '',
-    startsAt: '',
-    endsAt: '',
+    formType: "system" as SystemEvaluationFormType,
+    audienceRole: "student" as SystemEvaluationAudienceRole,
+    title: "",
+    classId: "",
+    startsAt: "",
+    endsAt: "",
   });
 
   const fetchEvaluations = useCallback(async () => {
@@ -105,7 +115,7 @@ export function SystemEvaluationsPage({
       setCount(res.data.count ?? 0);
       setSummary(res.data.summary ?? null);
     } catch {
-      toast.error('Failed to load system evaluations');
+      toast.error("Failed to load system evaluations");
       setRows([]);
       setCount(0);
       setSummary(null);
@@ -121,21 +131,32 @@ export function SystemEvaluationsPage({
   const fetchCampaigns = useCallback(async () => {
     if (!isAdmin) return;
     try {
-      const response = await lxpService.getSystemEvaluationCampaigns();
+      const response = await lxpService.getSystemEvaluationCampaigns({
+        page: campaignPage,
+        limit: 6,
+      });
       setCampaigns(response.data.campaigns ?? []);
+      setCampaignTotal(response.data.total ?? response.data.count ?? 0);
+      setCampaignTotalPages(response.data.totalPages ?? 1);
     } catch {
-      toast.error('Failed to load evaluation campaigns');
+      toast.error("Failed to load evaluation campaigns");
       setCampaigns([]);
+      setCampaignTotal(0);
+      setCampaignTotalPages(1);
     }
-  }, [isAdmin]);
+  }, [campaignPage, isAdmin]);
 
   useEffect(() => {
     void fetchCampaigns();
   }, [fetchCampaigns]);
 
   const handleCreateCampaign = async () => {
-    if (!campaignForm.title.trim() || !campaignForm.startsAt || !campaignForm.endsAt) {
-      toast.error('Campaign title and dates are required');
+    if (
+      !campaignForm.title.trim() ||
+      !campaignForm.startsAt ||
+      !campaignForm.endsAt
+    ) {
+      toast.error("Campaign title and dates are required");
       return;
     }
 
@@ -145,7 +166,7 @@ export function SystemEvaluationsPage({
       title: campaignForm.title.trim(),
       startsAt: new Date(campaignForm.startsAt).toISOString(),
       endsAt: new Date(campaignForm.endsAt).toISOString(),
-      status: 'active',
+      status: "active",
     };
     if (campaignForm.classId.trim()) {
       payload.classId = campaignForm.classId.trim();
@@ -154,11 +175,16 @@ export function SystemEvaluationsPage({
     try {
       setCampaignSubmitting(true);
       await lxpService.createSystemEvaluationCampaign(payload);
-      toast.success('Evaluation campaign created');
-      setCampaignForm((current) => ({ ...current, title: '', classId: '' }));
-      await Promise.all([fetchCampaigns(), fetchEvaluations()]);
+      toast.success("Evaluation campaign created");
+      setCampaignForm((current) => ({ ...current, title: "", classId: "" }));
+      if (campaignPage === 1)
+        await Promise.all([fetchCampaigns(), fetchEvaluations()]);
+      else {
+        setCampaignPage(1);
+        await fetchEvaluations();
+      }
     } catch {
-      toast.error('Failed to create evaluation campaign');
+      toast.error("Failed to create evaluation campaign");
     } finally {
       setCampaignSubmitting(false);
     }
@@ -167,7 +193,9 @@ export function SystemEvaluationsPage({
   const averageScores = useMemo(() => {
     if (summary?.averages) {
       return {
-        satisfaction: Number(summary.averages.satisfactionScore ?? 0).toFixed(1),
+        satisfaction: Number(summary.averages.satisfactionScore ?? 0).toFixed(
+          1,
+        ),
         usability: Number(summary.averages.usabilityScore ?? 0).toFixed(1),
         feedback: summary.feedbackCount ?? 0,
       };
@@ -175,8 +203,8 @@ export function SystemEvaluationsPage({
 
     if (rows.length === 0) {
       return {
-        satisfaction: '--',
-        usability: '--',
+        satisfaction: "--",
+        usability: "--",
         feedback: 0,
       };
     }
@@ -225,7 +253,9 @@ export function SystemEvaluationsPage({
                     ...current,
                     formType: event.target.value as SystemEvaluationFormType,
                     audienceRole:
-                      event.target.value === 'ja_hub' ? 'student' : current.audienceRole,
+                      event.target.value === "ja_hub"
+                        ? "student"
+                        : current.audienceRole,
                   }))
                 }
                 className="admin-select w-full text-sm"
@@ -241,11 +271,12 @@ export function SystemEvaluationsPage({
                 onChange={(event) =>
                   setCampaignForm((current) => ({
                     ...current,
-                    audienceRole: event.target.value as SystemEvaluationAudienceRole,
+                    audienceRole: event.target
+                      .value as SystemEvaluationAudienceRole,
                   }))
                 }
                 className="admin-select w-full text-sm"
-                disabled={campaignForm.formType === 'ja_hub'}
+                disabled={campaignForm.formType === "ja_hub"}
               >
                 <option value="student">Students</option>
                 <option value="teacher">Teachers</option>
@@ -318,15 +349,15 @@ export function SystemEvaluationsPage({
               disabled={campaignSubmitting}
               className="admin-button"
             >
-              {campaignSubmitting ? 'Creating...' : 'Create Campaign'}
+              {campaignSubmitting ? "Creating..." : "Create Campaign"}
             </button>
             <span className="admin-pill px-4 py-2 text-sm font-semibold">
-              {campaigns.length} campaign{campaigns.length === 1 ? '' : 's'}
+              {campaignTotal} campaign{campaignTotal === 1 ? "" : "s"}
             </span>
           </div>
           {campaigns.length > 0 ? (
             <div className="mt-4 grid gap-3 md:grid-cols-2">
-              {campaigns.slice(0, 6).map((campaign) => (
+              {campaigns.map((campaign) => (
                 <div
                   key={campaign.id}
                   className="rounded-[14px] border border-[var(--admin-outline)] bg-white px-4 py-4"
@@ -335,7 +366,8 @@ export function SystemEvaluationsPage({
                     {campaign.title}
                   </p>
                   <p className="mt-1 text-xs uppercase tracking-[0.14em] text-[var(--admin-text-muted)]">
-                    {formatModuleName(campaign.targetModule)} | {campaign.audienceRole}
+                    {formatModuleName(campaign.targetModule)} |{" "}
+                    {campaign.audienceRole}
                   </p>
                   <div className="mt-3 flex items-center justify-between text-sm text-[var(--admin-text-muted)]">
                     <span>{campaign.submittedCount} submitted</span>
@@ -343,6 +375,33 @@ export function SystemEvaluationsPage({
                   </div>
                 </div>
               ))}
+            </div>
+          ) : null}
+          {campaignTotalPages > 1 ? (
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                aria-label="Previous campaigns"
+                className="admin-button"
+                disabled={campaignPage <= 1}
+                onClick={() =>
+                  setCampaignPage((current) => Math.max(1, current - 1))
+                }
+              >
+                Previous
+              </button>
+              <span className="text-sm font-semibold text-[var(--admin-text-muted)]">
+                Page {campaignPage} of {campaignTotalPages}
+              </span>
+              <button
+                type="button"
+                aria-label="Next campaigns"
+                className="admin-button"
+                disabled={campaignPage >= campaignTotalPages}
+                onClick={() => setCampaignPage((current) => current + 1)}
+              >
+                Next
+              </button>
             </div>
           ) : null}
         </AdminSectionCard>
@@ -356,7 +415,11 @@ export function SystemEvaluationsPage({
           <div className="flex flex-wrap items-center gap-3">
             <select
               value={targetModule}
-              onChange={(event) => setTargetModule(event.target.value as '' | SystemEvaluationTargetModule)}
+              onChange={(event) =>
+                setTargetModule(
+                  event.target.value as "" | SystemEvaluationTargetModule,
+                )
+              }
               className="admin-select min-w-[240px] text-sm"
             >
               {MODULE_OPTIONS.map((option) => (
@@ -366,7 +429,7 @@ export function SystemEvaluationsPage({
               ))}
             </select>
             <div className="admin-pill px-4 py-2 text-sm font-semibold">
-              {count} evaluation{count === 1 ? '' : 's'}
+              {count} evaluation{count === 1 ? "" : "s"}
             </div>
           </div>
         </AdminSectionCard>
@@ -378,7 +441,11 @@ export function SystemEvaluationsPage({
           <div className="flex flex-wrap items-center gap-3">
             <select
               value={targetModule}
-              onChange={(event) => setTargetModule(event.target.value as '' | SystemEvaluationTargetModule)}
+              onChange={(event) =>
+                setTargetModule(
+                  event.target.value as "" | SystemEvaluationTargetModule,
+                )
+              }
               className="teacher-select min-w-[240px] text-sm"
             >
               {MODULE_OPTIONS.map((option) => (
@@ -388,7 +455,7 @@ export function SystemEvaluationsPage({
               ))}
             </select>
             <div className="teacher-soft-panel rounded-full px-4 py-2 text-sm font-semibold text-[var(--teacher-text-strong)]">
-              {count} evaluation{count === 1 ? '' : 's'}
+              {count} evaluation{count === 1 ? "" : "s"}
             </div>
           </div>
         </TeacherSectionCard>
@@ -409,29 +476,61 @@ export function SystemEvaluationsPage({
               <Table>
                 <TableHeader className="admin-table-head">
                   <TableRow className="hover:bg-transparent">
-                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--admin-text-muted)]">Module</TableHead>
-                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--admin-text-muted)]">Submitter</TableHead>
-                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--admin-text-muted)]">Usability</TableHead>
-                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--admin-text-muted)]">Functionality</TableHead>
-                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--admin-text-muted)]">Performance</TableHead>
-                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--admin-text-muted)]">Satisfaction</TableHead>
-                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--admin-text-muted)]">Feedback</TableHead>
-                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--admin-text-muted)]">Created</TableHead>
+                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--admin-text-muted)]">
+                      Module
+                    </TableHead>
+                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--admin-text-muted)]">
+                      Submitter
+                    </TableHead>
+                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--admin-text-muted)]">
+                      Usability
+                    </TableHead>
+                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--admin-text-muted)]">
+                      Functionality
+                    </TableHead>
+                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--admin-text-muted)]">
+                      Performance
+                    </TableHead>
+                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--admin-text-muted)]">
+                      Satisfaction
+                    </TableHead>
+                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--admin-text-muted)]">
+                      Feedback
+                    </TableHead>
+                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--admin-text-muted)]">
+                      Created
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody className="[&_tr:last-child]:border-0">
                   {rows.map((row) => (
                     <TableRow key={row.id} className="admin-table-row">
-                      <TableCell className="text-[13px] font-semibold text-[var(--admin-text-strong)]">{formatModuleName(row.targetModule)}</TableCell>
-                      <TableCell className="text-[13px] font-medium text-[var(--admin-text-strong)]">{formatSubmitter(row)}</TableCell>
-                      <TableCell className="text-[13px] text-[var(--admin-text-strong)]">{row.usabilityScore}</TableCell>
-                      <TableCell className="text-[13px] text-[var(--admin-text-strong)]">{row.functionalityScore}</TableCell>
-                      <TableCell className="text-[13px] text-[var(--admin-text-strong)]">{row.performanceScore}</TableCell>
-                      <TableCell className="text-[13px] text-[var(--admin-text-strong)]">{row.satisfactionScore}</TableCell>
-                      <TableCell className="max-w-[280px] text-[13px] text-[var(--admin-text-strong)]">
-                        <span className="line-clamp-2">{row.feedback?.trim() || 'No written feedback'}</span>
+                      <TableCell className="text-[13px] font-semibold text-[var(--admin-text-strong)]">
+                        {formatModuleName(row.targetModule)}
                       </TableCell>
-                      <TableCell className="text-[13px] text-[var(--admin-text-strong)]">{new Date(row.createdAt).toLocaleString('en-US')}</TableCell>
+                      <TableCell className="text-[13px] font-medium text-[var(--admin-text-strong)]">
+                        {formatSubmitter(row)}
+                      </TableCell>
+                      <TableCell className="text-[13px] text-[var(--admin-text-strong)]">
+                        {row.usabilityScore}
+                      </TableCell>
+                      <TableCell className="text-[13px] text-[var(--admin-text-strong)]">
+                        {row.functionalityScore}
+                      </TableCell>
+                      <TableCell className="text-[13px] text-[var(--admin-text-strong)]">
+                        {row.performanceScore}
+                      </TableCell>
+                      <TableCell className="text-[13px] text-[var(--admin-text-strong)]">
+                        {row.satisfactionScore}
+                      </TableCell>
+                      <TableCell className="max-w-[280px] text-[13px] text-[var(--admin-text-strong)]">
+                        <span className="line-clamp-2">
+                          {row.feedback?.trim() || "No written feedback"}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-[13px] text-[var(--admin-text-strong)]">
+                        {new Date(row.createdAt).toLocaleString("en-US")}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -454,29 +553,64 @@ export function SystemEvaluationsPage({
               <Table>
                 <TableHeader className="teacher-table-head [&_tr]:border-white/15">
                   <TableRow className="border-white/10 hover:bg-transparent">
-                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">Module</TableHead>
-                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">Submitter</TableHead>
-                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">Usability</TableHead>
-                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">Functionality</TableHead>
-                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">Performance</TableHead>
-                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">Satisfaction</TableHead>
-                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">Feedback</TableHead>
-                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">Created</TableHead>
+                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                      Module
+                    </TableHead>
+                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                      Submitter
+                    </TableHead>
+                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                      Usability
+                    </TableHead>
+                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                      Functionality
+                    </TableHead>
+                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                      Performance
+                    </TableHead>
+                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                      Satisfaction
+                    </TableHead>
+                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                      Feedback
+                    </TableHead>
+                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                      Created
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody className="[&_tr:last-child]:border-0">
                   {rows.map((row) => (
-                    <TableRow key={row.id} className="teacher-table-row border-white/10">
-                      <TableCell className="text-[13px] font-semibold text-[var(--teacher-text-strong)]">{formatModuleName(row.targetModule)}</TableCell>
-                      <TableCell className="text-[13px] font-medium text-[var(--teacher-text-strong)]">{formatSubmitter(row)}</TableCell>
-                      <TableCell className="text-[13px] text-[var(--teacher-text-strong)]">{row.usabilityScore}</TableCell>
-                      <TableCell className="text-[13px] text-[var(--teacher-text-strong)]">{row.functionalityScore}</TableCell>
-                      <TableCell className="text-[13px] text-[var(--teacher-text-strong)]">{row.performanceScore}</TableCell>
-                      <TableCell className="text-[13px] text-[var(--teacher-text-strong)]">{row.satisfactionScore}</TableCell>
-                      <TableCell className="max-w-[280px] text-[13px] text-[var(--teacher-text-strong)]">
-                        <span className="line-clamp-2">{row.feedback?.trim() || 'No written feedback'}</span>
+                    <TableRow
+                      key={row.id}
+                      className="teacher-table-row border-white/10"
+                    >
+                      <TableCell className="text-[13px] font-semibold text-[var(--teacher-text-strong)]">
+                        {formatModuleName(row.targetModule)}
                       </TableCell>
-                      <TableCell className="text-[13px] text-[var(--teacher-text-strong)]">{new Date(row.createdAt).toLocaleString('en-US')}</TableCell>
+                      <TableCell className="text-[13px] font-medium text-[var(--teacher-text-strong)]">
+                        {formatSubmitter(row)}
+                      </TableCell>
+                      <TableCell className="text-[13px] text-[var(--teacher-text-strong)]">
+                        {row.usabilityScore}
+                      </TableCell>
+                      <TableCell className="text-[13px] text-[var(--teacher-text-strong)]">
+                        {row.functionalityScore}
+                      </TableCell>
+                      <TableCell className="text-[13px] text-[var(--teacher-text-strong)]">
+                        {row.performanceScore}
+                      </TableCell>
+                      <TableCell className="text-[13px] text-[var(--teacher-text-strong)]">
+                        {row.satisfactionScore}
+                      </TableCell>
+                      <TableCell className="max-w-[280px] text-[13px] text-[var(--teacher-text-strong)]">
+                        <span className="line-clamp-2">
+                          {row.feedback?.trim() || "No written feedback"}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-[13px] text-[var(--teacher-text-strong)]">
+                        {new Date(row.createdAt).toLocaleString("en-US")}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -495,10 +629,34 @@ export function SystemEvaluationsPage({
       description={description}
       stats={
         <>
-          <AdminStatCard label="Responses" value={count} caption="Captured evaluation entries" icon={MessageSquareQuote} accent="sky" />
-          <AdminStatCard label="Avg Satisfaction" value={averageScores.satisfaction} caption="Overall sentiment score" icon={Star} accent="amber" />
-          <AdminStatCard label="Avg Usability" value={averageScores.usability} caption="Ease-of-use pulse" icon={Gauge} accent="violet" />
-          <AdminStatCard label="Detailed Feedback" value={averageScores.feedback} caption="Written comments included" icon={SlidersHorizontal} accent="rose" />
+          <AdminStatCard
+            label="Responses"
+            value={count}
+            caption="Captured evaluation entries"
+            icon={MessageSquareQuote}
+            accent="sky"
+          />
+          <AdminStatCard
+            label="Avg Satisfaction"
+            value={averageScores.satisfaction}
+            caption="Overall sentiment score"
+            icon={Star}
+            accent="amber"
+          />
+          <AdminStatCard
+            label="Avg Usability"
+            value={averageScores.usability}
+            caption="Ease-of-use pulse"
+            icon={Gauge}
+            accent="violet"
+          />
+          <AdminStatCard
+            label="Detailed Feedback"
+            value={averageScores.feedback}
+            caption="Written comments included"
+            icon={SlidersHorizontal}
+            accent="rose"
+          />
         </>
       }
     >
@@ -511,10 +669,34 @@ export function SystemEvaluationsPage({
       description={description}
       stats={
         <>
-          <TeacherStatCard label="Responses" value={count} caption="Captured evaluation entries" icon={MessageSquareQuote} accent="sky" />
-          <TeacherStatCard label="Avg Satisfaction" value={averageScores.satisfaction} caption="Overall sentiment score" icon={Star} accent="amber" />
-          <TeacherStatCard label="Avg Usability" value={averageScores.usability} caption="Ease-of-use pulse" icon={Gauge} accent="teal" />
-          <TeacherStatCard label="Detailed Feedback" value={averageScores.feedback} caption="Written comments included" icon={SlidersHorizontal} accent="rose" />
+          <TeacherStatCard
+            label="Responses"
+            value={count}
+            caption="Captured evaluation entries"
+            icon={MessageSquareQuote}
+            accent="sky"
+          />
+          <TeacherStatCard
+            label="Avg Satisfaction"
+            value={averageScores.satisfaction}
+            caption="Overall sentiment score"
+            icon={Star}
+            accent="amber"
+          />
+          <TeacherStatCard
+            label="Avg Usability"
+            value={averageScores.usability}
+            caption="Ease-of-use pulse"
+            icon={Gauge}
+            accent="teal"
+          />
+          <TeacherStatCard
+            label="Detailed Feedback"
+            value={averageScores.feedback}
+            caption="Written comments included"
+            icon={SlidersHorizontal}
+            accent="rose"
+          />
         </>
       }
     >

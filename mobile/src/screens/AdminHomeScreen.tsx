@@ -1,7 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
-import { Text, View } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Pressable, Text, View } from "react-native";
 import { adminApi } from "../api/services/admin";
+import { academicStateService } from "../api/services/academic-state";
 import { toAppError } from "../api/http";
 import type { MainTabParamList } from "../navigation/types";
 import {
@@ -20,18 +22,63 @@ export function AdminHomeScreen({ navigation }: Props) {
     queryKey: ["admin-overview"],
     queryFn: () => adminApi.getOverview(),
   });
+  const academicState = useQuery({
+    queryKey: ["academic", "current"],
+    queryFn: async () => (await academicStateService.getCurrent()).data,
+  });
+  const recentOperations = useQuery({
+    queryKey: ["admin-audit", "home-recent"],
+    queryFn: () => adminApi.getAuditPage({ page: 1, limit: 5 }),
+  });
   const stats = overview.data?.stats;
   const dependencies = overview.data
     ? Object.entries(overview.data.readiness.dependencies)
     : [];
-  const attentionCount = dependencies.filter(([, status]) => !status.ok || status.degraded).length;
+  const attentionItems = dependencies.filter(
+    ([, status]) => !status.ok || status.degraded,
+  );
+  const attentionCount = attentionItems.length;
+  const rootNavigation = navigation.getParent() as unknown as {
+    navigate: (name: string, params?: unknown) => void;
+  };
 
   return (
     <AdminScreen
       title="Admin overview"
       subtitle="School operations, people, and system readiness"
-      refreshing={overview.isRefetching}
-      onRefresh={() => void overview.refetch()}
+      rightAction={
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open notifications"
+          onPress={() => rootNavigation.navigate("Notifications")}
+          style={{
+            width: 48,
+            height: 48,
+            borderRadius: 8,
+            borderWidth: 1,
+            borderColor: theme.border,
+            backgroundColor: theme.surface,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <MaterialCommunityIcons
+            name="bell-outline"
+            size={20}
+            color={theme.primary}
+          />
+        </Pressable>
+      }
+      refreshing={
+        overview.isRefetching ||
+        academicState.isRefetching ||
+        recentOperations.isRefetching
+      }
+      onRefresh={() => {
+        void overview.refetch();
+        void academicState.refetch();
+        void recentOperations.refetch();
+      }}
     >
       {overview.isError ? (
         <AdminEmpty
@@ -42,6 +89,104 @@ export function AdminHomeScreen({ navigation }: Props) {
           onAction={() => void overview.refetch()}
         />
       ) : null}
+
+      <AdminSection
+        title="Current academic state"
+        subtitle="Backend-authoritative school year, policy period, and freshness"
+      >
+        {academicState.data ? (
+          <AdminDataRow
+            title={academicState.data.schoolYear}
+            subtitle={
+              academicState.data.periods.find(
+                (period) => period.key === academicState.data?.quarter,
+              )?.label ?? academicState.data.quarter
+            }
+            meta={`Version ${academicState.data.version} · updated ${new Date(academicState.data.updatedAt).toLocaleString()}`}
+            status="Current"
+            statusTone="green"
+            onPress={() => navigation.navigate("AdminSettings")}
+          />
+        ) : (
+          <AdminDataRow
+            title={
+              academicState.isError
+                ? "Academic state unavailable"
+                : "Loading academic state…"
+            }
+            subtitle={
+              academicState.isError
+                ? toAppError(academicState.error).message
+                : "Waiting for the authoritative backend state"
+            }
+            status={academicState.isError ? "Review" : "Loading"}
+            statusTone={academicState.isError ? "red" : "neutral"}
+            onPress={() => navigation.navigate("AdminSettings")}
+          />
+        )}
+      </AdminSection>
+
+      <AdminSection
+        title="Needs attention"
+        subtitle="Only backend-supported exceptions appear here"
+      >
+        {attentionItems.length ? (
+          attentionItems.map(([name, status]) => (
+            <AdminDataRow
+              key={name}
+              title={name}
+              subtitle={
+                status.message ||
+                (status.degraded
+                  ? "Available with reduced capability"
+                  : "Dependency unavailable")
+              }
+              status={status.degraded ? "Degraded" : "Issue"}
+              statusTone={status.degraded ? "amber" : "red"}
+              onPress={() => navigation.navigate("AdminDiagnostics")}
+            />
+          ))
+        ) : (
+          <AdminDataRow
+            title="No system exceptions"
+            subtitle="The current readiness response has no degraded or unavailable dependencies"
+            status="Ready"
+            statusTone="green"
+            onPress={() => navigation.navigate("AdminDiagnostics")}
+          />
+        )}
+      </AdminSection>
+
+      <AdminSection
+        title="Recent operations"
+        subtitle="Latest immutable audit events; open Audit Trail for full evidence"
+      >
+        {(recentOperations.data?.data ?? []).length ? (
+          recentOperations.data!.data.map((event) => (
+            <AdminDataRow
+              key={event.id}
+              title={event.action}
+              subtitle={`${event.targetType} · ${event.actor?.email ?? event.actorId}`}
+              meta={new Date(event.createdAt).toLocaleString()}
+              onPress={() => navigation.navigate("AdminAudit")}
+            />
+          ))
+        ) : (
+          <AdminDataRow
+            title={
+              recentOperations.isError
+                ? "Recent operations unavailable"
+                : "No recent operations"
+            }
+            subtitle={
+              recentOperations.isError
+                ? toAppError(recentOperations.error).message
+                : "No audit events were returned"
+            }
+            onPress={() => navigation.navigate("AdminAudit")}
+          />
+        )}
+      </AdminSection>
 
       {stats ? (
         <AdminMetricStrip
@@ -61,19 +206,25 @@ export function AdminHomeScreen({ navigation }: Props) {
         <AdminDataRow
           title="People and access"
           subtitle="Create accounts and review account status"
-          meta={stats ? `${stats.totalUsers} accounts` : "Open user administration"}
+          meta={
+            stats ? `${stats.totalUsers} accounts` : "Open user administration"
+          }
           onPress={() => navigation.navigate("AdminUsers")}
         />
         <AdminDataRow
           title="Classes and sections"
           subtitle="Inspect assignments, rosters, and schedules"
-          meta={stats ? `${stats.totalClasses} classes` : "Open class administration"}
-          onPress={() => navigation.navigate("Classes")}
+          meta={
+            stats
+              ? `${stats.totalClasses} classes`
+              : "Open class administration"
+          }
+          onPress={() => navigation.navigate("AdminClasses")}
         />
         <AdminDataRow
           title="Academic controls"
           subtitle="Periods, records, readiness, and recovery"
-          onPress={() => navigation.navigate("Academic")}
+          onPress={() => navigation.navigate("AdminSettings")}
         />
         <AdminDataRow
           title="System diagnostics"
@@ -84,20 +235,35 @@ export function AdminHomeScreen({ navigation }: Props) {
         />
       </AdminSection>
 
-      <AdminSection title="System readiness" subtitle="Live backend dependency checks">
+      <AdminSection
+        title="System readiness"
+        subtitle="Live backend dependency checks"
+      >
         {dependencies.length ? (
           dependencies.map(([name, status]) => (
             <AdminDataRow
               key={name}
               title={name}
-              subtitle={status.ok ? status.degraded ? "Available with reduced capability" : "Operating normally" : status.message || "Unavailable"}
-              status={status.ok ? status.degraded ? "Degraded" : "Ready" : "Issue"}
-              statusTone={status.ok ? status.degraded ? "amber" : "green" : "red"}
+              subtitle={
+                status.ok
+                  ? status.degraded
+                    ? "Available with reduced capability"
+                    : "Operating normally"
+                  : status.message || "Unavailable"
+              }
+              status={
+                status.ok ? (status.degraded ? "Degraded" : "Ready") : "Issue"
+              }
+              statusTone={
+                status.ok ? (status.degraded ? "amber" : "green") : "red"
+              }
             />
           ))
         ) : (
           <View style={{ paddingHorizontal: 16, paddingVertical: 18 }}>
-            <Text style={{ fontSize: 12, color: theme.muted }}>Loading system readiness…</Text>
+            <Text style={{ fontSize: 12, color: theme.muted }}>
+              Loading system readiness…
+            </Text>
           </View>
         )}
       </AdminSection>

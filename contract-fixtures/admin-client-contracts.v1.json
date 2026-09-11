@@ -1,0 +1,743 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schemaVersion": 1,
+  "description": "Administrator transport invariants shared by backend, web, and mobile. Each listed field must remain represented in every layer.",
+  "contracts": [
+    {
+      "id": "users.create",
+      "fields": [
+        "email",
+        "firstName",
+        "lastName",
+        "role",
+        "gradeLevel",
+        "lrn",
+        "employeeId",
+        "contactNumber"
+      ],
+      "layers": {
+        "backend": {
+          "sources": [
+            "backend/src/modules/users/DTO/create-user.dto.ts",
+            "backend/src/modules/users/users.controller.ts",
+            "backend/src/modules/users/users.service.ts"
+          ],
+          "endpoint": "@Post('create')"
+        },
+        "web": {
+          "sources": [
+            "next-frontend/src/services/user-service.ts",
+            "next-frontend/src/types/user.ts",
+            "next-frontend/app/(dashboard)/dashboard/admin/users/create/page.tsx"
+          ],
+          "endpoint": "/users/create"
+        },
+        "mobile": {
+          "sources": [
+            "mobile/src/api/services/admin.ts",
+            "mobile/src/types/admin.ts",
+            "mobile/src/screens/AdminCreateUserScreen.tsx"
+          ],
+          "endpoint": "/users/create"
+        }
+      }
+    },
+    {
+      "id": "users.password-reset",
+      "fields": [
+        "generatedPassword",
+        "emailDeliveryStatus",
+        "emailDeliveryError"
+      ],
+      "layers": {
+        "backend": {
+          "sources": [
+            "backend/src/modules/users/users.controller.ts",
+            "backend/src/modules/users/users.service.ts"
+          ],
+          "endpoint": "reset-password"
+        },
+        "web": {
+          "sources": [
+            "next-frontend/src/services/user-service.ts",
+            "next-frontend/app/(dashboard)/dashboard/admin/users/page.tsx"
+          ],
+          "endpoint": "reset-password"
+        },
+        "mobile": {
+          "sources": [
+            "mobile/src/api/services/admin.ts",
+            "mobile/src/types/admin.ts",
+            "mobile/src/screens/AdminUserDetailScreen.tsx"
+          ],
+          "endpoint": "reset-password"
+        }
+      }
+    },
+    {
+      "id": "admin.governed-lifecycle",
+      "fields": [
+        "manifestHash",
+        "manifestExpiresAt",
+        "currentPassword",
+        "reasonCode",
+        "notes",
+        "confirmations",
+        "idempotencyKey",
+        "operationId",
+        "replayed",
+        "changed",
+        "preserved",
+        "auditLogId"
+      ],
+      "layers": {
+        "backend": {
+          "sources": [
+            "backend/src/modules/admin-lifecycle/DTO/admin-lifecycle.dto.ts",
+            "backend/src/modules/admin-lifecycle/admin-lifecycle.types.ts",
+            "backend/src/modules/admin-lifecycle/admin-lifecycle.controller.ts"
+          ],
+          "endpoint": "lifecycle"
+        },
+        "web": {
+          "sources": [
+            "next-frontend/src/services/admin-lifecycle-service.ts",
+            "next-frontend/src/types/admin-lifecycle.ts",
+            "next-frontend/src/components/admin/AdminLifecycleDialog.tsx"
+          ],
+          "endpoint": "/admin/lifecycle"
+        },
+        "mobile": {
+          "sources": [
+            "mobile/src/api/services/admin-lifecycle.ts",
+            "mobile/src/types/admin-lifecycle.ts",
+            "mobile/src/screens/AdminLifecycleReviewScreen.tsx"
+          ],
+          "endpoint": "/admin/lifecycle"
+        }
+      }
+    },
+    {
+      "id": "evaluations.campaign-page",
+      "fields": [
+        "formType",
+        "audienceRole",
+        "classId",
+        "title",
+        "startsAt",
+        "endsAt",
+        "status",
+        "page",
+        "limit",
+        "total",
+        "totalPages"
+      ],
+      "layers": {
+        "backend": {
+          "sources": [
+            "backend/src/modules/lxp/dto/lxp.dto.ts",
+            "backend/src/modules/lxp/lxp.controller.ts",
+            "backend/src/modules/lxp/system-evaluation.service.ts"
+          ],
+          "endpoint": "system-evaluation-campaigns"
+        },
+        "web": {
+          "sources": [
+            "next-frontend/src/services/lxp-service.ts",
+            "next-frontend/src/types/lxp.ts",
+            "next-frontend/src/components/evaluations/system-evaluations-page.tsx"
+          ],
+          "endpoint": "/lxp/system-evaluation-campaigns"
+        },
+        "mobile": {
+          "sources": [
+            "mobile/src/api/services/evaluations.ts",
+            "mobile/src/screens/AdminEvaluationsScreen.tsx"
+          ],
+          "endpoint": "/lxp/system-evaluation-campaigns"
+        }
+      }
+    },
+    {
+      "id": "class-templates.content",
+      "fields": [
+        "modules",
+        "sections",
+        "items",
+        "lessons",
+        "blocks",
+        "assessments",
+        "questions",
+        "options",
+        "announcements",
+        "chunks",
+        "imagePositionX",
+        "imagePositionY"
+      ],
+      "layers": {
+        "backend": {
+          "sources": [
+            "backend/src/modules/class-templates/dto/class-template.dto.ts",
+            "backend/src/modules/class-templates/class-templates.controller.ts",
+            "backend/src/modules/class-templates/class-templates.service.ts"
+          ],
+          "endpoint": "class-templates"
+        },
+        "web": {
+          "sources": [
+            "next-frontend/src/services/class-template-service.ts",
+            "next-frontend/src/types/class-template.ts"
+          ],
+          "endpoint": "/class-templates"
+        },
+        "mobile": {
+          "sources": [
+            "mobile/src/api/services/class-templates.ts",
+            "mobile/src/types/class-template.ts",
+            "mobile/src/screens/AdminTemplateDetailScreen.tsx"
+          ],
+          "endpoint": "/class-templates"
+        }
+      }
+    },
+    {
+      "id": "roster-import.preview-commit",
+      "fields": [
+        "registered",
+        "pending",
+        "errors",
+        "summary",
+        "alreadyEnrolled",
+        "issues",
+        "enrolledRows",
+        "pendingRows",
+        "resolvedUserId"
+      ],
+      "layers": {
+        "backend": {
+          "sources": [
+            "backend/src/modules/roster-import/dto/roster-import.dto.ts",
+            "backend/src/modules/roster-import/roster-import.controller.ts",
+            "backend/src/modules/roster-import/roster-import.service.ts"
+          ],
+          "endpoint": "roster-import"
+        },
+        "web": {
+          "sources": ["next-frontend/src/services/roster-import-service.ts"],
+          "endpoint": "/roster-import"
+        },
+        "mobile": {
+          "sources": [
+            "mobile/src/api/services/roster-import.ts",
+            "mobile/src/screens/AdminRosterScreen.tsx"
+          ],
+          "endpoint": "/roster-import"
+        }
+      }
+    },
+    {
+      "id": "school-events.write",
+      "fields": [
+        "eventType",
+        "schoolYear",
+        "title",
+        "description",
+        "location",
+        "startsAt",
+        "endsAt",
+        "allDay"
+      ],
+      "layers": {
+        "backend": {
+          "sources": [
+            "backend/src/modules/school-events/DTO/create-school-event.dto.ts",
+            "backend/src/modules/school-events/DTO/update-school-event.dto.ts",
+            "backend/src/modules/school-events/school-events.controller.ts",
+            "backend/src/modules/school-events/school-events.service.ts"
+          ],
+          "endpoint": "school-events"
+        },
+        "web": {
+          "sources": [
+            "next-frontend/src/services/school-event-service.ts",
+            "next-frontend/src/types/school-event.ts"
+          ],
+          "endpoint": "/school-events"
+        },
+        "mobile": {
+          "sources": [
+            "mobile/src/api/services/school-events.ts",
+            "mobile/src/screens/AdminCalendarScreen.tsx"
+          ],
+          "endpoint": "/school-events"
+        }
+      }
+    },
+    {
+      "id": "announcements.class-write",
+      "fields": [
+        "classId",
+        "title",
+        "content",
+        "isPinned",
+        "scheduledAt",
+        "fileIds"
+      ],
+      "layers": {
+        "backend": {
+          "sources": [
+            "backend/src/modules/announcements/DTO/create-announcement.dto.ts",
+            "backend/src/modules/announcements/announcements.controller.ts",
+            "backend/src/modules/announcements/announcements.service.ts"
+          ],
+          "endpoint": "announcements"
+        },
+        "web": {
+          "sources": [
+            "next-frontend/src/services/announcement-service.ts",
+            "next-frontend/src/types/announcement.ts"
+          ],
+          "endpoint": "announcements"
+        },
+        "mobile": {
+          "sources": [
+            "mobile/src/api/services/announcements.ts",
+            "mobile/src/types/announcement.ts",
+            "mobile/src/screens/AdminAnnouncementsScreen.tsx"
+          ],
+          "endpoint": "announcements"
+        }
+      }
+    },
+    {
+      "id": "audit.page-export",
+      "fields": [
+        "action",
+        "actorId",
+        "dateFrom",
+        "dateTo",
+        "page",
+        "limit",
+        "total",
+        "totalPages"
+      ],
+      "layers": {
+        "backend": {
+          "sources": [
+            "backend/src/modules/admin/admin.controller.ts",
+            "backend/src/modules/audit/audit.service.ts"
+          ],
+          "endpoint": "audit-logs"
+        },
+        "web": {
+          "sources": [
+            "next-frontend/src/services/admin-service.ts",
+            "next-frontend/src/types/audit.ts"
+          ],
+          "endpoint": "audit-logs"
+        },
+        "mobile": {
+          "sources": [
+            "mobile/src/api/services/admin.ts",
+            "mobile/src/types/admin.ts",
+            "mobile/src/screens/AdminAuditScreen.tsx"
+          ],
+          "endpoint": "audit-logs"
+        }
+      }
+    },
+    {
+      "id": "reports.page",
+      "fields": [
+        "data",
+        "filters",
+        "generatedAt",
+        "page",
+        "limit",
+        "total",
+        "totalPages",
+        "csv"
+      ],
+      "layers": {
+        "backend": {
+          "sources": [
+            "backend/src/modules/reports/reports.controller.ts",
+            "backend/src/modules/reports/reports.service.ts"
+          ],
+          "endpoint": "reports"
+        },
+        "web": {
+          "sources": [
+            "next-frontend/src/services/report-service.ts",
+            "next-frontend/src/types/report.ts"
+          ],
+          "endpoint": "/reports"
+        },
+        "mobile": {
+          "sources": [
+            "mobile/src/api/services/reports.ts",
+            "mobile/src/types/report.ts",
+            "mobile/src/screens/AdminReportsScreen.tsx"
+          ],
+          "endpoint": "/reports"
+        }
+      }
+    },
+    {
+      "id": "sections.create-update",
+      "fields": [
+        "name",
+        "gradeLevel",
+        "schoolYear",
+        "capacity",
+        "roomNumber",
+        "adviserId"
+      ],
+      "layers": {
+        "backend": {
+          "sources": [
+            "backend/src/modules/sections/DTO/create-section.dto.ts",
+            "backend/src/modules/sections/DTO/update-section.dto.ts",
+            "backend/src/modules/sections/sections.controller.ts"
+          ],
+          "endpoint": "sections"
+        },
+        "web": {
+          "sources": [
+            "next-frontend/src/services/section-service.ts",
+            "next-frontend/src/types/section.ts"
+          ],
+          "endpoint": "/sections"
+        },
+        "mobile": {
+          "sources": [
+            "mobile/src/api/services/sections.ts",
+            "mobile/src/types/teacher.ts",
+            "mobile/src/screens/AdminSectionsScreen.tsx"
+          ],
+          "endpoint": "/sections"
+        }
+      }
+    },
+    {
+      "id": "admin-ai.conversation",
+      "fields": [
+        "sessionId",
+        "title",
+        "message",
+        "reply",
+        "sources",
+        "chart",
+        "dataView",
+        "suggestedPrompts",
+        "action"
+      ],
+      "layers": {
+        "backend": {
+          "sources": [
+            "backend/src/modules/ai-mentor/ai-mentor.controller.ts",
+            "backend/src/modules/ai-mentor/DTO/admin-chat.dto.ts",
+            "backend/src/modules/ai-mentor/admin-analytics-chat.service.ts"
+          ],
+          "endpoint": "admin/chat"
+        },
+        "web": {
+          "sources": [
+            "next-frontend/src/services/admin-chatbot-service.ts",
+            "next-frontend/src/types/admin-chatbot.ts"
+          ],
+          "endpoint": "/ai/admin"
+        },
+        "mobile": {
+          "sources": [
+            "mobile/src/api/services/admin-chatbot.ts",
+            "mobile/src/types/admin-chatbot.ts",
+            "mobile/src/screens/AdminChatbotScreen.tsx"
+          ],
+          "endpoint": "/ai/admin"
+        }
+      }
+    },
+    {
+      "id": "users.update-complete-profile",
+      "fields": [
+        "email",
+        "firstName",
+        "middleName",
+        "lastName",
+        "role",
+        "employeeId",
+        "contactNumber",
+        "lrn",
+        "gradeLevel",
+        "dateOfBirth",
+        "gender",
+        "phone",
+        "address",
+        "familyName",
+        "familyRelationship",
+        "familyContact"
+      ],
+      "layers": {
+        "backend": {
+          "sources": [
+            "backend/src/modules/users/DTO/update-user.dto.ts",
+            "backend/src/modules/users/users.controller.ts",
+            "backend/src/modules/users/users.service.ts"
+          ],
+          "endpoint": "update/:id"
+        },
+        "web": {
+          "sources": [
+            "next-frontend/src/services/user-service.ts",
+            "next-frontend/src/types/user.ts",
+            "next-frontend/app/(dashboard)/dashboard/admin/users/[id]/page.tsx"
+          ],
+          "endpoint": "/users/update/"
+        },
+        "mobile": {
+          "sources": [
+            "mobile/src/api/services/admin.ts",
+            "mobile/src/types/admin.ts",
+            "mobile/src/screens/AdminUserDetailScreen.tsx"
+          ],
+          "endpoint": "/users/update/"
+        }
+      }
+    },
+    {
+      "id": "classes.create-update-complete",
+      "fields": [
+        "subjectName",
+        "subjectCode",
+        "subjectGradeLevel",
+        "sectionId",
+        "teacherId",
+        "schoolYear",
+        "room",
+        "schedules",
+        "days",
+        "startTime",
+        "endTime",
+        "gradingProfile",
+        "writtenWork",
+        "performanceTask",
+        "quarterlyAssessment",
+        "academicWeightProfile",
+        "templateId",
+        "cardPreset",
+        "cardBannerUrl"
+      ],
+      "layers": {
+        "backend": {
+          "sources": [
+            "backend/src/modules/classes/DTO/create-class.dto.ts",
+            "backend/src/modules/classes/DTO/update-class.dto.ts",
+            "backend/src/modules/classes/DTO/update-class-presentation.dto.ts",
+            "backend/src/modules/classes/classes.controller.ts",
+            "backend/src/modules/classes/classes.service.ts"
+          ],
+          "endpoint": "classes"
+        },
+        "web": {
+          "sources": [
+            "next-frontend/src/services/class-service.ts",
+            "next-frontend/src/types/class.ts",
+            "next-frontend/src/components/admin/ClassForm.tsx"
+          ],
+          "endpoint": "/classes"
+        },
+        "mobile": {
+          "sources": [
+            "mobile/src/api/services/classes.ts",
+            "mobile/src/types/class.ts",
+            "mobile/src/screens/AdminClassesWorkspaceScreen.tsx"
+          ],
+          "endpoint": "/classes"
+        }
+      }
+    },
+    {
+      "id": "library.file-metadata",
+      "fields": [
+        "id",
+        "folderId",
+        "teacherId",
+        "classId",
+        "scope",
+        "subjectKey",
+        "gradeLevel",
+        "teacherVisible",
+        "aiEnabled",
+        "indexStatus",
+        "indexError",
+        "indexedAt",
+        "contentHash",
+        "fileKind",
+        "originalName",
+        "storedName",
+        "mimeType",
+        "sizeBytes",
+        "filePath",
+        "uploadedAt",
+        "deletedAt",
+        "teacher",
+        "class",
+        "folder"
+      ],
+      "layers": {
+        "backend": {
+          "sources": [
+            "backend/src/modules/file-upload/dto/file-upload.dto.ts",
+            "backend/src/modules/file-upload/file-upload.controller.ts",
+            "backend/src/modules/file-upload/file-upload.service.ts"
+          ],
+          "endpoint": "files"
+        },
+        "web": {
+          "sources": [
+            "next-frontend/src/services/file-service.ts",
+            "next-frontend/src/types/file.ts",
+            "next-frontend/src/components/library/LibraryWorkspaceView.tsx"
+          ],
+          "endpoint": "/files"
+        },
+        "mobile": {
+          "sources": [
+            "mobile/src/api/services/file-upload.ts",
+            "mobile/src/types/extraction.ts",
+            "mobile/src/screens/AdminLibraryScreen.tsx"
+          ],
+          "endpoint": "/files"
+        }
+      }
+    },
+    {
+      "id": "evaluations.response-summary",
+      "fields": [
+        "id",
+        "submittedBy",
+        "targetModule",
+        "campaignId",
+        "audienceRole",
+        "from",
+        "to",
+        "rows",
+        "summary",
+        "averages",
+        "moduleBreakdown",
+        "usabilityScore",
+        "functionalityScore",
+        "performanceScore",
+        "satisfactionScore",
+        "overallScore",
+        "questionRatingsJson",
+        "feedback",
+        "aiContextMetadata",
+        "createdAt",
+        "submitter",
+        "campaign"
+      ],
+      "layers": {
+        "backend": {
+          "sources": [
+            "backend/src/modules/lxp/dto/lxp.dto.ts",
+            "backend/src/modules/lxp/lxp.controller.ts",
+            "backend/src/modules/lxp/lxp.service.ts",
+            "backend/src/modules/lxp/system-evaluation.service.ts"
+          ],
+          "endpoint": "evaluations"
+        },
+        "web": {
+          "sources": [
+            "next-frontend/src/services/lxp-service.ts",
+            "next-frontend/src/types/lxp.ts",
+            "next-frontend/src/components/evaluations/system-evaluations-page.tsx"
+          ],
+          "endpoint": "/lxp/evaluations"
+        },
+        "mobile": {
+          "sources": [
+            "mobile/src/api/services/evaluations.ts",
+            "mobile/src/screens/AdminEvaluationsScreen.tsx"
+          ],
+          "endpoint": "/lxp/evaluations"
+        }
+      }
+    },
+    {
+      "id": "sections.student-readiness",
+      "fields": [
+        "schoolYear",
+        "gradeLevel",
+        "sectionId",
+        "search",
+        "outcome",
+        "blockers",
+        "outcomeManagedByTransition",
+        "finalGrade",
+        "finalGradePercentage",
+        "gradeStatus",
+        "isFinalized",
+        "requiredClassRecordCount",
+        "finalizedClassRecordCount",
+        "missingFinalGradeCount",
+        "finalizationLabel"
+      ],
+      "layers": {
+        "backend": {
+          "sources": [
+            "backend/src/modules/sections/DTO/access-students-overview.dto.ts",
+            "backend/src/modules/sections/sections.controller.ts",
+            "backend/src/modules/sections/sections.service.ts"
+          ],
+          "endpoint": "access-students/overview"
+        },
+        "web": {
+          "sources": [
+            "next-frontend/src/services/section-service.ts",
+            "next-frontend/app/(dashboard)/dashboard/admin/access-students/page.tsx"
+          ],
+          "endpoint": "/sections/access-students/overview"
+        },
+        "mobile": {
+          "sources": [
+            "mobile/src/api/services/sections.ts",
+            "mobile/src/types/teacher.ts",
+            "mobile/src/screens/AdminStudentReadinessScreen.tsx"
+          ],
+          "endpoint": "/sections/access-students/overview"
+        }
+      }
+    },
+    {
+      "id": "errors.structured-evidence",
+      "fields": ["statusCode", "code", "message", "errors", "fieldErrors"],
+      "layers": {
+        "backend": {
+          "sources": [
+            "backend/src/common/filters/global-exception.filter.ts",
+            "backend/src/common/filters/global-exception.filter.spec.ts"
+          ],
+          "endpoint": "fieldErrors"
+        },
+        "web": {
+          "sources": [
+            "next-frontend/src/lib/api-error.ts",
+            "next-frontend/src/services/admin-lifecycle-service.ts",
+            "next-frontend/src/types/admin-lifecycle.ts"
+          ],
+          "endpoint": "message"
+        },
+        "mobile": {
+          "sources": [
+            "mobile/src/api/errors.ts",
+            "mobile/src/types/api.ts",
+            "mobile/src/types/admin-lifecycle.ts"
+          ],
+          "endpoint": "fieldErrors"
+        }
+      }
+    }
+  ]
+}

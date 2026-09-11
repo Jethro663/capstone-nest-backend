@@ -47,6 +47,19 @@ export interface ClassItem {
   isHidden?: boolean;
   cardBannerUrl?: string | null;
   cardPreset?: string | null;
+  gradingProfile?: {
+    writtenWork: number;
+    performanceTask: number;
+    quarterlyAssessment: number;
+  } | null;
+  academicWeightProfile?: "academic" | "practical" | null;
+  templateId?: string | null;
+}
+
+export type BulkClassLifecycleAction = "archive" | "restore" | "purge";
+export interface BulkClassLifecycleDto {
+  action: BulkClassLifecycleAction;
+  classIds: string[];
 }
 
 export type ClassVisibilityStatus = "all" | "active" | "inactive";
@@ -91,6 +104,8 @@ export interface CreateClassDto {
   };
   academicWeightProfile?: "academic" | "practical";
   templateId?: string;
+  cardPreset?: string;
+  cardBannerUrl?: string | null;
 }
 
 export interface UpdateClassDto {
@@ -116,42 +131,78 @@ export interface TeacherStudentAssessmentHistoryItem {
   title: string;
   type: string;
   dueDate?: string | null;
+  status: "finished" | "late" | "not_started" | "in_progress";
   statusLabel: string;
   submittedAt?: string | null;
+  returnedAt?: string | null;
+  isLate: boolean;
+  lateByMinutes: number;
   score?: number | null;
   scorePercent?: number | null;
   scoreBreakdown?: import("./assessment").AcademicScoreBreakdown | null;
+  directScore?: number | null;
   totalPoints?: number | null;
+  passed?: boolean | null;
+  isReturned: boolean;
 }
 
-export interface TeacherClassStudentOverview {
+export interface TeacherClassStudentProfile {
+  classInfo: {
+    id: string;
+    subjectName: string;
+    subjectCode: string;
+  };
   student: {
     id: string;
-    firstName?: string | null;
-    lastName?: string | null;
-    email?: string | null;
-    status?: string | null;
-    profile?: {
+    firstName?: string;
+    middleName?: string | null;
+    lastName?: string;
+    email: string;
+    status: string;
+    profile: {
       lrn?: string | null;
-      profilePicture?: string | null;
+      dateOfBirth?: string | null;
+      gender?: string | null;
       phone?: string | null;
       address?: string | null;
       gradeLevel?: string | null;
+      familyName?: string | null;
+      familyRelationship?: string | null;
+      familyContact?: string | null;
+      profilePicture?: string | null;
     } | null;
   };
+  section: {
+    id: string;
+    name: string;
+    gradeLevel: string;
+    schoolYear: string;
+    roomNumber?: string | null;
+    adviser: {
+      id: string;
+      firstName?: string;
+      lastName?: string;
+      email?: string;
+    } | null;
+  } | null;
+}
+
+export interface TeacherClassStudentOverview {
   classInfo: {
-    classId: string;
-    subjectName?: string | null;
-    subjectCode?: string | null;
-    sectionLabel?: string | null;
+    id: string;
+    subjectName: string;
+    subjectCode: string;
+    sectionLabel: string;
   };
+  student: TeacherClassStudentProfile["student"];
+  section: TeacherClassStudentProfile["section"];
   standing: {
-    gradingPeriod?: string | null;
-    overallGradePercent?: number | null;
+    gradingPeriod: string | null;
+    overallGradePercent: number | null;
     components: {
-      writtenWorkPercent?: number | null;
-      performanceTaskPercent?: number | null;
-      quarterlyExamPercent?: number | null;
+      writtenWorkPercent: number | null;
+      performanceTaskPercent: number | null;
+      quarterlyExamPercent: number | null;
     };
   };
   history: {
@@ -160,11 +211,6 @@ export interface TeacherClassStudentOverview {
     pending: TeacherStudentAssessmentHistoryItem[];
   };
 }
-
-export type TeacherClassStudentProfile =
-  TeacherClassStudentOverview["student"] & {
-    profile?: TeacherClassStudentOverview["student"]["profile"];
-  };
 
 export interface StudentMasterlistSection {
   id: string;

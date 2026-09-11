@@ -95,6 +95,30 @@ describe('UsersController', () => {
     });
   });
 
+  it('passes server search to the paginated user query', async () => {
+    mockUsersService.findAll.mockResolvedValue({
+      data: [],
+      page: 1,
+      limit: 25,
+      total: 0,
+      totalPages: 1,
+    });
+
+    await controller.getAllUsers(
+      undefined,
+      undefined,
+      1,
+      25,
+      undefined,
+      undefined,
+      'Juan',
+    );
+
+    expect(mockUsersService.findAll).toHaveBeenCalledWith(
+      expect.objectContaining({ search: 'Juan', page: 1, limit: 25 }),
+    );
+  });
+
   it('passes the optional grade-level filter without shifting pagination arguments', async () => {
     mockUsersService.findAll.mockResolvedValue({
       data: [],

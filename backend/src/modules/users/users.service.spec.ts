@@ -11,13 +11,7 @@ import { DatabaseService } from '../../database/database.service';
 import { OtpService } from '../otp/otp.service';
 import { MailService } from '../mail/mail.service';
 import { AuditService } from '../audit/audit.service';
-import {
-  archivedUsers,
-  roles,
-  studentProfiles,
-  userRoles,
-  users,
-} from '../../drizzle/schema';
+import { archivedUsers, studentProfiles, users } from '../../drizzle/schema';
 
 jest.mock('bcrypt', () => ({
   hash: jest.fn(),
@@ -209,6 +203,62 @@ describe('UsersService', () => {
   });
 
   describe('createUser', () => {
+    it('creates the student profile with grade level in the user transaction', async () => {
+      mockDb.query.users.findFirst.mockResolvedValue(null);
+      mockDb.query.studentProfiles.findFirst.mockResolvedValue(null);
+      mockDb.query.roles.findFirst.mockResolvedValue({
+        id: 'role-student',
+        name: 'student',
+      });
+
+      const studentProfileValues = jest.fn().mockResolvedValue(undefined);
+      const tx = {
+        insert: jest.fn().mockImplementation((table: any) => {
+          if (table === users) {
+            return {
+              values: jest.fn().mockReturnValue({
+                returning: jest.fn().mockResolvedValue([
+                  {
+                    id: 'new-student',
+                    email: 'student@example.com',
+                    password: 'hashed-password',
+                    firstName: 'Stu',
+                    middleName: null,
+                    lastName: 'Dent',
+                    status: 'PENDING',
+                    isEmailVerified: false,
+                  },
+                ]),
+              }),
+            };
+          }
+          if (table === studentProfiles) {
+            return { values: studentProfileValues };
+          }
+          return { values: jest.fn().mockResolvedValue(undefined) };
+        }),
+      };
+      mockDb.transaction.mockImplementation(async (cb: Function) => cb(tx));
+
+      await service.createUser({
+        email: 'student@example.com',
+        password: 'P@ssword1',
+        firstName: 'Stu',
+        lastName: 'Dent',
+        role: 'student',
+        lrn: '123456789012',
+        gradeLevel: '8',
+      });
+
+      expect(studentProfileValues).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'new-student',
+          lrn: '123456789012',
+          gradeLevel: '8',
+        }),
+      );
+    });
+
     it('creates a user and does not expose temporaryPassword or password', async () => {
       mockDb.query.users.findFirst.mockResolvedValue(null);
       mockDb.query.roles.findFirst.mockResolvedValue({
@@ -328,6 +378,7 @@ describe('UsersService', () => {
           lastName: 'Dent',
           role: 'student',
           lrn: '123456789012',
+          gradeLevel: '7',
         },
         'admin-1',
       );

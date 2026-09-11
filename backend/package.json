@@ -8,7 +8,8 @@
   "scripts": {
     "check:src-clean": "node scripts/check-no-js-in-src.js",
     "check:migrations": "node scripts/check-migration-integrity.js",
-    "build": "npm run check:src-clean && npm run check:migrations && nest build && node scripts/check-build-output.cjs && npm run check:src-clean",
+    "contract:admin": "node ../scripts/check-admin-client-contracts.cjs",
+    "build": "npm run contract:admin && npm run check:src-clean && npm run check:migrations && nest build && node scripts/check-build-output.cjs && npm run check:src-clean",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "node scripts/start-dev-with-ai.cjs",

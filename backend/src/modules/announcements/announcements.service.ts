@@ -6,7 +6,18 @@ import {
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { and, eq, isNull, desc, inArray, sql } from 'drizzle-orm';
+import {
+  and,
+  eq,
+  isNull,
+  isNotNull,
+  desc,
+  inArray,
+  sql,
+  ilike,
+  or,
+  gt,
+} from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { announcements, classes, enrollments } from '../../drizzle/schema';
 import { CreateAnnouncementDto } from './DTO/create-announcement.dto';
@@ -14,6 +25,7 @@ import { UpdateAnnouncementDto } from './DTO/update-announcement.dto';
 import {
   QueryAnnouncementsDto,
   QueryTeacherAnnouncementsDto,
+  QueryAdminAnnouncementsDto,
 } from './DTO/query-announcements.dto';
 import { AuditService } from '../audit/audit.service';
 import { sanitizeRichTextHtml } from '../../common/utils/rich-text-sanitizer';
@@ -346,6 +358,63 @@ export class AnnouncementsService {
       totalPages: Math.max(1, Math.ceil(total / limit)),
       pinnedTotal: summary?.pinnedTotal ?? 0,
       latestCreatedAt: summary?.latestCreatedAt ?? null,
+    };
+  }
+
+  async findAdminFeed(adminId: string, query: QueryAdminAnnouncementsDto) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const offset = (page - 1) * limit;
+    const search = query.search?.trim();
+    const state = query.state ?? 'all';
+    const scope = and(
+      isNull(announcements.archivedAt),
+      query.classId ? eq(announcements.classId, query.classId) : undefined,
+      search
+        ? or(
+            ilike(announcements.title, `%${search}%`),
+            ilike(announcements.content, `%${search}%`),
+          )
+        : undefined,
+      state === 'pinned' ? eq(announcements.isPinned, true) : undefined,
+      state === 'scheduled'
+        ? and(
+            gt(announcements.scheduledAt, new Date()),
+            isNull(announcements.publishedAt),
+          )
+        : undefined,
+      state === 'published' ? isNotNull(announcements.publishedAt) : undefined,
+    );
+    const [rows, [summary]] = await Promise.all([
+      this.db.query.announcements.findMany({
+        where: scope,
+        orderBy: [desc(announcements.isPinned), desc(announcements.createdAt)],
+        limit,
+        offset,
+        with: {
+          class: {
+            columns: { id: true, subjectCode: true, subjectName: true },
+            with: { section: { columns: { id: true, name: true } } },
+          },
+          author: {
+            columns: { id: true, firstName: true, lastName: true, email: true },
+          },
+        },
+      }),
+      this.db
+        .select({ total: sql<number>`count(*)`.mapWith(Number) })
+        .from(announcements)
+        .where(scope),
+    ]);
+    const total = summary?.total ?? 0;
+    return {
+      items: rows.map((row) =>
+        this.decorateCapabilities(row, adminId, ['admin']),
+      ),
+      page,
+      limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
     };
   }
 

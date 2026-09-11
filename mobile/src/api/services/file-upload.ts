@@ -3,7 +3,13 @@ import { unwrapEnvelope } from "../http";
 import { fetchAllPages, normalizePageEnvelope } from "../pagination";
 import { downloadProtectedFile } from "./protected-files";
 import type { ApiEnvelope } from "../../types/api";
-import type { LibraryFolder, LibraryGradeLevel, LibraryStorageSummary, LibrarySubjectKey, UploadedLibraryFile } from "../../types/extraction";
+import type {
+  LibraryFolder,
+  LibraryGradeLevel,
+  LibraryStorageSummary,
+  LibrarySubjectKey,
+  UploadedLibraryFile,
+} from "../../types/extraction";
 
 export type FileLibraryQuery = {
   classId?: string;
@@ -14,7 +20,12 @@ export type FileLibraryQuery = {
   gradeLevel?: LibraryGradeLevel;
   teacherVisible?: boolean;
   aiEnabled?: boolean;
-  indexStatus?: "not_indexed" | "pending" | "processing" | "completed" | "failed";
+  indexStatus?:
+    | "not_indexed"
+    | "pending"
+    | "processing"
+    | "completed"
+    | "failed";
   search?: string;
   page?: number;
   limit?: number;
@@ -24,9 +35,12 @@ export const fileUploadApi = {
   async getPage(query: FileLibraryQuery = {}) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 100;
-    const response = await apiClient.get<ApiEnvelope<UploadedLibraryFile[]>>("/files", {
-      params: { ...query, page, limit },
-    });
+    const response = await apiClient.get<ApiEnvelope<UploadedLibraryFile[]>>(
+      "/files",
+      {
+        params: { ...query, page, limit },
+      },
+    );
     return normalizePageEnvelope(response.data, page, limit);
   },
 
@@ -42,27 +56,51 @@ export const fileUploadApi = {
   },
 
   async getFolders(query: FileLibraryQuery = {}) {
-    const response = await apiClient.get<ApiEnvelope<LibraryFolder[]>>("/files/folders", { params: query });
+    const response = await apiClient.get<ApiEnvelope<LibraryFolder[]>>(
+      "/files/folders",
+      { params: query },
+    );
     return unwrapEnvelope(response.data);
   },
 
-  async createFolder(payload: { name: string; parentId?: string; scope?: "private" | "general" }) {
-    const response = await apiClient.post<ApiEnvelope<LibraryFolder>>("/files/folders", payload);
+  async createFolder(payload: {
+    name: string;
+    parentId?: string;
+    scope?: "private" | "general";
+  }) {
+    const response = await apiClient.post<ApiEnvelope<LibraryFolder>>(
+      "/files/folders",
+      payload,
+    );
     return unwrapEnvelope(response.data);
   },
 
-  async updateFolder(id: string, payload: { name?: string; parentId?: string | null; scope?: "private" | "general" }) {
-    const response = await apiClient.patch<ApiEnvelope<LibraryFolder>>(`/files/folders/${id}`, payload);
+  async updateFolder(
+    id: string,
+    payload: {
+      name?: string;
+      parentId?: string | null;
+      scope?: "private" | "general";
+    },
+  ) {
+    const response = await apiClient.patch<ApiEnvelope<LibraryFolder>>(
+      `/files/folders/${id}`,
+      payload,
+    );
     return unwrapEnvelope(response.data);
   },
 
   async deleteFolder(id: string) {
-    const response = await apiClient.delete<ApiEnvelope<unknown>>(`/files/folders/${id}`);
+    const response = await apiClient.delete<ApiEnvelope<unknown>>(
+      `/files/folders/${id}`,
+    );
     return response.data;
   },
 
   async getStorageSummary() {
-    const response = await apiClient.get<ApiEnvelope<LibraryStorageSummary>>("/files/storage-summary");
+    const response = await apiClient.get<ApiEnvelope<LibraryStorageSummary>>(
+      "/files/storage-summary",
+    );
     return unwrapEnvelope(response.data);
   },
 
@@ -77,6 +115,10 @@ export const fileUploadApi = {
       teacherVisible?: boolean;
       aiEnabled?: boolean;
     } = {},
+    controls: {
+      onUploadProgress?: (progress: number) => void;
+      signal?: AbortSignal;
+    } = {},
   ) {
     const formData = new FormData();
     formData.append("file", {
@@ -85,24 +127,40 @@ export const fileUploadApi = {
       type: file.type || "application/pdf",
     } as never);
 
-    const response = await apiClient.post<ApiEnvelope<UploadedLibraryFile>>("/files/upload", formData, {
-      params: options,
-      headers: {
-        "Content-Type": "multipart/form-data",
+    const response = await apiClient.post<ApiEnvelope<UploadedLibraryFile>>(
+      "/files/upload",
+      formData,
+      {
+        params: options,
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+        signal: controls.signal,
+        onUploadProgress: (event) => {
+          if (event.total) {
+            controls.onUploadProgress?.(
+              Math.min(1, Math.max(0, event.loaded / event.total)),
+            );
+          }
+        },
+        timeout: 120000,
       },
-      timeout: 120000,
-    });
+    );
 
     return unwrapEnvelope(response.data);
   },
 
   async getById(id: string) {
-    const response = await apiClient.get<ApiEnvelope<UploadedLibraryFile & {
-      scope?: "private" | "general";
-      uploadedAt?: string;
-      indexStatus?: string | null;
-      teacherVisible?: boolean;
-    }>>(`/files/${id}`);
+    const response = await apiClient.get<
+      ApiEnvelope<
+        UploadedLibraryFile & {
+          scope?: "private" | "general";
+          uploadedAt?: string;
+          indexStatus?: string | null;
+          teacherVisible?: boolean;
+        }
+      >
+    >(`/files/${id}`);
     return unwrapEnvelope(response.data);
   },
 
@@ -113,13 +171,16 @@ export const fileUploadApi = {
       folderId?: string | null;
       classId?: string | null;
       scope?: "private" | "general";
-      subjectKey?: LibrarySubjectKey;
-      gradeLevel?: LibraryGradeLevel;
+      subjectKey?: LibrarySubjectKey | null;
+      gradeLevel?: LibraryGradeLevel | null;
       teacherVisible?: boolean;
       aiEnabled?: boolean;
     },
   ) {
-    const response = await apiClient.patch<ApiEnvelope<UploadedLibraryFile>>(`/files/${id}`, payload);
+    const response = await apiClient.patch<ApiEnvelope<UploadedLibraryFile>>(
+      `/files/${id}`,
+      payload,
+    );
     return unwrapEnvelope(response.data);
   },
 
@@ -141,12 +202,16 @@ export const fileUploadApi = {
   },
 
   async delete(id: string) {
-    const response = await apiClient.delete<ApiEnvelope<unknown>>(`/files/${id}`);
+    const response = await apiClient.delete<ApiEnvelope<unknown>>(
+      `/files/${id}`,
+    );
     return unwrapEnvelope(response.data);
   },
 
   async retryIndex(id: string) {
-    const response = await apiClient.post<ApiEnvelope<UploadedLibraryFile>>(`/files/${id}/index/retry`);
+    const response = await apiClient.post<ApiEnvelope<UploadedLibraryFile>>(
+      `/files/${id}/index/retry`,
+    );
     return unwrapEnvelope(response.data);
   },
 };

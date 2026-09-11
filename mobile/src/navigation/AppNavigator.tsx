@@ -5,6 +5,32 @@ import { AdminAssessmentsScreen } from "../screens/AdminAssessmentsScreen";
 import { AdminAnnouncementsScreen } from "../screens/AdminAnnouncementsScreen";
 import { AdminProfileScreen } from "../screens/AdminProfileScreen";
 import { AdminToolsScreen } from "../screens/AdminToolsScreen";
+import { AdminLifecycleReviewScreen } from "../screens/AdminLifecycleReviewScreen";
+import { AdminUsersScreen } from "../screens/AdminUsersScreen";
+import { AdminUserReportsScreen } from "../screens/AdminUserReportsScreen";
+import { AdminSectionsScreen } from "../screens/AdminSectionsScreen";
+import { AdminClassesWorkspaceScreen } from "../screens/AdminClassesWorkspaceScreen";
+import { AdminCreateUserScreen } from "../screens/AdminCreateUserScreen";
+import { AdminUserDetailScreen } from "../screens/AdminUserDetailScreen";
+import { AdminCalendarScreen } from "../screens/AdminCalendarScreen";
+import { AdminRosterScreen } from "../screens/AdminRosterScreen";
+import { AdminClassRecordScreen } from "../screens/AdminClassRecordScreen";
+import { AdminDiagnosticsScreen } from "../screens/AdminDiagnosticsScreen";
+import { AdminLibraryScreen } from "../screens/AdminLibraryScreen";
+import { AdminReportsScreen } from "../screens/AdminReportsScreen";
+import { AdminEvaluationsScreen } from "../screens/AdminEvaluationsScreen";
+import { AdminChatbotScreen } from "../screens/AdminChatbotScreen";
+import { AdminAuditScreen } from "../screens/AdminAuditScreen";
+import { AdminSettingsOverviewScreen } from "../screens/AdminSettingsOverviewScreen";
+import { AdminAcademicYearSettingsScreen } from "../screens/AdminAcademicYearSettingsScreen";
+import { AdminAssessmentsGradingSettingsScreen } from "../screens/AdminAssessmentsGradingSettingsScreen";
+import { AdminYearTransitionSettingsScreen } from "../screens/AdminYearTransitionSettingsScreen";
+import { AdminLearnerCompletionSettingsScreen } from "../screens/AdminLearnerCompletionSettingsScreen";
+import { AdminAuditRecoverySettingsScreen } from "../screens/AdminAuditRecoverySettingsScreen";
+import { AdminStudentReadinessScreen } from "../screens/AdminStudentReadinessScreen";
+import { AdminSectionDetailScreen } from "../screens/AdminSectionDetailScreen";
+import { AdminTemplatesScreen } from "../screens/AdminTemplatesScreen";
+import { AdminTemplateDetailScreen } from "../screens/AdminTemplateDetailScreen";
 import {
   Component,
   type ComponentProps,
@@ -12,12 +38,7 @@ import {
   type ReactNode,
   useState,
 } from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import {
   createBottomTabNavigator,
@@ -215,7 +236,11 @@ function DashboardRouteScreen(
 function StudentCalendarRouteScreen(
   props: BottomTabScreenProps<MainTabParamList, "StudentCalendar">,
 ) {
-  return <CalendarScreen {...(props as unknown as ComponentProps<typeof CalendarScreen>)} />;
+  return (
+    <CalendarScreen
+      {...(props as unknown as ComponentProps<typeof CalendarScreen>)}
+    />
+  );
 }
 
 function JaRouteScreen(props: BottomTabScreenProps<MainTabParamList, "JA">) {
@@ -639,6 +664,8 @@ class NavigationErrorBoundary extends Component<
             {this.state.error.message || "This screen failed to render."}
           </Text>
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Try rendering ${this.props.currentRouteName} again`}
             onPress={() => this.setState({ error: null })}
             style={{
               marginTop: 18,
@@ -694,7 +721,8 @@ function StudentTabs() {
         screenOptions={{ headerShown: false }}
         tabBar={() => null}
         screenListeners={{
-          state: (event) => setActiveRouteName(getActiveRouteName(event.data.state)),
+          state: (event) =>
+            setActiveRouteName(getActiveRouteName(event.data.state)),
         }}
       >
         {studentTabRouteNames.map(renderStudentTabScreen)}
@@ -707,14 +735,20 @@ function StudentNavigator() {
   return (
     <RootStack.Navigator screenOptions={{ headerShown: false }}>
       <RootStack.Screen name="MainTabs" component={StudentTabs} />
-      <RootStack.Screen name="Notifications" component={NotificationsInboxScreen} />
+      <RootStack.Screen
+        name="Notifications"
+        component={NotificationsInboxScreen}
+      />
       {renderStudentSupportScreen(classWorkspaceRouteName)}
       {studentStackRouteNames.map(renderStudentStackScreen)}
       <RootStack.Screen
         name="StudentGuidedAssessment"
         component={StudentGuidedAssessmentScreen}
       />
-      <RootStack.Screen name="StudentGeneratedLesson" component={StudentGeneratedLessonScreen} />
+      <RootStack.Screen
+        name="StudentGeneratedLesson"
+        component={StudentGeneratedLessonScreen}
+      />
       <RootStack.Screen
         name="StudentJaReviewAssessment"
         component={StudentJaReviewAssessmentScreen}
@@ -741,7 +775,8 @@ function TeacherDrawerNavigator() {
         screenOptions={{ headerShown: false }}
         tabBar={() => null}
         screenListeners={{
-          state: (event) => setActiveRouteName(getActiveRouteName(event.data.state)),
+          state: (event) =>
+            setActiveRouteName(getActiveRouteName(event.data.state)),
         }}
       >
         <Tab.Screen name="Home" component={TeacherHomeScreen} />
@@ -751,12 +786,27 @@ function TeacherDrawerNavigator() {
         <Tab.Screen name="TeacherCalendar" component={TeacherCalendarScreen} />
         <Tab.Screen name="TeacherLessons" component={TeacherLessonsScreen} />
         <Tab.Screen name="TeacherLibrary" component={TeacherLibraryScreen} />
-        <Tab.Screen name="TeacherClassRecord" component={TeacherClassRecordScreen} />
-        <Tab.Screen name="TeacherAnnouncements" component={TeacherAnnouncementsScreen} />
+        <Tab.Screen
+          name="TeacherClassRecord"
+          component={TeacherClassRecordScreen}
+        />
+        <Tab.Screen
+          name="TeacherAnnouncements"
+          component={TeacherAnnouncementsScreen}
+        />
         <Tab.Screen name="TeacherReports" component={TeacherReportsScreen} />
-        <Tab.Screen name="TeacherInterventions" component={TeacherInterventionsScreen} />
-        <Tab.Screen name="TeacherPerformance" component={TeacherPerformanceScreen} />
-        <Tab.Screen name="TeacherEvaluations" component={TeacherEvaluationsScreen} />
+        <Tab.Screen
+          name="TeacherInterventions"
+          component={TeacherInterventionsScreen}
+        />
+        <Tab.Screen
+          name="TeacherPerformance"
+          component={TeacherPerformanceScreen}
+        />
+        <Tab.Screen
+          name="TeacherEvaluations"
+          component={TeacherEvaluationsScreen}
+        />
         <Tab.Screen name="Profile" component={TeacherProfileScreen} />
       </Tab.Navigator>
     </RoleDrawerProvider>
@@ -766,8 +816,14 @@ function TeacherDrawerNavigator() {
 function TeacherNavigator() {
   return (
     <RootStack.Navigator screenOptions={{ headerShown: false }}>
-      <RootStack.Screen name="TeacherDrawer" component={TeacherDrawerNavigator} />
-      <RootStack.Screen name="Notifications" component={NotificationsInboxScreen} />
+      <RootStack.Screen
+        name="TeacherDrawer"
+        component={TeacherDrawerNavigator}
+      />
+      <RootStack.Screen
+        name="Notifications"
+        component={NotificationsInboxScreen}
+      />
       <RootStack.Screen
         name="TeacherClassDetail"
         component={TeacherClassDetailScreen}
@@ -859,37 +915,71 @@ function RoleTabs({ role }: { role: "teacher" | "admin" }) {
 }
 
 function AdminDrawerNavigator() {
+  const { logout } = useAuth();
   const [activeRouteName, setActiveRouteName] = useState("Home");
   return (
     <RoleDrawerProvider
       role="admin"
       activeRouteName={activeRouteName}
       onNavigate={navigateFromRoleDrawer}
+      onLogout={logout}
     >
       <Tab.Navigator
         backBehavior="history"
         screenOptions={{ headerShown: false }}
         tabBar={() => null}
         screenListeners={{
-          state: (event) => setActiveRouteName(getActiveRouteName(event.data.state)),
+          state: (event) =>
+            setActiveRouteName(getActiveRouteName(event.data.state)),
         }}
       >
         <Tab.Screen name="Home" component={AdminHomeScreen} />
-        <Tab.Screen name="AdminUsers" component={AdminToolsScreen} initialParams={{ section: "users" }} />
-        <Tab.Screen name="Classes" component={AdminClassesScreen} />
-        <Tab.Screen name="AdminRoster" component={AdminToolsScreen} initialParams={{ section: "roster" }} />
-        <Tab.Screen name="Assessments" component={AdminAssessmentsScreen} />
-        <Tab.Screen name="AdminAnnouncements" component={AdminAnnouncementsScreen} />
-        <Tab.Screen name="AdminEvaluations" component={AdminToolsScreen} initialParams={{ section: "evaluations" }} />
-        <Tab.Screen name="Academic" component={AdminAcademicScreen} />
-        <Tab.Screen name="AdminCalendar" component={AdminToolsScreen} initialParams={{ section: "calendar" }} />
-        <Tab.Screen name="AdminTemplates" component={AdminToolsScreen} initialParams={{ section: "templates" }} />
-        <Tab.Screen name="AdminLibrary" component={AdminToolsScreen} initialParams={{ section: "library" }} />
-        <Tab.Screen name="AdminReports" component={AdminToolsScreen} initialParams={{ section: "reports" }} />
-        <Tab.Screen name="AdminAudit" component={AdminToolsScreen} initialParams={{ section: "audit" }} />
-        <Tab.Screen name="AdminDiagnostics" component={AdminToolsScreen} initialParams={{ section: "diagnostics" }} />
-        <Tab.Screen name="AdminSettings" component={AdminToolsScreen} initialParams={{ section: "settings" }} />
+        <Tab.Screen
+          name="AdminDiagnostics"
+          component={AdminDiagnosticsScreen}
+        />
+        <Tab.Screen name="AdminUsers" component={AdminUsersScreen} />
+        <Tab.Screen name="AdminSections" component={AdminSectionsScreen} />
+        <Tab.Screen
+          name="AdminClasses"
+          component={AdminClassesWorkspaceScreen}
+        />
+        <Tab.Screen name="AdminCalendar" component={AdminCalendarScreen} />
+        <Tab.Screen name="AdminRoster" component={AdminRosterScreen} />
+        <Tab.Screen
+          name="AdminClassRecord"
+          component={AdminClassRecordScreen}
+        />
+        <Tab.Screen
+          name="AdminUserReports"
+          component={AdminUserReportsScreen}
+        />
+        <Tab.Screen name="AdminLibrary" component={AdminLibraryScreen} />
+        <Tab.Screen
+          name="AdminAnnouncements"
+          component={AdminAnnouncementsScreen}
+        />
+        <Tab.Screen name="AdminReports" component={AdminReportsScreen} />
+        <Tab.Screen
+          name="AdminEvaluations"
+          component={AdminEvaluationsScreen}
+        />
+        <Tab.Screen name="AdminChatbot" component={AdminChatbotScreen} />
+        <Tab.Screen name="AdminAudit" component={AdminAuditScreen} />
+        <Tab.Screen
+          name="AdminSettings"
+          component={AdminSettingsOverviewScreen}
+        />
         <Tab.Screen name="Profile" component={AdminProfileScreen} />
+        {/* Temporary direct-entry aliases retained for saved navigation state. */}
+        <Tab.Screen name="Classes" component={AdminClassesScreen} />
+        <Tab.Screen name="Assessments" component={AdminAssessmentsScreen} />
+        <Tab.Screen name="Academic" component={AdminAcademicScreen} />
+        <Tab.Screen
+          name="AdminTemplates"
+          component={AdminTemplatesScreen}
+          initialParams={{ section: "templates" }}
+        />
       </Tab.Navigator>
     </RoleDrawerProvider>
   );
@@ -899,38 +989,173 @@ function AdminNavigator() {
   return (
     <RootStack.Navigator screenOptions={{ headerShown: false }}>
       <RootStack.Screen name="MainTabs" component={AdminDrawerNavigator} />
-      <RootStack.Screen name="Notifications" component={NotificationsInboxScreen} />
+      <RootStack.Screen
+        name="Notifications"
+        component={NotificationsInboxScreen}
+      />
       <RootStack.Screen name="AdminTools" component={AdminToolsScreen} />
       <RootStack.Screen name="AdminAcademic" component={AdminAcademicScreen} />
-      <RootStack.Screen name="AdminAnnouncements" component={AdminAnnouncementsScreen} />
-      <RootStack.Screen name="TeacherClassDetail" component={TeacherClassDetailScreen} />
-      <RootStack.Screen name="TeacherSectionDetail" component={TeacherSectionDetailScreen} />
-      <RootStack.Screen name="TeacherSectionAddStudents" component={TeacherSectionAddStudentsScreen} />
-      <RootStack.Screen name="TeacherSectionStudentProfile" component={TeacherSectionStudentProfileScreen} />
-      <RootStack.Screen name="TeacherClassAddStudents" component={TeacherClassAddStudentsScreen} />
-      <RootStack.Screen name="TeacherClassStudentOverview" component={TeacherClassStudentOverviewScreen} />
-      <RootStack.Screen name="TeacherAssessmentDetail" component={TeacherAssessmentDetailScreen} />
-      <RootStack.Screen name="TeacherAssessmentEditor" component={TeacherAssessmentEditorScreen} />
-      <RootStack.Screen name="TeacherAssessmentReview" component={TeacherAssessmentReviewScreen} />
-      <RootStack.Screen name="TeacherAssessmentAttemptResult" component={TeacherAssessmentAttemptResultScreen} />
-      <RootStack.Screen name="TeacherModuleDetail" component={TeacherModuleDetailScreen} />
-      <RootStack.Screen name="TeacherLessonDetail" component={TeacherLessonDetailScreen} />
-      <RootStack.Screen name="TeacherLessonEditor" component={TeacherLessonEditorScreen} />
-      <RootStack.Screen name="TeacherLessons" component={TeacherLessonsScreen} />
-      <RootStack.Screen name="TeacherCreateModule" component={TeacherCreateModuleScreen} />
-      <RootStack.Screen name="TeacherCreateAssessment" component={TeacherCreateAssessmentScreen} options={{ presentation: "modal" }} />
-      <RootStack.Screen name="TeacherModuleFileDetail" component={TeacherModuleFileDetailScreen} />
-      <RootStack.Screen name="TeacherCalendar" component={TeacherCalendarScreen} />
-      <RootStack.Screen name="TeacherExtractionDetail" component={TeacherExtractionDetailScreen} />
-      <RootStack.Screen name="TeacherAiDraft" component={TeacherAiDraftScreen} />
-      <RootStack.Screen name="TeacherInterventionDetail" component={TeacherInterventionDetailScreen} />
-      <RootStack.Screen name="TeacherLibrary" component={TeacherLibraryScreen} />
-      <RootStack.Screen name="TeacherClassRecord" component={TeacherClassRecordScreen} />
-      <RootStack.Screen name="TeacherReports" component={TeacherReportsScreen} />
-      <RootStack.Screen name="TeacherInterventions" component={TeacherInterventionsScreen} />
-      <RootStack.Screen name="TeacherPerformance" component={TeacherPerformanceScreen} />
-      <RootStack.Screen name="TeacherEvaluations" component={TeacherEvaluationsScreen} />
-      <RootStack.Screen name="TeacherAnnouncements" component={TeacherAnnouncementsScreen} />
+      <RootStack.Screen
+        name="AdminSettingsAcademicYear"
+        component={AdminAcademicYearSettingsScreen}
+      />
+      <RootStack.Screen
+        name="AdminSettingsAssessmentsGrading"
+        component={AdminAssessmentsGradingSettingsScreen}
+      />
+      <RootStack.Screen
+        name="AdminSettingsYearTransition"
+        component={AdminYearTransitionSettingsScreen}
+      />
+      <RootStack.Screen
+        name="AdminSettingsLearnerCompletion"
+        component={AdminLearnerCompletionSettingsScreen}
+      />
+      <RootStack.Screen
+        name="AdminSettingsAuditRecovery"
+        component={AdminAuditRecoverySettingsScreen}
+      />
+      <RootStack.Screen
+        name="AdminStudentReadiness"
+        component={AdminStudentReadinessScreen}
+      />
+      <RootStack.Screen
+        name="AdminAnnouncements"
+        component={AdminAnnouncementsScreen}
+      />
+      <RootStack.Screen
+        name="AdminLifecycleReview"
+        component={AdminLifecycleReviewScreen}
+      />
+      <RootStack.Screen
+        name="AdminCreateUser"
+        component={AdminCreateUserScreen}
+      />
+      <RootStack.Screen
+        name="AdminUserDetail"
+        component={AdminUserDetailScreen}
+      />
+      <RootStack.Screen
+        name="AdminSectionDetail"
+        component={AdminSectionDetailScreen}
+      />
+      <RootStack.Screen
+        name="AdminTemplateDetail"
+        component={AdminTemplateDetailScreen}
+      />
+      <RootStack.Screen
+        name="TeacherClassDetail"
+        component={TeacherClassDetailScreen}
+      />
+      <RootStack.Screen
+        name="TeacherSectionDetail"
+        component={TeacherSectionDetailScreen}
+      />
+      <RootStack.Screen
+        name="TeacherSectionAddStudents"
+        component={TeacherSectionAddStudentsScreen}
+      />
+      <RootStack.Screen
+        name="TeacherSectionStudentProfile"
+        component={TeacherSectionStudentProfileScreen}
+      />
+      <RootStack.Screen
+        name="TeacherClassAddStudents"
+        component={TeacherClassAddStudentsScreen}
+      />
+      <RootStack.Screen
+        name="TeacherClassStudentOverview"
+        component={TeacherClassStudentOverviewScreen}
+      />
+      <RootStack.Screen
+        name="TeacherAssessmentDetail"
+        component={TeacherAssessmentDetailScreen}
+      />
+      <RootStack.Screen
+        name="TeacherAssessmentEditor"
+        component={TeacherAssessmentEditorScreen}
+      />
+      <RootStack.Screen
+        name="TeacherAssessmentReview"
+        component={TeacherAssessmentReviewScreen}
+      />
+      <RootStack.Screen
+        name="TeacherAssessmentAttemptResult"
+        component={TeacherAssessmentAttemptResultScreen}
+      />
+      <RootStack.Screen
+        name="TeacherModuleDetail"
+        component={TeacherModuleDetailScreen}
+      />
+      <RootStack.Screen
+        name="TeacherLessonDetail"
+        component={TeacherLessonDetailScreen}
+      />
+      <RootStack.Screen
+        name="TeacherLessonEditor"
+        component={TeacherLessonEditorScreen}
+      />
+      <RootStack.Screen
+        name="TeacherLessons"
+        component={TeacherLessonsScreen}
+      />
+      <RootStack.Screen
+        name="TeacherCreateModule"
+        component={TeacherCreateModuleScreen}
+      />
+      <RootStack.Screen
+        name="TeacherCreateAssessment"
+        component={TeacherCreateAssessmentScreen}
+        options={{ presentation: "modal" }}
+      />
+      <RootStack.Screen
+        name="TeacherModuleFileDetail"
+        component={TeacherModuleFileDetailScreen}
+      />
+      <RootStack.Screen
+        name="TeacherCalendar"
+        component={TeacherCalendarScreen}
+      />
+      <RootStack.Screen
+        name="TeacherExtractionDetail"
+        component={TeacherExtractionDetailScreen}
+      />
+      <RootStack.Screen
+        name="TeacherAiDraft"
+        component={TeacherAiDraftScreen}
+      />
+      <RootStack.Screen
+        name="TeacherInterventionDetail"
+        component={TeacherInterventionDetailScreen}
+      />
+      <RootStack.Screen
+        name="TeacherLibrary"
+        component={TeacherLibraryScreen}
+      />
+      <RootStack.Screen
+        name="TeacherClassRecord"
+        component={TeacherClassRecordScreen}
+      />
+      <RootStack.Screen
+        name="TeacherReports"
+        component={TeacherReportsScreen}
+      />
+      <RootStack.Screen
+        name="TeacherInterventions"
+        component={TeacherInterventionsScreen}
+      />
+      <RootStack.Screen
+        name="TeacherPerformance"
+        component={TeacherPerformanceScreen}
+      />
+      <RootStack.Screen
+        name="TeacherEvaluations"
+        component={TeacherEvaluationsScreen}
+      />
+      <RootStack.Screen
+        name="TeacherAnnouncements"
+        component={TeacherAnnouncementsScreen}
+      />
     </RootStack.Navigator>
   );
 }
@@ -985,7 +1210,12 @@ export function AppNavigator() {
   const { isAuthenticated, isProfileIncomplete, loading, user } = useAuth();
   const [currentRouteName, setCurrentRouteName] = useState("Home");
   const mobileRole = resolveMobileRole(user?.roles);
-  const surface = resolveAuthenticatedSurface({ loading, isAuthenticated, isProfileIncomplete, roles: user?.roles });
+  const surface = resolveAuthenticatedSurface({
+    loading,
+    isAuthenticated,
+    isProfileIncomplete,
+    roles: user?.roles,
+  });
 
   if (surface === "loading") {
     return <RootFallback />;
@@ -993,11 +1223,15 @@ export function AppNavigator() {
 
   let navigator = <AuthNavigator />;
   if (surface !== "auth") {
-    navigator = surface === "complete-profile" ? (
-      <RootStack.Navigator screenOptions={{ headerShown: false }}>
-        <RootStack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
-      </RootStack.Navigator>
-    ) : surface === "student" ? (
+    navigator =
+      surface === "complete-profile" ? (
+        <RootStack.Navigator screenOptions={{ headerShown: false }}>
+          <RootStack.Screen
+            name="CompleteProfile"
+            component={CompleteProfileScreen}
+          />
+        </RootStack.Navigator>
+      ) : surface === "student" ? (
         <NavigationErrorBoundary currentRouteName={currentRouteName}>
           <StudentNavigator />
         </NavigationErrorBoundary>
@@ -1017,7 +1251,13 @@ export function AppNavigator() {
           setCurrentRouteName("Login");
           return;
         }
-        setCurrentRouteName(isProfileIncomplete ? "CompleteProfile" : mobileRole === "student" ? "Dashboard" : "Home");
+        setCurrentRouteName(
+          isProfileIncomplete
+            ? "CompleteProfile"
+            : mobileRole === "student"
+              ? "Dashboard"
+              : "Home",
+        );
       }}
       onStateChange={(state) => setCurrentRouteName(getActiveRouteName(state))}
     >

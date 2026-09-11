@@ -6,6 +6,7 @@ import * as Crypto from "expo-crypto";
 import { academicStateService as states } from "../api/services/academic-state";
 import { academicGradingService as grading } from "../api/services/academic-grading";
 import { toAppError } from "../api/http";
+import { useAdminNetworkStatus } from "../hooks/useAdminNetworkStatus";
 import type { AcademicPeriodKey } from "../types/academic-grading";
 import type { AcademicAlignmentPreview } from "../types/academic-grading";
 import type {
@@ -18,6 +19,7 @@ import {
   AdminButton as Action,
   AdminChip as Chip,
   AdminField as Field,
+  AdminNotice,
   AdminSection as Panel,
   AdminScreen,
   adminTheme as theme,
@@ -25,15 +27,44 @@ import {
 const textStyle = { color: theme.text, fontSize: 13, lineHeight: 20 };
 
 type Props = {
+  workspace?:
+    | "legacy"
+    | "academic-year"
+    | "assessments-grading"
+    | "year-transition"
+    | "learner-completion"
+    | "audit-recovery";
   navigation?: {
     getState?: () => { type?: string };
     goBack: () => void;
   };
 };
 
-export function AdminAcademicScreen({ navigation }: Props = {}) {
+const workspaceTab = {
+  legacy: "controls",
+  "academic-year": "controls",
+  "assessments-grading": "workbooks",
+  "year-transition": "controls",
+  "learner-completion": "back subjects",
+  "audit-recovery": "alignment",
+} as const;
+
+const workspaceTitle = {
+  legacy: "Academic administration",
+  "academic-year": "Academic Year",
+  "assessments-grading": "Assessments & Grading",
+  "year-transition": "Year Transition",
+  "learner-completion": "Learner Completion",
+  "audit-recovery": "Audit & Recovery",
+} as const;
+
+export function AdminAcademicScreen({
+  navigation,
+  workspace = "legacy",
+}: Props = {}) {
   const legacyStackEntry = navigation?.getState?.().type === "stack";
   const client = useQueryClient();
+  const network = useAdminNetworkStatus();
   const current = useQuery({
     queryKey: ["academic", "current"],
     queryFn: async () => (await states.getCurrent()).data,
@@ -45,12 +76,14 @@ export function AdminAcademicScreen({ navigation }: Props = {}) {
   const backSubjects = useQuery({
     queryKey: ["academic", "back-subjects"],
     queryFn: async () => (await grading.backSubjects()).data,
+    enabled: workspace === "legacy" || workspace === "learner-completion",
   });
   const completions = useQuery({
     queryKey: ["academic", "grade10-completions"],
     queryFn: async () => (await grading.grade10Completions()).data,
+    enabled: workspace === "legacy" || workspace === "learner-completion",
   });
-  const [tab, setTab] = useState("controls");
+  const [tab, setTab] = useState<string>(workspaceTab[workspace]);
   const [classId, setClassId] = useState("");
   const [target, setTarget] = useState<AcademicPeriodKey>("Q1");
   const [activation, setActivation] =
@@ -59,7 +92,9 @@ export function AdminAcademicScreen({ navigation }: Props = {}) {
     useState<AcademicStateImpactPreview | null>(null);
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
-  const [assessmentPeriodMapping, setAssessmentPeriodMapping] = useState<Partial<Record<string, AcademicPeriodKey>>>({});
+  const [assessmentPeriodMapping, setAssessmentPeriodMapping] = useState<
+    Partial<Record<string, AcademicPeriodKey>>
+  >({});
   const [reason, setReason] = useState("");
   const [override, setOverride] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -68,14 +103,17 @@ export function AdminAcademicScreen({ navigation }: Props = {}) {
   const [scheduleYear, setScheduleYear] = useState("");
   const [schedulePeriod, setSchedulePeriod] = useState<AcademicPeriodKey>("Q1");
   const [grade, setGrade] = useState("");
-  const [alignmentPreview, setAlignmentPreview] = useState<AcademicAlignmentPreview | null>(null);
+  const [alignmentPreview, setAlignmentPreview] =
+    useState<AcademicAlignmentPreview | null>(null);
   const [alignmentAck, setAlignmentAck] = useState("");
   const [reference, setReference] = useState("");
   const effectiveScheduleYear = scheduleYear || current.data?.schoolYear || "";
   const schedulePolicy = useQuery({
     queryKey: ["academic-policy", effectiveScheduleYear],
     queryFn: async () => (await states.getPolicy(effectiveScheduleYear)).data,
-    enabled: Boolean(effectiveScheduleYear),
+    enabled:
+      Boolean(effectiveScheduleYear) &&
+      (workspace === "legacy" || workspace === "learner-completion"),
   });
   const refresh = useCallback(async () => {
     await client.invalidateQueries({ queryKey: ["academic"] });
@@ -86,6 +124,13 @@ export function AdminAcademicScreen({ navigation }: Props = {}) {
     mutation = true,
   ) => {
     if (busy) return;
+    if (network.isOffline) {
+      Alert.alert(
+        "Connection required",
+        "Academic previews and writes require fresh server state and are never queued while offline.",
+      );
+      return;
+    }
     setBusy(true);
     try {
       await action();
@@ -139,7 +184,7 @@ export function AdminAcademicScreen({ navigation }: Props = {}) {
   };
   return (
     <AdminScreen
-      title="Academic administration"
+      title={workspaceTitle[workspace]}
       subtitle="Verified policy periods, year transition, recovery, remediation and grade evidence."
       showBackButton={legacyStackEntry}
       onBackPress={legacyStackEntry ? navigation?.goBack : undefined}
@@ -147,6 +192,14 @@ export function AdminAcademicScreen({ navigation }: Props = {}) {
       refreshing={current.isFetching || readiness.isFetching}
     >
       <View style={{ padding: 14, gap: 12 }}>
+        {network.isOffline ? (
+          <AdminNotice
+            title="Offline · academic actions disabled"
+            description="Cached academic data is read-only. Preview and write operations require fresh server state and are never queued."
+            tone="amber"
+            icon="cloud-off-outline"
+          />
+        ) : null}
         <Text style={textStyle}>
           {current.data
             ? `${current.data.schoolYear} · ${current.data.periods.find((p) => p.key === current.data.quarter)?.label ?? current.data.quarter} · version ${current.data.version}`
@@ -154,229 +207,275 @@ export function AdminAcademicScreen({ navigation }: Props = {}) {
               ? "Academic state unavailable. Use recovery to inspect duplicate or invalid state."
               : "Loading academic state…"}
         </Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-          {["controls", "workbooks", "back subjects", "alignment", "recovery"].map(
-            (value) => (
+        {workspace === "legacy" || workspace === "audit-recovery" ? (
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+            {(workspace === "audit-recovery"
+              ? ["alignment", "recovery"]
+              : [
+                  "controls",
+                  "workbooks",
+                  "back subjects",
+                  "alignment",
+                  "recovery",
+                ]
+            ).map((value) => (
               <Chip
                 key={value}
                 label={value}
                 active={tab === value}
                 onPress={() => setTab(value)}
               />
-            ),
-          )}
-        </View>
+            ))}
+          </View>
+        ) : null}
         {tab === "controls" && (
           <>
-            <Panel title="Activate a grading period">
-              <View style={{ padding: 14, gap: 10 }}>
-                <View
-                  style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}
-                >
-                  {current.data?.periods.map((p) => (
-                    <Chip
-                      key={p.key}
-                      label={p.label}
-                      active={target === p.key}
-                      onPress={() => {
-                        setTarget(p.key);
-                        setActivation(null);
-                        setOverride(false);
-                      }}
-                    />
-                  ))}
-                </View>
-                <Action
-                  label="Preview period activation"
-                  disabled={busy || !current.data}
-                  onPress={() =>
-                    void run(
-                      async () =>
-                        setActivation(
-                          (await states.previewActivation(target)).data,
-                        ),
-                      "Review open workbooks, in-flight attempts and override requirements.",
-                      false,
-                    )
-                  }
-                />
-                {activation && (
-                  <>
-                    <Text style={textStyle}>
-                      {activation.message}
-                      {"\n"}
-                      {activation.currentOpenRecords} current open records ·{" "}
-                      {activation.targetMissingRecords} missing target records ·{" "}
-                      {activation.ongoingAttempts} ongoing attempts
-                    </Text>
-                    {activation.overrideRequired && (
-                      <>
-                        <Chip
-                          label={
-                            override
-                              ? "Override acknowledged"
-                              : "Acknowledge backward or skipped activation"
-                          }
-                          active={override}
-                          onPress={() => setOverride(!override)}
-                        />
-                        <Field
-                          label="Override reason"
-                          value={reason}
-                          onChangeText={setReason}
-                          multiline
-                        />
-                      </>
-                    )}
-                  </>
-                )}
-                <Text style={textStyle}>Current password</Text>
-                <TextInput
-                  accessibilityLabel="Academic control password"
-                  secureTextEntry
-                  value={password}
-                  onChangeText={setPassword}
-                  style={{
-                    color: theme.text,
-                    padding: 12,
-                    borderWidth: 1,
-                    borderColor: theme.border,
-                  }}
-                />
-                <Action
-                  label="Activate verified period"
-                  disabled={
-                    busy ||
-                    !activation ||
-                    !password ||
-                    (activation.overrideRequired &&
-                      (!override || !reason.trim()))
-                  }
-                  onPress={() =>
-                    void run(
-                      activate,
-                      "Period activated. Workbooks were not silently finalized.",
-                    )
-                  }
-                />
-              </View>
-            </Panel>
-            <Panel title="School-year transition">
-              <View style={{ padding: 14, gap: 10 }}>
-                <Text style={textStyle}>
-                  Next school year: {nextYear}. This operation archives the
-                  current year and applies every verified student outcome in one
-                  transaction.
-                </Text>
-                <Action
-                  label="Preview complete year transition"
-                  disabled={busy || !nextYear}
-                  onPress={() =>
-                    void run(
-                      async () =>
-                        setTransition(
-                          (
-                            await states.getImpactPreview({
-                              schoolYear: nextYear,
-                            })
-                          ).data,
-                        ),
-                      "Review blockers and projected outcomes. No grades were changed.",
-                      false,
-                    )
-                  }
-                />
-                {transition && (
-                  <>
-                    <Text style={textStyle}>
-                      {transition.impact.promotionReadiness.transitionBlocked
-                        ? "Transition blocked"
-                        : "Readiness checks pass"}{" "}
-                      · {transition.impact.classesToArchive} classes ·{" "}
-                      {transition.impact.sectionsToArchive} sections{"\n"}
-                      Promote{" "}
-                      {transition.impact.promotionReadiness.studentsToPromote} ·
-                      retain{" "}
-                      {transition.impact.promotionReadiness.studentsToRetain} ·
-                      conditional{" "}
-                      {
-                        transition.impact.promotionReadiness
-                          .studentsToConditionallyPromote
-                      }{" "}
-                      · Grade 10 pending{" "}
-                      {
-                        transition.impact.promotionReadiness
-                          .studentsPendingCompletion
-                      }
-                    </Text>
-                    <Text style={textStyle}>Map copied assessment drafts into the new year. Original assessments and student results will not be changed.</Text>
-                    {(transition.impact.assessmentPeriodSources ?? []).map(source => <Choices key={source} label={`Destination period for ${source}`} value={assessmentPeriodMapping[source]} options={(transition.impact.destinationPeriods ?? []).map(period => ({ value: period.key, label: period.label }))} onChange={period => setAssessmentPeriodMapping(current => ({ ...current, [source]: period as AcademicPeriodKey }))} />)}
-                    <Text style={textStyle}>
-                      Type exactly: {transition.transitionConfirmationText}
-                    </Text>
-                    <Field
-                      label="Transition confirmation"
-                      value={confirmation}
-                      onChangeText={setConfirmation}
-                    />
-                    <Action
-                      label="Commit verified year transition"
-                      disabled={
-                        busy ||
-                        !password ||
-                        (transition.impact.assessmentPeriodSources ?? []).some(source => !assessmentPeriodMapping[source]) ||
-                        transition.impact.promotionReadiness
-                          .transitionBlocked ||
-                        confirmation !== transition.transitionConfirmationText
-                      }
-                      onPress={() =>
-                        void run(async () => {
-                          await states.transition({
-                            expectedSchoolYear: transition.current.schoolYear,
-                            expectedQuarter: transition.current.quarter,
-                            expectedVersion: transition.current.version,
-                            schoolYear: transition.target.schoolYear,
-                            currentPassword: password,
-                            confirmationText: confirmation,
-                            assessmentPeriodMapping,
-                          });
-                          setTransition(null);
-                          setActivation(null);
-                          setConfirmation("");
-                        }, "Year transition committed; new period rosters are empty.")
-                      }
-                    />
-                  </>
-                )}
-                <Action
-                  label="Send grouped teacher readiness reminders"
-                  disabled={busy}
-                  onPress={() =>
-                    void run(
-                      () => states.notifyTeachers(),
-                      "Reminder request processed. Identical recent runs are deduplicated.",
-                    )
-                  }
-                />
-                {(
-                  transition?.impact.promotionReadiness ?? readiness.data
-                )?.blockers.map((b, index) => (
-                  <View key={index} style={{ gap: 5 }}>
-                    <Text style={textStyle}>{b.message}</Text>
-                    {b.classId && (
-                      <Action
-                        label="Open affected workbook"
-                        tone="neutral"
+            {workspace !== "year-transition" ? (
+              <Panel title="Activate a grading period">
+                <View style={{ padding: 14, gap: 10 }}>
+                  <View
+                    style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}
+                  >
+                    {current.data?.periods.map((p) => (
+                      <Chip
+                        key={p.key}
+                        label={p.label}
+                        active={target === p.key}
                         onPress={() => {
-                          setClassId(b.classId!);
-                          setTab("workbooks");
+                          setTarget(p.key);
+                          setActivation(null);
+                          setOverride(false);
                         }}
                       />
-                    )}
+                    ))}
                   </View>
-                ))}
-              </View>
-            </Panel>
+                  <Action
+                    label="Preview period activation"
+                    disabled={network.isOffline || busy || !current.data}
+                    onPress={() =>
+                      void run(
+                        async () =>
+                          setActivation(
+                            (await states.previewActivation(target)).data,
+                          ),
+                        "Review open workbooks, in-flight attempts and override requirements.",
+                        false,
+                      )
+                    }
+                  />
+                  {activation && (
+                    <>
+                      <Text style={textStyle}>
+                        {activation.message}
+                        {"\n"}
+                        {activation.currentOpenRecords} current open records ·{" "}
+                        {activation.targetMissingRecords} missing target records
+                        · {activation.ongoingAttempts} ongoing attempts
+                      </Text>
+                      {activation.overrideRequired && (
+                        <>
+                          <Chip
+                            label={
+                              override
+                                ? "Override acknowledged"
+                                : "Acknowledge backward or skipped activation"
+                            }
+                            active={override}
+                            onPress={() => setOverride(!override)}
+                          />
+                          <Field
+                            label="Override reason"
+                            value={reason}
+                            onChangeText={setReason}
+                            multiline
+                          />
+                        </>
+                      )}
+                    </>
+                  )}
+                  <Text style={textStyle}>Current password</Text>
+                  <TextInput
+                    accessibilityLabel="Academic control password"
+                    secureTextEntry
+                    value={password}
+                    onChangeText={setPassword}
+                    style={{
+                      minHeight: 48,
+                      color: theme.text,
+                      padding: 12,
+                      borderWidth: 1,
+                      borderColor: theme.border,
+                      borderRadius: 8,
+                    }}
+                  />
+                  <Action
+                    label="Activate verified period"
+                    disabled={
+                      network.isOffline ||
+                      busy ||
+                      !activation ||
+                      !password ||
+                      (activation.overrideRequired &&
+                        (!override || !reason.trim()))
+                    }
+                    onPress={() =>
+                      void run(
+                        activate,
+                        "Period activated. Workbooks were not silently finalized.",
+                      )
+                    }
+                  />
+                </View>
+              </Panel>
+            ) : null}
+            {workspace === "year-transition" || workspace === "legacy" ? (
+              <Panel title="School-year transition">
+                <View style={{ padding: 14, gap: 10 }}>
+                  <Text style={textStyle}>
+                    Next school year: {nextYear}. This operation archives the
+                    current year and applies every verified student outcome in
+                    one transaction.
+                  </Text>
+                  <Action
+                    label="Preview complete year transition"
+                    disabled={network.isOffline || busy || !nextYear}
+                    onPress={() =>
+                      void run(
+                        async () =>
+                          setTransition(
+                            (
+                              await states.getImpactPreview({
+                                schoolYear: nextYear,
+                              })
+                            ).data,
+                          ),
+                        "Review blockers and projected outcomes. No grades were changed.",
+                        false,
+                      )
+                    }
+                  />
+                  {transition && (
+                    <>
+                      <Text style={textStyle}>
+                        {transition.impact.promotionReadiness.transitionBlocked
+                          ? "Transition blocked"
+                          : "Readiness checks pass"}{" "}
+                        · {transition.impact.classesToArchive} classes ·{" "}
+                        {transition.impact.sectionsToArchive} sections{"\n"}
+                        Promote{" "}
+                        {
+                          transition.impact.promotionReadiness.studentsToPromote
+                        }{" "}
+                        · retain{" "}
+                        {transition.impact.promotionReadiness.studentsToRetain}{" "}
+                        · conditional{" "}
+                        {
+                          transition.impact.promotionReadiness
+                            .studentsToConditionallyPromote
+                        }{" "}
+                        · Grade 10 pending{" "}
+                        {
+                          transition.impact.promotionReadiness
+                            .studentsPendingCompletion
+                        }
+                      </Text>
+                      <Text style={textStyle}>
+                        Map copied assessment drafts into the new year. Original
+                        assessments and student results will not be changed.
+                      </Text>
+                      {(transition.impact.assessmentPeriodSources ?? []).map(
+                        (source) => (
+                          <Choices
+                            key={source}
+                            label={`Destination period for ${source}`}
+                            value={assessmentPeriodMapping[source]}
+                            options={(
+                              transition.impact.destinationPeriods ?? []
+                            ).map((period) => ({
+                              value: period.key,
+                              label: period.label,
+                            }))}
+                            onChange={(period) =>
+                              setAssessmentPeriodMapping((current) => ({
+                                ...current,
+                                [source]: period as AcademicPeriodKey,
+                              }))
+                            }
+                          />
+                        ),
+                      )}
+                      <Text style={textStyle}>
+                        Type exactly: {transition.transitionConfirmationText}
+                      </Text>
+                      <Field
+                        label="Transition confirmation"
+                        value={confirmation}
+                        onChangeText={setConfirmation}
+                      />
+                      <Action
+                        label="Commit verified year transition"
+                        disabled={
+                          network.isOffline ||
+                          busy ||
+                          !password ||
+                          (
+                            transition.impact.assessmentPeriodSources ?? []
+                          ).some(
+                            (source) => !assessmentPeriodMapping[source],
+                          ) ||
+                          transition.impact.promotionReadiness
+                            .transitionBlocked ||
+                          confirmation !== transition.transitionConfirmationText
+                        }
+                        onPress={() =>
+                          void run(async () => {
+                            await states.transition({
+                              expectedSchoolYear: transition.current.schoolYear,
+                              expectedQuarter: transition.current.quarter,
+                              expectedVersion: transition.current.version,
+                              schoolYear: transition.target.schoolYear,
+                              currentPassword: password,
+                              confirmationText: confirmation,
+                              assessmentPeriodMapping,
+                            });
+                            setTransition(null);
+                            setActivation(null);
+                            setConfirmation("");
+                          }, "Year transition committed; new period rosters are empty.")
+                        }
+                      />
+                    </>
+                  )}
+                  <Action
+                    label="Send grouped teacher readiness reminders"
+                    disabled={network.isOffline || busy}
+                    onPress={() =>
+                      void run(
+                        () => states.notifyTeachers(),
+                        "Reminder request processed. Identical recent runs are deduplicated.",
+                      )
+                    }
+                  />
+                  {(
+                    transition?.impact.promotionReadiness ?? readiness.data
+                  )?.blockers.map((b, index) => (
+                    <View key={index} style={{ gap: 5 }}>
+                      <Text style={textStyle}>{b.message}</Text>
+                      {b.classId && (
+                        <Action
+                          label="Open affected workbook"
+                          tone="neutral"
+                          onPress={() => {
+                            setClassId(b.classId!);
+                            setTab("workbooks");
+                          }}
+                        />
+                      )}
+                    </View>
+                  ))}
+                </View>
+              </Panel>
+            ) : null}
           </>
         )}
         {tab === "workbooks" && (
@@ -404,38 +503,144 @@ export function AdminAcademicScreen({ navigation }: Props = {}) {
           </>
         )}
         {tab === "alignment" && (
-          <Panel title="Academic state alignment" subtitle="Preview first; execution is bound to the returned manifest hash and confirmation texts.">
+          <Panel
+            title="Academic state alignment"
+            subtitle="Preview first; execution is bound to the returned manifest hash and confirmation texts."
+          >
             <View style={{ padding: 14, gap: 10 }}>
-              <Text style={textStyle}>Source: {current.data?.schoolYear ?? "Unavailable"} · Target: {nextYear || "Unavailable"} · Quarter: {target}</Text>
-              <Text style={textStyle}>Selected scope: {classId ? "one class" : "all classes in readiness"}</Text>
+              <Text style={textStyle}>
+                Source: {current.data?.schoolYear ?? "Unavailable"} · Target:{" "}
+                {nextYear || "Unavailable"} · Quarter: {target}
+              </Text>
+              <Text style={textStyle}>
+                Selected scope:{" "}
+                {classId ? "one class" : "all classes in readiness"}
+              </Text>
               <Action
                 label="Preview state alignment"
-                disabled={busy || !current.data || !nextYear}
-                onPress={() => void run(async () => {
-                  const classIds = classId ? [classId] : (readiness.data?.classReadiness ?? []).map((entry) => entry.classId);
-                  const response = await grading.previewStateAlignment({ sourceSchoolYear: current.data!.schoolYear, targetSchoolYear: nextYear, targetQuarter: target, classIds });
-                  setAlignmentPreview(response.data);
-                  setAlignmentAck("");
-                }, "Review blockers, warnings, selected classes, and confirmations before execution.", false)}
+                disabled={
+                  network.isOffline || busy || !current.data || !nextYear
+                }
+                onPress={() =>
+                  void run(
+                    async () => {
+                      const classIds = classId
+                        ? [classId]
+                        : (readiness.data?.classReadiness ?? []).map(
+                            (entry) => entry.classId,
+                          );
+                      const response = await grading.previewStateAlignment({
+                        sourceSchoolYear: current.data!.schoolYear,
+                        targetSchoolYear: nextYear,
+                        targetQuarter: target,
+                        classIds,
+                      });
+                      setAlignmentPreview(response.data);
+                      setAlignmentAck("");
+                    },
+                    "Review blockers, warnings, selected classes, and confirmations before execution.",
+                    false,
+                  )
+                }
               />
               {alignmentPreview ? (
                 <>
-                  <Text style={textStyle}>{alignmentPreview.selectedClasses.length} classes · {alignmentPreview.movedSectionIds.length} sections · {alignmentPreview.blockers.length} blockers · {alignmentPreview.warnings.length} warnings</Text>
-                  {alignmentPreview.blockers.map((entry) => <Text key={`${entry.code}-${entry.classId ?? "all"}`} style={{ ...textStyle, color: theme.red }}>{entry.code}: {entry.message}</Text>)}
-                  {alignmentPreview.requiredConfirmations.map((entry) => <Text key={entry.code} style={textStyle}>{entry.code}: {entry.text}</Text>)}
-                  <Field label="Reason (minimum 5 characters)" value={reason} onChangeText={setReason} multiline />
-                  <TextInput accessibilityLabel="State alignment password" secureTextEntry value={password} onChangeText={setPassword} placeholder="Current password" placeholderTextColor={theme.muted} style={{ color: theme.text, padding: 12, borderWidth: 1, borderColor: theme.border }} />
-                  <Field label="Type ALIGN to acknowledge every confirmation above" value={alignmentAck} onChangeText={setAlignmentAck} />
+                  <Text style={textStyle}>
+                    {alignmentPreview.selectedClasses.length} classes ·{" "}
+                    {alignmentPreview.movedSectionIds.length} sections ·{" "}
+                    {alignmentPreview.blockers.length} blockers ·{" "}
+                    {alignmentPreview.warnings.length} warnings
+                  </Text>
+                  <View style={{ gap: 4, paddingVertical: 4 }}>
+                    <Text style={{ ...textStyle, fontWeight: "700" }}>
+                      Alignment evidence
+                    </Text>
+                    <Text style={textStyle}>
+                      {alignmentPreview.policies.length} existing policies ·{" "}
+                      {alignmentPreview.proposedPolicies.length} proposed
+                      policies · {alignmentPreview.candidates.length} candidate
+                      classes · {alignmentPreview.sections.length} affected
+                      sections
+                    </Text>
+                    <Text style={textStyle}>
+                      Ambiguous records:{" "}
+                      {alignmentPreview.ambiguousCounts.periodRevisions} period
+                      revisions ·{" "}
+                      {alignmentPreview.ambiguousCounts.externalGrades} external
+                      grades ·{" "}
+                      {alignmentPreview.ambiguousCounts.annualSelections} annual
+                      selections ·{" "}
+                      {alignmentPreview.ambiguousCounts.annualGrades} annual
+                      grades · {alignmentPreview.ambiguousCounts.yearOutcomes}{" "}
+                      year outcomes
+                    </Text>
+                  </View>
+                  {alignmentPreview.blockers.map((entry) => (
+                    <Text
+                      key={`${entry.code}-${entry.classId ?? "all"}`}
+                      style={{ ...textStyle, color: theme.red }}
+                    >
+                      {entry.code}: {entry.message}
+                    </Text>
+                  ))}
+                  {alignmentPreview.requiredConfirmations.map((entry) => (
+                    <Text key={entry.code} style={textStyle}>
+                      {entry.code}: {entry.text}
+                    </Text>
+                  ))}
+                  <Field
+                    label="Reason (minimum 5 characters)"
+                    value={reason}
+                    onChangeText={setReason}
+                    multiline
+                  />
+                  <TextInput
+                    accessibilityLabel="State alignment password"
+                    secureTextEntry
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder="Current password"
+                    placeholderTextColor={theme.muted}
+                    style={{
+                      minHeight: 48,
+                      color: theme.text,
+                      padding: 12,
+                      borderWidth: 1,
+                      borderColor: theme.border,
+                      borderRadius: 8,
+                    }}
+                  />
+                  <Field
+                    label="Type ALIGN to acknowledge every confirmation above"
+                    value={alignmentAck}
+                    onChangeText={setAlignmentAck}
+                  />
                   <Action
                     label="Execute manifest-bound alignment"
                     tone="red"
-                    disabled={busy || !alignmentPreview.safeToApply || alignmentPreview.blockers.length > 0 || alignmentAck !== "ALIGN" || reason.trim().length < 5 || !password}
-                    onPress={() => void run(async () => {
-                      const preview = alignmentPreview;
-                      await grading.executeStateAlignment({ ...preview.input, manifestHash: preview.manifestHash, confirmations: preview.requiredConfirmations, reason: reason.trim(), currentPassword: password });
-                      setAlignmentPreview(null);
-                      setAlignmentAck("");
-                    }, "State alignment completed and its audit event was retained.")}
+                    disabled={
+                      network.isOffline ||
+                      busy ||
+                      !alignmentPreview.safeToApply ||
+                      alignmentPreview.blockers.length > 0 ||
+                      alignmentAck !== "ALIGN" ||
+                      reason.trim().length < 5 ||
+                      !password
+                    }
+                    onPress={() =>
+                      void run(async () => {
+                        const preview = alignmentPreview;
+                        await grading.executeStateAlignment({
+                          ...preview.input,
+                          manifestHash: preview.manifestHash,
+                          confirmations: preview.requiredConfirmations,
+                          reason: reason.trim(),
+                          currentPassword: password,
+                        });
+                        setAlignmentPreview(null);
+                        setAlignmentAck("");
+                      }, "State alignment completed and its audit event was retained.")
+                    }
                   />
                 </>
               ) : null}

@@ -1,11 +1,14 @@
-import { type PropsWithChildren, type ReactNode } from "react";
+import { useState, type PropsWithChildren, type ReactNode } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import {
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   Text,
   TextInput,
   View,
+  useWindowDimensions,
   type TextInputProps,
   type ViewStyle,
 } from "react-native";
@@ -18,6 +21,67 @@ type IconName = React.ComponentProps<typeof MaterialCommunityIcons>["name"];
 type Tone = "primary" | "green" | "amber" | "red" | "purple" | "neutral";
 
 export { theme as adminTheme };
+
+export function AdminListHeader({
+  title,
+  subtitle,
+  rightAction,
+}: {
+  title: string;
+  subtitle?: string;
+  rightAction?: ReactNode;
+}) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View
+      style={{
+        paddingTop: insets.top + 6,
+        paddingBottom: subtitle ? 12 : 8,
+        paddingHorizontal: 16,
+        backgroundColor: theme.surface,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.border,
+      }}
+    >
+      <View
+        style={{
+          minHeight: 48,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 10,
+        }}
+      >
+        <RoleHeaderNavigationButton color={theme.primary} />
+        <Text
+          numberOfLines={1}
+          maxFontSizeMultiplier={1.35}
+          style={{
+            flex: 1,
+            fontSize: 20,
+            fontWeight: "900",
+            color: theme.text,
+          }}
+        >
+          {title}
+        </Text>
+        {rightAction}
+      </View>
+      {subtitle ? (
+        <Text
+          style={{
+            marginLeft: 54,
+            marginTop: 2,
+            fontSize: 12,
+            lineHeight: 17,
+            color: theme.subtext,
+          }}
+        >
+          {subtitle}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
 
 function toneColors(tone: Tone = "primary") {
   switch (tone) {
@@ -63,66 +127,126 @@ export function AdminScreen({
   const insets = useSafeAreaInsets();
   const canGoBack = showBackButton && typeof onBackPress === "function";
   const content = (
-    <ScreenScroll
-      backgroundColor={theme.bg}
-      refreshControl={onRefresh ? <Refreshable refreshing={Boolean(refreshing)} onRefresh={onRefresh} /> : undefined}
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      keyboardVerticalOffset={8}
     >
-      <View
-        testID="admin-compact-header"
-        style={{
-          paddingTop: insets.top + 6,
-          paddingBottom: subtitle ? 12 : 8,
-          paddingHorizontal: 16,
-          backgroundColor: theme.surface,
-          borderBottomWidth: 1,
-          borderBottomColor: theme.border,
-        }}
+      <ScreenScroll
+        backgroundColor={theme.bg}
+        refreshControl={
+          onRefresh ? (
+            <Refreshable
+              refreshing={Boolean(refreshing)}
+              onRefresh={onRefresh}
+            />
+          ) : undefined
+        }
       >
-        <View style={{ minHeight: 48, flexDirection: "row", alignItems: "center", gap: 10 }}>
-          {canGoBack ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={backLabel}
-              onPress={onBackPress}
-              style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}
-            >
-              <MaterialCommunityIcons name="arrow-left" size={22} color={theme.primary} />
-            </Pressable>
-          ) : (
-            <RoleHeaderNavigationButton color={theme.primary} onBackPress={onBackPress} />
-          )}
-          <Text
-            numberOfLines={1}
-            maxFontSizeMultiplier={1.35}
-            style={{ flex: 1, fontSize: 20, fontWeight: "900", color: theme.text }}
+        <View
+          testID="admin-compact-header"
+          style={{
+            paddingTop: insets.top + 6,
+            paddingBottom: subtitle ? 12 : 8,
+            paddingHorizontal: 16,
+            backgroundColor: theme.surface,
+            borderBottomWidth: 1,
+            borderBottomColor: theme.border,
+          }}
+        >
+          <View
+            style={{
+              minHeight: 48,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 10,
+            }}
           >
-            {title}
-          </Text>
-          {rightAction}
-          {showRefreshAction && onRefresh ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Refresh ${title}`}
-              onPress={onRefresh}
-              disabled={Boolean(refreshing)}
-              style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center", opacity: refreshing ? 0.5 : 1 }}
+            {canGoBack ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={backLabel}
+                onPress={onBackPress}
+                style={{
+                  width: 48,
+                  height: 48,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <MaterialCommunityIcons
+                  name="arrow-left"
+                  size={22}
+                  color={theme.primary}
+                />
+              </Pressable>
+            ) : (
+              <RoleHeaderNavigationButton
+                color={theme.primary}
+                onBackPress={onBackPress}
+              />
+            )}
+            <Text
+              numberOfLines={1}
+              maxFontSizeMultiplier={1.35}
+              style={{
+                flex: 1,
+                fontSize: 20,
+                fontWeight: "900",
+                color: theme.text,
+              }}
             >
-              <MaterialCommunityIcons name="refresh" size={21} color={theme.primary} />
-            </Pressable>
+              {title}
+            </Text>
+            {rightAction}
+            {showRefreshAction && onRefresh ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Refresh ${title}`}
+                onPress={onRefresh}
+                disabled={Boolean(refreshing)}
+                style={{
+                  width: 48,
+                  height: 48,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  opacity: refreshing ? 0.5 : 1,
+                }}
+              >
+                <MaterialCommunityIcons
+                  name="refresh"
+                  size={21}
+                  color={theme.primary}
+                />
+              </Pressable>
+            ) : null}
+          </View>
+          {subtitle ? (
+            <Text
+              style={{
+                marginLeft: canGoBack ? 54 : 54,
+                marginTop: 2,
+                fontSize: 12,
+                lineHeight: 17,
+                color: theme.subtext,
+              }}
+            >
+              {subtitle}
+            </Text>
           ) : null}
         </View>
-        {subtitle ? (
-          <Text style={{ marginLeft: canGoBack ? 54 : 54, marginTop: 2, fontSize: 12, lineHeight: 17, color: theme.subtext }}>
-            {subtitle}
-          </Text>
-        ) : null}
-      </View>
-      {children}
-    </ScreenScroll>
+        {children}
+      </ScreenScroll>
+    </KeyboardAvoidingView>
   );
 
   if (!bottomAction) return content;
-  return <View style={{ flex: 1, backgroundColor: theme.bg }}>{content}{bottomAction}</View>;
+  return (
+    <View style={{ flex: 1, backgroundColor: theme.bg }}>
+      {content}
+      {bottomAction}
+    </View>
+  );
 }
 
 export function AdminMetricStrip({
@@ -163,10 +287,28 @@ export function AdminMetricStrip({
                 borderLeftColor: theme.border,
               }}
             >
-              <Text numberOfLines={1} style={{ fontSize: 10, fontWeight: "800", color: theme.muted, textTransform: "uppercase", letterSpacing: 0.5 }}>
+              <Text
+                numberOfLines={1}
+                style={{
+                  fontSize: 10,
+                  fontWeight: "800",
+                  color: theme.muted,
+                  textTransform: "uppercase",
+                  letterSpacing: 0.5,
+                }}
+              >
                 {item.label}
               </Text>
-              <Text style={{ marginTop: 4, fontSize: 19, fontWeight: "900", color: colors.color }}>{item.value}</Text>
+              <Text
+                style={{
+                  marginTop: 4,
+                  fontSize: 19,
+                  fontWeight: "900",
+                  color: colors.color,
+                }}
+              >
+                {item.value}
+              </Text>
             </View>
           );
         })}
@@ -180,7 +322,11 @@ export function AdminSection({
   subtitle,
   action,
   children,
-}: PropsWithChildren<{ title?: string; subtitle?: string; action?: ReactNode }>) {
+}: PropsWithChildren<{
+  title?: string;
+  subtitle?: string;
+  action?: ReactNode;
+}>) {
   return (
     <View
       testID="admin-flat-section"
@@ -193,10 +339,36 @@ export function AdminSection({
       }}
     >
       {title || subtitle || action ? (
-        <View style={{ minHeight: 58, paddingHorizontal: 16, paddingVertical: 11, flexDirection: "row", alignItems: "center", gap: 10 }}>
+        <View
+          style={{
+            minHeight: 58,
+            paddingHorizontal: 16,
+            paddingVertical: 11,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 10,
+          }}
+        >
           <View style={{ flex: 1 }}>
-            {title ? <Text style={{ fontSize: 15, fontWeight: "900", color: theme.text }}>{title}</Text> : null}
-            {subtitle ? <Text style={{ marginTop: 3, fontSize: 11, lineHeight: 16, color: theme.subtext }}>{subtitle}</Text> : null}
+            {title ? (
+              <Text
+                style={{ fontSize: 15, fontWeight: "900", color: theme.text }}
+              >
+                {title}
+              </Text>
+            ) : null}
+            {subtitle ? (
+              <Text
+                style={{
+                  marginTop: 3,
+                  fontSize: 11,
+                  lineHeight: 16,
+                  color: theme.subtext,
+                }}
+              >
+                {subtitle}
+              </Text>
+            ) : null}
           </View>
           {action}
         </View>
@@ -228,44 +400,111 @@ export function AdminDataRow({
   containerStyle?: ViewStyle;
 }) {
   const colors = toneColors(statusTone);
+  const [pressed, setPressed] = useState(false);
   return (
-    <Pressable
-      accessibilityRole={onPress ? "button" : undefined}
-      accessibilityLabel={onPress ? `Open ${title}` : undefined}
-      disabled={!onPress}
-      onPress={onPress}
-      style={({ pressed }) => [
+    <View
+      style={[
         {
           minHeight: 66,
-          paddingHorizontal: 16,
-          paddingVertical: 12,
           borderTopWidth: 1,
           borderTopColor: theme.border,
           flexDirection: "row",
-          alignItems: "center",
-          gap: 11,
-          backgroundColor: pressed ? theme.selection : theme.surface,
+          alignItems: "stretch",
+          backgroundColor: theme.surface,
         },
         containerStyle,
       ]}
     >
-      {left}
-      <View style={{ flex: 1 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
-          <Text numberOfLines={1} style={{ flex: 1, fontSize: 13, fontWeight: "800", color: theme.text }}>{title}</Text>
-          {status ? (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-              <View style={{ width: 7, height: 7, borderRadius: 99, backgroundColor: colors.color }} />
-              <Text style={{ fontSize: 10, fontWeight: "800", color: colors.color }}>{status}</Text>
-            </View>
+      <Pressable
+        accessibilityRole={onPress ? "button" : undefined}
+        accessibilityLabel={onPress ? `Open ${title}` : undefined}
+        disabled={!onPress}
+        onPress={onPress}
+        onPressIn={() => setPressed(true)}
+        onPressOut={() => setPressed(false)}
+        style={{
+          flex: 1,
+          minHeight: 66,
+          paddingHorizontal: 16,
+          paddingVertical: 12,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 11,
+          backgroundColor: pressed ? theme.selection : theme.surface,
+        }}
+      >
+        {left}
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
+            <Text
+              numberOfLines={2}
+              maxFontSizeMultiplier={1.6}
+              style={{
+                flex: 1,
+                fontSize: 13,
+                fontWeight: "800",
+                color: theme.text,
+              }}
+            >
+              {title}
+            </Text>
+            {status ? (
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 5 }}
+              >
+                <View
+                  style={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: 99,
+                    backgroundColor: colors.color,
+                  }}
+                />
+                <Text
+                  style={{
+                    fontSize: 10,
+                    fontWeight: "800",
+                    color: colors.color,
+                  }}
+                >
+                  {status}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+          {subtitle ? (
+            <Text
+              numberOfLines={2}
+              maxFontSizeMultiplier={1.6}
+              style={{ marginTop: 3, fontSize: 11, color: theme.subtext }}
+            >
+              {subtitle}
+            </Text>
+          ) : null}
+          {meta ? (
+            <Text
+              numberOfLines={2}
+              maxFontSizeMultiplier={1.6}
+              style={{ marginTop: 3, fontSize: 10, color: theme.muted }}
+            >
+              {meta}
+            </Text>
           ) : null}
         </View>
-        {subtitle ? <Text numberOfLines={1} style={{ marginTop: 3, fontSize: 11, color: theme.subtext }}>{subtitle}</Text> : null}
-        {meta ? <Text numberOfLines={1} style={{ marginTop: 3, fontSize: 10, color: theme.muted }}>{meta}</Text> : null}
-      </View>
-      {right}
-      {onPress ? <MaterialCommunityIcons name="chevron-right" size={18} color={theme.dim} /> : null}
-    </Pressable>
+        {onPress ? (
+          <MaterialCommunityIcons
+            name="chevron-right"
+            size={18}
+            color={theme.dim}
+          />
+        ) : null}
+      </Pressable>
+      {right ? (
+        <View style={{ justifyContent: "center", paddingRight: 12 }}>
+          {right}
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -294,12 +533,16 @@ export function AdminButton({
       disabled={disabled}
       onPress={onPress}
       style={{
-        minHeight: 44,
+        minHeight: 48,
         opacity: disabled ? 0.45 : 1,
         borderRadius: 8,
         borderWidth: textOnly ? 0 : 1,
         borderColor: solid ? colors.color : theme.borderStrong,
-        backgroundColor: textOnly ? "transparent" : solid ? colors.color : colors.surface,
+        backgroundColor: textOnly
+          ? "transparent"
+          : solid
+            ? colors.color
+            : colors.surface,
         paddingHorizontal: 12,
         paddingVertical: 10,
         flexDirection: "row",
@@ -308,8 +551,22 @@ export function AdminButton({
         gap: 7,
       }}
     >
-      {icon ? <MaterialCommunityIcons name={icon} size={16} color={solid ? "#FFFFFF" : colors.color} /> : null}
-      <Text style={{ fontSize: 12, fontWeight: "800", color: solid ? "#FFFFFF" : colors.color }}>{label}</Text>
+      {icon ? (
+        <MaterialCommunityIcons
+          name={icon}
+          size={16}
+          color={solid ? "#FFFFFF" : colors.color}
+        />
+      ) : null}
+      <Text
+        style={{
+          fontSize: 12,
+          fontWeight: "800",
+          color: solid ? "#FFFFFF" : colors.color,
+        }}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -317,20 +574,23 @@ export function AdminButton({
 export function AdminChip({
   label,
   active = false,
+  disabled = false,
   onPress,
 }: {
   label: string;
   active?: boolean;
+  disabled?: boolean;
   onPress?: () => void;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityState={{ selected: active }}
+      accessibilityState={{ selected: active, disabled }}
       onPress={onPress}
+      disabled={disabled}
       style={{
-        minHeight: 44,
+        minHeight: 48,
         borderRadius: 8,
         borderWidth: 1,
         borderColor: active ? theme.primary : theme.borderStrong,
@@ -338,9 +598,18 @@ export function AdminChip({
         paddingHorizontal: 11,
         paddingVertical: 10,
         justifyContent: "center",
+        opacity: disabled ? 0.5 : 1,
       }}
     >
-      <Text style={{ fontSize: 11, fontWeight: "800", color: active ? theme.primary : theme.subtext }}>{label}</Text>
+      <Text
+        style={{
+          fontSize: 11,
+          fontWeight: "800",
+          color: active ? theme.primary : theme.subtext,
+        }}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -363,8 +632,29 @@ export function AdminFilterBar<Key extends string>({
   resultCount: number;
 }) {
   return (
-    <View style={{ marginTop: 10, backgroundColor: theme.surface, borderTopWidth: 1, borderBottomWidth: 1, borderColor: theme.border }}>
-      <View style={{ minHeight: 48, marginHorizontal: 16, marginTop: 12, borderWidth: 1, borderColor: theme.borderStrong, borderRadius: 8, flexDirection: "row", alignItems: "center", paddingHorizontal: 12, gap: 8 }}>
+    <View
+      style={{
+        marginTop: 10,
+        backgroundColor: theme.surface,
+        borderTopWidth: 1,
+        borderBottomWidth: 1,
+        borderColor: theme.border,
+      }}
+    >
+      <View
+        style={{
+          minHeight: 48,
+          marginHorizontal: 16,
+          marginTop: 12,
+          borderWidth: 1,
+          borderColor: theme.borderStrong,
+          borderRadius: 8,
+          flexDirection: "row",
+          alignItems: "center",
+          paddingHorizontal: 12,
+          gap: 8,
+        }}
+      >
         <MaterialCommunityIcons name="magnify" size={18} color={theme.muted} />
         <TextInput
           accessibilityLabel={placeholder}
@@ -372,15 +662,42 @@ export function AdminFilterBar<Key extends string>({
           placeholderTextColor={theme.dim}
           value={search}
           onChangeText={onSearchChange}
-          style={{ flex: 1, color: theme.text, fontSize: 13, paddingVertical: 11 }}
+          style={{
+            flex: 1,
+            color: theme.text,
+            fontSize: 13,
+            paddingVertical: 11,
+          }}
         />
         {search ? (
-          <Pressable accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => onSearchChange("")} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
-            <MaterialCommunityIcons name="close-circle" size={18} color={theme.muted} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Clear search"
+            onPress={() => onSearchChange("")}
+            style={{
+              width: 48,
+              height: 48,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <MaterialCommunityIcons
+              name="close-circle"
+              size={18}
+              color={theme.muted}
+            />
           </Pressable>
         ) : null}
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 10, gap: 6 }}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{
+          paddingHorizontal: 16,
+          paddingVertical: 10,
+          gap: 6,
+        }}
+      >
         {segments.map((segment) => {
           const selected = segment.key === activeSegment;
           return (
@@ -390,14 +707,40 @@ export function AdminFilterBar<Key extends string>({
               accessibilityLabel={`Show ${segment.label}`}
               accessibilityState={{ selected }}
               onPress={() => onSegmentChange(segment.key)}
-              style={{ minHeight: 44, minWidth: 62, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: selected ? theme.primary : theme.border, backgroundColor: selected ? theme.primarySoft : theme.surface, alignItems: "center", justifyContent: "center" }}
+              style={{
+                minHeight: 48,
+                minWidth: 62,
+                paddingHorizontal: 12,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: selected ? theme.primary : theme.border,
+                backgroundColor: selected ? theme.primarySoft : theme.surface,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
             >
-              <Text style={{ fontSize: 11, fontWeight: "800", color: selected ? theme.primary : theme.subtext }}>{segment.label}</Text>
+              <Text
+                style={{
+                  fontSize: 11,
+                  fontWeight: "800",
+                  color: selected ? theme.primary : theme.subtext,
+                }}
+              >
+                {segment.label}
+              </Text>
             </Pressable>
           );
         })}
-        <View style={{ minHeight: 44, paddingHorizontal: 8, justifyContent: "center" }}>
-          <Text style={{ fontSize: 11, fontWeight: "700", color: theme.muted }}>{resultCount} {resultCount === 1 ? "result" : "results"}</Text>
+        <View
+          style={{
+            minHeight: 48,
+            paddingHorizontal: 8,
+            justifyContent: "center",
+          }}
+        >
+          <Text style={{ fontSize: 11, fontWeight: "700", color: theme.muted }}>
+            {resultCount} {resultCount === 1 ? "result" : "results"}
+          </Text>
         </View>
       </ScrollView>
     </View>
@@ -419,10 +762,15 @@ export function AdminField({
   placeholder?: string;
   multiline?: boolean;
   maxLength?: number;
-} & Omit<TextInputProps, "value" | "onChangeText" | "placeholder" | "multiline" | "maxLength">) {
+} & Omit<
+  TextInputProps,
+  "value" | "onChangeText" | "placeholder" | "multiline" | "maxLength"
+>) {
   return (
     <View style={{ gap: 5 }}>
-      <Text style={{ fontSize: 11, fontWeight: "800", color: theme.subtext }}>{label}</Text>
+      <Text style={{ fontSize: 11, fontWeight: "800", color: theme.subtext }}>
+        {label}
+      </Text>
       <TextInput
         accessibilityLabel={label}
         value={value}
@@ -432,7 +780,17 @@ export function AdminField({
         multiline={multiline}
         maxLength={maxLength}
         {...props}
-        style={{ minHeight: multiline ? 104 : 46, borderWidth: 1, borderColor: theme.borderStrong, borderRadius: 8, backgroundColor: theme.surface, color: theme.text, paddingHorizontal: 11, paddingVertical: 10, textAlignVertical: multiline ? "top" : "center" }}
+        style={{
+          minHeight: multiline ? 104 : 48,
+          borderWidth: 1,
+          borderColor: theme.borderStrong,
+          borderRadius: 8,
+          backgroundColor: theme.surface,
+          color: theme.text,
+          paddingHorizontal: 11,
+          paddingVertical: 10,
+          textAlignVertical: multiline ? "top" : "center",
+        }}
       />
     </View>
   );
@@ -452,11 +810,43 @@ export function AdminEmpty({
   onAction?: () => void;
 }) {
   return (
-    <View style={{ alignItems: "center", paddingHorizontal: 20, paddingVertical: 28, borderTopWidth: 1, borderTopColor: theme.border }}>
+    <View
+      style={{
+        alignItems: "center",
+        paddingHorizontal: 20,
+        paddingVertical: 28,
+        borderTopWidth: 1,
+        borderTopColor: theme.border,
+      }}
+    >
       <MaterialCommunityIcons name={icon} size={24} color={theme.muted} />
-      <Text style={{ marginTop: 10, fontSize: 14, fontWeight: "900", color: theme.text }}>{title}</Text>
-      <Text style={{ marginTop: 4, maxWidth: 300, textAlign: "center", fontSize: 12, lineHeight: 18, color: theme.subtext }}>{subtitle}</Text>
-      {actionLabel && onAction ? <View style={{ marginTop: 12 }}><AdminButton label={actionLabel} onPress={onAction} /></View> : null}
+      <Text
+        style={{
+          marginTop: 10,
+          fontSize: 14,
+          fontWeight: "900",
+          color: theme.text,
+        }}
+      >
+        {title}
+      </Text>
+      <Text
+        style={{
+          marginTop: 4,
+          maxWidth: 300,
+          textAlign: "center",
+          fontSize: 12,
+          lineHeight: 18,
+          color: theme.subtext,
+        }}
+      >
+        {subtitle}
+      </Text>
+      {actionLabel && onAction ? (
+        <View style={{ marginTop: 12 }}>
+          <AdminButton label={actionLabel} onPress={onAction} />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -474,11 +864,72 @@ export function AdminNotice({
 }) {
   const colors = toneColors(tone);
   return (
-    <View style={{ marginHorizontal: 16, marginTop: 10, paddingHorizontal: 12, paddingVertical: 11, borderLeftWidth: 3, borderLeftColor: colors.color, backgroundColor: colors.surface, flexDirection: "row", alignItems: "flex-start", gap: 9 }}>
+    <View
+      style={{
+        marginHorizontal: 16,
+        marginTop: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 11,
+        borderLeftWidth: 3,
+        borderLeftColor: colors.color,
+        backgroundColor: colors.surface,
+        flexDirection: "row",
+        alignItems: "flex-start",
+        gap: 9,
+      }}
+    >
       <MaterialCommunityIcons name={icon} size={18} color={colors.color} />
       <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 12, fontWeight: "900", color: theme.text }}>{title}</Text>
-        <Text style={{ marginTop: 3, fontSize: 11, lineHeight: 16, color: theme.subtext }}>{description}</Text>
+        <Text style={{ fontSize: 12, fontWeight: "900", color: theme.text }}>
+          {title}
+        </Text>
+        <Text
+          style={{
+            marginTop: 3,
+            fontSize: 11,
+            lineHeight: 16,
+            color: theme.subtext,
+          }}
+        >
+          {description}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+export function AdminAdaptiveColumns({
+  primary,
+  secondary,
+}: {
+  primary: ReactNode;
+  secondary: ReactNode;
+}) {
+  const { width } = useWindowDimensions();
+  const expanded = width >= 768;
+  return (
+    <View
+      style={{
+        flexDirection: expanded ? "row" : "column",
+        alignItems: "flex-start",
+        gap: expanded ? 12 : 0,
+      }}
+    >
+      <View
+        style={{
+          flex: expanded ? 1 : undefined,
+          width: expanded ? undefined : "100%",
+        }}
+      >
+        {primary}
+      </View>
+      <View
+        style={{
+          flex: expanded ? 1 : undefined,
+          width: expanded ? undefined : "100%",
+        }}
+      >
+        {secondary}
       </View>
     </View>
   );

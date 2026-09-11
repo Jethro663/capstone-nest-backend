@@ -51,8 +51,8 @@ export function RoleMenuButton({ color = theme.redText }: { color?: string }) {
       accessibilityLabel="Open navigation menu"
       onPress={drawer.openDrawer}
       style={{
-        width: 44,
-        height: 44,
+        width: 48,
+        height: 48,
         borderRadius: 12,
         borderWidth: 1,
         borderColor: theme.border,
@@ -84,8 +84,8 @@ export function RoleHeaderNavigationButton({
       accessibilityLabel="Back"
       onPress={onBackPress}
       style={{
-        width: 44,
-        height: 44,
+        width: 48,
+        height: 48,
         borderRadius: 12,
         borderWidth: 1,
         borderColor: theme.border,
@@ -160,7 +160,9 @@ function RoleNavigationDrawer({
   const confirmLogout = () => {
     Alert.alert(
       "Log out?",
-      "You will need to sign in again to continue learning.",
+      role === "admin"
+        ? "You will need to sign in again to continue administration."
+        : "You will need to sign in again to continue learning.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -212,15 +214,33 @@ function RoleNavigationDrawer({
           {destination.label}
         </Text>
         {active ? (
-          <View style={{ width: 4, height: 22, borderRadius: 999, backgroundColor: theme.red }} />
+          <View
+            style={{
+              width: 4,
+              height: 22,
+              borderRadius: 999,
+              backgroundColor: theme.red,
+            }}
+          />
         ) : null}
       </Pressable>
     );
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={{ flex: 1, flexDirection: "row", backgroundColor: "rgba(15,23,42,0.32)" }}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View
+        style={{
+          flex: 1,
+          flexDirection: "row",
+          backgroundColor: "rgba(15,23,42,0.32)",
+        }}
+      >
         <View
           testID="role-navigation-drawer"
           accessibilityViewIsModal
@@ -251,8 +271,19 @@ function RoleNavigationDrawer({
               style={{ width: 42, height: 42 }}
             />
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 16, fontWeight: "900", color: theme.text }}>GABHS Nexora</Text>
-              <Text style={{ marginTop: 2, fontSize: 11, fontWeight: "600", color: theme.muted }}>
+              <Text
+                style={{ fontSize: 16, fontWeight: "900", color: theme.text }}
+              >
+                GABHS Nexora
+              </Text>
+              <Text
+                style={{
+                  marginTop: 2,
+                  fontSize: 11,
+                  fontWeight: "600",
+                  color: theme.muted,
+                }}
+              >
                 {roleLabels[role]}
               </Text>
             </View>
@@ -260,15 +291,28 @@ function RoleNavigationDrawer({
               accessibilityRole="button"
               accessibilityLabel="Close navigation menu"
               onPress={onClose}
-              style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}
+              style={{
+                width: 48,
+                height: 48,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
             >
-              <MaterialCommunityIcons name="close" size={22} color={theme.muted} />
+              <MaterialCommunityIcons
+                name="close"
+                size={22}
+                color={theme.muted}
+              />
             </Pressable>
           </View>
 
           <ScrollView
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 14, gap: 14 }}
+            contentContainerStyle={{
+              paddingHorizontal: 12,
+              paddingVertical: 14,
+              gap: 14,
+            }}
           >
             {groups.map((group) => (
               <View key={group.label}>
@@ -285,12 +329,14 @@ function RoleNavigationDrawer({
                 >
                   {group.label}
                 </Text>
-                <View style={{ gap: 2 }}>{group.items.map(renderDestination)}</View>
+                <View style={{ gap: 2 }}>
+                  {group.items.map(renderDestination)}
+                </View>
               </View>
             ))}
           </ScrollView>
 
-          {role === "student" && onLogout ? (
+          {(role === "admin" || role === "student") && onLogout ? (
             <View
               testID="student-drawer-footer"
               style={{
@@ -323,14 +369,31 @@ function RoleNavigationDrawer({
                   gap: 6,
                 }}
               >
-                <MaterialCommunityIcons name="logout" size={18} color={theme.redText} />
-                <Text numberOfLines={1} style={{ color: theme.redText, fontSize: 11, fontWeight: "900" }}>
+                <MaterialCommunityIcons
+                  name="logout"
+                  size={18}
+                  color={theme.redText}
+                />
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    color: theme.redText,
+                    fontSize: 11,
+                    fontWeight: "900",
+                  }}
+                >
                   Log out
                 </Text>
               </Pressable>
             </View>
           ) : (
-            <View style={{ padding: 12, borderTopWidth: 1, borderTopColor: theme.border }}>
+            <View
+              style={{
+                padding: 12,
+                borderTopWidth: 1,
+                borderTopColor: theme.border,
+              }}
+            >
               {renderDestination(ROLE_DRAWER_PROFILE_DESTINATION)}
             </View>
           )}

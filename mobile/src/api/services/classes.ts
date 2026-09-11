@@ -13,8 +13,13 @@ import type {
   TeacherClassStudentOverview,
   TeacherClassStudentProfile,
   UpdateClassDto,
+  BulkClassLifecycleDto,
 } from "../../types/class";
-import { fetchAllPages, normalizePageEnvelope, type PageEnvelope } from "../pagination";
+import {
+  fetchAllPages,
+  normalizePageEnvelope,
+  type PageEnvelope,
+} from "../pagination";
 
 export type ClassesListQuery = {
   isActive?: boolean;
@@ -27,17 +32,25 @@ export type ClassesListQuery = {
 
 export const classesApi = {
   async create(payload: CreateClassDto) {
-    const response = await apiClient.post<ApiEnvelope<ClassItem>>("/classes", payload);
+    const response = await apiClient.post<ApiEnvelope<ClassItem>>(
+      "/classes",
+      payload,
+    );
     return unwrapEnvelope(response.data);
   },
 
   async update(classId: string, payload: UpdateClassDto) {
-    const response = await apiClient.put<ApiEnvelope<ClassItem>>(`/classes/${classId}`, payload);
+    const response = await apiClient.put<ApiEnvelope<ClassItem>>(
+      `/classes/${classId}`,
+      payload,
+    );
     return unwrapEnvelope(response.data);
   },
 
   async toggleStatus(classId: string) {
-    const response = await apiClient.put<ApiEnvelope<ClassItem>>(`/classes/${classId}/toggle-status`);
+    const response = await apiClient.put<ApiEnvelope<ClassItem>>(
+      `/classes/${classId}/toggle-status`,
+    );
     return unwrapEnvelope(response.data);
   },
 
@@ -45,15 +58,33 @@ export const classesApi = {
     await apiClient.delete(`/classes/${classId}`);
   },
 
-  async getPage(query: ClassesListQuery = {}): Promise<PageEnvelope<ClassItem>> {
+  async bulkLifecycle(payload: BulkClassLifecycleDto) {
+    return (await apiClient.post("/classes/bulk/lifecycle", payload)).data;
+  },
+
+  async hide(classId: string) {
+    return (await apiClient.patch(`/classes/${classId}/hide`)).data;
+  },
+
+  async unhide(classId: string) {
+    return (await apiClient.patch(`/classes/${classId}/unhide`)).data;
+  },
+
+  async getPage(
+    query: ClassesListQuery = {},
+  ): Promise<PageEnvelope<ClassItem>> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 50;
-    const response = await apiClient.get<ApiEnvelope<{ data: ClassItem[]; total?: number; page?: number; limit?: number }>>(
-      "/classes/all",
-      {
-        params: { ...query, page, limit },
-      },
-    );
+    const response = await apiClient.get<
+      ApiEnvelope<{
+        data: ClassItem[];
+        total?: number;
+        page?: number;
+        limit?: number;
+      }>
+    >("/classes/all", {
+      params: { ...query, page, limit },
+    });
     return normalizePageEnvelope(unwrapEnvelope(response.data), page, limit);
   },
 
@@ -66,35 +97,48 @@ export const classesApi = {
   },
 
   async getStudentClasses(studentId: string) {
-    const response = await apiClient.get<ApiEnvelope<ClassItem[]>>(`/classes/student/${studentId}`);
+    const response = await apiClient.get<ApiEnvelope<ClassItem[]>>(
+      `/classes/student/${studentId}`,
+    );
     return normalizeArray<ClassItem>(unwrapEnvelope(response.data));
   },
 
-  async getTeacherClasses(teacherId: string, status: ClassVisibilityStatus = "active") {
-    const response = await apiClient.get<ApiEnvelope<ClassItem[]>>(`/classes/teacher/${teacherId}`, {
-      params: { status },
-    });
+  async getTeacherClasses(
+    teacherId: string,
+    status: ClassVisibilityStatus = "active",
+  ) {
+    const response = await apiClient.get<ApiEnvelope<ClassItem[]>>(
+      `/classes/teacher/${teacherId}`,
+      {
+        params: { status },
+      },
+    );
     return normalizeArray<ClassItem>(unwrapEnvelope(response.data));
   },
 
   async getById(classId: string) {
-    const response = await apiClient.get<ApiEnvelope<ClassItem>>(`/classes/${classId}`);
+    const response = await apiClient.get<ApiEnvelope<ClassItem>>(
+      `/classes/${classId}`,
+    );
     return unwrapEnvelope(response.data);
   },
 
   async getEnrollments(classId: string) {
-    const response = await apiClient.get<ApiEnvelope<EnrollmentRecord[]>>(`/classes/${classId}/enrollments`);
+    const response = await apiClient.get<ApiEnvelope<EnrollmentRecord[]>>(
+      `/classes/${classId}/enrollments`,
+    );
     return normalizeArray<EnrollmentRecord>(unwrapEnvelope(response.data));
   },
 
   async getStudentsMasterlist(classId: string, query?: StudentMasterlistQuery) {
-    const response = await apiClient.get<ApiEnvelope<StudentMasterlistItem[]> | StudentMasterlistResponse>(
-      `/classes/${classId}/students/masterlist`,
-      { params: query },
-    );
+    const response = await apiClient.get<
+      ApiEnvelope<StudentMasterlistItem[]> | StudentMasterlistResponse
+    >(`/classes/${classId}/students/masterlist`, { params: query });
     const payload = response.data as StudentMasterlistResponse;
     return {
-      data: normalizeArray<StudentMasterlistItem>(unwrapEnvelope(response.data as ApiEnvelope<StudentMasterlistItem[]>)),
+      data: normalizeArray<StudentMasterlistItem>(
+        unwrapEnvelope(response.data as ApiEnvelope<StudentMasterlistItem[]>),
+      ),
       total: payload.total,
       page: payload.page,
       limit: payload.limit,
@@ -104,21 +148,24 @@ export const classesApi = {
   },
 
   async getStudentProfileForClass(classId: string, studentId: string) {
-    const response = await apiClient.get<ApiEnvelope<TeacherClassStudentProfile>>(
-      `/classes/${classId}/students/${studentId}/profile`,
-    );
+    const response = await apiClient.get<
+      ApiEnvelope<TeacherClassStudentProfile>
+    >(`/classes/${classId}/students/${studentId}/profile`);
     return unwrapEnvelope(response.data);
   },
 
   async getStudentOverviewForClass(classId: string, studentId: string) {
-    const response = await apiClient.get<ApiEnvelope<TeacherClassStudentOverview>>(
-      `/classes/${classId}/students/${studentId}/overview`,
-    );
+    const response = await apiClient.get<
+      ApiEnvelope<TeacherClassStudentOverview>
+    >(`/classes/${classId}/students/${studentId}/overview`);
     return unwrapEnvelope(response.data);
   },
 
   async enrollStudent(classId: string, dto: EnrollStudentDto) {
-    const response = await apiClient.post<ApiEnvelope<EnrollmentRecord>>(`/classes/${classId}/enrollments`, dto);
+    const response = await apiClient.post<ApiEnvelope<EnrollmentRecord>>(
+      `/classes/${classId}/enrollments`,
+      dto,
+    );
     return unwrapEnvelope(response.data);
   },
 
@@ -129,15 +176,21 @@ export const classesApi = {
     return unwrapEnvelope(response.data);
   },
 
-  async updatePresentation(classId: string, dto: { cardPreset?: string | null; cardBannerUrl?: string | null }) {
-    const response = await apiClient.patch<ApiEnvelope<ClassItem>>(`/classes/${classId}/presentation`, dto);
+  async updatePresentation(
+    classId: string,
+    dto: { cardPreset?: string | null; cardBannerUrl?: string | null },
+  ) {
+    const response = await apiClient.patch<ApiEnvelope<ClassItem>>(
+      `/classes/${classId}/presentation`,
+      dto,
+    );
     return unwrapEnvelope(response.data);
   },
 
   async uploadBanner(classId: string, imageUri: string) {
     const formData = new FormData();
-    const filename = imageUri.split('/').pop() || 'banner.jpg';
-    
+    const filename = imageUri.split("/").pop() || "banner.jpg";
+
     // Determine MIME type based on extension
     const match = /\.(\w+)$/.exec(filename);
     const type = match ? `image/${match[1]}` : `image`;
@@ -153,7 +206,7 @@ export const classesApi = {
       formData,
       {
         headers: { "Content-Type": "multipart/form-data" },
-      }
+      },
     );
     return unwrapEnvelope(response.data);
   },

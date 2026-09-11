@@ -1,12 +1,12 @@
 {
   "platform": "android",
-  "versionCode": 32,
-  "minSupportedVersionCode": 32,
-  "nativeVersion": "0.1.31",
-  "otaRuntimeVersion": "0.1.31",
+  "versionCode": 33,
+  "minSupportedVersionCode": 33,
+  "nativeVersion": "0.1.32",
+  "otaRuntimeVersion": "0.1.32",
   "apkDownloadUrl": "https://next-frontend-v2-production.up.railway.app/downloads/nexora-student-mobile-release.apk",
   "requiresFullApk": true,
-  "releaseNotes": "Fixes student class cards so their padded navy headers, status, subject, grade and teacher hierarchy match the web design cleanly on mobile.",
-  "apkSha256": "8b95f0ebd0b4910c53f6c53d324849f39154983536399397807ba9fc3643918c",
-  "apkSizeBytes": 41048471
+  "releaseNotes": "Redesigns the mobile administrator workspace with web-parity navigation, paginated task views, governed lifecycle review, complete contracts, reports, library tools, and accessible controls.",
+  "apkSha256": "19153c4f79dc9e0be746aa0eec91aa8bbb5f29feb98e69581f83df632def13d0",
+  "apkSizeBytes": 41267135
 }

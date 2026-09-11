@@ -53,10 +53,16 @@ let consoleErrorSpy: jest.SpyInstance;
 
 beforeAll(() => {
   const originalConsoleError = console.error;
-  consoleErrorSpy = jest.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
-    if (typeof args[0] === "string" && args[0].includes("react-test-renderer is deprecated")) return;
-    originalConsoleError(...(args as Parameters<typeof console.error>));
-  });
+  consoleErrorSpy = jest
+    .spyOn(console, "error")
+    .mockImplementation((...args: unknown[]) => {
+      if (
+        typeof args[0] === "string" &&
+        args[0].includes("react-test-renderer is deprecated")
+      )
+        return;
+      originalConsoleError(...(args as Parameters<typeof console.error>));
+    });
 });
 
 afterAll(() => {
@@ -70,7 +76,9 @@ describe("role drawer destination contracts", () => {
       "Content & records",
       "Insights & support",
     ]);
-    expect(flattenRoleDrawerDestinations("teacher").map((item) => item.label)).toEqual([
+    expect(
+      flattenRoleDrawerDestinations("teacher").map((item) => item.label),
+    ).toEqual([
       "Home",
       "My Classes",
       "My Sections",
@@ -85,12 +93,22 @@ describe("role drawer destination contracts", () => {
       "Performance",
       "Evaluations",
     ]);
-    expect(flattenRoleDrawerDestinations("teacher").some((item) => item.route === "TeacherMore")).toBe(false);
-    expect(flattenRoleDrawerDestinations("teacher").every((item) => item.kind === "tab")).toBe(true);
+    expect(
+      flattenRoleDrawerDestinations("teacher").some(
+        (item) => item.route === "TeacherMore",
+      ),
+    ).toBe(false);
+    expect(
+      flattenRoleDrawerDestinations("teacher").every(
+        (item) => item.kind === "tab",
+      ),
+    ).toBe(true);
   });
 
   it("preserves student destinations and exposes the complete grouped admin workspace", () => {
-    expect(flattenRoleDrawerDestinations("student").map((item) => item.route)).toEqual([
+    expect(
+      flattenRoleDrawerDestinations("student").map((item) => item.route),
+    ).toEqual([
       "Dashboard",
       "Classes",
       "Assessments",
@@ -100,17 +118,36 @@ describe("role drawer destination contracts", () => {
     ]);
     expect(ROLE_DRAWER_GROUPS.admin.map((group) => group.label)).toEqual([
       "Overview",
-      "People & learning",
-      "School operations",
-      "Oversight",
+      "School Setup",
+      "Content & Comms",
+      "Insights & AI",
+      "Account",
     ]);
-    expect(flattenRoleDrawerDestinations("admin").map((item) => item.route)).toEqual([
-      "Home", "AdminUsers", "Classes", "AdminRoster", "Assessments",
-      "AdminAnnouncements", "AdminEvaluations", "Academic", "AdminCalendar",
-      "AdminTemplates", "AdminLibrary", "AdminReports", "AdminAudit",
-      "AdminDiagnostics", "AdminSettings",
+    expect(
+      flattenRoleDrawerDestinations("admin").map((item) => item.route),
+    ).toEqual([
+      "Home",
+      "AdminDiagnostics",
+      "AdminUsers",
+      "AdminSections",
+      "AdminClasses",
+      "AdminCalendar",
+      "AdminRoster",
+      "AdminClassRecord",
+      "AdminUserReports",
+      "AdminLibrary",
+      "AdminAnnouncements",
+      "AdminReports",
+      "AdminEvaluations",
+      "AdminChatbot",
+      "AdminAudit",
+      "AdminSettings",
     ]);
-    expect(flattenRoleDrawerDestinations("admin").every((item) => item.kind === "tab")).toBe(true);
+    expect(
+      flattenRoleDrawerDestinations("admin").every(
+        (item) => item.kind === "tab",
+      ),
+    ).toBe(true);
     expect(ROLE_DRAWER_PROFILE_DESTINATION).toMatchObject({
       label: "Profile",
       route: "Profile",
@@ -127,34 +164,54 @@ describe("role drawer destination contracts", () => {
 });
 
 describe("RoleDrawerProvider", () => {
-  it("opens from a 44px hamburger, renders an 84% drawer, navigates, and closes", () => {
+  it("opens from a 48px hamburger, renders an 84% drawer, navigates, and closes", () => {
     const onNavigate = jest.fn();
     let renderer: TestRenderer.ReactTestRenderer;
 
     act(() => {
       renderer = TestRenderer.create(
-        <RoleDrawerProvider role="teacher" activeRouteName="Home" onNavigate={onNavigate}>
+        <RoleDrawerProvider
+          role="teacher"
+          activeRouteName="Home"
+          onNavigate={onNavigate}
+        >
           <RoleMenuButton />
         </RoleDrawerProvider>,
       );
     });
 
-    const trigger = renderer!.root.findByProps({ accessibilityLabel: "Open navigation menu" });
-    expect(trigger.props.style).toMatchObject({ width: 44, height: 44 });
+    const trigger = renderer!.root.findByProps({
+      accessibilityLabel: "Open navigation menu",
+    });
+    expect(trigger.props.style).toMatchObject({ width: 48, height: 48 });
 
     act(() => trigger.props.onPress());
 
-    const drawer = renderer!.root.findByProps({ testID: "role-navigation-drawer" });
+    const drawer = renderer!.root.findByProps({
+      testID: "role-navigation-drawer",
+    });
     expect(drawer.props.style.width).toBe(336);
-    expect(renderer!.root.findByProps({ accessibilityLabel: "Close navigation menu" })).toBeTruthy();
+    expect(
+      renderer!.root.findByProps({
+        accessibilityLabel: "Close navigation menu",
+      }),
+    ).toBeTruthy();
 
-    const classes = renderer!.root.findByProps({ accessibilityLabel: "Go to My Classes" });
+    const classes = renderer!.root.findByProps({
+      accessibilityLabel: "Go to My Classes",
+    });
     act(() => classes.props.onPress());
 
     expect(onNavigate).toHaveBeenCalledWith(
-      expect.objectContaining({ label: "My Classes", route: "Classes", kind: "tab" }),
+      expect.objectContaining({
+        label: "My Classes",
+        route: "Classes",
+        kind: "tab",
+      }),
     );
-    expect(renderer!.root.findAllByProps({ testID: "role-navigation-drawer" })).toHaveLength(0);
+    expect(
+      renderer!.root.findAllByProps({ testID: "role-navigation-drawer" }),
+    ).toHaveLength(0);
   });
 
   it("falls back to Back outside a root drawer context", () => {
@@ -170,7 +227,11 @@ describe("RoleDrawerProvider", () => {
     const back = renderer!.root.findByProps({ accessibilityLabel: "Back" });
     act(() => back.props.onPress());
     expect(onBackPress).toHaveBeenCalledTimes(1);
-    expect(renderer!.root.findAllByProps({ accessibilityLabel: "Open navigation menu" })).toHaveLength(0);
+    expect(
+      renderer!.root.findAllByProps({
+        accessibilityLabel: "Open navigation menu",
+      }),
+    ).toHaveLength(0);
   });
 
   it("prefers the hamburger inside a drawer context even when Back is available", () => {
@@ -189,11 +250,17 @@ describe("RoleDrawerProvider", () => {
       );
     });
 
-    const menu = renderer!.root.findByProps({ accessibilityLabel: "Open navigation menu" });
+    const menu = renderer!.root.findByProps({
+      accessibilityLabel: "Open navigation menu",
+    });
     act(() => menu.props.onPress());
 
-    expect(renderer!.root.findByProps({ testID: "role-navigation-drawer" })).toBeTruthy();
-    expect(renderer!.root.findAllByProps({ accessibilityLabel: "Back" })).toHaveLength(0);
+    expect(
+      renderer!.root.findByProps({ testID: "role-navigation-drawer" }),
+    ).toBeTruthy();
+    expect(
+      renderer!.root.findAllByProps({ accessibilityLabel: "Back" }),
+    ).toHaveLength(0);
     expect(onBackPress).not.toHaveBeenCalled();
   });
 
@@ -215,13 +282,27 @@ describe("RoleDrawerProvider", () => {
         </RoleDrawerProvider>,
       );
     });
-    act(() => studentRenderer!.root.findByProps({ accessibilityLabel: "Open navigation menu" }).props.onPress());
+    act(() =>
+      studentRenderer!.root
+        .findByProps({ accessibilityLabel: "Open navigation menu" })
+        .props.onPress(),
+    );
 
-    const footer = studentRenderer!.root.findByProps({ testID: "student-drawer-footer" });
+    const footer = studentRenderer!.root.findByProps({
+      testID: "student-drawer-footer",
+    });
     expect(footer.props.style).toMatchObject({ flexDirection: "row" });
-    expect(studentRenderer!.root.findByProps({ accessibilityLabel: "Go to Profile" })).toBeTruthy();
+    expect(
+      studentRenderer!.root.findByProps({
+        accessibilityLabel: "Go to Profile",
+      }),
+    ).toBeTruthy();
 
-    act(() => studentRenderer!.root.findByProps({ accessibilityLabel: "Log out" }).props.onPress());
+    act(() =>
+      studentRenderer!.root
+        .findByProps({ accessibilityLabel: "Log out" })
+        .props.onPress(),
+    );
     expect(Alert.alert).toHaveBeenCalledWith(
       "Log out?",
       "You will need to sign in again to continue learning.",
@@ -240,12 +321,22 @@ describe("RoleDrawerProvider", () => {
     let teacherRenderer: TestRenderer.ReactTestRenderer;
     act(() => {
       teacherRenderer = TestRenderer.create(
-        <RoleDrawerProvider role="teacher" activeRouteName="Home" onNavigate={jest.fn()}>
+        <RoleDrawerProvider
+          role="teacher"
+          activeRouteName="Home"
+          onNavigate={jest.fn()}
+        >
           <RoleMenuButton />
         </RoleDrawerProvider>,
       );
     });
-    act(() => teacherRenderer!.root.findByProps({ accessibilityLabel: "Open navigation menu" }).props.onPress());
-    expect(teacherRenderer!.root.findAllByProps({ accessibilityLabel: "Log out" })).toHaveLength(0);
+    act(() =>
+      teacherRenderer!.root
+        .findByProps({ accessibilityLabel: "Open navigation menu" })
+        .props.onPress(),
+    );
+    expect(
+      teacherRenderer!.root.findAllByProps({ accessibilityLabel: "Log out" }),
+    ).toHaveLength(0);
   });
 });

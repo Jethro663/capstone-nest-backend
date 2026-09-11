@@ -1,9 +1,16 @@
 import axios from "axios";
-import type { AppError, ErrorPresentationPayload, FieldErrorMap } from "../types/api";
+import type {
+  AppError,
+  ErrorPresentationPayload,
+  FieldErrorMap,
+} from "../types/api";
 
-let globalPresenter: ((payload: ErrorPresentationPayload) => void) | null = null;
+let globalPresenter: ((payload: ErrorPresentationPayload) => void) | null =
+  null;
 
-export function setGlobalErrorPresenter(presenter: (payload: ErrorPresentationPayload) => void) {
+export function setGlobalErrorPresenter(
+  presenter: (payload: ErrorPresentationPayload) => void,
+) {
   globalPresenter = presenter;
 }
 
@@ -24,7 +31,10 @@ function toFieldErrors(message: unknown): FieldErrorMap | undefined {
   return message as FieldErrorMap;
 }
 
-export function normalizeApiError(error: unknown, options?: NormalizeApiErrorOptions): AppError {
+export function normalizeApiError(
+  error: unknown,
+  options?: NormalizeApiErrorOptions,
+): AppError {
   if (!axios.isAxiosError(error)) {
     return {
       title: "Unexpected Error",
@@ -35,17 +45,30 @@ export function normalizeApiError(error: unknown, options?: NormalizeApiErrorOpt
 
   const status = error.response?.status;
   const payload = error.response?.data as
-    | { message?: string | string[] | FieldErrorMap; error?: string; code?: string; errors?: string[]; fieldErrors?: Array<{ field: string; message: string }> }
+    | {
+        message?: string | string[] | FieldErrorMap;
+        error?: string;
+        code?: string;
+        errors?: string[];
+        fieldErrors?: Array<{ field: string; message: string }>;
+      }
     | undefined;
 
-  const details = payload?.errors ?? (Array.isArray(payload?.message)
-    ? payload.message
-    : typeof payload?.message === "string"
-      ? [payload.message]
-      : undefined);
+  const details =
+    payload?.errors ??
+    (Array.isArray(payload?.message)
+      ? payload.message
+      : typeof payload?.message === "string"
+        ? [payload.message]
+        : undefined);
 
-  const fieldErrors = Array.isArray(payload?.fieldErrors) ? Object.fromEntries(payload.fieldErrors.map(issue => [issue.field, [issue.message]])) :
-    payload?.message && typeof payload.message === "object" && !Array.isArray(payload.message)
+  const fieldErrors = Array.isArray(payload?.fieldErrors)
+    ? Object.fromEntries(
+        payload.fieldErrors.map((issue) => [issue.field, [issue.message]]),
+      )
+    : payload?.message &&
+        typeof payload.message === "object" &&
+        !Array.isArray(payload.message)
       ? toFieldErrors(payload.message)
       : undefined;
 
@@ -56,26 +79,30 @@ export function normalizeApiError(error: unknown, options?: NormalizeApiErrorOpt
 
   const appError: AppError = {
     status,
+    statusCode: status,
     code: payload?.code,
     title:
       status === 409
         ? "Save conflict or academic restriction"
         : status === 401
-        ? "Session Expired"
-        : status === 403
-          ? "Access Denied"
-          : status === 404
-            ? "Not Found"
-            : status === 422 || status === 400
-              ? "Validation Failed"
-              : error.code === "ERR_NETWORK"
-                ? "Network Error"
-                : "Request Failed",
+          ? "Session Expired"
+          : status === 403
+            ? "Access Denied"
+            : status === 404
+              ? "Not Found"
+              : status === 422 || status === 400
+                ? "Validation Failed"
+                : error.code === "ERR_NETWORK"
+                  ? "Network Error"
+                  : "Request Failed",
     message,
     details,
     fieldErrors,
     isNetworkError: error.code === "ERR_NETWORK",
-    shouldShowModal: error.code === "ERR_NETWORK" || (status !== undefined && status >= 500) || status === 404,
+    shouldShowModal:
+      error.code === "ERR_NETWORK" ||
+      (status !== undefined && status >= 500) ||
+      status === 404,
   };
 
   if (options?.present !== false && appError.shouldShowModal) {

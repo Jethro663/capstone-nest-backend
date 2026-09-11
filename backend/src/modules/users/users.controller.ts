@@ -40,6 +40,7 @@ export class UsersController {
     @Query('limit') limit: number = 20,
     @Query('includeStatusCounts') includeStatusCountsQuery?: string,
     @Query('gradeLevel') gradeLevel?: string,
+    @Query('search') search?: string,
   ) {
     const result = await this.usersService.findAll({
       role,
@@ -51,6 +52,7 @@ export class UsersController {
         'includeStatusCounts',
       ),
       ...(gradeLevel ? { gradeLevel } : {}),
+      ...(search?.trim() ? { search: search.trim() } : {}),
     });
     return {
       success: true,

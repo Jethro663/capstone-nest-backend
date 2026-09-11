@@ -3,7 +3,7 @@ export interface UploadedFile {
   folderId?: string | null;
   teacherId: string;
   classId?: string | null;
-  scope: 'private' | 'general';
+  scope: "private" | "general";
   subjectKey?: LibrarySubjectKey | null;
   gradeLevel?: LibraryGradeLevel | null;
   teacherVisible?: boolean;
@@ -35,43 +35,52 @@ export interface UploadedFile {
 }
 
 export type LibrarySubjectKey =
-  | 'math'
-  | 'science'
-  | 'english'
-  | 'filipino'
-  | 'ap'
-  | 'tle'
-  | 'mapeh'
-  | 'esp';
+  | "math"
+  | "science"
+  | "english"
+  | "filipino"
+  | "ap"
+  | "tle"
+  | "mapeh"
+  | "esp";
 
-export type LibraryGradeLevel = '7' | '8' | '9' | '10';
+export type LibraryGradeLevel = "7" | "8" | "9" | "10";
 export type LibraryIndexStatus =
-  | 'not_indexed'
-  | 'pending'
-  | 'processing'
-  | 'completed'
-  | 'failed';
-export type LibraryFileKind = 'pdf' | 'txt' | 'pptx' | 'image';
+  | "not_indexed"
+  | "pending"
+  | "processing"
+  | "completed"
+  | "failed";
+export type LibraryFileKind =
+  | "pdf"
+  | "txt"
+  | "pptx"
+  | "document"
+  | "image"
+  | "file";
 
-export const LIBRARY_SUBJECTS: Array<{ key: LibrarySubjectKey; label: string }> = [
-  { key: 'math', label: 'Math' },
-  { key: 'science', label: 'Science' },
-  { key: 'english', label: 'English' },
-  { key: 'filipino', label: 'Filipino' },
-  { key: 'ap', label: 'Araling Panlipunan' },
-  { key: 'tle', label: 'TLE' },
-  { key: 'mapeh', label: 'MAPEH' },
-  { key: 'esp', label: 'ESP' },
+export const LIBRARY_SUBJECTS: Array<{
+  key: LibrarySubjectKey;
+  label: string;
+}> = [
+  { key: "math", label: "Math" },
+  { key: "science", label: "Science" },
+  { key: "english", label: "English" },
+  { key: "filipino", label: "Filipino" },
+  { key: "ap", label: "Araling Panlipunan" },
+  { key: "tle", label: "TLE" },
+  { key: "mapeh", label: "MAPEH" },
+  { key: "esp", label: "ESP" },
 ];
 
-export const LIBRARY_GRADES: LibraryGradeLevel[] = ['7', '8', '9', '10'];
+export const LIBRARY_GRADES: LibraryGradeLevel[] = ["7", "8", "9", "10"];
 
 export interface LibraryFolder {
   id: string;
   name: string;
   ownerId: string;
   parentId?: string | null;
-  scope: 'private' | 'general';
+  scope: "private" | "general";
   createdAt?: string;
   updatedAt?: string;
   deletedAt?: string | null;
@@ -91,7 +100,7 @@ export interface StorageSummary {
 }
 
 export interface FileLibraryQuery {
-  scope?: 'private' | 'general';
+  scope?: "private" | "general";
   folderId?: string;
   ownerId?: string;
   classId?: string;

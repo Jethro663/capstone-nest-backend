@@ -70,6 +70,12 @@ export interface RubricScore {
   feedback?: string;
 }
 
+export interface StudentAssessmentActivity {
+  hasSubmittedAttempt: boolean;
+  submittedAttemptCount: number;
+  ongoingAttemptId: string | null;
+}
+
 export interface Assessment {
   authoringRestrictions?: {
     hasAttempts: boolean;
@@ -89,6 +95,8 @@ export interface Assessment {
 
   editorRevision?: number;
   isCoreTemplateAsset?: boolean | null;
+  templateId?: string | null;
+  templateSourceId?: string | null;
   academicCapabilities?: AcademicCapabilities;
   id: string;
   title: string;
@@ -113,6 +121,9 @@ export interface Assessment {
   classRecordCategory?: string | null;
   quarter?: string | null;
   questions?: AssessmentQuestion[];
+  studentActivity?: StudentAssessmentActivity;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface CreateAssessmentDto {

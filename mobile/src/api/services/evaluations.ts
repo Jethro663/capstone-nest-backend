@@ -1,12 +1,12 @@
-import { apiClient } from '../client';
-import { unwrapEnvelope } from '../http';
-import type { ApiEnvelope } from '../../types/api';
+import { apiClient } from "../client";
+import { unwrapEnvelope } from "../http";
+import type { ApiEnvelope } from "../../types/api";
 
-export type AcademicPeriodKey = 'Q1' | 'Q2' | 'Q3' | 'Q4';
+export type AcademicPeriodKey = "Q1" | "Q2" | "Q3" | "Q4";
 export type TeacherEvaluationType =
-  | 'teacher_class'
-  | 'ja_hub'
-  | 'learners_path';
+  | "teacher_class"
+  | "ja_hub"
+  | "learners_path";
 
 export type TeacherEvaluationQuestion = {
   key: string;
@@ -63,17 +63,17 @@ export type SubmitTeacherEvaluationDto = {
 };
 
 export type SystemEvaluationTargetModule =
-  | 'lms'
-  | 'lxp'
-  | 'ai_mentor'
-  | 'intervention'
-  | 'overall';
-export type SystemEvaluationFormType = 'system' | 'ja_hub';
-export type SystemEvaluationAudienceRole = 'student' | 'teacher';
+  | "lms"
+  | "lxp"
+  | "ai_mentor"
+  | "intervention"
+  | "overall";
+export type SystemEvaluationFormType = "system" | "ja_hub";
+export type SystemEvaluationAudienceRole = "student" | "teacher";
 export type SystemEvaluationAssignmentStatus =
-  | 'pending'
-  | 'submitted'
-  | 'expired';
+  | "pending"
+  | "submitted"
+  | "expired";
 
 export type AssignedSystemEvaluation = {
   id: string;
@@ -102,7 +102,7 @@ export type SubmitAssignedSystemEvaluationDto = {
   feedback?: string;
 };
 
-export type SystemEvaluationCampaignStatus = 'draft' | 'active' | 'closed';
+export type SystemEvaluationCampaignStatus = "draft" | "active" | "closed";
 export type SystemEvaluationCampaign = {
   id: string;
   formType: SystemEvaluationFormType;
@@ -120,6 +120,15 @@ export type SystemEvaluationCampaign = {
   submittedCount: number;
 };
 
+export type SystemEvaluationCampaignPage = {
+  campaigns: SystemEvaluationCampaign[];
+  count: number;
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+};
+
 export type CreateSystemEvaluationCampaignDto = {
   formType: SystemEvaluationFormType;
   audienceRole: SystemEvaluationAudienceRole;
@@ -130,26 +139,85 @@ export type CreateSystemEvaluationCampaignDto = {
   status?: SystemEvaluationCampaignStatus;
 };
 
+export type SystemEvaluationRow = {
+  id: string;
+  submittedBy: string;
+  campaignId?: string | null;
+  targetModule: SystemEvaluationTargetModule;
+  usabilityScore: number | string;
+  functionalityScore: number | string;
+  performanceScore: number | string;
+  satisfactionScore: number | string;
+  overallScore?: number | string | null;
+  questionRatingsJson?: Record<string, number> | null;
+  feedback: string | null;
+  aiContextMetadata?: {
+    sessionType?: "mentor_chat" | "mistake_explanation" | "student_tutor";
+    attemptId?: string;
+    questionId?: string;
+    classId?: string;
+    sourceFlow?: string;
+  } | null;
+  createdAt: string;
+  submitter?: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string | null;
+  } | null;
+  campaign?: {
+    id: string;
+    title: string;
+    formType: SystemEvaluationFormType;
+    audienceRole: SystemEvaluationAudienceRole;
+    status: SystemEvaluationCampaignStatus;
+  } | null;
+};
+
+export type SystemEvaluationListResponse = {
+  count: number;
+  rows: SystemEvaluationRow[];
+  summary?: {
+    averages: {
+      usabilityScore: number;
+      functionalityScore: number;
+      performanceScore: number;
+      satisfactionScore: number;
+    };
+    feedbackCount: number;
+    moduleBreakdown: Array<{
+      targetModule: SystemEvaluationTargetModule;
+      count: number;
+      averages: {
+        usabilityScore: number;
+        functionalityScore: number;
+        performanceScore: number;
+        satisfactionScore: number;
+      };
+    }>;
+  };
+};
+
 export const evaluationsApi = {
   async getStudentInbox(): Promise<TeacherEvaluationDashboard> {
-    const response = await apiClient.get<ApiEnvelope<TeacherEvaluationDashboard>>(
-      '/lxp/me/teacher-evaluations',
-    );
+    const response = await apiClient.get<
+      ApiEnvelope<TeacherEvaluationDashboard>
+    >("/lxp/me/teacher-evaluations");
     return unwrapEnvelope(response.data);
   },
 
   async submitEvaluation(payload: SubmitTeacherEvaluationDto) {
     const response = await apiClient.post<ApiEnvelope<unknown>>(
-      '/lxp/me/teacher-evaluations',
+      "/lxp/me/teacher-evaluations",
       payload,
     );
     return unwrapEnvelope(response.data);
   },
 
   async getMySystemEvaluations(): Promise<SystemEvaluationDashboard> {
-    const response = await apiClient.get<ApiEnvelope<SystemEvaluationDashboard>>(
-      '/lxp/me/system-evaluations',
-    );
+    const response = await apiClient.get<
+      ApiEnvelope<SystemEvaluationDashboard>
+    >("/lxp/me/system-evaluations");
     return unwrapEnvelope(response.data);
   },
 
@@ -157,25 +225,56 @@ export const evaluationsApi = {
     assignmentId: string,
     payload: SubmitAssignedSystemEvaluationDto,
   ) {
-    const response = await apiClient.post<ApiEnvelope<AssignedSystemEvaluation>>(
-      `/lxp/me/system-evaluations/${assignmentId}/submit`,
-      payload,
-    );
+    const response = await apiClient.post<
+      ApiEnvelope<AssignedSystemEvaluation>
+    >(`/lxp/me/system-evaluations/${assignmentId}/submit`, payload);
     return unwrapEnvelope(response.data);
   },
 
-  async getCampaigns(filters?: { formType?: SystemEvaluationFormType; audienceRole?: SystemEvaluationAudienceRole; status?: SystemEvaluationCampaignStatus; classId?: string }) {
-    const response = await apiClient.get<ApiEnvelope<{ campaigns: SystemEvaluationCampaign[]; count: number }>>('/lxp/system-evaluation-campaigns', { params: filters });
+  async getCampaigns(filters?: {
+    formType?: SystemEvaluationFormType;
+    audienceRole?: SystemEvaluationAudienceRole;
+    status?: SystemEvaluationCampaignStatus;
+    classId?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const response = await apiClient.get<
+      ApiEnvelope<SystemEvaluationCampaignPage>
+    >("/lxp/system-evaluation-campaigns", { params: filters });
     return unwrapEnvelope(response.data);
   },
 
   async createCampaign(payload: CreateSystemEvaluationCampaignDto) {
-    const response = await apiClient.post<ApiEnvelope<SystemEvaluationCampaign>>('/lxp/system-evaluation-campaigns', payload);
+    const response = await apiClient.post<
+      ApiEnvelope<SystemEvaluationCampaign>
+    >("/lxp/system-evaluation-campaigns", payload);
     return unwrapEnvelope(response.data);
   },
 
-  async updateCampaignStatus(id: string, status: SystemEvaluationCampaignStatus) {
-    const response = await apiClient.patch<ApiEnvelope<SystemEvaluationCampaign>>(`/lxp/system-evaluation-campaigns/${id}/status`, { status });
+  async updateCampaignStatus(
+    id: string,
+    status: SystemEvaluationCampaignStatus,
+  ) {
+    const response = await apiClient.patch<
+      ApiEnvelope<SystemEvaluationCampaign>
+    >(`/lxp/system-evaluation-campaigns/${id}/status`, { status });
+    return unwrapEnvelope(response.data);
+  },
+
+  async getEvaluations(filters?: {
+    targetModule?: SystemEvaluationTargetModule;
+    campaignId?: string;
+    audienceRole?: SystemEvaluationAudienceRole;
+    from?: string;
+    to?: string;
+  }) {
+    const response = await apiClient.get<
+      ApiEnvelope<SystemEvaluationListResponse>
+    >("/lxp/evaluations", {
+      params: filters && Object.keys(filters).length ? filters : undefined,
+    });
     return unwrapEnvelope(response.data);
   },
 };

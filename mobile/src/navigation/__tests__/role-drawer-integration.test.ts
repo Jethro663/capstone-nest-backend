@@ -7,9 +7,11 @@ function readSource(relativePath: string) {
 
 describe("role drawer integration", () => {
   const appNavigator = readSource("../AppNavigator.tsx");
-  const teacherNavigatorSource = appNavigator.match(
-    /function TeacherNavigator\(\)[\s\S]*?function RoleTabs/,
-  )?.[0] ?? "";
+  const normalizedAppNavigator = appNavigator.replace(/\s+/g, " ");
+  const teacherNavigatorSource =
+    appNavigator
+      .match(/function TeacherNavigator\(\)[\s\S]*?function RoleTabs/)?.[0]
+      .replace(/\s+/g, " ") ?? "";
 
   it("mounts the drawer for every role while keeping the existing tab navigators", () => {
     expect(appNavigator.match(/<RoleDrawerProvider/g)).toHaveLength(3);
@@ -35,8 +37,12 @@ describe("role drawer integration", () => {
       "TeacherPerformance",
       "TeacherEvaluations",
     ]) {
-      expect(appNavigator).toContain(`<Tab.Screen name="${routeName}"`);
-      expect(teacherNavigatorSource).not.toContain(`<RootStack.Screen name="${routeName}"`);
+      expect(normalizedAppNavigator).toContain(
+        `<Tab.Screen name="${routeName}"`,
+      );
+      expect(teacherNavigatorSource).not.toContain(
+        `<RootStack.Screen name="${routeName}"`,
+      );
     }
   });
 
@@ -45,11 +51,18 @@ describe("role drawer integration", () => {
       appNavigator.indexOf("function StudentTabs"),
       appNavigator.indexOf("function StudentNavigator"),
     );
-    const drawerModel = readSource("../role-drawer-model.ts");
+    const drawerModel = readSource("../role-drawer-model.ts").replace(
+      /\s+/g,
+      " ",
+    );
     expect(studentTabsSource).toContain('backBehavior="history"');
     expect(appNavigator).toContain('case "StudentCalendar"');
-    expect(appNavigator).toContain("component={studentTabScreens.StudentCalendar}");
-    expect(drawerModel).toContain('{ label: "Calendar", route: "StudentCalendar", kind: "tab"');
+    expect(appNavigator).toContain(
+      "component={studentTabScreens.StudentCalendar}",
+    );
+    expect(drawerModel).toContain(
+      '{ label: "Calendar", route: "StudentCalendar", kind: "tab"',
+    );
     expect(appNavigator).toContain('case "Calendar"');
     expect(appNavigator).toContain("component={studentStackScreens.Calendar}");
   });
@@ -64,11 +77,14 @@ describe("role drawer integration", () => {
     "../../screens/TeacherInterventionsScreen.tsx",
     "../../screens/TeacherPerformanceScreen.tsx",
     "../../screens/TeacherEvaluationsScreen.tsx",
-  ])("uses the hamburger instead of Back on teacher drawer root %s", (screenPath) => {
-    const source = readSource(screenPath);
-    expect(source).not.toContain("showBackButton");
-    expect(source).toContain("onBackPress={() => navigation.goBack()}");
-  });
+  ])(
+    "uses the hamburger instead of Back on teacher drawer root %s",
+    (screenPath) => {
+      const source = readSource(screenPath);
+      expect(source).not.toContain("showBackButton");
+      expect(source).toContain("onBackPress={() => navigation.goBack()}");
+    },
+  );
 
   it.each([
     "../../screens/TeacherClassDetailScreen.tsx",
@@ -76,23 +92,29 @@ describe("role drawer integration", () => {
     "../../screens/TeacherLessonDetailScreen.tsx",
     "../../screens/TeacherAiDraftScreen.tsx",
     "../../screens/TeacherDeepParityScreens.tsx",
-  ])("uses durable Back handling on redesigned teacher detail %s", (screenPath) => {
-    const source = readSource(screenPath);
-    expect(source).toContain("showBackButton");
-    expect(source).toContain("navigateTeacherDetailBack");
-    expect(source).toContain("onBackPress={handleBack}");
-  });
+  ])(
+    "uses durable Back handling on redesigned teacher detail %s",
+    (screenPath) => {
+      const source = readSource(screenPath);
+      expect(source).toContain("showBackButton");
+      expect(source).toContain("navigateTeacherDetailBack");
+      expect(source).toContain("onBackPress={handleBack}");
+    },
+  );
 
   it.each([
     "../../screens/TeacherSectionDetailScreen.tsx",
     "../../screens/TeacherAssessmentDetailScreen.tsx",
     "../../screens/TeacherAssessmentReviewScreen.tsx",
     "../../screens/TeacherCreateModuleScreen.tsx",
-  ])("puts Back in the leading header position on unchanged teacher detail %s", (screenPath) => {
-    const source = readSource(screenPath);
-    expect(source).toContain("showBackButton");
-    expect(source).toContain("onBackPress={() => navigation.goBack()}");
-  });
+  ])(
+    "puts Back in the leading header position on unchanged teacher detail %s",
+    (screenPath) => {
+      const source = readSource(screenPath);
+      expect(source).toContain("showBackButton");
+      expect(source).toContain("onBackPress={() => navigation.goBack()}");
+    },
+  );
 
   it("carries source metadata into alternate teacher detail entries", () => {
     expect(readSource("../../screens/TeacherLibraryScreen.tsx")).toContain(
@@ -117,9 +139,13 @@ describe("role drawer integration", () => {
 
   it("gives the root-stack Notifications utility a visible Back action", () => {
     const source = readSource("../../screens/NotificationsInboxScreen.tsx");
-    expect(source).toContain('NativeStackScreenProps<RootStackParamList, "Notifications">');
+    expect(source).toContain(
+      'NativeStackScreenProps<RootStackParamList, "Notifications">',
+    );
     expect(source).toContain('accessibilityLabel="Back"');
-    expect(source).toContain('navigation.navigate("TeacherDrawer", { screen: "Home" })');
+    expect(source).toContain(
+      'navigation.navigate("TeacherDrawer", { screen: "Home" })',
+    );
   });
 
   it("keeps Calendar announcement links inside the teacher drawer navigator", () => {
@@ -141,8 +167,12 @@ describe("role drawer integration", () => {
   });
 
   it("removes bottom-bar reservation from the long student Home and Profile screens", () => {
-    expect(readSource("../../screens/DashboardScreen.tsx")).not.toContain("paddingBottom: 88");
-    expect(readSource("../../screens/ProfileScreen.tsx")).not.toContain("paddingBottom: 132");
+    expect(readSource("../../screens/DashboardScreen.tsx")).not.toContain(
+      "paddingBottom: 88",
+    );
+    expect(readSource("../../screens/ProfileScreen.tsx")).not.toContain(
+      "paddingBottom: 132",
+    );
   });
 
   it("lets the shared JA surface show Back when it is opened as a stack route", () => {

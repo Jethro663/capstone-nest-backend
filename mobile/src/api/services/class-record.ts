@@ -23,6 +23,9 @@ import type {
   RecordScoreDto,
   SpreadsheetData,
   UpdateClassRecordItemDto,
+  TransmutationBand,
+  TransmutationPreviewResult,
+  TransmutationTableRecord,
 } from "../../types/class-record";
 
 function normalizeArray<T>(value: unknown): T[] {
@@ -201,6 +204,48 @@ export const classRecordApi = {
     const response = await apiClient.get<
       ApiEnvelope<{ id: string; title: string; description?: string }>
     >("/class-record/transmutation/active");
+    return unwrapEnvelope(response.data);
+  },
+  async getAllTransmutationTables() {
+    const response = await apiClient.get<
+      ApiEnvelope<TransmutationTableRecord[]>
+    >("/class-record/transmutation/all");
+    return normalizeArray<TransmutationTableRecord>(
+      unwrapEnvelope(response.data),
+    );
+  },
+  async previewTransmutationTable(file: {
+    uri: string;
+    name: string;
+    type?: string | null;
+  }) {
+    const form = new FormData();
+    form.append("file", {
+      uri: file.uri,
+      name: file.name,
+      type: file.type || "application/pdf",
+    } as never);
+    const response = await apiClient.post<
+      ApiEnvelope<TransmutationPreviewResult>
+    >("/class-record/transmutation/preview", form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return unwrapEnvelope(response.data);
+  },
+  async applyTransmutationTable(payload: {
+    title: string;
+    description?: string;
+    bands: TransmutationBand[];
+  }) {
+    const response = await apiClient.post<
+      ApiEnvelope<TransmutationTableRecord>
+    >("/class-record/transmutation/apply", payload);
+    return unwrapEnvelope(response.data);
+  },
+  async activateTransmutationTable(id: string) {
+    const response = await apiClient.post<
+      ApiEnvelope<TransmutationTableRecord>
+    >(`/class-record/transmutation/activate/${id}`);
     return unwrapEnvelope(response.data);
   },
 

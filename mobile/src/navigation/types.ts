@@ -1,5 +1,8 @@
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
-import type { CompositeScreenProps, NavigatorScreenParams } from "@react-navigation/native";
+import type {
+  CompositeScreenProps,
+  NavigatorScreenParams,
+} from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 export type {
@@ -38,10 +41,20 @@ export type TeacherClassDetailSource =
 export type TeacherModuleDetailSource = "class" | "library";
 export type TeacherLessonDetailSource = "module" | "lessons";
 export type TeacherAiDraftSource = "class" | "assessments";
-export type StudentClassDetailSource = "classes" | "home" | "calendar" | "courses" | "assessments";
+export type StudentClassDetailSource =
+  | "classes"
+  | "home"
+  | "calendar"
+  | "courses"
+  | "assessments";
 export type StudentModuleDetailSource = "class";
 export type StudentLessonDetailSource = "module" | "class" | "home" | "ja";
-export type StudentAssessmentDetailSource = "assessments" | "class" | "home" | "calendar" | "history";
+export type StudentAssessmentDetailSource =
+  | "assessments"
+  | "class"
+  | "home"
+  | "calendar"
+  | "history";
 
 export type AdminToolSection =
   | "users"
@@ -54,7 +67,9 @@ export type AdminToolSection =
   | "roster"
   | "templates"
   | "settings"
-  | "records";
+  | "records"
+  | "userReports"
+  | "chatbot";
 
 export type JaRouteParams = {
   panel?: JaPanel;
@@ -70,15 +85,50 @@ export type RootStackParamList = {
   Notifications: undefined;
   AdminTools: { section?: AdminToolSection };
   AdminAcademic: undefined;
+  AdminSettingsAcademicYear: undefined;
+  AdminSettingsAssessmentsGrading: undefined;
+  AdminSettingsYearTransition: undefined;
+  AdminSettingsLearnerCompletion: undefined;
+  AdminSettingsAuditRecovery: undefined;
+  AdminStudentReadiness: undefined;
   AdminAnnouncements: undefined;
+  AdminLifecycleReview: {
+    targetType: "CLASS" | "SECTION" | "STUDENT";
+    targetId: string;
+    targetLabel: string;
+    isActive: boolean;
+    sectionId?: string;
+    classId?: string;
+  };
+  AdminSectionDetail: { sectionId: string };
+  AdminTemplateDetail: { templateId: string };
+  AdminCreateUser: undefined;
+  AdminUserDetail: { userId: string };
   ClassWorkspace: { classId: string };
-  ClassDetail: { classId: string; initialTab?: ClassDetailInitialTab; source?: StudentClassDetailSource };
-  ModuleDetail: { classId: string; moduleId: string; source?: StudentModuleDetailSource };
+  ClassDetail: {
+    classId: string;
+    initialTab?: ClassDetailInitialTab;
+    source?: StudentClassDetailSource;
+  };
+  ModuleDetail: {
+    classId: string;
+    moduleId: string;
+    source?: StudentModuleDetailSource;
+  };
   Calendar: { classId?: string } | undefined;
   Courses: undefined;
   Lessons: undefined;
-  LessonDetail: { lessonId: string; classId?: string; moduleId?: string; source?: StudentLessonDetailSource };
-  AssessmentDetail: { assessmentId: string; classId: string; source?: StudentAssessmentDetailSource };
+  LessonDetail: {
+    lessonId: string;
+    classId?: string;
+    moduleId?: string;
+    source?: StudentLessonDetailSource;
+  };
+  AssessmentDetail: {
+    assessmentId: string;
+    classId: string;
+    source?: StudentAssessmentDetailSource;
+  };
   AssessmentTake: { assessmentId: string };
   AssessmentResults: { attemptId: string };
   AssessmentHistory: { assessmentId?: string; classId?: string } | undefined;
@@ -168,6 +218,8 @@ export type MainTabParamList = {
   Academic: undefined;
   Home: undefined;
   AdminUsers: { section?: AdminToolSection } | undefined;
+  AdminSections: undefined;
+  AdminClasses: undefined;
   AdminRoster: { section?: AdminToolSection } | undefined;
   AdminAnnouncements: undefined;
   AdminEvaluations: { section?: AdminToolSection } | undefined;
@@ -178,6 +230,9 @@ export type MainTabParamList = {
   AdminAudit: { section?: AdminToolSection } | undefined;
   AdminDiagnostics: { section?: AdminToolSection } | undefined;
   AdminSettings: { section?: AdminToolSection } | undefined;
+  AdminClassRecord: { section?: AdminToolSection } | undefined;
+  AdminUserReports: { section?: AdminToolSection } | undefined;
+  AdminChatbot: { section?: AdminToolSection } | undefined;
   Dashboard: undefined;
   StudentCalendar: undefined;
   Classes: undefined;
@@ -202,12 +257,11 @@ export type MainTabParamList = {
   Lessons: undefined;
 };
 
-export type TeacherDrawerScreenProps<
-  RouteName extends keyof MainTabParamList,
-> = CompositeScreenProps<
-  BottomTabScreenProps<MainTabParamList, RouteName>,
-  NativeStackScreenProps<RootStackParamList>
->;
+export type TeacherDrawerScreenProps<RouteName extends keyof MainTabParamList> =
+  CompositeScreenProps<
+    BottomTabScreenProps<MainTabParamList, RouteName>,
+    NativeStackScreenProps<RootStackParamList>
+  >;
 
 export type AuthStackParamList = {
   Login: undefined;

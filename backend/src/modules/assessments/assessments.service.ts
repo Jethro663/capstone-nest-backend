@@ -8,7 +8,17 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AssessmentSubmittedEvent } from '../../common/events';
-import { eq, and, desc, inArray, isNull, sql, count } from 'drizzle-orm';
+import {
+  eq,
+  and,
+  desc,
+  inArray,
+  isNull,
+  sql,
+  count,
+  ilike,
+  or,
+} from 'drizzle-orm';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { DatabaseService } from '../../database/database.service';
@@ -1856,6 +1866,60 @@ export class AssessmentsService {
       page,
       limit,
       totalPages: Math.max(Math.ceil(total / limit), 1),
+    };
+  }
+
+  async getAdminInventory(
+    options: {
+      page?: number;
+      limit?: number;
+      classId?: string;
+      search?: string;
+      publication?: 'all' | 'published' | 'draft';
+    },
+    _currentUser: { userId: string; roles: string[] },
+  ) {
+    const page = options.page ?? 1;
+    const limit = options.limit ?? 25;
+    const offset = (page - 1) * limit;
+    const search = options.search?.trim();
+    const where = and(
+      options.classId ? eq(assessments.classId, options.classId) : undefined,
+      search
+        ? or(
+            ilike(assessments.title, `%${search}%`),
+            ilike(assessments.description, `%${search}%`),
+          )
+        : undefined,
+      options.publication === 'published'
+        ? eq(assessments.isPublished, true)
+        : undefined,
+      options.publication === 'draft'
+        ? eq(assessments.isPublished, false)
+        : undefined,
+    );
+    const [data, [summary]] = await Promise.all([
+      this.db.query.assessments.findMany({
+        where,
+        orderBy: [desc(assessments.createdAt)],
+        limit,
+        offset,
+        with: {
+          class: {
+            columns: { id: true, subjectCode: true, subjectName: true },
+            with: { section: { columns: { id: true, name: true } } },
+          },
+        },
+      }),
+      this.db.select({ total: count() }).from(assessments).where(where),
+    ]);
+    const total = Number(summary?.total ?? 0);
+    return {
+      data,
+      page,
+      limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
     };
   }
 

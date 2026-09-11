@@ -135,4 +135,11 @@ export class CreateUserDto {
     message: 'LRN must be exactly 12 digits (e.g., 202401230001)',
   })
   lrn?: string;
+
+  @ValidateIf((o: { role: string }) => o.role === 'student')
+  @IsString({ message: 'Grade level is required for student accounts' })
+  @IsIn(['7', '8', '9', '10'], {
+    message: 'Grade level must be 7, 8, 9, or 10',
+  })
+  gradeLevel?: '7' | '8' | '9' | '10';
 }

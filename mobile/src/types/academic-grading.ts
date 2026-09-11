@@ -1,14 +1,76 @@
 /** Backend-owned academic contracts. Mirror in mobile/src/types/academic-grading.ts. */
 export type AcademicPeriodKey = "Q1" | "Q2" | "Q3" | "Q4";
 
+export interface AcademicAlignmentCounts {
+  enrollments: number;
+  assessments: number;
+  attempts: number;
+  classRecords: number;
+  finalizedRecords: number;
+  finalGradeRows: number;
+  legacyEvidenceRows: number;
+  periodRevisionRows: number;
+}
+
+export interface AcademicAlignmentCandidate {
+  id: string;
+  subjectCode: string;
+  subjectName: string;
+  sectionId: string;
+  sectionName: string;
+  sectionSchoolYear: string;
+  teacherId: string | null;
+  teacherName: string | null;
+  isActive: boolean;
+  counts: AcademicAlignmentCounts;
+}
+
+export interface AcademicAlignmentMessage {
+  code: string;
+  message: string;
+  classId?: string;
+  sectionId?: string;
+}
+
 export interface AcademicAlignmentPreview {
-  input: { sourceSchoolYear: string; targetSchoolYear: string; targetQuarter: AcademicPeriodKey; classIds: string[] };
-  state: { id: string; schoolYear: string; quarter: AcademicPeriodKey; version: number };
-  selectedClasses: Array<{ id: string; subjectCode: string; subjectName: string; sectionName: string; isActive: boolean }>;
+  input: {
+    sourceSchoolYear: string;
+    targetSchoolYear: string;
+    targetQuarter: AcademicPeriodKey;
+    classIds: string[];
+  };
+  state: {
+    id: string;
+    schoolYear: string;
+    quarter: AcademicPeriodKey;
+    version: number;
+  };
+  policies: Array<{
+    schoolYear: string;
+    policyId: string;
+    policy: AcademicPolicy;
+  }>;
+  proposedPolicies: AcademicPolicy[];
+  candidates: AcademicAlignmentCandidate[];
+  selectedClasses: AcademicAlignmentCandidate[];
+  sections: Array<{
+    id: string;
+    name: string;
+    gradeLevel: string;
+    schoolYear: string;
+    classIds: string[];
+  }>;
   movedSectionIds: string[];
+  ambiguousCounts: {
+    periodRevisions: number;
+    externalGrades: number;
+    annualSelections: number;
+    annualGrades: number;
+    yearOutcomes: number;
+  };
   requiredConfirmations: Array<{ code: string; text: string }>;
-  blockers: Array<{ code: string; message: string; classId?: string; sectionId?: string }>;
-  warnings: Array<{ code: string; message: string; classId?: string; sectionId?: string }>;
+  blockers: AcademicAlignmentMessage[];
+  warnings: AcademicAlignmentMessage[];
   safeToApply: boolean;
   manifestHash: string;
 }

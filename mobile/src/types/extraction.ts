@@ -1,4 +1,9 @@
-export type ExtractionStatus = "pending" | "processing" | "completed" | "failed" | "applied";
+export type ExtractionStatus =
+  | "pending"
+  | "processing"
+  | "completed"
+  | "failed"
+  | "applied";
 export type ExtractionStyle = "faithful" | "clean" | "student_friendly";
 
 export type LibrarySubjectKey =
@@ -13,31 +18,63 @@ export type LibrarySubjectKey =
 
 export type LibraryGradeLevel = "7" | "8" | "9" | "10";
 
+export const LIBRARY_SUBJECTS: Array<{
+  key: LibrarySubjectKey;
+  label: string;
+}> = [
+  { key: "math", label: "Math" },
+  { key: "science", label: "Science" },
+  { key: "english", label: "English" },
+  { key: "filipino", label: "Filipino" },
+  { key: "ap", label: "Araling Panlipunan" },
+  { key: "tle", label: "TLE" },
+  { key: "mapeh", label: "MAPEH" },
+  { key: "esp", label: "ESP" },
+];
+
+export const LIBRARY_GRADES: LibraryGradeLevel[] = ["7", "8", "9", "10"];
+
 export interface UploadedLibraryFile {
   id: string;
   folderId?: string | null;
-  teacherId?: string;
+  teacherId: string;
   originalName: string;
-  storedName?: string;
+  storedName: string;
   filename?: string;
   mimeType: string;
   sizeBytes: number;
-  filePath?: string;
+  filePath: string;
   classId?: string | null;
-  scope?: "private" | "general";
+  scope: "private" | "general";
   subjectKey?: LibrarySubjectKey | null;
   gradeLevel?: LibraryGradeLevel | null;
   teacherVisible?: boolean;
   aiEnabled?: boolean;
-  indexStatus?: "not_indexed" | "pending" | "processing" | "completed" | "failed";
+  indexStatus?:
+    | "not_indexed"
+    | "pending"
+    | "processing"
+    | "completed"
+    | "failed";
   indexError?: string | null;
   indexedAt?: string | null;
   contentHash?: string | null;
   fileKind?: "pdf" | "txt" | "pptx" | "document" | "image" | "file";
-  uploadedAt?: string;
+  uploadedAt: string;
   createdAt?: string;
   deletedAt?: string | null;
   folder?: LibraryFolder | null;
+  teacher?: {
+    id: string;
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+  };
+  class?: {
+    id: string;
+    subjectName?: string;
+    subjectCode?: string;
+  };
 }
 
 export interface LibraryFolder {

@@ -1,4 +1,4 @@
-import { api } from '@/lib/api-client';
+import { api } from "@/lib/api-client";
 import type {
   FileLibraryResponse,
   FileLibraryQuery,
@@ -7,7 +7,7 @@ import type {
   LibraryFolder,
   StorageSummary,
   UploadedFile,
-} from '@/types/file';
+} from "@/types/file";
 
 export const fileService = {
   async upload(
@@ -15,7 +15,7 @@ export const fileService = {
     options: {
       classId?: string;
       folderId?: string;
-      scope?: 'private' | 'general';
+      scope?: "private" | "general";
       subjectKey?: LibrarySubjectKey;
       gradeLevel?: LibraryGradeLevel;
       teacherVisible?: boolean;
@@ -23,9 +23,9 @@ export const fileService = {
     } = {},
   ): Promise<{ success: boolean; message: string; data: UploadedFile }> {
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append("file", file);
 
-    const { data } = await api.post('/files/upload', formData, {
+    const { data } = await api.post("/files/upload", formData, {
       params: options,
       timeout: 120_000,
     });
@@ -35,45 +35,62 @@ export const fileService = {
   async getAll(
     query: FileLibraryQuery = {},
   ): Promise<FileLibraryResponse<UploadedFile>> {
-    const { data } = await api.get('/files', { params: query });
+    const { data } = await api.get("/files", { params: query });
     return data;
   },
 
   async getFolders(
     query: FileLibraryQuery = {},
-  ): Promise<{ success: boolean; message: string; data: LibraryFolder[]; count: number }> {
-    const { data } = await api.get('/files/folders', { params: query });
+  ): Promise<{
+    success: boolean;
+    message: string;
+    data: LibraryFolder[];
+    count: number;
+  }> {
+    const { data } = await api.get("/files/folders", { params: query });
     return data;
   },
 
   async createFolder(dto: {
     name: string;
     parentId?: string;
-    scope?: 'private' | 'general';
+    scope?: "private" | "general";
   }): Promise<{ success: boolean; message: string; data: LibraryFolder }> {
-    const { data } = await api.post('/files/folders', dto);
+    const { data } = await api.post("/files/folders", dto);
     return data;
   },
 
   async updateFolder(
     id: string,
-    dto: { name?: string; parentId?: string | null; scope?: 'private' | 'general' },
+    dto: {
+      name?: string;
+      parentId?: string | null;
+      scope?: "private" | "general";
+    },
   ): Promise<{ success: boolean; message: string; data: LibraryFolder }> {
     const { data } = await api.patch(`/files/folders/${id}`, dto);
     return data;
   },
 
-  async deleteFolder(id: string): Promise<{ success: boolean; message: string }> {
+  async deleteFolder(
+    id: string,
+  ): Promise<{ success: boolean; message: string }> {
     const { data } = await api.delete(`/files/folders/${id}`);
     return data;
   },
 
-  async getStorageSummary(): Promise<{ success: boolean; message: string; data: StorageSummary }> {
-    const { data } = await api.get('/files/storage-summary');
+  async getStorageSummary(): Promise<{
+    success: boolean;
+    message: string;
+    data: StorageSummary;
+  }> {
+    const { data } = await api.get("/files/storage-summary");
     return data;
   },
 
-  async getById(id: string): Promise<{ success: boolean; message: string; data: UploadedFile }> {
+  async getById(
+    id: string,
+  ): Promise<{ success: boolean; message: string; data: UploadedFile }> {
     const { data } = await api.get(`/files/${id}`);
     return data;
   },
@@ -84,9 +101,9 @@ export const fileService = {
       originalName?: string;
       folderId?: string | null;
       classId?: string | null;
-      scope?: 'private' | 'general';
-      subjectKey?: LibrarySubjectKey;
-      gradeLevel?: LibraryGradeLevel;
+      scope?: "private" | "general";
+      subjectKey?: LibrarySubjectKey | null;
+      gradeLevel?: LibraryGradeLevel | null;
       teacherVisible?: boolean;
       aiEnabled?: boolean;
     },
@@ -96,11 +113,15 @@ export const fileService = {
   },
 
   async download(id: string): Promise<Blob> {
-    const { data } = await api.get(`/files/${id}/download`, { responseType: 'blob' });
+    const { data } = await api.get(`/files/${id}/download`, {
+      responseType: "blob",
+    });
     return data;
   },
 
-  async retryIndex(id: string): Promise<{ success: boolean; message: string; data: UploadedFile }> {
+  async retryIndex(
+    id: string,
+  ): Promise<{ success: boolean; message: string; data: UploadedFile }> {
     const { data } = await api.post(`/files/${id}/index/retry`);
     return data;
   },

@@ -1,4 +1,4 @@
-import type { StudentProfile, TeacherProfile } from './profile';
+import type { StudentProfile, TeacherProfile } from "./profile";
 
 export interface User {
   id: string;
@@ -8,7 +8,7 @@ export interface User {
   middleName?: string;
   lastName?: string;
   roles: string[];
-  status: 'ACTIVE' | 'PENDING' | 'SUSPENDED' | 'DELETED';
+  status: "ACTIVE" | "PENDING" | "SUSPENDED" | "DELETED";
   isEmailVerified: boolean;
   lastLoginAt?: string;
   createdAt?: string;
@@ -41,8 +41,9 @@ export interface CreateUserDto {
   firstName: string;
   middleName?: string;
   lastName: string;
-  role: 'student' | 'teacher' | 'admin';
+  role: "student" | "teacher" | "admin";
   lrn?: string;
+  gradeLevel?: "7" | "8" | "9" | "10";
   employeeId?: string;
   contactNumber?: string;
 }

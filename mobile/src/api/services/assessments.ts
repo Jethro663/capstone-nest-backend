@@ -118,6 +118,33 @@ function normalizeTeacherSubmissionsResponse(
 }
 
 export const assessmentsApi = {
+  async getAdminPage(
+    query: {
+      page?: number;
+      limit?: number;
+      classId?: string;
+      search?: string;
+      publication?: "all" | "published" | "draft";
+    } = {},
+  ) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 25;
+    const response = await apiClient.get<
+      ApiEnvelope<
+        Array<
+          Assessment & {
+            class?: {
+              id: string;
+              subjectCode: string;
+              subjectName: string;
+              section?: { id: string; name: string } | null;
+            } | null;
+          }
+        >
+      >
+    >("/assessments/admin/inventory", { params: { ...query, page, limit } });
+    return normalizePageEnvelope(response.data, page, limit);
+  },
   async getCreationContext(classId: string) {
     return unwrapEnvelope<AssignmentCreationContext>(
       (await apiClient.get(`/assessments/class/${classId}/creation-context`))

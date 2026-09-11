@@ -13,6 +13,7 @@ export type FieldErrorMap = Record<string, string[]>;
 
 export type AppError = {
   status?: number;
+  statusCode?: number;
   code?: string;
   title: string;
   message: string;

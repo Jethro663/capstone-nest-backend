@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { SQL, and, desc, eq, inArray, or } from 'drizzle-orm';
+import { SQL, and, count, desc, eq, ilike, inArray, or } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import {
   classes,
@@ -242,6 +242,10 @@ export class SystemEvaluationService {
       conditions.push(eq(systemEvaluationCampaigns.status, query.status));
     if (query.classId)
       conditions.push(eq(systemEvaluationCampaigns.classId, query.classId));
+    if (query.search?.trim())
+      conditions.push(
+        ilike(systemEvaluationCampaigns.title, `%${query.search.trim()}%`),
+      );
     if (!this.isAdmin(user.roles)) {
       const teacherClasses = await this.db.query.classes.findMany({
         where: eq(classes.teacherId, user.userId),
@@ -257,19 +261,30 @@ export class SystemEvaluationService {
           : eq(systemEvaluationCampaigns.createdBy, user.userId),
       );
     }
-    const campaigns = await this.db.query.systemEvaluationCampaigns.findMany({
-      where: conditions.length > 0 ? and(...conditions) : undefined,
-      with: {
-        class: {
-          columns: { id: true, subjectName: true, subjectCode: true },
-          with: {
-            section: { columns: { id: true, name: true, gradeLevel: true } },
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 25;
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+    const [campaigns, totalRows] = await Promise.all([
+      this.db.query.systemEvaluationCampaigns.findMany({
+        where: whereClause,
+        with: {
+          class: {
+            columns: { id: true, subjectName: true, subjectCode: true },
+            with: {
+              section: { columns: { id: true, name: true, gradeLevel: true } },
+            },
           },
+          assignments: { columns: { id: true, status: true } },
         },
-        assignments: { columns: { id: true, status: true } },
-      },
-      orderBy: [desc(systemEvaluationCampaigns.createdAt)],
-    });
+        orderBy: [desc(systemEvaluationCampaigns.createdAt)],
+        limit,
+        offset: (page - 1) * limit,
+      }),
+      this.db
+        .select({ total: count() })
+        .from(systemEvaluationCampaigns)
+        .where(whereClause),
+    ]);
     const mapped = campaigns.map((campaign) => ({
       id: campaign.id,
       formType: campaign.formType,
@@ -288,7 +303,15 @@ export class SystemEvaluationService {
         campaign.assignments?.filter((item) => item.status === 'submitted')
           .length ?? 0,
     }));
-    return { campaigns: mapped, count: mapped.length };
+    const total = Number(totalRows[0]?.total ?? 0);
+    return {
+      campaigns: mapped,
+      count: total,
+      page,
+      limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    };
   }
 
   async updateCampaignStatus(

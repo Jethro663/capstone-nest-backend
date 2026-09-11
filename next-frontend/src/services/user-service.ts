@@ -1,13 +1,14 @@
-import { api } from '@/lib/api-client';
-import type { User, CreateUserDto, UpdateUserDto } from '@/types/user';
+import { api } from "@/lib/api-client";
+import type { User, CreateUserDto, UpdateUserDto } from "@/types/user";
 
 export interface UsersQuery {
   role?: string;
   status?: string;
-  gradeLevel?: '7' | '8' | '9' | '10' | 'graduated';
+  gradeLevel?: "7" | "8" | "9" | "10" | "graduated";
   page?: number;
   limit?: number;
   includeStatusCounts?: boolean;
+  search?: string;
 }
 
 export interface UserMonitoringReportQuery {
@@ -60,12 +61,15 @@ export interface ResetUserPasswordResponse {
   message: string;
   userId: string;
   generatedPassword: string;
-  emailDeliveryStatus?: 'sent' | 'failed';
+  emailDeliveryStatus?: "sent" | "failed";
   emailDeliveryError?: string;
 }
 
 export type BulkUserLifecycleAction =
-  'suspend' | 'reactivate' | 'archive' | 'purge';
+  | "suspend"
+  | "reactivate"
+  | "archive"
+  | "purge";
 
 export interface BulkUserLifecycleDto {
   action: BulkUserLifecycleAction;
@@ -89,7 +93,7 @@ export interface BulkUserLifecycleResponse {
 export const userService = {
   /** GET /users/all - Admin only */
   async getAll(query?: UsersQuery): Promise<UsersListResponse> {
-    const { data } = await api.get('/users/all', { params: query });
+    const { data } = await api.get("/users/all", { params: query });
     return data;
   },
 
@@ -97,7 +101,7 @@ export const userService = {
   async getMonitoringReport(
     query?: UserMonitoringReportQuery,
   ): Promise<UserMonitoringReportResponse> {
-    const { data } = await api.get('/users/reports/monitoring', {
+    const { data } = await api.get("/users/reports/monitoring", {
       params: query,
     });
     return data;
@@ -115,7 +119,7 @@ export const userService = {
   async create(
     dto: CreateUserDto,
   ): Promise<{ success: boolean; message: string; data: { user: User } }> {
-    const { data } = await api.post('/users/create', dto);
+    const { data } = await api.post("/users/create", dto);
     return data;
   },
 
@@ -159,7 +163,7 @@ export const userService = {
   /** GET /users/:id/export - Admin only (JSON download) */
   async exportUser(id: string): Promise<Blob> {
     const { data } = await api.get(`/users/${id}/export`, {
-      responseType: 'blob',
+      responseType: "blob",
     });
     return data;
   },
@@ -174,7 +178,7 @@ export const userService = {
   async bulkLifecycle(
     dto: BulkUserLifecycleDto,
   ): Promise<BulkUserLifecycleResponse> {
-    const { data } = await api.post('/users/bulk/lifecycle', dto);
+    const { data } = await api.post("/users/bulk/lifecycle", dto);
     return data;
   },
 

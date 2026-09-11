@@ -407,6 +407,24 @@ export class ListSystemEvaluationCampaignsQueryDto {
   @IsOptional()
   @IsUUID('4')
   classId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  search?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number = 1;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number = 25;
 }
 
 export class UpdateSystemEvaluationCampaignStatusDto {

@@ -193,6 +193,7 @@ export class UsersService {
     page?: number;
     limit?: number;
     includeStatusCounts?: boolean;
+    search?: string;
   }) {
     if (filters?.status && !VALID_STATUSES.includes(filters.status as any)) {
       throw new BadRequestException(
@@ -215,6 +216,17 @@ export class UsersService {
     const offset = (page - 1) * limit;
 
     const whereConditions: SQL<unknown>[] = [];
+    const search = filters?.search?.trim();
+    if (search) {
+      const pattern = `%${search}%`;
+      const searchCondition = or(
+        ilike(users.email, pattern),
+        ilike(users.firstName, pattern),
+        ilike(users.middleName, pattern),
+        ilike(users.lastName, pattern),
+      );
+      if (searchCondition) whereConditions.push(searchCondition);
+    }
     if (filters?.status) {
       whereConditions.push(eq(users.status, filters.status as any));
     }
@@ -648,6 +660,7 @@ export class UsersService {
       lastName,
       role,
       lrn,
+      gradeLevel,
       employeeId,
       contactNumber,
     } = createUserDto;
@@ -665,6 +678,11 @@ export class UsersService {
     if (role === 'student') {
       if (!lrn) {
         throw new ConflictException('LRN is required for student accounts');
+      }
+      if (!gradeLevel) {
+        throw new BadRequestException(
+          'Grade level is required for student accounts',
+        );
       }
 
       const existingProfile = await this.db.query.studentProfiles.findFirst({
@@ -741,6 +759,7 @@ export class UsersService {
           await tx.insert(studentProfiles).values({
             userId: newUser.id,
             lrn,
+            gradeLevel,
             createdAt: new Date(),
             updatedAt: new Date(),
           });
@@ -1550,7 +1569,7 @@ export class UsersService {
   }
 
   private toPublicUser<T extends Record<string, any>>(user: T) {
-    const { password, ...safeUser } = user;
+    const { password: _password, ...safeUser } = user;
     return safeUser;
   }
 

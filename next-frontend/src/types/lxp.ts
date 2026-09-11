@@ -17,11 +17,11 @@ export interface EligibleClass {
   openedAt: string | null;
 }
 
-export type LxpPathStatus = 'active' | 'completed';
+export type LxpPathStatus = "active" | "completed";
 
 export interface LxpPathSummary {
   classId: string;
-  class: EligibleClass['class'];
+  class: EligibleClass["class"];
   interventionCaseId: string | null;
   status: LxpPathStatus;
   isAtRisk: boolean;
@@ -52,21 +52,26 @@ export interface EligibilityResponse {
 export interface LxpCheckpoint {
   id: string;
   type:
-    | 'lesson_review'
-    | 'assessment_retry'
-    | 'generated_lesson_review'
-    | 'guided_assessment';
+    | "lesson_review"
+    | "assessment_retry"
+    | "generated_lesson_review"
+    | "guided_assessment";
   label: string;
   order: number;
   isCompleted: boolean;
   completedAt: string | null;
   xpAwarded: number;
-  lesson?: { id: string; title: string; description?: string | null; order?: number } | null;
+  lesson?: {
+    id: string;
+    title: string;
+    description?: string | null;
+    order?: number;
+  } | null;
   generatedLesson?: GeneratedLessonContent | null;
   assessment?: {
     id: string;
     title: string;
-    type?: 'quiz' | 'exam' | 'assignment' | 'file_upload';
+    type?: "quiz" | "exam" | "assignment" | "file_upload";
     description?: string | null;
     passingScore?: number | null;
     dueDate?: string | null;
@@ -83,7 +88,7 @@ export interface GeneratedLessonContent {
   weakConcepts: string[];
   sourceLessonIds?: string[];
   sourceReferences?: Array<Record<string, unknown>>;
-  status?: 'draft' | 'approved' | 'rejected' | null;
+  status?: "draft" | "approved" | "rejected" | null;
   approvedAt?: string | null;
   rejectedAt?: string | null;
 }
@@ -97,7 +102,7 @@ export interface GuidedAssessmentContent {
   sourceReferences?: Array<Record<string, unknown>>;
   formativeSummary?: string | null;
   questions: GuidedAssessmentQuestion[];
-  status?: 'draft' | 'approved' | 'rejected' | null;
+  status?: "draft" | "approved" | "rejected" | null;
   approvedAt?: string | null;
   rejectedAt?: string | null;
 }
@@ -138,7 +143,7 @@ export interface LxpOverviewSelectedClass {
 export interface LxpOverviewStatus {
   caseId: string;
   status: string;
-  code: 'on_track' | 'improving' | 'needs_attention';
+  code: "on_track" | "improving" | "needs_attention";
   label: string;
   message: string;
   openedAt: string;
@@ -163,7 +168,7 @@ export interface LxpOverviewSubjectMasteryRow {
   subjectCode: string;
   masteryPercent: number | null;
   thresholdApplied: number;
-  status: 'needs_attention' | 'on_track' | 'improving';
+  status: "needs_attention" | "on_track" | "improving";
   isSelected: boolean;
   lastComputedAt: string | null;
 }
@@ -171,10 +176,10 @@ export interface LxpOverviewSubjectMasteryRow {
 export interface LxpOverviewRecommendedAction {
   assignmentId: string;
   type:
-    | 'lesson_review'
-    | 'assessment_retry'
-    | 'generated_lesson_review'
-    | 'guided_assessment';
+    | "lesson_review"
+    | "assessment_retry"
+    | "generated_lesson_review"
+    | "guided_assessment";
   title: string;
   subtitle: string;
   xpAwarded: number;
@@ -186,7 +191,7 @@ export interface LxpOverviewAssessmentItem {
   assessmentId: string;
   title: string;
   dueDate: string | null;
-  type?: 'quiz' | 'exam' | 'assignment' | 'file_upload';
+  type?: "quiz" | "exam" | "assignment" | "file_upload";
   passingScore: number | null;
   xpAwarded: number;
   href: string;
@@ -202,7 +207,7 @@ export interface LxpOverviewActivityItem {
 
 export interface LxpOverviewWeakFocusItem {
   id: string;
-  source: 'performance' | 'checkpoint';
+  source: "performance" | "checkpoint";
   title: string;
   subtitle: string;
   masteryPercent: number | null;
@@ -223,7 +228,7 @@ export interface LxpOverviewResponse {
 export interface TeacherInterventionQueueItem {
   id: string;
   classId: string;
-  status: 'pending' | 'active' | 'completed' | 'dismissed';
+  status: "pending" | "active" | "completed" | "dismissed";
   studentId: string;
   student?: {
     id: string;
@@ -250,7 +255,7 @@ export interface TeacherInterventionQueueItem {
   };
 }
 
-export type TeacherPathScoreSource = 'guided_assessment' | 'assessment_retry';
+export type TeacherPathScoreSource = "guided_assessment" | "assessment_retry";
 
 export interface TeacherPathScore {
   source: TeacherPathScoreSource;
@@ -266,10 +271,10 @@ export interface TeacherPathScore {
 export interface TeacherInterventionAssignment {
   id: string;
   type:
-    | 'lesson_review'
-    | 'assessment_retry'
-    | 'generated_lesson_review'
-    | 'guided_assessment';
+    | "lesson_review"
+    | "assessment_retry"
+    | "generated_lesson_review"
+    | "guided_assessment";
   label: string;
   order: number;
   isCompleted: boolean;
@@ -319,7 +324,7 @@ export interface TeacherInterventionCaseDetail {
     lastName: string | null;
     email: string | null;
   } | null;
-  status: 'pending' | 'active' | 'completed' | 'dismissed';
+  status: "pending" | "active" | "completed" | "dismissed";
   openedAt: string;
   closedAt: string | null;
   triggerScore: number | null;
@@ -383,7 +388,7 @@ export interface TeacherInterventionHistoryRow {
     lastName: string | null;
     email: string | null;
   } | null;
-  status: 'pending' | 'active' | 'completed' | 'dismissed';
+  status: "pending" | "active" | "completed" | "dismissed";
   openedAt: string;
   closedAt: string | null;
   triggerSource: string | null;
@@ -459,19 +464,19 @@ export interface LxpClassReport {
 }
 
 export type SystemEvaluationTargetModule =
-  | 'lms'
-  | 'lxp'
-  | 'ai_mentor'
-  | 'intervention'
-  | 'overall';
+  | "lms"
+  | "lxp"
+  | "ai_mentor"
+  | "intervention"
+  | "overall";
 
-export type SystemEvaluationFormType = 'system' | 'ja_hub';
-export type SystemEvaluationAudienceRole = 'student' | 'teacher';
-export type SystemEvaluationCampaignStatus = 'draft' | 'active' | 'closed';
+export type SystemEvaluationFormType = "system" | "ja_hub";
+export type SystemEvaluationAudienceRole = "student" | "teacher";
+export type SystemEvaluationCampaignStatus = "draft" | "active" | "closed";
 export type SystemEvaluationAssignmentStatus =
-  | 'pending'
-  | 'submitted'
-  | 'expired';
+  | "pending"
+  | "submitted"
+  | "expired";
 
 export interface SystemEvaluationQuestion {
   key: string;
@@ -525,7 +530,7 @@ export interface SystemEvaluationCampaign {
   targetModule: SystemEvaluationTargetModule;
   audienceRole: SystemEvaluationAudienceRole;
   classId: string | null;
-  class?: AssignedSystemEvaluationItem['class'];
+  class?: AssignedSystemEvaluationItem["class"];
   title: string;
   startsAt: string;
   endsAt: string;
@@ -539,6 +544,10 @@ export interface SystemEvaluationCampaign {
 export interface SystemEvaluationCampaignListResponse {
   campaigns: SystemEvaluationCampaign[];
   count: number;
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
 }
 
 export interface SystemEvaluationRow {
@@ -554,7 +563,7 @@ export interface SystemEvaluationRow {
   questionRatingsJson?: Record<string, number> | null;
   feedback: string | null;
   aiContextMetadata?: {
-    sessionType?: 'mentor_chat' | 'mistake_explanation' | 'student_tutor';
+    sessionType?: "mentor_chat" | "mistake_explanation" | "student_tutor";
     attemptId?: string;
     questionId?: string;
     classId?: string;
@@ -618,7 +627,7 @@ export interface ApproveGeneratedRemedialPayload {
     sourceReferences: Array<Record<string, unknown>>;
     questions: Array<{
       id: string;
-      type: 'multiple_choice' | 'multiple_select' | 'true_false' | 'dropdown';
+      type: "multiple_choice" | "multiple_select" | "true_false" | "dropdown";
       stem: string;
       explanation: string;
       hint?: string | null;
@@ -648,7 +657,7 @@ export interface GuidedAssessmentQuestionOption {
 
 export interface GuidedAssessmentQuestion {
   id: string;
-  type: 'multiple_choice' | 'multiple_select' | 'true_false' | 'dropdown';
+  type: "multiple_choice" | "multiple_select" | "true_false" | "dropdown";
   stem: string;
   explanation: string;
   hint?: string | null;
@@ -659,7 +668,7 @@ export interface GuidedAssessmentQuestion {
 
 export interface GuidedAssessmentAttemptState {
   id: string;
-  status: 'in_progress' | 'submitted';
+  status: "in_progress" | "submitted";
   attemptNumber?: number;
   currentQuestionIndex: number;
   responses: Array<{
@@ -687,7 +696,7 @@ export interface GuidedAssessmentAttemptSummary {
   attempts: Array<{
     id: string;
     attemptNumber: number;
-    status: 'in_progress' | 'submitted';
+    status: "in_progress" | "submitted";
     scorePercent: number | null;
     correctCount: number | null;
     totalQuestions: number | null;
@@ -713,7 +722,7 @@ export interface GuidedAssessmentScoreComparison {
   currentScorePercent: number;
   currentSubmittedAt?: string | null;
   deltaScorePercent: number | null;
-  trend: 'improved' | 'declined' | 'unchanged' | 'no_baseline';
+  trend: "improved" | "declined" | "unchanged" | "no_baseline";
 }
 
 export interface GuidedAssessmentResultResponse {
@@ -741,9 +750,9 @@ export interface GuidedAssessmentResultResponse {
 }
 
 export type TeacherEvaluationType =
-  | 'teacher_class'
-  | 'ja_hub'
-  | 'learners_path';
+  | "teacher_class"
+  | "ja_hub"
+  | "learners_path";
 
 export interface TeacherEvaluationQuestion {
   key: string;
@@ -752,7 +761,7 @@ export interface TeacherEvaluationQuestion {
 
 export interface StudentTeacherEvaluationItem {
   classId: string;
-  gradingPeriod: 'Q1' | 'Q2' | 'Q3' | 'Q4';
+  gradingPeriod: "Q1" | "Q2" | "Q3" | "Q4";
   schoolYear: string;
   evaluationType: TeacherEvaluationType;
   title: string;
@@ -773,17 +782,17 @@ export interface StudentTeacherEvaluationItem {
 export interface StudentTeacherEvaluationCompletedItem {
   id: string;
   classId: string;
-  gradingPeriod: 'Q1' | 'Q2' | 'Q3' | 'Q4';
+  gradingPeriod: "Q1" | "Q2" | "Q3" | "Q4";
   evaluationType: TeacherEvaluationType;
   title: string;
-  class: StudentTeacherEvaluationItem['class'] | null;
+  class: StudentTeacherEvaluationItem["class"] | null;
   submittedAt: string;
 }
 
 export interface StudentTeacherEvaluationDashboardResponse {
   currentAcademicState: {
     schoolYear: string;
-    quarter: 'Q1' | 'Q2' | 'Q3' | 'Q4';
+    quarter: "Q1" | "Q2" | "Q3" | "Q4";
   };
   pending: StudentTeacherEvaluationItem[];
   completed: StudentTeacherEvaluationCompletedItem[];
@@ -806,7 +815,7 @@ export interface TeacherEvaluationSummaryResponse {
       gradeLevel: string;
     } | null;
   }>;
-  periods: Array<'Q1' | 'Q2' | 'Q3' | 'Q4'>;
+  periods: Array<"Q1" | "Q2" | "Q3" | "Q4">;
   evaluationType: TeacherEvaluationType;
   tabTitle: string;
   tabDescription: string;
@@ -822,13 +831,13 @@ export interface TeacherEvaluationSummaryResponse {
     id: string;
     comment: string;
     submittedAt: string;
-    gradingPeriod: 'Q1' | 'Q2' | 'Q3' | 'Q4';
+    gradingPeriod: "Q1" | "Q2" | "Q3" | "Q4";
     classId: string;
     classLabel: string;
   }>;
   trends: Array<{
     classId: string;
-    gradingPeriod: 'Q1' | 'Q2' | 'Q3' | 'Q4';
+    gradingPeriod: "Q1" | "Q2" | "Q3" | "Q4";
     classLabel: string;
     responseCount: number;
     eligibleCount: number;

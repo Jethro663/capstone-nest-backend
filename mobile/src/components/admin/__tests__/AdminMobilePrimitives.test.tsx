@@ -3,6 +3,7 @@ import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import {
   AdminButton,
+  AdminDataRow,
   AdminFilterBar,
   AdminMetricStrip,
   AdminSection,
@@ -52,17 +53,26 @@ jest.mock("../../ui/primitives", () => {
 });
 
 function renderedText(root: TestRenderer.ReactTestInstance) {
-  return root.findAllByType("Text").flatMap((node) => node.children).join(" ");
+  return root
+    .findAllByType("Text")
+    .flatMap((node) => node.children)
+    .join(" ");
 }
 
 let consoleErrorSpy: jest.SpyInstance;
 
 beforeAll(() => {
   const originalConsoleError = console.error;
-  consoleErrorSpy = jest.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
-    if (typeof args[0] === "string" && args[0].includes("react-test-renderer is deprecated")) return;
-    originalConsoleError(...(args as Parameters<typeof console.error>));
-  });
+  consoleErrorSpy = jest
+    .spyOn(console, "error")
+    .mockImplementation((...args: unknown[]) => {
+      if (
+        typeof args[0] === "string" &&
+        args[0].includes("react-test-renderer is deprecated")
+      )
+        return;
+      originalConsoleError(...(args as Parameters<typeof console.error>));
+    });
 });
 
 afterAll(() => consoleErrorSpy.mockRestore());
@@ -82,10 +92,18 @@ describe("admin mobile primitives", () => {
     });
 
     const strip = renderer!.root.findByProps({ testID: "admin-metric-strip" });
-    expect(strip.props.style).toMatchObject({ borderTopWidth: 1, borderBottomWidth: 1 });
+    expect(strip.props.style).toMatchObject({
+      borderTopWidth: 1,
+      borderBottomWidth: 1,
+    });
     expect(strip.props.style).not.toHaveProperty("shadowOpacity");
     expect(strip.props.style).not.toHaveProperty("elevation");
-    expect(renderer!.root.findAll((node) => node.type === "View" && node.props.testID === "admin-metric-item")).toHaveLength(2);
+    expect(
+      renderer!.root.findAll(
+        (node) =>
+          node.type === "View" && node.props.testID === "admin-metric-item",
+      ),
+    ).toHaveLength(2);
   });
 
   it("standardizes search, clear, segments, and visible result count", () => {
@@ -109,16 +127,28 @@ describe("admin mobile primitives", () => {
       );
     });
 
-    expect(renderer!.root.findByProps({ accessibilityLabel: "Search records" })).toBeTruthy();
+    expect(
+      renderer!.root.findByProps({ accessibilityLabel: "Search records" }),
+    ).toBeTruthy();
     expect(renderedText(renderer!.root)).toMatch(/12\s+results/);
 
-    act(() => renderer!.root.findByProps({ accessibilityLabel: "Clear search" }).props.onPress());
+    act(() =>
+      renderer!.root
+        .findByProps({ accessibilityLabel: "Clear search" })
+        .props.onPress(),
+    );
     expect(onSearchChange).toHaveBeenCalledWith("");
 
-    const active = renderer!.root.findByProps({ accessibilityLabel: "Show Active" });
+    const active = renderer!.root.findByProps({
+      accessibilityLabel: "Show Active",
+    });
     expect(active.props.accessibilityState).toEqual({ selected: true });
-    expect(active.props.style).toMatchObject({ minHeight: 44 });
-    act(() => renderer!.root.findByProps({ accessibilityLabel: "Show All" }).props.onPress());
+    expect(active.props.style).toMatchObject({ minHeight: 48 });
+    act(() =>
+      renderer!.root
+        .findByProps({ accessibilityLabel: "Show All" })
+        .props.onPress(),
+    );
     expect(onSegmentChange).toHaveBeenCalledWith("all");
   });
 
@@ -127,14 +157,54 @@ describe("admin mobile primitives", () => {
     act(() => {
       renderer = TestRenderer.create(
         <>
-          <AdminSection title="People"><AdminButton label="Add user" /></AdminSection>
+          <AdminSection title="People">
+            <AdminButton label="Add user" />
+          </AdminSection>
         </>,
       );
     });
 
-    const section = renderer!.root.findByProps({ testID: "admin-flat-section" });
-    expect(section.props.style).toMatchObject({ borderTopWidth: 1, borderBottomWidth: 1 });
+    const section = renderer!.root.findByProps({
+      testID: "admin-flat-section",
+    });
+    expect(section.props.style).toMatchObject({
+      borderTopWidth: 1,
+      borderBottomWidth: 1,
+    });
     expect(section.props.style).not.toHaveProperty("shadowOpacity");
-    expect(renderer!.root.findByProps({ accessibilityLabel: "Add user" }).props.style).toMatchObject({ minHeight: 44 });
+    expect(
+      renderer!.root.findByProps({ accessibilityLabel: "Add user" }).props
+        .style,
+    ).toMatchObject({ minHeight: 48 });
+  });
+
+  it("keeps row actions outside the row navigation press target", () => {
+    let renderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        <AdminDataRow
+          title="User record"
+          onPress={jest.fn()}
+          right={<AdminButton label="Edit user" onPress={jest.fn()} />}
+        />,
+      );
+    });
+
+    const rowTarget = renderer!.root.findByProps({
+      accessibilityLabel: "Open User record",
+    });
+    expect(rowTarget.props.style).toMatchObject({
+      flex: 1,
+      minHeight: 66,
+      paddingHorizontal: 16,
+    });
+    const actionTarget = renderer!.root.findByProps({
+      accessibilityLabel: "Edit user",
+    });
+    let parent = actionTarget.parent;
+    while (parent) {
+      expect(parent).not.toBe(rowTarget);
+      parent = parent.parent;
+    }
   });
 });

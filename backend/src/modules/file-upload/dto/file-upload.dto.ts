@@ -203,13 +203,13 @@ export class UpdateFileMetadataDto {
       'subjectKey must be one of math, science, english, filipino, ap, tle, mapeh, esp',
   })
   @IsOptional()
-  subjectKey?: LibrarySubjectKeyDto;
+  subjectKey?: LibrarySubjectKeyDto | null;
 
   @IsEnum(GradeLevelDto, {
     message: 'gradeLevel must be one of 7, 8, 9, 10',
   })
   @IsOptional()
-  gradeLevel?: GradeLevelDto;
+  gradeLevel?: GradeLevelDto | null;
 
   @Transform(({ value }) => toBoolean(value))
   @IsBoolean()

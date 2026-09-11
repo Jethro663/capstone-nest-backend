@@ -9,10 +9,17 @@ export interface Announcement {
   templateId?: string | null;
   templateSourceId?: string | null;
   scheduledAt?: string;
+  publishedAt?: string | null;
   isArchived: boolean;
   fileIds?: string[];
   authorId?: string;
   author?: { id?: string; firstName?: string; lastName?: string };
+  class?: {
+    id: string;
+    subjectCode: string;
+    subjectName: string;
+    section: { id: string; name: string } | null;
+  } | null;
   canEdit?: boolean;
   canDelete?: boolean;
   restrictionReason?: "core_template" | "not_author" | null;
@@ -33,4 +40,19 @@ export interface UpdateAnnouncementDto {
   content?: string;
   isPinned?: boolean;
   scheduledAt?: string;
+}
+
+export interface ReleaseCoreAnnouncementDto {
+  isVisible?: boolean;
+  isPinned?: boolean;
+  scheduledAt?: string | null;
+}
+
+export interface AdminAnnouncement extends Announcement {
+  class?: {
+    id: string;
+    subjectCode: string;
+    subjectName: string;
+    section: { id: string; name: string } | null;
+  } | null;
 }
