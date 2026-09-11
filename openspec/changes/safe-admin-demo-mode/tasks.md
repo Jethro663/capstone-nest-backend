@@ -69,18 +69,26 @@
 - [x] 7.3 Build the production ARM64 release APK from the verified mobile source.
 - [x] 7.4 Verify package/version/ABI/signing/embedded URL/size/SHA and committed manifest equality.
 - [x] 7.5 Rerun mobile and frontend checks invalidated by packaging and commit the artifact.
-- [ ] 7.6 Push `developement`, prove exact local/remote SHA and `0 0` divergence, and observe exact-SHA CI to terminal success.
-- [ ] 7.7 Observe exact-SHA Railway backend/frontend deployments and health to terminal success.
-- [ ] 7.8 Enable `ADMIN_DEMO_MODE_AVAILABLE=true` only after healthy migration/deployment and verify the resulting backend deployment.
-- [ ] 7.9 Register the exact Android updater record and verify live APK/manifest/policy equality.
+- [x] 7.6 Push `developement`, prove exact local/remote SHA and `0 0` divergence, and observe exact-SHA CI to terminal success.
+- [x] 7.7 Observe exact-SHA Railway backend/frontend deployments and health to terminal success.
+- [x] 7.8 Enable `ADMIN_DEMO_MODE_AVAILABLE=true` only after healthy migration/deployment and verify the resulting backend deployment.
+- [x] 7.9 Register the exact Android updater record and verify live APK/manifest/policy equality.
 
 ## 8. Live acceptance and cleanup
 
-- [ ] 8.1 Log into the deployed web app with the supplied admin account and prove the inactive baseline.
-- [ ] 8.2 Prove activation remains blocked until every field is valid and a wrong password leaves state unchanged.
-- [ ] 8.3 Activate a 15-minute acceptance window and verify status/banner/Manage navigation across admin workspaces.
-- [ ] 8.4 Observe a known relaxed control without mutating existing production academic records.
-- [ ] 8.5 Deactivate immediately and prove normal controls/status return after refresh.
-- [ ] 8.6 Install and test the exact APK on an attached Android target when available; otherwise record the device boundary.
-- [ ] 8.7 Confirm disabled production state, no disposable data, clean worktree, exact SHA, successful CI/deployments, and `0 0` divergence.
+- [x] 8.1 Log into the deployed web app with the supplied admin account and prove the inactive baseline.
+- [x] 8.2 Prove activation remains blocked until every field is valid and a wrong password leaves state unchanged.
+- [x] 8.3 Activate a 15-minute acceptance window and verify status/banner/Manage navigation across admin workspaces.
+- [x] 8.4 Observe a known relaxed control without mutating existing production academic records.
+- [x] 8.5 Deactivate immediately and prove normal controls/status return after refresh.
+- [x] 8.6 Install and test the exact APK on an attached Android target when available; otherwise record the device boundary.
+- [x] 8.7 Confirm disabled production state, no disposable data, clean worktree, exact SHA, successful CI/deployments, and `0 0` divergence.
 - [ ] 8.8 Update task evidence and complete the active goal only when every required outcome is proven or explicitly bounded.
+
+## Release evidence recorded 2026-09-12
+
+- Application revision `468e7692e8fa3488fd6f026e97816042ccd77dd6` matched `origin/developement` with `0 0` divergence. Exact-SHA CI run `34643569270` passed every required job, including PostgreSQL 16/18 migration/runtime, backend unit/E2E/build, frontend test/build/security, mobile release/type/test, and AI service.
+- Railway workflow run `34643918164` succeeded for the CI-tested revision. Backend deployment `6381afea-cefa-4d39-9234-5b3dffbefda9` and frontend deployment `9b5bc626-8fe3-4237-80f9-4c57da288b50` reached `SUCCESS`; public live/ready/root/login checks passed. Enabling the availability flag produced backend redeploy `0b95fbb4-15cb-4532-9da9-669c8eba739d`, which also reached `SUCCESS`.
+- Android build 34 / version `0.1.33` was registered as updater row `f2af8528-a1b5-4fe5-95be-9f2478caaa5f`. The live APK and manifest matched the repository exactly: 41,041,179 bytes and SHA-256 `9161f27e858e0aa3749180eaa2fe225ff404517b708fd75303d42673e4e449b3`. Build 33 received `apk_forced`; build 34 received `none`.
+- Production browser acceptance proved the inactive baseline, incomplete exact-phrase gating, wrong-password rejection, a server-timed 15-minute activation, global notices, occupied-room/adviser conflicts becoming selectable only while active, immediate deactivation, and normal disabled conflict controls after refresh. No create/update/archive/restore/purge form was submitted.
+- No Android device was attached. The sole available emulator is x86_64 while the release APK is ARM64-only, so native install/login acceptance remains an explicit device boundary. Package metadata, ARM64 ABI, archive integrity, production endpoint, version, and v2 signature were verified; the current artifact still uses the repository's existing Android Debug certificate rather than a production release keystore.

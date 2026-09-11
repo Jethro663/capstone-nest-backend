@@ -960,11 +960,11 @@ git commit -m "chore(mobile): package admin demo mode release"
 
 - Exact pushed SHA must be the CI-tested and Railway-deployed SHA.
 
-- [ ] **Step 1: Read and follow finish-and-ship release instructions and the Railway skill**
+- [x] **Step 1: Read and follow finish-and-ship release instructions and the Railway skill**
 
 Resolve the current Railway project, production environment, backend/frontend services, GitHub repository, and workflow names from live tools. Do not rely only on old IDs.
 
-- [ ] **Step 2: Pre-push evidence**
+- [x] **Step 2: Pre-push evidence**
 
 ```bash
 git status --short
@@ -976,7 +976,7 @@ git rev-parse HEAD
 
 Require a clean working tree and understand every outgoing commit.
 
-- [ ] **Step 3: Push the reviewed current checkout**
+- [x] **Step 3: Push the reviewed current checkout**
 
 ```bash
 git push origin developement
@@ -988,19 +988,19 @@ git rev-list --left-right --count origin/developement...HEAD
 
 Require local SHA equals remote SHA and divergence is `0 0`.
 
-- [ ] **Step 4: Observe exact-SHA CI**
+- [x] **Step 4: Observe exact-SHA CI**
 
 Find the GitHub Actions run whose `headSha` equals the pushed SHA. Require backend unit/lint, backend E2E, PostgreSQL 16/18 migration/runtime, frontend build/security, mobile release/type/test, AI service, contract, and deployment gates to reach terminal success. A successful older run is not evidence.
 
-- [ ] **Step 5: Observe exact-SHA Railway deployment**
+- [x] **Step 5: Observe exact-SHA Railway deployment**
 
 Require backend and frontend deployments for the pushed SHA to reach terminal `SUCCESS`, then verify backend `/api/health/live`, `/api/health/ready`, frontend `/`, and the protected login route without exposing secrets.
 
-- [ ] **Step 6: Enable production availability after healthy migration**
+- [x] **Step 6: Enable production availability after healthy migration**
 
 Set `ADMIN_DEMO_MODE_AVAILABLE=true` on the backend production service without printing other variables. Wait for the resulting deployment to reach terminal `SUCCESS`; recheck live/ready health. If this deployment fails, set the variable false before diagnosis.
 
-- [ ] **Step 7: Register and verify the Android updater record**
+- [x] **Step 7: Register and verify the Android updater record**
 
 Use Railway-injected admin secret without printing it. Register the committed APK manifest, then verify old version gets the intended update policy, the new version gets `none`, and live APK URL bytes/SHA match the committed artifact exactly.
 
@@ -1017,31 +1017,31 @@ Use Railway-injected admin secret without printing it. Register the committed AP
 - Uses the supplied admin credentials through the login UI only.
 - Leaves production Demo mode disabled and test data unchanged/removed.
 
-- [ ] **Step 1: Web login and inactive baseline**
+- [x] **Step 1: Web login and inactive baseline**
 
 Open the deployed frontend in the browser, log in with the supplied administrator account, navigate to System Settings → Demo mode, and confirm status is disabled and the global banner is absent. Do not expose credentials in logs, screenshots, source, or final output.
 
-- [ ] **Step 2: Validate activation safeguards**
+- [x] **Step 2: Validate activation safeguards**
 
 Confirm the action is disabled with missing reason, acknowledgement, password, phrase, or duration. Submit one deliberately wrong password and verify a safe field error with no state change.
 
-- [ ] **Step 3: Activate the shortest production window**
+- [x] **Step 3: Activate the shortest production window**
 
 Use a 15-minute duration and reason `Automated post-release Demo mode acceptance`. Complete all acknowledgements and exact phrase. Confirm active status, server-derived expiry, banner on System Settings, Users, Classes, and Sections, and the Manage link’s source-aware navigation.
 
-- [ ] **Step 4: Observe one relaxed control without changing real academic data**
+- [x] **Step 4: Observe one relaxed control without changing real academic data**
 
 Open a class/section form and confirm a known conflict is now annotated/selectable. Do not submit a mutation against existing production academic records. Backend E2E supplies mutation proof; live acceptance supplies UI/deployment proof.
 
-- [ ] **Step 5: Disable immediately and prove restoration**
+- [x] **Step 5: Disable immediately and prove restoration**
 
 Return to the Demo route, type `DISABLE DEMO MODE`, deactivate, and confirm the banner disappears across pages and the previously relaxed control returns to normal disabled behavior. Refresh the browser and re-query status to prove disabled state is durable.
 
-- [ ] **Step 6: Android/emulator acceptance**
+- [x] **Step 6: Android/emulator acceptance**
 
 Run `/home/jethro/Android/Sdk/platform-tools/adb devices -l`. If a target exists, install the exact release APK, log in, open System Settings → Demo mode, repeat active-notice and deactivate checks, and record package/version/device evidence. If no target exists, report Android build/artifact proof and the missing device boundary separately; do not infer physical acceptance.
 
-- [ ] **Step 7: Final cleanup checks**
+- [x] **Step 7: Final cleanup checks**
 
 Confirm Demo mode is disabled through API/UI, no disposable production records were created, the working tree is clean, divergence is `0 0`, and final local/remote SHA still matches the CI/deployed SHA. Ensure local browser/test output remains untracked.
 
