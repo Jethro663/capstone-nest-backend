@@ -274,11 +274,11 @@ git commit -m "feat(admin): add guarded demo mode activation API"
 - Consumes `AdminDemoModeService.resolveForActor(adminId)`.
 - Produces audit metadata only when `user_lifecycle_sequence` is actually bypassed.
 
-- [ ] **Step 1: Add backend RED cases**
+- [x] **Step 1: Add backend RED cases**
 
 Prove normal mode keeps the exact suspend-before-archive and suspended-only-reactivate errors. Prove active admin Demo mode allows an ACTIVE/PENDING account to archive and a DELETED account to reactivate. Prove self-suspend/delete/purge remains rejected in both modes. Prove purge still requires DELETED.
 
-- [ ] **Step 2: Run backend RED**
+- [x] **Step 2: Run backend RED**
 
 ```bash
 npm --prefix backend test -- --runInBand src/modules/users/users.service.spec.ts
@@ -286,7 +286,7 @@ npm --prefix backend test -- --runInBand src/modules/users/users.service.spec.ts
 
 Expected: only the new Demo-mode cases fail.
 
-- [ ] **Step 3: Implement the narrow bypass**
+- [x] **Step 3: Implement the narrow bypass**
 
 Resolve policy once per lifecycle mutation. Replace only the status-sequence conditions:
 
@@ -301,7 +301,7 @@ if (existingUser.status !== 'SUSPENDED') {
 
 Keep self protection, existence, uniqueness, archive snapshot, transaction, and audit. Add `{ demoMode: demo.audit(bypassedRules) }` only when at least one rule was bypassed.
 
-- [ ] **Step 4: Run focused GREEN**
+- [x] **Step 4: Run focused GREEN**
 
 ```bash
 npm --prefix backend test -- --runInBand src/modules/users/users.service.spec.ts
@@ -309,7 +309,7 @@ npm --prefix backend test -- --runInBand src/modules/users/users.service.spec.ts
 
 Expected: the focused suite exits 0.
 
-- [ ] **Step 5: Commit the user slice**
+- [x] **Step 5: Commit the user slice**
 
 ```bash
 git add backend/src/modules/users/users.service.ts backend/src/modules/users/users.service.spec.ts

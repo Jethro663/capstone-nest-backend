@@ -27,6 +27,8 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DatabaseService } from '../../database/database.service';
 import { MailService } from '../mail/mail.service';
 import { AuditService } from '../audit/audit.service';
+import { AdminDemoModeService } from '../admin-demo-mode/admin-demo-mode.service';
+import type { AdminDemoModeRelaxedRuleCode } from '../admin-demo-mode/admin-demo-mode.policy';
 import {
   users,
   roles,
@@ -67,6 +69,7 @@ export class UsersService {
     private eventEmitter: EventEmitter2,
     private mailService: MailService,
     private readonly auditService: AuditService,
+    private readonly adminDemoModeService: AdminDemoModeService,
   ) {
     const configuredRounds = Number(
       this.configService.get<string>('AUTH_PASSWORD_HASH_ROUNDS') ?? '10',
@@ -1266,8 +1269,15 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
+    const demo = await this.adminDemoModeService.resolveForActor(adminId);
+    const bypassedRules: AdminDemoModeRelaxedRuleCode[] = [];
     if (existingUser.status !== 'SUSPENDED') {
-      throw new BadRequestException('Only suspended users can be reactivated');
+      if (!demo.allows('user_lifecycle_sequence')) {
+        throw new BadRequestException(
+          'Only suspended users can be reactivated',
+        );
+      }
+      bypassedRules.push('user_lifecycle_sequence');
     }
 
     await this.db
@@ -1275,6 +1285,7 @@ export class UsersService {
       .set({ status: 'ACTIVE', updatedAt: new Date() })
       .where(eq(users.id, id));
 
+    const demoMode = demo.audit(bypassedRules);
     await this.auditService.log({
       actorId: adminId,
       action: 'user.reactivated',
@@ -1282,6 +1293,7 @@ export class UsersService {
       targetId: id,
       metadata: {
         previousStatus: existingUser.status,
+        ...(demoMode ? { demoMode } : {}),
       },
     });
 
@@ -1302,10 +1314,15 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
+    const demo = await this.adminDemoModeService.resolveForActor(adminId);
+    const bypassedRules: AdminDemoModeRelaxedRuleCode[] = [];
     if (existingUser.status !== 'SUSPENDED') {
-      throw new BadRequestException(
-        'User must be suspended before deletion. Please suspend the user first.',
-      );
+      if (!demo.allows('user_lifecycle_sequence')) {
+        throw new BadRequestException(
+          'User must be suspended before deletion. Please suspend the user first.',
+        );
+      }
+      bypassedRules.push('user_lifecycle_sequence');
     }
 
     // Collect all related data for archival
@@ -1330,6 +1347,7 @@ export class UsersService {
         .where(eq(users.id, id));
     });
 
+    const demoMode = demo.audit(bypassedRules);
     await this.auditService.log({
       actorId: adminId,
       action: 'user.archived',
@@ -1338,6 +1356,7 @@ export class UsersService {
       metadata: {
         previousStatus: existingUser.status,
         roles: userRoleNames,
+        ...(demoMode ? { demoMode } : {}),
       },
     });
 

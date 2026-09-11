@@ -18,8 +18,8 @@
 
 ## 3. Backend workflow integrations
 
-- [ ] 3.1 Add paired normal/Demo tests for non-self user archive and restore sequence.
-- [ ] 3.2 Integrate `user_lifecycle_sequence` without weakening self-protection, identity, archive, audit, or purge rules.
+- [x] 3.1 Add paired normal/Demo tests for non-self user archive and restore sequence.
+- [x] 3.2 Integrate `user_lifecycle_sequence` without weakening self-protection, identity, archive, audit, or purge rules.
 - [ ] 3.3 Add paired normal/Demo tests for schedule collision, room/adviser reuse, capacity, historical membership, safe archival, and class restore.
 - [ ] 3.4 Integrate class rules while preserving time shape, identity/evidence, duplicates, transactions, and class-record capture.
 - [ ] 3.5 Integrate section rules while preserving role/grade/graduation, duplicates, cross-section reconciliation, and audit.

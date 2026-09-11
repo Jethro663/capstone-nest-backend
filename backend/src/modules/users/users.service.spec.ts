@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -11,6 +12,7 @@ import { DatabaseService } from '../../database/database.service';
 import { OtpService } from '../otp/otp.service';
 import { MailService } from '../mail/mail.service';
 import { AuditService } from '../audit/audit.service';
+import { AdminDemoModeService } from '../admin-demo-mode/admin-demo-mode.service';
 import { archivedUsers, studentProfiles, users } from '../../drizzle/schema';
 
 jest.mock('bcrypt', () => ({
@@ -64,11 +66,26 @@ describe('UsersService', () => {
     log: jest.fn().mockResolvedValue(undefined),
   };
 
+  const inactiveDemoContext = {
+    active: false,
+    version: 0,
+    expiresAt: null,
+    allows: jest.fn().mockReturnValue(false),
+    audit: jest.fn().mockReturnValue(undefined),
+  };
+
+  const mockAdminDemoModeService = {
+    resolveForActor: jest.fn().mockResolvedValue(inactiveDemoContext),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
     bcrypt.hash.mockResolvedValue('hashed-password');
     mockOtpService.createAndSendOTP.mockResolvedValue(undefined);
     mockAuditService.log.mockResolvedValue(undefined);
+    mockAdminDemoModeService.resolveForActor.mockResolvedValue(
+      inactiveDemoContext,
+    );
 
     mockDb = {
       query: {
@@ -120,6 +137,10 @@ describe('UsersService', () => {
         { provide: ConfigService, useValue: mockConfigService },
         { provide: EventEmitter2, useValue: mockEventEmitter },
         { provide: AuditService, useValue: mockAuditService },
+        {
+          provide: AdminDemoModeService,
+          useValue: mockAdminDemoModeService,
+        },
       ],
     }).compile();
 
@@ -748,6 +769,16 @@ describe('UsersService', () => {
   });
 
   describe('softDeleteUser', () => {
+    it('keeps the suspend-before-archive sequence in normal mode', async () => {
+      jest
+        .spyOn(service, 'findById')
+        .mockResolvedValue(makeUser({ status: 'ACTIVE' }));
+
+      await expect(service.softDeleteUser('user-1', 'admin-1')).rejects.toThrow(
+        'User must be suspended before deletion. Please suspend the user first.',
+      );
+    });
+
     it('archives and sets deleted status inside one transaction', async () => {
       jest
         .spyOn(service, 'findById')
@@ -787,6 +818,63 @@ describe('UsersService', () => {
         },
       });
     });
+
+    it('archives an active non-self account only when Demo mode allows the sequence bypass', async () => {
+      const demoMetadata = {
+        demoModeVersion: 2,
+        demoModeExpiresAt: '2026-09-12T04:30:00.000Z',
+        bypassedRules: ['user_lifecycle_sequence'],
+      };
+      mockAdminDemoModeService.resolveForActor.mockResolvedValue({
+        active: true,
+        version: 2,
+        expiresAt: new Date('2026-09-12T04:30:00.000Z'),
+        allows: jest.fn().mockReturnValue(true),
+        audit: jest.fn().mockReturnValue(demoMetadata),
+      });
+      jest
+        .spyOn(service, 'findById')
+        .mockResolvedValue(
+          makeUser({ status: 'ACTIVE', roles: [{ name: 'teacher' }] }),
+        );
+      (service as any).collectUserData = jest
+        .fn()
+        .mockResolvedValue({ snapshot: true });
+      const tx = {
+        insert: jest.fn().mockReturnValue({
+          values: jest.fn().mockResolvedValue(undefined),
+        }),
+        update: jest.fn().mockReturnValue({
+          set: jest.fn().mockReturnValue({
+            where: jest.fn().mockResolvedValue(undefined),
+          }),
+        }),
+      };
+      mockDb.transaction.mockImplementation(async (cb: Function) => cb(tx));
+
+      await service.softDeleteUser('user-1', 'admin-1');
+
+      expect(mockAdminDemoModeService.resolveForActor).toHaveBeenCalledWith(
+        'admin-1',
+      );
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({ demoMode: demoMetadata }),
+        }),
+      );
+    });
+
+    it('keeps self-account archive protection while Demo mode is active', async () => {
+      mockAdminDemoModeService.resolveForActor.mockResolvedValue({
+        ...inactiveDemoContext,
+        active: true,
+        allows: jest.fn().mockReturnValue(true),
+      });
+      await expect(
+        service.softDeleteUser('admin-1', 'admin-1'),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(mockAdminDemoModeService.resolveForActor).not.toHaveBeenCalled();
+    });
   });
 
   describe('exportUserData', () => {
@@ -816,6 +904,32 @@ describe('UsersService', () => {
   });
 
   describe('purgeUser', () => {
+    it('still requires DELETED status while Demo mode is active', async () => {
+      mockAdminDemoModeService.resolveForActor.mockResolvedValue({
+        ...inactiveDemoContext,
+        active: true,
+        allows: jest.fn().mockReturnValue(true),
+      });
+      jest
+        .spyOn(service, 'findById')
+        .mockResolvedValue(makeUser({ status: 'ACTIVE' }));
+
+      await expect(service.purgeUser('user-1', 'admin-1')).rejects.toThrow(
+        'User must have DELETED status before permanent removal.',
+      );
+    });
+
+    it('keeps self-account purge protection while Demo mode is active', async () => {
+      mockAdminDemoModeService.resolveForActor.mockResolvedValue({
+        ...inactiveDemoContext,
+        active: true,
+        allows: jest.fn().mockReturnValue(true),
+      });
+      await expect(
+        service.purgeUser('admin-1', 'admin-1'),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
     it('marks archive as purged and deletes user in transaction', async () => {
       jest
         .spyOn(service, 'findById')
@@ -854,6 +968,15 @@ describe('UsersService', () => {
   });
 
   describe('reactivateUser', () => {
+    it('keeps suspended-only reactivation in normal mode', async () => {
+      jest
+        .spyOn(service, 'findById')
+        .mockResolvedValue(makeUser({ status: 'DELETED' }));
+      await expect(service.reactivateUser('user-1', 'admin-1')).rejects.toThrow(
+        'Only suspended users can be reactivated',
+      );
+    });
+
     it('reactivates suspended user and writes audit metadata', async () => {
       jest
         .spyOn(service, 'findById')
@@ -879,9 +1002,51 @@ describe('UsersService', () => {
         },
       });
     });
+
+    it('reactivates a deleted non-self account only when Demo mode allows the sequence bypass', async () => {
+      const demoMetadata = {
+        demoModeVersion: 5,
+        demoModeExpiresAt: '2026-09-12T04:30:00.000Z',
+        bypassedRules: ['user_lifecycle_sequence'],
+      };
+      mockAdminDemoModeService.resolveForActor.mockResolvedValue({
+        active: true,
+        version: 5,
+        expiresAt: new Date('2026-09-12T04:30:00.000Z'),
+        allows: jest.fn().mockReturnValue(true),
+        audit: jest.fn().mockReturnValue(demoMetadata),
+      });
+      jest
+        .spyOn(service, 'findById')
+        .mockResolvedValue(makeUser({ status: 'DELETED' }));
+      mockDb.update.mockReturnValue({
+        set: jest.fn().mockReturnValue({
+          where: jest.fn().mockResolvedValue(undefined),
+        }),
+      });
+
+      await service.reactivateUser('user-1', 'admin-1');
+
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({ demoMode: demoMetadata }),
+        }),
+      );
+    });
   });
 
   describe('suspendUser', () => {
+    it('keeps self-account suspension protection while Demo mode is active', async () => {
+      mockAdminDemoModeService.resolveForActor.mockResolvedValue({
+        ...inactiveDemoContext,
+        active: true,
+        allows: jest.fn().mockReturnValue(true),
+      });
+      await expect(
+        service.suspendUser('admin-1', 'admin-1'),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
     it('suspends active user and writes audit metadata', async () => {
       jest
         .spyOn(service, 'findById')
