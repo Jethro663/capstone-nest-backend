@@ -38,7 +38,7 @@ function setup(available = true) {
   const stateFindFirst = jest.fn();
   const userFindFirst = jest.fn().mockResolvedValue({
     id: ACTOR_ID,
-    email: 'admin@lms.local',
+    email: 'admin@example.test',
     firstName: 'Demo',
     lastName: 'Admin',
     password: 'hash',
@@ -90,7 +90,7 @@ function setup(available = true) {
 }
 
 const activationDto = (): ActivateAdminDemoModeDto => ({
-  currentPassword: 'Test@123',
+  currentPassword: 'DemoOnly!456',
   confirmation: 'ENABLE DEMO MODE',
   reason: 'Prepare a complete presentation flow.',
   durationMinutes: 30,
@@ -207,7 +207,7 @@ describe('AdminDemoModeService', () => {
         version: 1,
       }),
     );
-    expect(JSON.stringify(audit.log.mock.calls)).not.toContain('Test@123');
+    expect(JSON.stringify(audit.log.mock.calls)).not.toContain('DemoOnly!456');
   });
 
   it('deactivates immediately even when deployment availability is off', async () => {

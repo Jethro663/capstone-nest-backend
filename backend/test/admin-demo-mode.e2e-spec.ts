@@ -71,7 +71,7 @@ const SECOND_TARGET_ID = '10000000-0000-4000-8000-000000000004';
 const START = new Date('2026-09-12T04:00:00.000Z');
 
 const activationBody = (expectedVersion = 0) => ({
-  currentPassword: 'Test@123',
+  currentPassword: 'DemoOnly!456',
   confirmation: 'ENABLE DEMO MODE',
   reason: 'Exercise the complete administrator presentation flow.',
   durationMinutes: 15,
@@ -186,7 +186,7 @@ describeWithDatabase('Admin Demo mode HTTP and PostgreSQL policy (e2e)', () => {
         { name: 'student', description: 'Student' },
       ])
       .returning();
-    const password = await bcrypt.hash('Test@123', 4);
+    const password = await bcrypt.hash('DemoOnly!456', 4);
     await database.db.insert(users).values([
       {
         id: ADMIN_ID,

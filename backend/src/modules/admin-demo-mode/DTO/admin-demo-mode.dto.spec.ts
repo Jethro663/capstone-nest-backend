@@ -8,7 +8,7 @@ import {
 describe('admin demo mode DTOs', () => {
   const validActivation = () =>
     Object.assign(new ActivateAdminDemoModeDto(), {
-      currentPassword: 'Test@123',
+      currentPassword: 'DemoOnly!456',
       confirmation: 'ENABLE DEMO MODE',
       reason: 'Prepare a complete presentation flow.',
       durationMinutes: 30,

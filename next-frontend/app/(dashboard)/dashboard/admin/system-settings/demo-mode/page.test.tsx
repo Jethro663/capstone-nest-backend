@@ -55,7 +55,7 @@ function completeActivationForm() {
     target: { value: "School defense rehearsal" },
   });
   fireEvent.change(screen.getByLabelText("Current password"), {
-    target: { value: "Test@123" },
+    target: { value: "DemoOnly!456" },
   });
   fireEvent.change(screen.getByLabelText("Type ENABLE DEMO MODE"), {
     target: { value: "ENABLE DEMO MODE" },
@@ -87,7 +87,7 @@ describe("Demo mode settings", () => {
 
     await waitFor(() =>
       expect(activate).toHaveBeenCalledWith({
-        currentPassword: "Test@123",
+        currentPassword: "DemoOnly!456",
         confirmation: "ENABLE DEMO MODE",
         reason: "School defense rehearsal",
         durationMinutes: 30,
