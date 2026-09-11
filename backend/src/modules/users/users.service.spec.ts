@@ -426,6 +426,71 @@ describe('UsersService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
+    it('rejects editing a deleted account when Demo mode is inactive', async () => {
+      jest
+        .spyOn(service, 'findById')
+        .mockResolvedValue(makeUser({ status: 'DELETED' }));
+
+      await expect(
+        service.updateUser(
+          'user-1',
+          { firstName: 'Archived' } as any,
+          'admin-1',
+        ),
+      ).rejects.toThrow('Deleted accounts can only be edited in Demo mode');
+
+      expect(mockDb.transaction).not.toHaveBeenCalled();
+    });
+
+    it('audits editing a deleted account when Demo mode allows the sequence bypass', async () => {
+      const demoMetadata = {
+        demoModeVersion: 7,
+        demoModeExpiresAt: '2026-09-12T04:30:00.000Z',
+        bypassedRules: ['user_lifecycle_sequence'],
+      };
+      mockAdminDemoModeService.resolveForActor.mockResolvedValue({
+        active: true,
+        version: 7,
+        expiresAt: new Date('2026-09-12T04:30:00.000Z'),
+        allows: jest.fn().mockReturnValue(true),
+        audit: jest.fn().mockReturnValue(demoMetadata),
+      });
+      jest
+        .spyOn(service, 'findById')
+        .mockResolvedValueOnce(makeUser({ status: 'DELETED' }))
+        .mockResolvedValueOnce(
+          makeUser({ status: 'DELETED', firstName: 'Archived' }),
+        );
+      const tx = {
+        query: {
+          studentProfiles: { findFirst: jest.fn() },
+          roles: { findFirst: jest.fn() },
+          teacherProfiles: { findFirst: jest.fn() },
+        },
+        update: jest.fn().mockReturnValue({
+          set: jest.fn().mockReturnValue({
+            where: jest.fn().mockResolvedValue(undefined),
+          }),
+        }),
+        insert: jest.fn(),
+        delete: jest.fn(),
+      };
+      mockDb.transaction.mockImplementation(async (cb: Function) => cb(tx));
+
+      await service.updateUser(
+        'user-1',
+        { firstName: 'Archived' } as any,
+        'admin-1',
+      );
+
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'user.updated',
+          metadata: expect.objectContaining({ demoMode: demoMetadata }),
+        }),
+      );
+    });
+
     it('fails role update atomically when role does not exist (no role wipe)', async () => {
       jest
         .spyOn(service, 'findById')

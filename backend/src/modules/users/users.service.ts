@@ -830,6 +830,24 @@ export class UsersService {
     if (!existingUser) {
       throw new NotFoundException('User not found');
     }
+    let demoModeAuditMetadata:
+      | {
+          demoModeVersion: number;
+          demoModeExpiresAt: string;
+          bypassedRules: AdminDemoModeRelaxedRuleCode[];
+        }
+      | undefined;
+    if (existingUser.status === 'DELETED') {
+      const demo = actorId
+        ? await this.adminDemoModeService.resolveForActor(actorId)
+        : null;
+      if (!demo?.allows('user_lifecycle_sequence')) {
+        throw new BadRequestException(
+          'Deleted accounts can only be edited in Demo mode',
+        );
+      }
+      demoModeAuditMetadata = demo.audit(['user_lifecycle_sequence']);
+    }
     if ((updateUserDto as Record<string, unknown>).status !== undefined) {
       throw new BadRequestException(
         'Direct status updates are not allowed. Use lifecycle endpoints.',
@@ -1034,6 +1052,9 @@ export class UsersService {
               metadata: {
                 previousStatus: existingUser.status,
                 changedFields: Array.from(new Set(changedFields)),
+                ...(demoModeAuditMetadata
+                  ? { demoMode: demoModeAuditMetadata }
+                  : {}),
               },
             });
           }
