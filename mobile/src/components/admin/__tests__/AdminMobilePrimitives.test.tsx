@@ -8,6 +8,8 @@ import {
   AdminMetricStrip,
   AdminSection,
 } from "../AdminMobilePrimitives";
+import fs from "node:fs";
+import path from "node:path";
 
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -52,6 +54,10 @@ jest.mock("../../ui/primitives", () => {
   };
 });
 
+jest.mock("../AdminDemoModeNotice", () => ({
+  AdminDemoModeNotice: () => null,
+}));
+
 function renderedText(root: TestRenderer.ReactTestInstance) {
   return root
     .findAllByType("Text")
@@ -78,6 +84,16 @@ beforeAll(() => {
 afterAll(() => consoleErrorSpy.mockRestore());
 
 describe("admin mobile primitives", () => {
+  it("places the shared Demo mode notice below AdminScreen headers", () => {
+    const source = fs.readFileSync(
+      path.resolve(__dirname, "../AdminMobilePrimitives.tsx"),
+      "utf8",
+    );
+    expect(source).toContain("<AdminDemoModeNotice");
+    expect(source.indexOf("<AdminDemoModeNotice")).toBeGreaterThan(
+      source.indexOf('testID="admin-compact-header"'),
+    );
+  });
   it("renders metrics as one compact divided strip without floating card shadows", () => {
     let renderer: TestRenderer.ReactTestRenderer;
     act(() => {

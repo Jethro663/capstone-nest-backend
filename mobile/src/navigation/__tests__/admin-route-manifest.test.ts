@@ -64,6 +64,17 @@ describe("administrator navigation manifest", () => {
     );
   });
 
+  it("registers Demo mode as a System Settings stack task, never a drawer destination", () => {
+    expect(adminSource).toContain(
+      '<RootStack.Screen name="AdminSettingsDemoMode" component={AdminDemoModeSettingsScreen}',
+    );
+    const adminDrawerSource = source.slice(
+      source.indexOf("function AdminDrawerNavigator"),
+      source.indexOf("function AdminNavigator"),
+    );
+    expect(adminDrawerSource).not.toContain('name="AdminSettingsDemoMode"');
+  });
+
   it.each(["AdminAcademicScreen.tsx"])(
     "gives legacy stack entry %s a visible Back action while drawer roots keep the menu",
     (fileName) => {

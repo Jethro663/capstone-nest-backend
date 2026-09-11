@@ -13,6 +13,7 @@ import {
   adminTheme as theme,
 } from "./AdminMobilePrimitives";
 import { useAdminNetworkStatus } from "../../hooks/useAdminNetworkStatus";
+import { AdminDemoModeNotice } from "./AdminDemoModeNotice";
 
 function AdminSkeletonRows() {
   return (
@@ -94,6 +95,7 @@ export function AdminPaginatedList<Item>({
     : "time unavailable";
   const listHeader = (
     <>
+      <AdminDemoModeNotice />
       <View>{header}</View>
       {cachedOffline ? (
         <AdminNotice

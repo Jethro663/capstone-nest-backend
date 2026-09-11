@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Refreshable, ScreenScroll } from "../ui/primitives";
 import { RoleHeaderNavigationButton } from "../navigation/RoleNavigationDrawer";
 import { adminTheme as theme } from "../../theme/admin";
+import { AdminDemoModeNotice } from "./AdminDemoModeNotice";
 
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>["name"];
 type Tone = "primary" | "green" | "amber" | "red" | "purple" | "neutral";
@@ -235,6 +236,7 @@ export function AdminScreen({
             </Text>
           ) : null}
         </View>
+        <AdminDemoModeNotice />
         {children}
       </ScreenScroll>
     </KeyboardAvoidingView>

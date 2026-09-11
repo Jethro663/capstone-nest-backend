@@ -47,5 +47,6 @@ describe("administrator virtualized pagination", () => {
     expect(source).toContain("ListEmptyComponent");
     expect(source).toContain("fetchNextPage");
     expect(source).not.toContain("ScrollView");
+    expect(source).toContain("<AdminDemoModeNotice");
   });
 });

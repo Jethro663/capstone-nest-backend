@@ -42,11 +42,11 @@
 
 ## 5. Mobile controls and consumers
 
-- [ ] 5.1 Add shared mobile types, authenticated service, and contract tests.
-- [ ] 5.2 Add shared React Query status/mutation hook with focus refresh and offline behavior.
-- [ ] 5.3 Add `AdminSettingsDemoMode` route and System Settings row without a new drawer destination.
-- [ ] 5.4 Implement safe-area/keyboard-aware activation/deactivation screen and state tests.
-- [ ] 5.5 Add compact active notice to `AdminScreen` and `AdminPaginatedList`.
+- [x] 5.1 Add shared mobile types, authenticated service, and contract tests.
+- [x] 5.2 Add shared React Query status/mutation hook with focus refresh and offline behavior.
+- [x] 5.3 Add `AdminSettingsDemoMode` route and System Settings row without a new drawer destination.
+- [x] 5.4 Implement safe-area/keyboard-aware activation/deactivation screen and state tests.
+- [x] 5.5 Add compact active notice to `AdminScreen` and `AdminPaginatedList`.
 - [ ] 5.6 Make class/section/roster options capability-aware while keeping offline writes disabled.
 - [ ] 5.7 Add mobile archived-class restore and Demo user lifecycle/edit controls without changing permanent purge confirmation.
 - [ ] 5.8 Run focused mobile tests and typecheck.

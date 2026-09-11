@@ -632,7 +632,7 @@ If the backend returns the existing conflict because mode expired, keep all ente
 npm --prefix next-frontend test -- --runInBand src/components/admin/ClassForm.test.tsx src/components/admin/SectionForm.test.tsx 'app/(dashboard)/dashboard/admin/classes/new/page.test.tsx' 'app/(dashboard)/dashboard/admin/classes/[id]/page.test.tsx' 'app/(dashboard)/dashboard/admin/users/[id]/page.test.tsx'
 ```
 
-- [ ] **Step 6: Commit the web consumer alignment**
+- [x] **Step 6: Commit the web consumer alignment**
 
 ```bash
 git add next-frontend/src/components/admin/ClassForm.tsx next-frontend/src/components/admin/ClassForm.test.tsx next-frontend/src/components/admin/SectionForm.tsx next-frontend/src/components/admin/SectionForm.test.tsx 'next-frontend/app/(dashboard)/dashboard/admin/classes' 'next-frontend/app/(dashboard)/dashboard/admin/sections' 'next-frontend/app/(dashboard)/dashboard/admin/users/[id]'
@@ -667,37 +667,37 @@ git commit -m "feat(admin): align web forms with demo capabilities"
 - `AdminSettingsDemoMode: undefined` is a native stack route.
 - Mutations are disabled when offline and never queued.
 
-- [ ] **Step 1: Write contract/navigation RED tests**
+- [x] **Step 1: Write contract/navigation RED tests**
 
 Assert exact paths and request payloads, response typing, new stack route, settings row navigation, header/hardware Back compatibility, and no new drawer destination.
 
-- [ ] **Step 2: Write screen/primitive RED tests**
+- [x] **Step 2: Write screen/primitive RED tests**
 
 Cover loading, unavailable, disabled, active, expired, wrong password, stale version refresh, disabled-offline writes, cached status label, password clearing, and notice rendering in both `AdminScreen` and `AdminPaginatedList`.
 
-- [ ] **Step 3: Run RED**
+- [x] **Step 3: Run RED**
 
 ```bash
 npm --prefix mobile test -- --runInBand admin-demo-mode admin-settings-workspaces AdminMobilePrimitives admin-route-manifest
 ```
 
-- [ ] **Step 4: Implement service and shared query**
+- [x] **Step 4: Implement service and shared query**
 
 Use authenticated `apiClient`, the same types/codes as web, `staleTime: 30_000`, and refetch on app focus. Activation/deactivation invalidate `['admin-demo-mode']` and affected admin list/detail query prefixes.
 
-- [ ] **Step 5: Implement the native settings screen**
+- [x] **Step 5: Implement the native settings screen**
 
 Use `AdminScreen`, `AdminNotice`, `AdminSection`, `AdminField`, `AdminChip`, and `AdminButton`. Use secure password input, multiline reason capped at 240, duration chips, three explicit acknowledgement controls, typed phrase, and a final native confirmation alert. Do not store the password in React Query or async storage.
 
-- [ ] **Step 6: Add the shared active notice**
+- [x] **Step 6: Add the shared active notice**
 
 Render `AdminDemoModeNotice` below the compact header in `AdminScreen` and above the list header in `AdminPaginatedList`. It renders only for effective active state, shows time remaining and a Manage action, and labels cached/offline state.
 
-- [ ] **Step 7: Add stack navigation**
+- [x] **Step 7: Add stack navigation**
 
 Add the route to `RootStackParamList`, register it in `AdminNavigator`, and add the System Settings row. Keep the drawer inventory unchanged because Demo mode is a subtask of System Settings.
 
-- [ ] **Step 8: Run GREEN and typecheck**
+- [x] **Step 8: Run GREEN and typecheck**
 
 ```bash
 npm --prefix mobile test -- --runInBand admin-demo-mode admin-settings-workspaces AdminMobilePrimitives admin-route-manifest

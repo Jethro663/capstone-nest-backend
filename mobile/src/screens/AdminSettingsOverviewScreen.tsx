@@ -34,6 +34,7 @@ export function AdminSettingsOverviewScreen({ navigation }: Props) {
       | "AdminSettingsYearTransition"
       | "AdminSettingsLearnerCompletion"
       | "AdminSettingsAuditRecovery"
+      | "AdminSettingsDemoMode"
       | "AdminStudentReadiness",
   ) => root.navigate(name);
   const blockers = readiness.data?.blockers.length ?? 0;
@@ -108,6 +109,13 @@ export function AdminSettingsOverviewScreen({ navigation }: Props) {
               title="Audit & Recovery"
               subtitle="Audit first; repair only from manifest-bound evidence"
               onPress={() => open("AdminSettingsAuditRecovery")}
+            />
+            <AdminDataRow
+              title="Demo Mode"
+              subtitle="Start a time-bound, audited evaluator walkthrough window"
+              status="Advanced"
+              statusTone="red"
+              onPress={() => open("AdminSettingsDemoMode")}
             />
           </AdminSection>
         }

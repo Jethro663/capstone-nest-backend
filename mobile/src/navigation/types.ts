@@ -90,6 +90,7 @@ export type RootStackParamList = {
   AdminSettingsYearTransition: undefined;
   AdminSettingsLearnerCompletion: undefined;
   AdminSettingsAuditRecovery: undefined;
+  AdminSettingsDemoMode: undefined;
   AdminStudentReadiness: undefined;
   AdminAnnouncements: undefined;
   AdminLifecycleReview: {
