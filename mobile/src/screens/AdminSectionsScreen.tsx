@@ -9,6 +9,8 @@ import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import { adminApi } from "../api/services/admin";
 import { sectionsApi } from "../api/services/sections";
 import { toAppError } from "../api/http";
+import { useAdminDemoMode } from "../hooks/useAdminDemoMode";
+import { useAdminNetworkStatus } from "../hooks/useAdminNetworkStatus";
 import { AdminPaginatedList } from "../components/admin/AdminPaginatedList";
 import {
   mergeAdminPages,
@@ -32,6 +34,8 @@ type Status = "all" | "active" | "archived";
 
 export function AdminSectionsScreen({ navigation }: Props) {
   const queryClient = useQueryClient();
+  const network = useAdminNetworkStatus();
+  const demoMode = useAdminDemoMode();
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [status, setStatus] = useState<Status>("all");
@@ -74,11 +78,48 @@ export function AdminSectionsScreen({ navigation }: Props) {
         limit: 100,
       }),
   });
+  const conflictSections = useQuery({
+    queryKey: ["admin-section-conflict-candidates"],
+    queryFn: () => sectionsApi.getPage({ page: 1, limit: 200 }),
+    enabled: showForm,
+  });
   const rows = useMemo(
     () => mergeAdminPages(query.data?.pages ?? [], (entry) => entry.id),
     [query.data?.pages],
   );
   const total = query.data?.pages[0]?.total ?? rows.length;
+  const canRelaxRoomAndAdviser = demoMode.hasExactRule(
+    "room_adviser_exclusivity",
+  );
+  const canRelaxCapacity = demoMode.hasExactRule("section_capacity");
+  const activeConflictCandidates = (conflictSections.data?.data ?? []).filter(
+    (section) => section.isActive && section.id !== editing?.id,
+  );
+  const roomConflict = activeConflictCandidates.find(
+    (section) =>
+      Boolean(roomNumber.trim()) &&
+      section.roomNumber?.trim().toLowerCase() ===
+        roomNumber.trim().toLowerCase(),
+  );
+  const adviserConflict = activeConflictCandidates.find(
+    (section) => Boolean(adviserId) && section.adviser?.id === adviserId,
+  );
+  const roomOrAdviserConflict = roomConflict ?? adviserConflict;
+  const parsedCapacity = Number(capacity);
+  const currentHeadcount =
+    editing?.enrollmentCount ?? editing?.studentCount ?? 0;
+  const capacityConflict = Boolean(
+    editing &&
+    Number.isInteger(parsedCapacity) &&
+    parsedCapacity < currentHeadcount,
+  );
+  const duplicateSection = (conflictSections.data?.data ?? []).find(
+    (section) =>
+      section.id !== editing?.id &&
+      section.name.trim().toLowerCase() === name.trim().toLowerCase() &&
+      section.gradeLevel === gradeLevel &&
+      section.schoolYear.trim() === schoolYear.trim(),
+  );
   const rootNavigation = navigation.getParent() as unknown as {
     navigate: (name: string, params?: unknown) => void;
   };
@@ -130,7 +171,6 @@ export function AdminSectionsScreen({ navigation }: Props) {
     setShowForm(true);
   };
   const save = async () => {
-    const parsedCapacity = Number(capacity);
     if (
       !name.trim() ||
       !schoolYear.trim() ||
@@ -139,6 +179,30 @@ export function AdminSectionsScreen({ navigation }: Props) {
     ) {
       setFormError(
         "Name, school year, and a positive whole-number capacity are required.",
+      );
+      return;
+    }
+    if (network.isOffline) {
+      setFormError(
+        "A live connection is required. Section writes are never queued while offline.",
+      );
+      return;
+    }
+    if (duplicateSection) {
+      setFormError(
+        "A section with this name, grade, and school year already exists. This identity safeguard stays protected.",
+      );
+      return;
+    }
+    if (roomOrAdviserConflict && !canRelaxRoomAndAdviser) {
+      setFormError(
+        "Room or adviser conflict. Choose an available assignment or activate the exact Demo mode capability.",
+      );
+      return;
+    }
+    if (capacityConflict && !canRelaxCapacity) {
+      setFormError(
+        `Capacity cannot be lower than the current ${currentHeadcount}-student headcount.`,
       );
       return;
     }
@@ -158,12 +222,20 @@ export function AdminSectionsScreen({ navigation }: Props) {
       resetForm();
       await queryClient.invalidateQueries({ queryKey: ["admin-sections"] });
     } catch (error) {
+      await demoMode.refresh();
       setFormError(toAppError(error).message);
     } finally {
       setBusy(false);
     }
   };
   const setVisibility = async (section: TeacherSection) => {
+    if (network.isOffline) {
+      Alert.alert(
+        "Connection required",
+        "Section visibility writes are never queued while offline.",
+      );
+      return;
+    }
     try {
       setBusy(true);
       await (section.isHidden
@@ -171,6 +243,7 @@ export function AdminSectionsScreen({ navigation }: Props) {
         : sectionsApi.hide(section.id));
       await queryClient.invalidateQueries({ queryKey: ["admin-sections"] });
     } catch (error) {
+      await demoMode.refresh();
       Alert.alert("Visibility update rejected", toAppError(error).message);
     } finally {
       setBusy(false);
@@ -240,6 +313,14 @@ export function AdminSectionsScreen({ navigation }: Props) {
         resultCount={total ?? rows.length}
       />
       {batchControls}
+      {network.isOffline ? (
+        <AdminNotice
+          title="Offline · section writes disabled"
+          description="Cached sections remain available, but create, edit, and visibility writes are never queued while offline."
+          tone="amber"
+          icon="cloud-off-outline"
+        />
+      ) : null}
       {showForm ? (
         <View
           style={{
@@ -257,6 +338,30 @@ export function AdminSectionsScreen({ navigation }: Props) {
               title="Section was not saved"
               description={formError}
               tone="red"
+            />
+          ) : null}
+          {roomOrAdviserConflict ? (
+            <AdminNotice
+              title="Room or adviser conflict"
+              description={
+                canRelaxRoomAndAdviser
+                  ? `Demo mode permits this audited exception involving Grade ${roomOrAdviserConflict.gradeLevel} · ${roomOrAdviserConflict.name}.`
+                  : `Grade ${roomOrAdviserConflict.gradeLevel} · ${roomOrAdviserConflict.name} already uses this assignment.`
+              }
+              tone={canRelaxRoomAndAdviser ? "amber" : "red"}
+              icon="account-switch-outline"
+            />
+          ) : null}
+          {capacityConflict ? (
+            <AdminNotice
+              title="Capacity is below current enrollment"
+              description={
+                canRelaxCapacity
+                  ? `Demo mode permits the audited capacity exception; ${currentHeadcount} enrolled students remain preserved.`
+                  : `Enter at least ${currentHeadcount}, matching the current enrolled headcount.`
+              }
+              tone={canRelaxCapacity ? "amber" : "red"}
+              icon="account-group-outline"
             />
           ) : null}
           <Text style={{ fontSize: 15, fontWeight: "900", color: theme.text }}>
@@ -309,6 +414,12 @@ export function AdminSectionsScreen({ navigation }: Props) {
                 key={teacher.id}
                 label={`${teacher.firstName ?? ""} ${teacher.lastName ?? teacher.email}`.trim()}
                 active={adviserId === teacher.id}
+                disabled={
+                  !canRelaxRoomAndAdviser &&
+                  activeConflictCandidates.some(
+                    (section) => section.adviser?.id === teacher.id,
+                  )
+                }
                 onPress={() => setAdviserId(teacher.id)}
               />
             ))}
@@ -320,7 +431,13 @@ export function AdminSectionsScreen({ navigation }: Props) {
             icon="content-save"
             tone="green"
             variant="solid"
-            disabled={busy}
+            disabled={
+              busy ||
+              network.isOffline ||
+              Boolean(duplicateSection) ||
+              Boolean(roomOrAdviserConflict && !canRelaxRoomAndAdviser) ||
+              Boolean(capacityConflict && !canRelaxCapacity)
+            }
             onPress={() => void save()}
           />
         </View>
@@ -386,7 +503,7 @@ export function AdminSectionsScreen({ navigation }: Props) {
               label={item.isHidden ? "Unhide" : "Hide"}
               variant="text"
               tone="amber"
-              disabled={busy}
+              disabled={busy || network.isOffline}
               onPress={() => void setVisibility(item)}
             />
             <AdminButton

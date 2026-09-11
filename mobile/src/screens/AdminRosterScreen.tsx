@@ -9,6 +9,7 @@ import {
 import { sectionsApi } from "../api/services/sections";
 import { toAppError } from "../api/http";
 import { useAdminNetworkStatus } from "../hooks/useAdminNetworkStatus";
+import { useAdminDemoMode } from "../hooks/useAdminDemoMode";
 import type { MainTabParamList } from "../navigation/types";
 import {
   AdminButton,
@@ -28,6 +29,11 @@ type ReviewTab = "registered" | "pending" | "errors";
 
 export function AdminRosterScreen(_props: Props) {
   const network = useAdminNetworkStatus();
+  const demoMode = useAdminDemoMode();
+  const canRelaxMembershipWindow = demoMode.hasExactRule(
+    "section_membership_window",
+  );
+  const canRelaxSectionCapacity = demoMode.hasExactRule("section_capacity");
   const [sectionId, setSectionId] = useState("");
   const [preview, setPreview] = useState<RosterImportPreview | null>(null);
   const [reviewTab, setReviewTab] = useState<ReviewTab>("registered");
@@ -72,6 +78,7 @@ export function AdminRosterScreen(_props: Props) {
       setPreview(await rosterImportApi.preview(sectionId, selection.assets[0]));
       setReviewTab("registered");
     } catch (nextError) {
+      await demoMode.refresh();
       setError(toAppError(nextError).message);
     } finally {
       setBusy(false);
@@ -86,6 +93,7 @@ export function AdminRosterScreen(_props: Props) {
       setPreview(null);
       await pendingRows.refetch();
     } catch (nextError) {
+      await demoMode.refresh();
       setError(toAppError(nextError).message);
     } finally {
       setBusy(false);
@@ -101,6 +109,7 @@ export function AdminRosterScreen(_props: Props) {
       setResolvedUserId("");
       await pendingRows.refetch();
     } catch (nextError) {
+      await demoMode.refresh();
       setError(toAppError(nextError).message);
     } finally {
       setBusy(false);
@@ -121,6 +130,21 @@ export function AdminRosterScreen(_props: Props) {
           description="Cached section and pending-row data is read-only. Preview, commit, and resolution writes require a live connection and are never queued."
           tone="amber"
           icon="cloud-off-outline"
+        />
+      ) : null}
+      {canRelaxMembershipWindow || canRelaxSectionCapacity ? (
+        <AdminNotice
+          title="Demo mode · roster workflow exceptions"
+          description={`The server may permit ${[
+            canRelaxMembershipWindow ? "membership-window changes" : null,
+            canRelaxSectionCapacity ? "capacity exceptions" : null,
+          ]
+            .filter(Boolean)
+            .join(
+              " and ",
+            )} as audited exceptions. Malformed rows, identity validation, preview errors, and offline blocking remain protected.`}
+          tone="amber"
+          icon="account-multiple-check-outline"
         />
       ) : null}
       {error ? (

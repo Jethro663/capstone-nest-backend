@@ -10,6 +10,8 @@ import { adminApi } from "../api/services/admin";
 import { classesApi } from "../api/services/classes";
 import { sectionsApi } from "../api/services/sections";
 import { toAppError } from "../api/http";
+import { useAdminDemoMode } from "../hooks/useAdminDemoMode";
+import { useAdminNetworkStatus } from "../hooks/useAdminNetworkStatus";
 import { AdminPaginatedList } from "../components/admin/AdminPaginatedList";
 import {
   mergeAdminPages,
@@ -32,8 +34,23 @@ type Props = BottomTabScreenProps<MainTabParamList, "AdminClasses">;
 type Status = "all" | "active" | "archived";
 const days: ScheduleDay[] = ["M", "T", "W", "Th", "F", "Sa", "Su"];
 
+const schedulesOverlap = (
+  entry: ClassItem,
+  selectedDays: ScheduleDay[],
+  startTime: string,
+  endTime: string,
+) =>
+  (entry.schedules ?? []).some(
+    (schedule) =>
+      schedule.days.some((day) => selectedDays.includes(day)) &&
+      schedule.startTime < endTime &&
+      schedule.endTime > startTime,
+  );
+
 export function AdminClassesWorkspaceScreen({ navigation }: Props) {
   const queryClient = useQueryClient();
+  const network = useAdminNetworkStatus();
+  const demoMode = useAdminDemoMode();
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [status, setStatus] = useState<Status>("all");
@@ -96,11 +113,59 @@ export function AdminClassesWorkspaceScreen({ navigation }: Props) {
     queryKey: ["admin-class-form-templates"],
     queryFn: () => adminApi.getTemplates(),
   });
+  const conflictCandidates = useQuery({
+    queryKey: [
+      "admin-class-conflict-candidates",
+      sectionId,
+      teacherId,
+      room.trim(),
+      schoolYear.trim(),
+    ],
+    queryFn: async () => {
+      const shared = {
+        page: 1,
+        limit: 200,
+        isActive: true,
+        schoolYear: schoolYear.trim(),
+      };
+      const pages = await Promise.all([
+        classesApi.getPage({ ...shared, sectionId }),
+        classesApi.getPage({ ...shared, teacherId }),
+        classesApi.getPage({ ...shared, room: room.trim() }),
+      ]);
+      return mergeAdminPages(pages, (entry) => entry.id);
+    },
+    enabled: Boolean(
+      showForm && sectionId && teacherId && room.trim() && schoolYear.trim(),
+    ),
+  });
   const rows = useMemo(
     () => mergeAdminPages(query.data?.pages ?? [], (entry) => entry.id),
     [query.data?.pages],
   );
   const total = query.data?.pages[0]?.total ?? rows.length;
+  const canRelaxScheduleCollision = demoMode.hasExactRule("schedule_collision");
+  const canRestoreArchivedClass = demoMode.hasExactRule(
+    "restore_archived_class",
+  );
+  const candidateRows = conflictCandidates.data ?? [];
+  const duplicateSubject = candidateRows.find(
+    (entry) =>
+      entry.id !== editing?.id &&
+      entry.sectionId === sectionId &&
+      (entry.subjectName.trim().toLowerCase() ===
+        subjectName.trim().toLowerCase() ||
+        entry.subjectCode.trim().toLowerCase() ===
+          subjectCode.trim().toLowerCase()),
+  );
+  const scheduleConflict = candidateRows.find(
+    (entry) =>
+      entry.id !== editing?.id &&
+      schedulesOverlap(entry, selectedDays, startTime, endTime) &&
+      (entry.sectionId === sectionId ||
+        entry.teacherId === teacherId ||
+        entry.room?.trim().toLowerCase() === room.trim().toLowerCase()),
+  );
   const rootNavigation = navigation.getParent() as unknown as {
     navigate: (name: string, params?: unknown) => void;
   };
@@ -194,6 +259,24 @@ export function AdminClassesWorkspaceScreen({ navigation }: Props) {
       );
       return;
     }
+    if (network.isOffline) {
+      setFormError(
+        "A live connection is required. Class writes are never queued while offline.",
+      );
+      return;
+    }
+    if (duplicateSubject) {
+      setFormError(
+        `Duplicate subject identity is protected. ${duplicateSubject.subjectName} already belongs to this section.`,
+      );
+      return;
+    }
+    if (scheduleConflict && !canRelaxScheduleCollision) {
+      setFormError(
+        `Schedule conflict with ${scheduleConflict.subjectName}. Adjust the section, teacher, room, days, or time.`,
+      );
+      return;
+    }
     if (
       !Object.values(gradingProfile).every(
         (value) => Number.isInteger(value) && value > 0,
@@ -231,12 +314,20 @@ export function AdminClassesWorkspaceScreen({ navigation }: Props) {
       reset();
       await queryClient.invalidateQueries({ queryKey: ["admin-classes"] });
     } catch (error) {
+      await demoMode.refresh();
       setFormError(toAppError(error).message);
     } finally {
       setBusy(false);
     }
   };
   const visibility = async (entry: ClassItem) => {
+    if (network.isOffline) {
+      Alert.alert(
+        "Connection required",
+        "Class visibility writes are never queued while offline.",
+      );
+      return;
+    }
     try {
       setBusy(true);
       await (entry.isHidden
@@ -244,7 +335,30 @@ export function AdminClassesWorkspaceScreen({ navigation }: Props) {
         : classesApi.hide(entry.id));
       await queryClient.invalidateQueries({ queryKey: ["admin-classes"] });
     } catch (error) {
+      await demoMode.refresh();
       Alert.alert("Visibility update rejected", toAppError(error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const restoreClass = async (entry: ClassItem) => {
+    if (network.isOffline) {
+      Alert.alert(
+        "Connection required",
+        "Class restore writes are never queued while offline.",
+      );
+      return;
+    }
+    try {
+      setBusy(true);
+      await classesApi.toggleStatus(entry.id);
+      await queryClient.invalidateQueries({ queryKey: ["admin-classes"] });
+    } catch (error) {
+      await demoMode.refresh();
+      Alert.alert(
+        "Restore rejected",
+        `Demo mode expired or the server rejected this exception. ${toAppError(error).message}`,
+      );
     } finally {
       setBusy(false);
     }
@@ -328,6 +442,14 @@ export function AdminClassesWorkspaceScreen({ navigation }: Props) {
         />
       </View>
       {batchControls}
+      {network.isOffline ? (
+        <AdminNotice
+          title="Offline · class writes disabled"
+          description="Cached classes remain available, but create, edit, restore, and visibility writes are never queued while offline."
+          tone="amber"
+          icon="cloud-off-outline"
+        />
+      ) : null}
       {showForm ? (
         <View
           style={{
@@ -345,6 +467,18 @@ export function AdminClassesWorkspaceScreen({ navigation }: Props) {
               title="Class was not saved"
               description={formError}
               tone="red"
+            />
+          ) : null}
+          {scheduleConflict ? (
+            <AdminNotice
+              title="Schedule conflict"
+              description={
+                canRelaxScheduleCollision
+                  ? `Demo mode permits this audited collision with ${scheduleConflict.subjectName}; the server will still validate the request.`
+                  : `Conflicts with ${scheduleConflict.subjectName}. Change the assignment or activate the exact Demo mode schedule capability.`
+              }
+              tone={canRelaxScheduleCollision ? "amber" : "red"}
+              icon="calendar-alert"
             />
           ) : null}
           <Text style={{ fontSize: 15, fontWeight: "900", color: theme.text }}>
@@ -545,7 +679,12 @@ export function AdminClassesWorkspaceScreen({ navigation }: Props) {
             icon="content-save"
             tone="green"
             variant="solid"
-            disabled={busy}
+            disabled={
+              busy ||
+              network.isOffline ||
+              Boolean(duplicateSubject) ||
+              Boolean(scheduleConflict && !canRelaxScheduleCollision)
+            }
             onPress={() => void save()}
           />
         </View>
@@ -621,9 +760,30 @@ export function AdminClassesWorkspaceScreen({ navigation }: Props) {
               label={item.isHidden ? "Unhide" : "Hide"}
               variant="text"
               tone="amber"
-              disabled={busy}
+              disabled={busy || network.isOffline}
               onPress={() => void visibility(item)}
             />
+            {!item.isActive && canRestoreArchivedClass ? (
+              <AdminButton
+                label="Restore"
+                variant="text"
+                tone="green"
+                disabled={busy || network.isOffline}
+                onPress={() =>
+                  Alert.alert(
+                    "Restore archived class?",
+                    "Demo mode will restore this class as an audited exception. Existing records remain preserved.",
+                    [
+                      { text: "Cancel", style: "cancel" },
+                      {
+                        text: "Restore",
+                        onPress: () => void restoreClass(item),
+                      },
+                    ],
+                  )
+                }
+              />
+            ) : null}
             <AdminButton
               label={item.isActive ? "Archive review" : "Delete review"}
               variant="text"

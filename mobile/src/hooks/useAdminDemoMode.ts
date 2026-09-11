@@ -8,6 +8,7 @@ import type {
   AdminDemoModeStatus,
   DeactivateAdminDemoMode,
 } from "../types/admin-demo-mode";
+import { hasAdminDemoModeRule } from "../types/admin-demo-mode";
 
 export const ADMIN_DEMO_MODE_QUERY_KEY = ["admin-demo-mode"] as const;
 
@@ -59,7 +60,9 @@ export function useAdminDemoMode() {
 
   const acceptStatus = async (status: AdminDemoModeStatus) => {
     queryClient.setQueryData(ADMIN_DEMO_MODE_QUERY_KEY, status);
-    await queryClient.invalidateQueries({ queryKey: ADMIN_DEMO_MODE_QUERY_KEY });
+    await queryClient.invalidateQueries({
+      queryKey: ADMIN_DEMO_MODE_QUERY_KEY,
+    });
     await Promise.all(
       ADMIN_QUERY_PREFIXES.map((queryKey) =>
         queryClient.invalidateQueries({ queryKey }),
@@ -76,16 +79,13 @@ export function useAdminDemoMode() {
     onSuccess: acceptStatus,
   });
 
-  const status = useMemo(
-    () => {
-      const serverTime = Date.parse(query.data?.serverTime ?? "");
-      const serverOffset = Number.isFinite(serverTime)
-        ? serverTime - query.dataUpdatedAt
-        : 0;
-      return effectiveStatus(query.data, now + serverOffset);
-    },
-    [now, query.data, query.dataUpdatedAt],
-  );
+  const status = useMemo(() => {
+    const serverTime = Date.parse(query.data?.serverTime ?? "");
+    const serverOffset = Number.isFinite(serverTime)
+      ? serverTime - query.dataUpdatedAt
+      : 0;
+    return effectiveStatus(query.data, now + serverOffset);
+  }, [now, query.data, query.dataUpdatedAt]);
 
   const assertOnline = () => {
     if (network.isOffline) {
@@ -102,6 +102,8 @@ export function useAdminDemoMode() {
     isCachedOffline: network.isOffline && Boolean(query.data),
     isMutating: activation.isPending || deactivation.isPending,
     refresh: query.refetch,
+    hasExactRule: (code: Parameters<typeof hasAdminDemoModeRule>[1]) =>
+      hasAdminDemoModeRule(status, code),
     activate: async (payload: ActivateAdminDemoMode) => {
       assertOnline();
       return activation.mutateAsync(payload);

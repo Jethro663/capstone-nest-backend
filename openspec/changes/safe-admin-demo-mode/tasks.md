@@ -47,9 +47,9 @@
 - [x] 5.3 Add `AdminSettingsDemoMode` route and System Settings row without a new drawer destination.
 - [x] 5.4 Implement safe-area/keyboard-aware activation/deactivation screen and state tests.
 - [x] 5.5 Add compact active notice to `AdminScreen` and `AdminPaginatedList`.
-- [ ] 5.6 Make class/section/roster options capability-aware while keeping offline writes disabled.
-- [ ] 5.7 Add mobile archived-class restore and Demo user lifecycle/edit controls without changing permanent purge confirmation.
-- [ ] 5.8 Run focused mobile tests and typecheck.
+- [x] 5.6 Make class/section/roster options capability-aware while keeping offline writes disabled.
+- [x] 5.7 Add mobile archived-class restore and Demo user lifecycle/edit controls without changing permanent purge confirmation.
+- [x] 5.8 Run focused mobile tests and typecheck.
 
 ## 6. Cross-surface proof
 

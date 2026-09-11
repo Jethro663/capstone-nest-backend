@@ -86,6 +86,18 @@ describe("administrator mobile workspace design contract", () => {
     expect(source).toContain('record.status === "DELETED"');
   });
 
+  it("uses the exact user-lifecycle capability without weakening permanent purge", () => {
+    const source = readScreen("AdminUserDetailScreen");
+    expect(source).toContain("useAdminDemoMode");
+    expect(source).toContain("hasExactRule");
+    expect(source).toContain('"user_lifecycle_sequence"');
+    expect(source).toContain("canEditDeletedUser");
+    expect(source).toContain("canDirectArchive");
+    expect(source).toContain("canReactivateDeletedUser");
+    expect(source).toContain("demoMode.refresh()");
+    expect(source).toContain("purgeConfirmName !== exactName");
+  });
+
   it("keeps the web bulk-user lifecycle and visible export tasks available", () => {
     const source = readScreen("AdminUsersScreen");
     expect(source).toContain("adminApi.bulkUserLifecycle");

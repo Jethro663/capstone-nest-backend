@@ -14,6 +14,7 @@ import type {
 } from "../types/admin";
 import type { User } from "../types/user";
 import { useAdminNetworkStatus } from "../hooks/useAdminNetworkStatus";
+import { useAdminDemoMode } from "../hooks/useAdminDemoMode";
 import {
   AdminButton,
   AdminChip,
@@ -42,12 +43,7 @@ type UserEditForm = {
   address: string;
   familyName: string;
   familyRelationship:
-    | ""
-    | "Father"
-    | "Mother"
-    | "Guardian"
-    | "Sibling"
-    | "Other";
+    "" | "Father" | "Mother" | "Guardian" | "Sibling" | "Other";
   familyContact: string;
 };
 
@@ -94,6 +90,7 @@ const formSignature = (form: UserEditForm | null) =>
 export function AdminUserDetailScreen({ navigation, route }: Props) {
   const queryClient = useQueryClient();
   const network = useAdminNetworkStatus();
+  const demoMode = useAdminDemoMode();
   const [resetResult, setResetResult] =
     useState<ResetAdminUserPasswordResponse | null>(null);
   const [showPurge, setShowPurge] = useState(false);
@@ -109,6 +106,19 @@ export function AdminUserDetailScreen({ navigation, route }: Props) {
     queryFn: () => adminApi.getUser(route.params.userId),
   });
   const record = user.data;
+  const canRelaxUserLifecycle = demoMode.hasExactRule(
+    "user_lifecycle_sequence",
+  );
+  const canEditDeletedUser = Boolean(
+    record?.status === "DELETED" && canRelaxUserLifecycle,
+  );
+  const canDirectArchive = Boolean(
+    record?.status === "SUSPENDED" ||
+    (record?.status !== "DELETED" && canRelaxUserLifecycle),
+  );
+  const canReactivateDeletedUser = Boolean(
+    record?.status === "DELETED" && canRelaxUserLifecycle,
+  );
 
   useEffect(() => {
     if (!record || editing) return;
@@ -163,6 +173,7 @@ export function AdminUserDetailScreen({ navigation, route }: Props) {
       await adminApi.setUserLifecycle(route.params.userId, action);
       await refreshLists();
     } catch (error) {
+      await demoMode.refresh();
       Alert.alert("Lifecycle rejected", toAppError(error).message);
     } finally {
       setBusy(false);
@@ -255,6 +266,7 @@ export function AdminUserDetailScreen({ navigation, route }: Props) {
         queryClient.invalidateQueries({ queryKey: ["admin-user-monitoring"] }),
       ]);
     } catch (error) {
+      await demoMode.refresh();
       setFormError(toAppError(error).message);
     } finally {
       setBusy(false);
@@ -326,7 +338,7 @@ export function AdminUserDetailScreen({ navigation, route }: Props) {
       <AdminButton
         label="Edit user"
         icon="account-edit"
-        disabled={record.status === "DELETED"}
+        disabled={record.status === "DELETED" && !canEditDeletedUser}
         onPress={() => {
           const next = toForm(record);
           setForm(next);
@@ -375,6 +387,14 @@ export function AdminUserDetailScreen({ navigation, route }: Props) {
               description="This cached record is read-only. User, role, password, lifecycle, and purge writes require a live connection and are never queued."
               tone="amber"
               icon="cloud-off-outline"
+            />
+          ) : null}
+          {record.status === "DELETED" && canRelaxUserLifecycle ? (
+            <AdminNotice
+              title="Demo mode · archived account exception"
+              description="Editing and reactivation are available as audited lifecycle exceptions. Permanent purge still requires the archived state and exact full-name confirmation."
+              tone="amber"
+              icon="shield-alert-outline"
             />
           ) : null}
           {editing && form ? (
@@ -699,7 +719,7 @@ export function AdminUserDetailScreen({ navigation, route }: Props) {
                     disabled={busy}
                     onPress={() => void exportRecord()}
                   />
-                  {record.status === "SUSPENDED" ? (
+                  {record.status === "SUSPENDED" || canReactivateDeletedUser ? (
                     <AdminButton
                       label="Reactivate account"
                       icon="account-check"
@@ -709,7 +729,9 @@ export function AdminUserDetailScreen({ navigation, route }: Props) {
                       onPress={() =>
                         Alert.alert(
                           "Reactivate account?",
-                          "The user will regain sign-in access.",
+                          record.status === "DELETED"
+                            ? "Demo mode will restore this archived account as an audited exception."
+                            : "The user will regain sign-in access.",
                           [
                             { text: "Cancel", style: "cancel" },
                             {
@@ -743,7 +765,7 @@ export function AdminUserDetailScreen({ navigation, route }: Props) {
                       }
                     />
                   ) : null}
-                  {record.status !== "DELETED" ? (
+                  {canDirectArchive ? (
                     <AdminButton
                       label="Archive account"
                       icon="archive-outline"
@@ -765,7 +787,8 @@ export function AdminUserDetailScreen({ navigation, route }: Props) {
                         )
                       }
                     />
-                  ) : (
+                  ) : null}
+                  {record.status === "DELETED" ? (
                     <AdminButton
                       label={
                         showPurge
@@ -781,7 +804,7 @@ export function AdminUserDetailScreen({ navigation, route }: Props) {
                         setPurgeConfirmName("");
                       }}
                     />
-                  )}
+                  ) : null}
                 </View>
               </AdminSection>
               {record.status === "DELETED" && showPurge ? (

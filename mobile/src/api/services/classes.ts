@@ -25,6 +25,9 @@ export type ClassesListQuery = {
   isActive?: boolean;
   schoolYear?: string;
   subjectGradeLevel?: string;
+  sectionId?: string;
+  teacherId?: string;
+  room?: string;
   search?: string;
   page?: number;
   limit?: number;

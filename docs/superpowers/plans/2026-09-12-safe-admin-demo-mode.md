@@ -704,7 +704,7 @@ npm --prefix mobile test -- --runInBand admin-demo-mode admin-settings-workspace
 npm --prefix mobile run typecheck
 ```
 
-- [ ] **Step 9: Commit the mobile feature surface**
+- [x] **Step 9: Commit the mobile feature surface**
 
 ```bash
 git add mobile/src/types/admin-demo-mode.ts mobile/src/api/services/admin-demo-mode.ts mobile/src/api/__tests__/admin-demo-mode-contract.test.ts mobile/src/hooks/useAdminDemoMode.ts mobile/src/components/admin mobile/src/screens/AdminDemoModeSettingsScreen.tsx mobile/src/screens/AdminSettingsOverviewScreen.tsx mobile/src/screens/__tests__ mobile/src/navigation
@@ -729,28 +729,28 @@ git commit -m "feat(admin): add mobile demo mode controls"
 - Consumes `useAdminDemoMode()` and exact relaxed rule codes.
 - Existing APIs and query invalidation remain unchanged.
 
-- [ ] **Step 1: Write RED UI cases**
+- [x] **Step 1: Write RED UI cases**
 
 Prove conflicts remain explained but selectable when their capability is active. Prove archived-class Restore appears only in active Demo mode. Prove a DELETED user can be edited/reactivated only in Demo mode while purge confirmation remains unchanged. Prove required fields, valid times, role/grade requirements, exact lifecycle confirmation, and offline disabled state remain in both modes.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```bash
 npm --prefix mobile test -- --runInBand admin-school-setup admin-workspace-contract
 ```
 
-- [ ] **Step 3: Implement capability-aware controls**
+- [x] **Step 3: Implement capability-aware controls**
 
 Use the server rule list; never infer capability from the word `active` alone. Add one concise `AdminNotice` inside an expanded form when a conflicting selection is being permitted. Preserve entered values when a mode-expiry backend conflict occurs.
 
-- [ ] **Step 4: Run GREEN**
+- [x] **Step 4: Run GREEN**
 
 ```bash
 npm --prefix mobile test -- --runInBand admin-school-setup admin-workspace-contract
 npm --prefix mobile run typecheck
 ```
 
-- [ ] **Step 5: Commit the mobile consumer alignment**
+- [x] **Step 5: Commit the mobile consumer alignment**
 
 ```bash
 git add mobile/src/screens/AdminClassesWorkspaceScreen.tsx mobile/src/screens/AdminSectionsScreen.tsx mobile/src/screens/AdminRosterScreen.tsx mobile/src/screens/AdminUserDetailScreen.tsx mobile/src/screens/__tests__/admin-school-setup-contract.test.ts mobile/src/screens/__tests__/admin-workspace-contract.test.ts

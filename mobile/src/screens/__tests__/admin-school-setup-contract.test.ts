@@ -97,6 +97,48 @@ describe("administrator School Setup workspaces", () => {
     expect(roster).toContain("commitReceipt");
   });
 
+  it("uses exact Demo mode capabilities for mobile class conflicts and restore", () => {
+    const classes = read("AdminClassesWorkspaceScreen.tsx");
+    expect(classes).toContain("useAdminDemoMode");
+    expect(classes).toContain("hasExactRule");
+    expect(classes).toContain('"schedule_collision"');
+    expect(classes).toContain('"restore_archived_class"');
+    expect(classes).toContain("classesApi.toggleStatus");
+    expect(classes).toContain("Schedule conflict");
+    expect(classes).toContain(
+      "Demo mode expired or the server rejected this exception",
+    );
+  });
+
+  it("uses the exact room/adviser capability while retaining section validation", () => {
+    const sections = read("AdminSectionsScreen.tsx");
+    expect(sections).toContain("useAdminDemoMode");
+    expect(sections).toContain("hasExactRule");
+    expect(sections).toContain('"room_adviser_exclusivity"');
+    expect(sections).toContain("Room or adviser conflict");
+    expect(sections).toContain("positive whole-number capacity");
+  });
+
+  it("keeps roster validation closed while surfacing exact Demo mode workflow rules", () => {
+    const roster = read("AdminRosterScreen.tsx");
+    expect(roster).toContain("useAdminDemoMode");
+    expect(roster).toContain("hasExactRule");
+    expect(roster).toContain('"section_membership_window"');
+    expect(roster).toContain('"section_capacity"');
+    expect(roster).toContain("preview.summary.errorCount > 0");
+    expect(roster).toContain("demoMode.refresh()");
+  });
+
+  it.each(["AdminClassesWorkspaceScreen.tsx", "AdminSectionsScreen.tsx"])(
+    "never queues high-risk workspace writes while offline on %s",
+    (file) => {
+      const source = read(file);
+      expect(source).toContain("useAdminNetworkStatus");
+      expect(source).toContain("network.isOffline");
+      expect(source).toContain("never queued");
+    },
+  );
+
   it("implements the web transmutation list, preview, apply, and activate contracts", () => {
     const record = read("AdminClassRecordScreen.tsx");
     const service = fs.readFileSync(
