@@ -3,7 +3,7 @@
 **Evidence, confirmed problems, contract-correction plan, and implementation-ready UX design**
 
 - **Date:** 2026-09-11
-- **Status:** Direction A implemented; release verification in progress
+- **Status:** Direction A implemented and released
 - **Accepted direction:** Direction A — Web-aligned mobile workspaces
 - **Primary role:** Administrator
 - **Primary mobile target:** `mobile/` (Expo/React Native)
@@ -1103,4 +1103,11 @@ The final mobile `npm audit --omit=dev` snapshot reports 65 advisories (2 low, 4
 
 ### 27.6 Release promotion evidence
 
-The exact implementation SHA, GitHub Actions result, Railway backend/frontend deployment result, live APK byte/hash comparison, and hosted update-policy readback are appended after the immutable release commit is pushed and observed.
+- **Immutable revisions:** the administrator overhaul was committed as `a4d82524cd1504eb5d555124f78c31c8fee95ae1`; the narrowly scoped deployment repair was committed as `3b13521f404c8e04c360a7deb034212d23ba9dda`. Both were pushed to `developement`.
+- **GitHub Actions:** CI run [34626286509](https://github.com/Jethro663/capstone-nest-backend/actions/runs/34626286509) completed successfully for exact head `3b13521f404c8e04c360a7deb034212d23ba9dda`. Backend unit/lint (including the explicit 18-contract/54-layer administrator gate), backend e2e, PostgreSQL 16 and 18 migration/runtime rehearsals, frontend build/security checks, mobile release/type/test checks, AI service tests, and advisory quality reports all completed successfully.
+- **Deployment failure found and corrected:** the first backend deployment, `5a943ac2-ec04-4a5f-a7a7-0c58f257e7b5`, failed because `backend/package.json` coupled its image-local build to `../scripts/check-admin-client-contracts.cjs`, which is outside the backend Docker context. The repair leaves the cross-client gate as an explicit CI responsibility and keeps the image build backend-owned. The ownership regression check failed before the change, then passed together with the gate, backend build, and a real local backend Docker build.
+- **Railway production:** backend deployment `4cdda821-3776-46eb-82de-584b62654d59` and frontend deployment `40f9c423-3e9b-4cbe-8654-6bce5c388f32` both reached exact terminal status `SUCCESS`. Hosted `/api/health/live` and `/api/health/ready` returned HTTP 200; readiness confirmed database, Redis, and AI-service dependencies available.
+- **Live Android artifact:** the hosted JSON manifest matched the committed manifest exactly. Downloading the public APK produced 41,267,135 bytes and SHA-256 `19153c4f79dc9e0be746aa0eec91aa8bbb5f29feb98e69581f83df632def13d0`, exactly matching the committed build `33` manifest before policy registration.
+- **Hosted update policy:** the exact manifest was registered through the secret-backed production endpoint with HTTP 200. Android `0.1.31` / build `32` receives `updateType: apk_forced`, `isForceUpdate: true`, build `33`, minimum build `33`, the exact public URL, size, and SHA-256. Android `0.1.32` / build `33` receives `updateType: none` and `isForceUpdate: false` while retaining the same authoritative metadata.
+- **Authenticated production reads:** a seeded administrator using Android build `33` headers received successful responses for identity, administrator overview, paginated users/sections/classes, student readiness, templates, assessment and announcement inventories, library and storage, evaluation campaigns/responses, academic state/readiness, audit, and student-master-list reports. No destructive production lifecycle exercise was run; the complete preview/execute/receipt/purge acceptance remained confined to the controlled local runtime.
+- **Remaining native boundary:** the same-source Android 15 x86_64 emulator acceptance is complete, but a physical ARM64 Android install/update flow and native iOS build/device acceptance remain hardware-specific checks and are not represented as completed by this release.
