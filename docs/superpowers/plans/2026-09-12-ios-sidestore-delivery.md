@@ -289,7 +289,7 @@ Expected: identity, workflow, and verifier tests pass; only the missing-guide te
 
 ```bash
 bash -n mobile/scripts/verify-ios-sidestore-ipa.sh
-ruby -e 'require "yaml"; YAML.load_file(ARGV.fetch(0), aliases: true)' .github/workflows/build-mobile-ios-sidestore.yml
+python3 -c 'import sys, yaml; yaml.safe_load(open(sys.argv[1], encoding="utf-8"))' .github/workflows/build-mobile-ios-sidestore.yml
 git diff --check
 ```
 
@@ -408,7 +408,7 @@ git commit -m "docs(mobile): add exhaustive SideStore tester guide"
 ```bash
 npm --prefix mobile run test:ios-sidestore
 bash -n mobile/scripts/verify-ios-sidestore-ipa.sh
-ruby -e 'require "yaml"; YAML.load_file(ARGV.fetch(0), aliases: true)' .github/workflows/build-mobile-ios-sidestore.yml
+python3 -c 'import sys, yaml; yaml.safe_load(open(sys.argv[1], encoding="utf-8"))' .github/workflows/build-mobile-ios-sidestore.yml
 ```
 
 Expected: all exit 0.

@@ -1,0 +1,190 @@
+name: Build Mobile iOS SideStore IPA
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the verified IPA to the rolling SideStore prerelease
+        required: true
+        type: boolean
+        default: false
+      release_notes:
+        description: Short purpose shown on the GitHub prerelease
+        required: true
+        type: string
+        default: Physical iPhone acceptance build for Nexora Capstone 2.
+
+concurrency:
+  group: mobile-ios-sidestore-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build_ios_sideload:
+    name: Build and verify unsigned iPhone IPA
+    runs-on: macos-26
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      EXPO_PUBLIC_API_URL: https://capstone-backend-v2-production.up.railway.app/api
+      RELEASE_TAG: ios-sidestore-latest
+      STABLE_IPA_NAME: Nexora-iOS-latest-unsigned.ipa
+      STABLE_METADATA_NAME: Nexora-iOS-latest-metadata.txt
+
+    steps:
+      - name: Check out the requested source revision
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 26.5
+        run: |
+          sudo xcode-select --switch /Applications/Xcode_26.5.app/Contents/Developer
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.4
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install mobile dependencies
+        working-directory: mobile
+        run: npm ci
+
+      - name: Verify source and release contracts
+        working-directory: mobile
+        run: |
+          npm run test:ios-sidestore
+          npm run test:release
+          npm run release:verify
+          npm run typecheck
+          npx expo install --check
+
+      - name: Generate the ephemeral iOS project
+        working-directory: mobile
+        run: npx expo prebuild --platform ios --clean --no-install
+
+      - name: Install CocoaPods dependencies
+        working-directory: mobile
+        run: npx --yes pod-install ios
+
+      - name: Resolve the generated workspace and scheme
+        shell: bash
+        run: |
+          set -euo pipefail
+          IOS_WORKSPACE=$(find "$GITHUB_WORKSPACE/mobile/ios" -maxdepth 1 -name '*.xcworkspace' -print -quit)
+          if [ -z "$IOS_WORKSPACE" ]; then
+            echo 'No generated Xcode workspace was found.' >&2
+            exit 1
+          fi
+          IOS_SCHEME=$(xcodebuild -workspace "$IOS_WORKSPACE" -list -json | ruby -rjson -e 'payload = JSON.parse(STDIN.read); puts payload.fetch("workspace").fetch("schemes").first')
+          if [ -z "$IOS_SCHEME" ]; then
+            echo 'No shared Xcode scheme was found.' >&2
+            exit 1
+          fi
+          printf 'IOS_WORKSPACE=%s\n' "$IOS_WORKSPACE" >> "$GITHUB_ENV"
+          printf 'IOS_SCHEME=%s\n' "$IOS_SCHEME" >> "$GITHUB_ENV"
+          printf 'workspace=%s\nscheme=%s\n' "$IOS_WORKSPACE" "$IOS_SCHEME"
+
+      - name: Compile the unsigned physical-device Release application
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -o pipefail
+          xcodebuild \
+            -workspace "$IOS_WORKSPACE" \
+            -scheme "$IOS_SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/nexora-ios-derived" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY= \
+            build | tee "$RUNNER_TEMP/nexora-ios-xcodebuild.log"
+
+      - name: Package the unsigned IPA
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_PATH=$(find "$RUNNER_TEMP/nexora-ios-derived/Build/Products/Release-iphoneos" -maxdepth 1 -type d -name '*.app' -print -quit)
+          if [ -z "$APP_PATH" ]; then
+            echo 'No Release-iphoneos application was produced.' >&2
+            exit 1
+          fi
+          OUTPUT_DIR="$GITHUB_WORKSPACE/mobile/dist/ios"
+          PACKAGE_ROOT="$RUNNER_TEMP/nexora-ios-package"
+          rm -rf "$OUTPUT_DIR" "$PACKAGE_ROOT"
+          mkdir -p "$OUTPUT_DIR" "$PACKAGE_ROOT/Payload"
+          ditto "$APP_PATH" "$PACKAGE_ROOT/Payload/$(basename "$APP_PATH")"
+          (
+            cd "$PACKAGE_ROOT"
+            zip -qry "$OUTPUT_DIR/$STABLE_IPA_NAME" Payload
+          )
+          VERSION=$(node -p "require('./mobile/app.json').expo.version")
+          BUILD=$(node -p "require('./mobile/app.json').expo.ios.buildNumber")
+          SHORT_SHA=${GITHUB_SHA:0:8}
+          printf 'artifact_name=Nexora-iOS-%s-build%s-%s\n' "$VERSION" "$BUILD" "$SHORT_SHA" >> "$GITHUB_OUTPUT"
+          printf 'version=%s\nbuild=%s\n' "$VERSION" "$BUILD" >> "$GITHUB_OUTPUT"
+
+      - name: Verify the packaged IPA and produce metadata
+        shell: bash
+        run: |
+          mobile/scripts/verify-ios-sidestore-ipa.sh \
+            "mobile/dist/ios/$STABLE_IPA_NAME" \
+            "mobile/app.json" \
+            "mobile/dist/ios/$STABLE_METADATA_NAME" \
+            "$GITHUB_SHA"
+
+      - name: Upload the immutable workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.artifact_name }}
+          path: |
+            mobile/dist/ios/Nexora-iOS-latest-unsigned.ipa
+            mobile/dist/ios/Nexora-iOS-latest-unsigned.ipa.sha256
+            mobile/dist/ios/Nexora-iOS-latest-metadata.txt
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      - name: Publish the rolling SideStore prerelease
+        if: ${{ inputs.publish == true }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_NOTES: ${{ inputs.release_notes }}
+          VERSION: ${{ steps.package.outputs.version }}
+          BUILD: ${{ steps.package.outputs.build }}
+        run: |
+          set -euo pipefail
+          NOTES_PATH="$RUNNER_TEMP/nexora-ios-release-notes.md"
+          {
+            printf '# Nexora iOS SideStore build\n\n'
+            printf '%s\n\n' "$RELEASE_NOTES"
+            printf 'Version: `%s`  \nBuild: `%s`  \nSource: `%s`\n\n' "$VERSION" "$BUILD" "$GITHUB_SHA"
+            printf 'This is an unsigned physical-iPhone Release build. SideStore applies the tester’s personal seven-day development signature. Refresh it in SideStore before expiry. This is not an App Store or TestFlight release.\n\n'
+            printf 'Follow the [complete Windows and iPhone guide](https://github.com/%s/blob/developement/docs/mobile-ios-sidestore-windows-guide.md).\n' "$GITHUB_REPOSITORY"
+          } > "$NOTES_PATH"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" \
+              --title "Nexora iOS SideStore — v$VERSION build $BUILD" \
+              --notes-file "$NOTES_PATH" \
+              --prerelease
+          else
+            gh release create "$RELEASE_TAG" \
+              --target "$GITHUB_SHA" \
+              --title "Nexora iOS SideStore — v$VERSION build $BUILD" \
+              --notes-file "$NOTES_PATH" \
+              --prerelease
+          fi
+          gh release upload "$RELEASE_TAG" \
+            "mobile/dist/ios/$STABLE_IPA_NAME" \
+            "mobile/dist/ios/$STABLE_IPA_NAME.sha256" \
+            "mobile/dist/ios/$STABLE_METADATA_NAME" \
+            --clobber
+          printf '### iOS SideStore release\n\n' >> "$GITHUB_STEP_SUMMARY"
+          printf '[Release page](https://github.com/%s/releases/tag/%s)\n\n' "$GITHUB_REPOSITORY" "$RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"
+          printf '[Direct IPA download](https://github.com/%s/releases/download/%s/%s)\n' "$GITHUB_REPOSITORY" "$RELEASE_TAG" "$STABLE_IPA_NAME" >> "$GITHUB_STEP_SUMMARY"
