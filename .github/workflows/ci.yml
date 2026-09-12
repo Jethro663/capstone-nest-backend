@@ -137,7 +137,7 @@ jobs:
           RESET_TEST_ADMIN_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
           RESET_TEST_REDIS_URL: redis://127.0.0.1:16379
           RESET_TEST_STARTUP_SMOKE: "1"
-        run: npm run test:system-reset
+        run: npm run build && npm run test:system-reset
       - name: Verify real Redis cleanup generation and worker draining
         env:
           RESET_TEST_REDIS_URL: redis://127.0.0.1:16379
