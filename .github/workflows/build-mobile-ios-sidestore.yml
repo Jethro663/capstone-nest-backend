@@ -13,6 +13,9 @@ on:
         required: true
         type: string
         default: Physical iPhone acceptance build for Nexora Capstone 2.
+  push:
+    tags:
+      - "ios-sidestore-build-*"
 
 concurrency:
   group: mobile-ios-sidestore-${{ github.ref }}
@@ -57,8 +60,8 @@ jobs:
         run: |
           npm run test:ios-sidestore
           npm run test:release
-          npm run release:verify
           npm run typecheck
+          npm run test
           npx expo install --check
 
       - name: Generate the ephemeral iOS project
@@ -151,11 +154,11 @@ jobs:
           compression-level: 0
 
       - name: Publish the rolling SideStore prerelease
-        if: ${{ inputs.publish == true }}
+        if: ${{ github.event_name == 'push' || inputs.publish == true }}
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_NOTES: ${{ inputs.release_notes }}
+          RELEASE_NOTES: ${{ github.event_name == 'workflow_dispatch' && inputs.release_notes || 'Physical iPhone acceptance build for Nexora Capstone 2.' }}
           VERSION: ${{ steps.package.outputs.version }}
           BUILD: ${{ steps.package.outputs.build }}
         run: |
@@ -169,6 +172,10 @@ jobs:
             printf 'Follow the [complete Windows and iPhone guide](https://github.com/%s/blob/developement/docs/mobile-ios-sidestore-windows-guide.md).\n' "$GITHUB_REPOSITORY"
           } > "$NOTES_PATH"
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh api --method PATCH \
+              "repos/$GITHUB_REPOSITORY/git/refs/tags/$RELEASE_TAG" \
+              -f sha="$GITHUB_SHA" \
+              -F force=true
             gh release edit "$RELEASE_TAG" \
               --target "$GITHUB_SHA" \
               --title "Nexora iOS SideStore — v$VERSION build $BUILD" \

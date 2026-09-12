@@ -17,18 +17,30 @@ test("Expo config defines the stable iOS SideStore identity", async () => {
   assert.match(appJson.expo.version, /^\d+\.\d+\.\d+$/);
 });
 
-test("the iOS workflow is manual, unsigned, verified, and publish-gated", async () => {
+test("the iOS workflow is deliberate, unsigned, verified, and publish-gated", async () => {
   const workflow = await read(
     ".github/workflows/build-mobile-ios-sidestore.yml",
   );
   assert.match(workflow, /workflow_dispatch:/);
-  assert.doesNotMatch(workflow, /^\s*(push|pull_request):/m);
+  assert.match(
+    workflow,
+    /push:\n\s+tags:\n\s+- "ios-sidestore-build-\*"/,
+  );
+  assert.doesNotMatch(workflow, /^\s+branches:/m);
   assert.match(workflow, /runs-on: macos-26/);
   assert.match(workflow, /Xcode_26\.5\.app/);
   assert.match(workflow, /CODE_SIGNING_ALLOWED=NO/);
   assert.match(workflow, /verify-ios-sidestore-ipa\.sh/);
+  assert.match(workflow, /^\s+npm run test$/m);
   assert.match(workflow, /ios-sidestore-latest/);
-  assert.match(workflow, /inputs\.publish == true/);
+  assert.match(
+    workflow,
+    /github\.event_name == 'push' \|\| inputs\.publish == true/,
+  );
+  assert.match(
+    workflow,
+    /git\/refs\/tags\/\$RELEASE_TAG[\s\S]*?force=true/,
+  );
   assert.match(
     workflow,
     /gh release edit "\$RELEASE_TAG" \\\n\s+--target "\$GITHUB_SHA"/,

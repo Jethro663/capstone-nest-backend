@@ -4,7 +4,7 @@
 
 **Goal:** Build, verify, and publish a standalone unsigned Nexora iPhone IPA that a Windows/iPhone tester can install through SideStore using one stable download link and one exhaustive handoff guide.
 
-**Architecture:** GitHub Actions generates the uncommitted iOS native project on a macOS 26 runner, compiles a Release application for `iphoneos` with project signing disabled, packages and verifies the IPA, and optionally publishes stable-named files to the `ios-sidestore-latest` prerelease. SideStore applies the tester's seven-day personal-development signature on the iPhone; the repository never receives Apple credentials or pairing material.
+**Architecture:** A deliberate `ios-sidestore-build-*` tag or an available manual dispatch starts GitHub Actions, which generates the uncommitted iOS native project on a macOS 26 runner, compiles a Release application for `iphoneos` with project signing disabled, packages and verifies the IPA, and publishes stable-named files to the `ios-sidestore-latest` prerelease. SideStore applies the tester's seven-day personal-development signature on the iPhone; the repository never receives Apple credentials or pairing material.
 
 **Tech Stack:** Expo SDK 54, React Native 0.81.5, Node.js 20.19.4, npm, Expo Prebuild, CocoaPods, Xcode 26.5, Bash, Node test runner, GitHub Actions, GitHub CLI, SideStore/iLoader/LocalDevVPN.
 
@@ -33,7 +33,7 @@
 - Consumes: existing Expo configuration and Node's built-in test runner.
 - Produces: `npm run test:ios-sidestore`; configured bundle identifier `com.nexora.lms.mobile`; static contract coverage used by CI and the build workflow.
 
-- [ ] **Step 1: Write the failing delivery-contract tests**
+- [x] **Step 1: Write the failing delivery-contract tests**
 
 Create `mobile/scripts/ios-sidestore-delivery.test.cjs` with tests that read paths relative to `mobile/` and assert the exact delivery contract:
 
@@ -57,16 +57,19 @@ test("Expo config defines the stable iOS SideStore identity", async () => {
   assert.match(appJson.expo.version, /^\d+\.\d+\.\d+$/);
 });
 
-test("the iOS workflow is manual, unsigned, verified, and publish-gated", async () => {
+test("the iOS workflow is deliberate, unsigned, verified, and publish-gated", async () => {
   const workflow = await read(".github/workflows/build-mobile-ios-sidestore.yml");
   assert.match(workflow, /workflow_dispatch:/);
-  assert.doesNotMatch(workflow, /^\s*(push|pull_request):/m);
+  assert.match(workflow, /push:\n\s+tags:\n\s+- "ios-sidestore-build-\*"/);
+  assert.doesNotMatch(workflow, /^\s+branches:/m);
   assert.match(workflow, /runs-on: macos-26/);
   assert.match(workflow, /Xcode_26\.5\.app/);
   assert.match(workflow, /CODE_SIGNING_ALLOWED=NO/);
   assert.match(workflow, /verify-ios-sidestore-ipa\.sh/);
+  assert.match(workflow, /^\s+npm run test$/m);
   assert.match(workflow, /ios-sidestore-latest/);
-  assert.match(workflow, /inputs\.publish == true/);
+  assert.match(workflow, /github\.event_name == 'push' \|\| inputs\.publish == true/);
+  assert.match(workflow, /git\/refs\/tags\/\$RELEASE_TAG[\s\S]*?force=true/);
   assert.match(
     workflow,
     /https:\/\/capstone-backend-v2-production\.up\.railway\.app\/api/,
@@ -111,7 +114,7 @@ test("the tester guide covers install, refresh, evidence, privacy, and recovery"
 });
 ```
 
-- [ ] **Step 2: Add the test command and prove it fails for the missing delivery files**
+- [x] **Step 2: Add the test command and prove it fails for the missing delivery files**
 
 Add this script to `mobile/package.json`:
 
@@ -127,7 +130,7 @@ npm --prefix mobile run test:ios-sidestore
 
 Expected: FAIL because `expo.ios.bundleIdentifier`, the workflow, verifier, and guide do not exist yet.
 
-- [ ] **Step 3: Add the iOS bundle identifier**
+- [x] **Step 3: Add the iOS bundle identifier**
 
 Change the iOS block in `mobile/app.json` to preserve the current build number and add the stable identity:
 
@@ -138,7 +141,7 @@ Change the iOS block in `mobile/app.json` to preserve the current build number a
 }
 ```
 
-- [ ] **Step 4: Run the focused test and confirm only later-task fixtures remain red**
+- [x] **Step 4: Run the focused test and confirm only later-task fixtures remain red**
 
 Run:
 
@@ -148,7 +151,7 @@ npm --prefix mobile run test:ios-sidestore
 
 Expected: the Expo identity test passes; workflow, verifier, and guide tests fail with missing-file errors.
 
-- [ ] **Step 5: Commit the identity and contract tests**
+- [x] **Step 5: Commit the identity and contract tests**
 
 ```bash
 git add mobile/app.json mobile/package.json mobile/scripts/ios-sidestore-delivery.test.cjs
@@ -165,10 +168,10 @@ git commit -m "test(mobile): lock iOS SideStore delivery contract"
 - Test: `mobile/scripts/ios-sidestore-delivery.test.cjs`
 
 **Interfaces:**
-- Consumes: `mobile/app.json`, an unsigned `Release-iphoneos/*.app`, `EXPO_PUBLIC_API_URL`, GitHub workflow inputs `publish` and `release_notes`.
+- Consumes: `mobile/app.json`, an unsigned `Release-iphoneos/*.app`, `EXPO_PUBLIC_API_URL`, an `ios-sidestore-build-*` tag, and GitHub workflow inputs `publish` and `release_notes`.
 - Produces: `mobile/dist/ios/Nexora-iOS-latest-unsigned.ipa`, `.sha256`, metadata, an immutable Actions artifact, and optional `ios-sidestore-latest` prerelease assets.
 
-- [ ] **Step 1: Implement the fail-closed IPA verifier**
+- [x] **Step 1: Implement the fail-closed IPA verifier**
 
 Create executable `mobile/scripts/verify-ios-sidestore-ipa.sh`. It must accept exactly four arguments—IPA, app.json, metadata output, and source SHA—and perform these concrete checks:
 
@@ -244,15 +247,15 @@ Make it executable:
 chmod +x mobile/scripts/verify-ios-sidestore-ipa.sh
 ```
 
-- [ ] **Step 2: Implement the manual GitHub workflow**
+- [x] **Step 2: Implement the deliberate GitHub workflow**
 
 Create `.github/workflows/build-mobile-ios-sidestore.yml` with:
 
-- `workflow_dispatch` only.
+- `workflow_dispatch` plus a narrowly scoped `push.tags` pattern of `ios-sidestore-build-*`; never run on an ordinary branch push.
 - Boolean input `publish`, default `false`.
 - String input `release_notes`, default `Physical iPhone acceptance build for Nexora Capstone 2.`.
 - Job-level `contents: write`, `macos-26`, Xcode 26.5, Node 20.19.4, npm caching, and a 60-minute timeout.
-- `npm ci`, `npm run test:ios-sidestore`, `npm run test:release`, `npm run release:verify`, and `npm run typecheck` in `mobile/`.
+- `npm ci`, `npm run test:ios-sidestore`, `npm run test:release`, `npm run typecheck`, and `npm run test` in `mobile/`.
 - `npx expo install --check`, clean iOS Prebuild, and `npx pod-install ios`.
 - Workspace/scheme discovery followed by an unsigned generic-device Release build:
 
@@ -273,11 +276,11 @@ xcodebuild \
 - `.app` discovery, `Payload/` packaging with `ditto`, and ZIP creation at `mobile/dist/ios/Nexora-iOS-latest-unsigned.ipa`.
 - Invocation of the verifier with `${{ github.sha }}`.
 - `actions/upload-artifact@v4` using `Nexora-iOS-<version>-build<build>-<shortsha>` as the immutable artifact name.
-- A publish step guarded by exactly `if: ${{ inputs.publish == true }}` that creates or edits `ios-sidestore-latest`, writes current metadata into the release body, and uploads the stable IPA/checksum/metadata filenames with `gh release upload --clobber`.
+- A publish step guarded by `if: ${{ github.event_name == 'push' || inputs.publish == true }}` that creates or edits `ios-sidestore-latest`, force-moves that explicitly rolling release tag to the verified source SHA, writes current metadata into the release body, and uploads the stable IPA/checksum/metadata filenames with `gh release upload --clobber`.
 
 The workflow must pass `EXPO_PUBLIC_API_URL` as a job environment variable and must never reference Apple secrets.
 
-- [ ] **Step 3: Run the static contract test**
+- [x] **Step 3: Run the static contract test**
 
 ```bash
 npm --prefix mobile run test:ios-sidestore
@@ -285,7 +288,7 @@ npm --prefix mobile run test:ios-sidestore
 
 Expected: identity, workflow, and verifier tests pass; only the missing-guide test fails.
 
-- [ ] **Step 4: Validate shell and YAML syntax locally**
+- [x] **Step 4: Validate shell and YAML syntax locally**
 
 ```bash
 bash -n mobile/scripts/verify-ios-sidestore-ipa.sh
@@ -295,7 +298,7 @@ git diff --check
 
 Expected: all commands exit 0.
 
-- [ ] **Step 5: Commit the builder and verifier**
+- [x] **Step 5: Commit the builder and verifier**
 
 ```bash
 git add .github/workflows/build-mobile-ios-sidestore.yml mobile/scripts/verify-ios-sidestore-ipa.sh
@@ -314,7 +317,7 @@ git commit -m "ci(mobile): build verified iOS SideStore IPA"
 - Consumes: stable GitHub prerelease URL, official SideStore installation flow, iPhone 11/iOS 26.5, 64-bit Windows, a data cable, Wi-Fi, and tester-owned Apple/Nexora accounts.
 - Produces: one self-contained guide covering preparation, SideStore installation, Nexora installation, seven-day refresh, physical-device acceptance, evidence capture, recovery, privacy, and cleanup.
 
-- [ ] **Step 1: Write the complete handoff guide**
+- [x] **Step 1: Write the complete handoff guide**
 
 Create `docs/mobile-ios-sidestore-windows-guide.md` with these exact top-level sections and bounded instructions:
 
@@ -372,7 +375,7 @@ Give app deletion, Settings > General > VPN & Device Management profile removal,
 
 Every instruction must include the expected visible result and the exact next recovery action when that result does not appear.
 
-- [ ] **Step 2: Run the complete contract test**
+- [x] **Step 2: Run the complete contract test**
 
 ```bash
 npm --prefix mobile run test:ios-sidestore
@@ -380,11 +383,11 @@ npm --prefix mobile run test:ios-sidestore
 
 Expected: PASS, all four tests.
 
-- [ ] **Step 3: Review the guide as a first-time tester**
+- [x] **Step 3: Review the guide as a first-time tester**
 
 Verify manually that the guide never assumes Git, GitHub Actions, Node.js, Expo, Xcode, command-line knowledge, project source access, or access to the development computer. Verify every credential remains on the tester's own devices.
 
-- [ ] **Step 4: Commit the guide**
+- [x] **Step 4: Commit the guide**
 
 ```bash
 git add docs/mobile-ios-sidestore-windows-guide.md
@@ -403,7 +406,7 @@ git commit -m "docs(mobile): add exhaustive SideStore tester guide"
 - Consumes: completed delivery implementation.
 - Produces: local static/test evidence proving the workflow is safe to dispatch.
 
-- [ ] **Step 1: Run focused delivery checks**
+- [x] **Step 1: Run focused delivery checks**
 
 ```bash
 npm --prefix mobile run test:ios-sidestore
@@ -413,7 +416,7 @@ python3 -c 'import sys, yaml; yaml.safe_load(open(sys.argv[1], encoding="utf-8")
 
 Expected: all exit 0.
 
-- [ ] **Step 2: Run mobile release and source checks**
+- [x] **Step 2: Run mobile release and source checks**
 
 ```bash
 npm --prefix mobile run test:release
@@ -426,7 +429,7 @@ git diff --exit-code -- mobile/src/generated/assessment-rich-text.ts
 
 Expected: all pass and the generated rich-text bundle is unchanged.
 
-- [ ] **Step 3: Audit the scope and secrets**
+- [x] **Step 3: Audit the scope and secrets**
 
 ```bash
 git diff --check
@@ -438,7 +441,7 @@ rg -n -i 'apple.?id.?password|two.?factor|pairing.?file.?data|BEGIN (RSA |EC )?P
 
 Expected: only the approved design, plan, mobile iOS identity/test/verifier, workflow, and guide differ; the secret scan finds warnings/documentation only, never credential values or encoded material.
 
-- [ ] **Step 4: Commit any verification-only corrections**
+- [x] **Step 4: Commit any verification-only corrections**
 
 If and only if checks required scoped corrections:
 
@@ -477,19 +480,21 @@ gh run watch <CI_RUN_ID> --exit-status
 
 Expected: the exact-SHA CI run reaches terminal success.
 
-- [ ] **Step 3: Dispatch the publish build**
+- [ ] **Step 3: Push one deliberate publish-build tag**
+
+GitHub requires a new `workflow_dispatch` workflow to exist on the default branch. Because this repository's current work is on `developement` while the default remains `master`, trigger the build without changing branch settings:
 
 ```bash
-gh workflow run build-mobile-ios-sidestore.yml \
-  --ref developement \
-  -f publish=true \
-  -f release_notes='Physical iPhone acceptance build for Nexora Capstone 2.'
+source_sha=$(git rev-parse HEAD)
+build_tag="ios-sidestore-build-${source_sha:0:8}"
+git tag "$build_tag" "$source_sha"
+git push origin "refs/tags/$build_tag"
 ```
 
 Resolve the new run ID and wait:
 
 ```bash
-gh run list --workflow build-mobile-ios-sidestore.yml --branch developement --limit 1
+gh run list --workflow build-mobile-ios-sidestore.yml --commit "$source_sha" --limit 1
 gh run watch <IOS_RUN_ID> --exit-status
 ```
 

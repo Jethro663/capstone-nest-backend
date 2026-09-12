@@ -10,6 +10,7 @@ Produce a verified, unsigned iPhone-device IPA for Nexora on GitHub's macOS infr
 - The tester owns and controls an iPhone 11 running iOS 26.5 and a Windows computer. The guide must verify that Windows is 64-bit because current iLoader builds do not support 32-bit Windows.
 - Neither the project team nor the tester has a paid Apple Developer Program membership.
 - The GitHub repository is public, so standard GitHub-hosted macOS runners are available without billed Actions minutes.
+- The repository default branch is `master`, while the active and deployed branch is `developement`. GitHub will not dispatch a newly added manual workflow until that workflow exists on the default branch, so a deliberate tag trigger is required to bootstrap and operate the builder without changing repository-wide branch settings.
 - `mobile/ios/` is not committed. The workflow must generate native iOS files ephemerally through Expo Prebuild.
 - `mobile/app.json` has `ios.buildNumber` but no explicit `ios.bundleIdentifier`.
 - SideStore, not GitHub, will apply the tester's free seven-day personal-development signature.
@@ -49,7 +50,7 @@ The bundle identifier identifies the generated application before SideStore re-s
 
 ### GitHub build workflow
 
-Add a manually triggered workflow dedicated to iOS sideload builds. It must not run on every push and must not alter Android release behavior.
+Add a deliberately triggered workflow dedicated to iOS sideload builds. It must not run on ordinary branch pushes and must not alter Android release behavior. An `ios-sidestore-build-*` tag starts and publishes a build directly from the tagged commit, including before the workflow reaches the default branch. `workflow_dispatch` remains available when GitHub recognizes the workflow on the default branch.
 
 The job will:
 
@@ -76,11 +77,11 @@ Publication is allowed only when all checks succeed:
 - The archive contains no provisioning profile and no project-owned signing certificate.
 - The checksum file matches the final uploaded IPA bytes.
 
-The workflow always uploads a diagnostic Actions artifact after successful verification. Publication occurs only when the operator explicitly selects the publish input.
+The workflow always uploads a diagnostic Actions artifact after successful verification. Publication occurs only for an explicit `ios-sidestore-build-*` tag or when the operator explicitly selects the manual publish input.
 
 ### Release delivery
 
-Use a stable prerelease tag named `ios-sidestore-latest`. A successful published build replaces the assets on that prerelease only after verification. The release uses stable convenience names so the tester can reuse the same direct download link:
+Use a stable prerelease tag named `ios-sidestore-latest`. A successful published build moves this intentionally rolling tag to the verified source SHA and replaces the assets only after verification. The release uses stable convenience names so the tester can reuse the same direct download link:
 
 - `Nexora-iOS-latest-unsigned.ipa`
 - `Nexora-iOS-latest-unsigned.ipa.sha256`
@@ -129,7 +130,7 @@ The evidence must not be described as App Store, TestFlight, production-signing,
 ## Repository changes
 
 - Modify `mobile/app.json` to add the iOS bundle identifier.
-- Add a manually triggered GitHub workflow for unsigned physical-device IPA creation and optional rolling-prerelease publication.
+- Add a deliberately triggered GitHub workflow for unsigned physical-device IPA creation and rolling-prerelease publication through a named build tag, with optional `workflow_dispatch` publication when available.
 - Add a focused verification script used by the workflow.
 - Add the detailed Windows/iPhone SideStore tester guide.
 - Add tests that enforce the iOS identity, workflow safety gates, release naming, production API configuration, and required guide content.
@@ -138,7 +139,7 @@ No backend, frontend, AI service, database, Android signing, APK updater, Railwa
 
 ## Acceptance criteria
 
-1. A manually dispatched GitHub run on the exact source commit completes on macOS/Xcode and publishes a verified unsigned ARM64 IPA plus checksum and metadata.
+1. A deliberate `ios-sidestore-build-*` tag on the exact source commit starts a GitHub macOS/Xcode run and publishes a verified unsigned ARM64 IPA plus checksum and metadata without changing the repository default branch.
 2. The public prerelease provides a direct IPA download without requiring the tester to clone the repository or install development tools.
 3. SideStore accepts, signs, installs, refreshes, and launches Nexora on the iPhone 11 running iOS 26.5.
 4. Nexora starts without Metro and reaches the production API over HTTPS.
