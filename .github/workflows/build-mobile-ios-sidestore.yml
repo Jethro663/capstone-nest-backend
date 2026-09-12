@@ -170,6 +170,7 @@ jobs:
           } > "$NOTES_PATH"
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release edit "$RELEASE_TAG" \
+              --target "$GITHUB_SHA" \
               --title "Nexora iOS SideStore — v$VERSION build $BUILD" \
               --notes-file "$NOTES_PATH" \
               --prerelease

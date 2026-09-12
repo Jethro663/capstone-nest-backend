@@ -31,6 +31,10 @@ test("the iOS workflow is manual, unsigned, verified, and publish-gated", async 
   assert.match(workflow, /inputs\.publish == true/);
   assert.match(
     workflow,
+    /gh release edit "\$RELEASE_TAG" \\\n\s+--target "\$GITHUB_SHA"/,
+  );
+  assert.match(
+    workflow,
     /https:\/\/capstone-backend-v2-production\.up\.railway\.app\/api/,
   );
 });
