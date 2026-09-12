@@ -59,6 +59,8 @@ test("the verifier enforces identity, ARM64, embedded JS, and no profile", async
   );
   for (const required of [
     "set -euo pipefail",
+    "APP_JSON_INPUT",
+    'APP_JSON=$(cd "$(dirname "$APP_JSON_INPUT")" && pwd)',
     "CFBundleIdentifier",
     "CFBundleShortVersionString",
     "CFBundleVersion",

@@ -80,6 +80,8 @@ test("the verifier enforces identity, ARM64, embedded JS, and no profile", async
   const verifier = await read("mobile/scripts/verify-ios-sidestore-ipa.sh");
   for (const required of [
     "set -euo pipefail",
+    "APP_JSON_INPUT",
+    'APP_JSON=$(cd "$(dirname "$APP_JSON_INPUT")" && pwd)',
     "CFBundleIdentifier",
     "CFBundleShortVersionString",
     "CFBundleVersion",
@@ -179,10 +181,14 @@ Create executable `mobile/scripts/verify-ios-sidestore-ipa.sh`. It must accept e
 #!/usr/bin/env bash
 set -euo pipefail
 
-IPA_PATH=${1:?Usage: verify-ios-sidestore-ipa.sh IPA APP_JSON METADATA SOURCE_SHA}
-APP_JSON=${2:?Usage: verify-ios-sidestore-ipa.sh IPA APP_JSON METADATA SOURCE_SHA}
-METADATA_PATH=${3:?Usage: verify-ios-sidestore-ipa.sh IPA APP_JSON METADATA SOURCE_SHA}
+IPA_PATH_INPUT=${1:?Usage: verify-ios-sidestore-ipa.sh IPA APP_JSON METADATA SOURCE_SHA}
+APP_JSON_INPUT=${2:?Usage: verify-ios-sidestore-ipa.sh IPA APP_JSON METADATA SOURCE_SHA}
+METADATA_PATH_INPUT=${3:?Usage: verify-ios-sidestore-ipa.sh IPA APP_JSON METADATA SOURCE_SHA}
 SOURCE_SHA=${4:?Usage: verify-ios-sidestore-ipa.sh IPA APP_JSON METADATA SOURCE_SHA}
+
+IPA_PATH=$(cd "$(dirname "$IPA_PATH_INPUT")" && pwd)/$(basename "$IPA_PATH_INPUT")
+APP_JSON=$(cd "$(dirname "$APP_JSON_INPUT")" && pwd)/$(basename "$APP_JSON_INPUT")
+METADATA_PATH=$(cd "$(dirname "$METADATA_PATH_INPUT")" && pwd)/$(basename "$METADATA_PATH_INPUT")
 EXPECTED_BUNDLE_ID=com.nexora.lms.mobile
 EXPECTED_API_URL=https://capstone-backend-v2-production.up.railway.app/api
 STABLE_IPA_NAME=Nexora-iOS-latest-unsigned.ipa
