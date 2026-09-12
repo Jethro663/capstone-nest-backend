@@ -257,7 +257,7 @@ Create `.github/workflows/build-mobile-ios-sidestore.yml` with:
 - Job-level `contents: write`, `macos-26`, Xcode 26.5, Node 20.19.4, npm caching, and a 60-minute timeout.
 - `npm ci`, `npm run test:ios-sidestore`, `npm run test:release`, `npm run typecheck`, and `npm run test` in `mobile/`.
 - `npx expo install --check`, clean iOS Prebuild, and `npx pod-install ios`.
-- Workspace/scheme discovery followed by an unsigned generic-device Release build:
+- Workspace discovery plus application-scheme derivation from the generated top-level `.xcodeproj` (never the first auxiliary workspace scheme), followed by an unsigned generic-device Release build:
 
 ```bash
 xcodebuild \

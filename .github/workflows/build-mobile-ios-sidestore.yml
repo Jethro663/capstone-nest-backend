@@ -81,9 +81,15 @@ jobs:
             echo 'No generated Xcode workspace was found.' >&2
             exit 1
           fi
-          IOS_SCHEME=$(xcodebuild -workspace "$IOS_WORKSPACE" -list -json | ruby -rjson -e 'payload = JSON.parse(STDIN.read); puts payload.fetch("workspace").fetch("schemes").first')
-          if [ -z "$IOS_SCHEME" ]; then
-            echo 'No shared Xcode scheme was found.' >&2
+          IOS_PROJECT=$(find "$GITHUB_WORKSPACE/mobile/ios" -maxdepth 1 -type d -name '*.xcodeproj' -print -quit)
+          if [ -z "$IOS_PROJECT" ]; then
+            echo 'No generated application Xcode project was found.' >&2
+            exit 1
+          fi
+          IOS_SCHEME=$(basename "$IOS_PROJECT" .xcodeproj)
+          SCHEMES_JSON=$(xcodebuild -workspace "$IOS_WORKSPACE" -list -json)
+          if ! SCHEMES_JSON="$SCHEMES_JSON" IOS_SCHEME="$IOS_SCHEME" node -e 'const payload = JSON.parse(process.env.SCHEMES_JSON); process.exit(payload.workspace.schemes.includes(process.env.IOS_SCHEME) ? 0 : 1)'; then
+            echo "Generated application scheme $IOS_SCHEME was not found in the workspace." >&2
             exit 1
           fi
           printf 'IOS_WORKSPACE=%s\n' "$IOS_WORKSPACE" >> "$GITHUB_ENV"

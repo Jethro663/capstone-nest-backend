@@ -29,6 +29,8 @@ test("the iOS workflow is deliberate, unsigned, verified, and publish-gated", as
   assert.doesNotMatch(workflow, /^\s+branches:/m);
   assert.match(workflow, /runs-on: macos-26/);
   assert.match(workflow, /Xcode_26\.5\.app/);
+  assert.match(workflow, /basename "\$IOS_PROJECT" \.xcodeproj/);
+  assert.doesNotMatch(workflow, /fetch\("schemes"\)\.first/);
   assert.match(workflow, /CODE_SIGNING_ALLOWED=NO/);
   assert.match(workflow, /verify-ios-sidestore-ipa\.sh/);
   assert.match(workflow, /^\s+npm run test$/m);

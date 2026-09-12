@@ -57,7 +57,7 @@ The job will:
 1. Check out the selected commit on a standard `macos-26` runner and explicitly select Xcode 26.5.
 2. Install the repository's declared Node.js/npm dependencies from `mobile/package-lock.json`.
 3. Validate Expo dependency alignment, run the mobile typecheck and focused release tests, and generate a clean ephemeral iOS project with Expo Prebuild.
-4. Install CocoaPods dependencies and compile a Release application for the physical-device `iphoneos` SDK with code signing disabled.
+4. Install CocoaPods dependencies, derive the application scheme from the generated top-level `.xcodeproj` rather than selecting an auxiliary workspace scheme, and compile a Release application for the physical-device `iphoneos` SDK with code signing disabled.
 5. Package the resulting `.app` under `Payload/` as an unsigned `.ipa` suitable for SideStore re-signing.
 6. Generate build metadata and a SHA-256 checksum.
 7. Run structural verification before uploading or publishing anything.
