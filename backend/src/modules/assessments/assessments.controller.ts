@@ -23,6 +23,7 @@ import { diskStorage } from 'multer';
 import * as path from 'path';
 import * as fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
+import { resetStorageFilename } from '../system-reset/system-reset.context';
 import { AssessmentsService } from './assessments.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -408,7 +409,7 @@ export class AssessmentsController {
         },
         filename: (_req, file, cb) => {
           const ext = path.extname(file.originalname).toLowerCase();
-          cb(null, `${uuidv4()}_${Date.now()}${ext}`);
+          cb(null, resetStorageFilename(`${uuidv4()}_${Date.now()}${ext}`));
         },
       }),
       limits: { fileSize: MAX_IMAGE_SIZE, files: 1 },
@@ -457,7 +458,7 @@ export class AssessmentsController {
         },
         filename: (_req, file, cb) => {
           const ext = path.extname(file.originalname).toLowerCase();
-          cb(null, `${uuidv4()}_${Date.now()}${ext}`);
+          cb(null, resetStorageFilename(`${uuidv4()}_${Date.now()}${ext}`));
         },
       }),
       limits: { fileSize: MAX_IMAGE_SIZE, files: 1 },
@@ -527,7 +528,7 @@ export class AssessmentsController {
         },
         filename: (_req, file, cb) => {
           const ext = path.extname(file.originalname).toLowerCase();
-          cb(null, `${uuidv4()}_${Date.now()}${ext}`);
+          cb(null, resetStorageFilename(`${uuidv4()}_${Date.now()}${ext}`));
         },
       }),
       limits: { fileSize: MAX_FILE_SIZE, files: 1 },
@@ -577,7 +578,7 @@ export class AssessmentsController {
         },
         filename: (_req, file, cb) => {
           const ext = path.extname(file.originalname).toLowerCase();
-          cb(null, `${uuidv4()}_${Date.now()}${ext}`);
+          cb(null, resetStorageFilename(`${uuidv4()}_${Date.now()}${ext}`));
         },
       }),
       limits: { fileSize: MAX_FILE_SIZE, files: 1 },
@@ -828,7 +829,7 @@ export class AssessmentsController {
         },
         filename: (_req, file, cb) => {
           const ext = path.extname(file.originalname).toLowerCase();
-          cb(null, `${uuidv4()}_${Date.now()}${ext}`);
+          cb(null, resetStorageFilename(`${uuidv4()}_${Date.now()}${ext}`));
         },
       }),
       limits: { fileSize: MAX_FILE_SIZE, files: 1 },

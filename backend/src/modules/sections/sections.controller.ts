@@ -21,6 +21,7 @@ import { diskStorage } from 'multer';
 import * as fs from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import { resetStorageFilename } from '../system-reset/system-reset.context';
 import { SectionsService } from './sections.service';
 import { CreateSectionDto } from './DTO/create-section.dto';
 import { UpdateSectionDto } from './DTO/update-section.dto';
@@ -51,7 +52,7 @@ const sectionBannerMulterOptions = {
     },
     filename: (_req, file, cb) => {
       const ext = path.extname(file.originalname) || '.png';
-      cb(null, `${uuidv4()}_${Date.now()}${ext}`);
+      cb(null, resetStorageFilename(`${uuidv4()}_${Date.now()}${ext}`));
     },
   }),
   limits: {

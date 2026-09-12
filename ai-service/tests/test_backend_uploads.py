@@ -10,7 +10,16 @@ from app import backend_uploads
 
 
 class BackendUploadsTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self) -> None:
+        self.cache_directory = tempfile.TemporaryDirectory()
+        self.cache_patch = patch.object(
+            backend_uploads, "backend_upload_cache_dir", return_value=Path(self.cache_directory.name),
+        )
+        self.cache_patch.start()
+
     async def asyncTearDown(self) -> None:
+        self.cache_patch.stop()
+        self.cache_directory.cleanup()
         current_task = asyncio.current_task()
         pending_tasks = [
             task

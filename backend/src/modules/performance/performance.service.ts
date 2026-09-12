@@ -4,7 +4,10 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
+import { runSystemResetWork } from '../system-reset/system-reset.work';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
@@ -129,6 +132,7 @@ export class PerformanceService {
     private readonly auditService: AuditService,
     private readonly snapshotReadService: PerformanceSnapshotReadService,
     private readonly classRecordService: ClassRecordService,
+    @Optional() private readonly modules?: ModuleRef,
   ) {}
 
   private get db() {
@@ -561,7 +565,7 @@ export class PerformanceService {
         classId,
         chunk,
       );
-      await Promise.all(
+      const writes = await Promise.allSettled(
         chunk.map((studentId) => {
           const component = components.get(studentId)!;
           const snapshotData = this.buildSnapshotData(
@@ -578,6 +582,13 @@ export class PerformanceService {
           );
         }),
       );
+      // A failed snapshot must not release worker admission while sibling writes
+      // are still executing and may emit additional performance/LXP events.
+      const failure = writes.find(
+        (result): result is PromiseRejectedResult =>
+          result.status === 'rejected',
+      );
+      if (failure) throw failure.reason;
     }
 
     return { recomputed: uniqueStudentIds.length };
@@ -1651,12 +1662,14 @@ export class PerformanceService {
       });
 
     setTimeout(() => {
-      void this.runPerformanceAnalysisJob(
-        job.id,
-        classId,
-        userId,
-        dto.studentId,
-        dto.note,
+      void runSystemResetWork(this.modules, () =>
+        this.runPerformanceAnalysisJob(
+          job.id,
+          classId,
+          userId,
+          dto.studentId,
+          dto.note,
+        ),
       ).catch(() => {});
     }, 0);
 

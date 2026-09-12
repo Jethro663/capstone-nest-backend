@@ -1,6 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { Job } from 'bullmq';
 import { AssessmentNotificationProcessor } from './assessment-notification.processor';
+
+// Admission/lifetime behavior is covered by the dedicated reset regression suites.
+jest.mock('../../system-reset/system-reset.work', () => ({
+  runSystemResetWork: (_modules: unknown, work: () => Promise<unknown>) =>
+    work(),
+}));
 import { DatabaseService } from '../../../database/database.service';
 import { NotificationsGateway } from '../notifications.gateway';
 import { NotificationsService } from '../notifications.service';

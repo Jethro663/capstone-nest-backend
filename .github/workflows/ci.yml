@@ -105,6 +105,13 @@ jobs:
           --health-interval 5s --health-timeout 5s --health-retries 10
         ports:
           - 6379:6379
+      reset_redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+        ports:
+          - 16379:6379
     env:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/nexora_academic_test_ci
       ACADEMIC_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/nexora_academic_test_ci
@@ -125,6 +132,16 @@ jobs:
         run: node run-migrations.js
       - name: Verify real academic transactions and lifecycle
         run: npm run test:academic -- --ci
+      - name: Rehearse reset preservation, fencing and restart recovery
+        env:
+          RESET_TEST_ADMIN_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+          RESET_TEST_REDIS_URL: redis://127.0.0.1:16379
+          RESET_TEST_STARTUP_SMOKE: "1"
+        run: npm run test:system-reset
+      - name: Verify real Redis cleanup generation and worker draining
+        env:
+          RESET_TEST_REDIS_URL: redis://127.0.0.1:16379
+        run: node node_modules/jest/bin/jest.js --config test/jest-system-reset-queues-integration.json --runInBand
       - name: Rehearse a legacy upgrade and migration replay
         env:
           ACADEMIC_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/nexora_academic_test_upgrade
@@ -199,9 +216,22 @@ jobs:
     name: AI service
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: nexora_reset_test_ai_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd "pg_isready -U postgres -d nexora_reset_test_ai_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+        ports:
+          - 5432:5432
     env:
       AI_SERVICE_SHARED_SECRET: test-shared-secret
       AI_RUNTIME_MODE: test
+      AI_RESET_TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/nexora_reset_test_ai_ci
     defaults:
       run:
         working-directory: ai-service

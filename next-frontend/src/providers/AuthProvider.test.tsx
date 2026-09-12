@@ -74,6 +74,16 @@ describe('AuthProvider', () => {
     expect(screen.getByTestId('status')).toHaveTextContent('unauthenticated');
   });
 
+  it('renders public maintenance without a valid refresh session', async () => {
+    usePathnameMock.mockReturnValue('/system-maintenance');
+    mockedAxios.post.mockRejectedValue(new Error('Session invalidated by reset'));
+    render(<AuthProvider><AuthProbe>Maintenance progress</AuthProbe></AuthProvider>);
+    await waitFor(() => expect(screen.getByTestId('loading')).toHaveTextContent('ready'));
+    expect(screen.getByText('Maintenance progress')).toBeInTheDocument();
+    expect(mockedAxios.post).not.toHaveBeenCalled();
+    expect(getCurrentUserActionMock).not.toHaveBeenCalled();
+  });
+
   it('bootstraps auth on dashboard routes', async () => {
     usePathnameMock.mockReturnValue('/dashboard/student');
     mockedAxios.post.mockResolvedValue({

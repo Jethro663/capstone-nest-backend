@@ -265,12 +265,18 @@ export class AuthService {
     }
   }
 
-  private async generateAccessToken(user: any): Promise<string> {
+  private async generateAccessToken(user: {
+    id: string;
+    email: string;
+    roles: Array<{ name: string }>;
+    sessionVersion?: number | null;
+  }): Promise<string> {
     const payload = {
       userId: user.id,
       email: user.email,
       roles: user.roles.map((role) => role.name),
       type: 'access',
+      sessionVersion: user.sessionVersion ?? 0,
     };
 
     return this.jwtService.signAsync(payload, {

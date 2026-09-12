@@ -1,5 +1,7 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Logger } from '@nestjs/common';
+import { Logger, Optional } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
+import { runSystemResetWork } from '../../system-reset/system-reset.work';
 import { UnrecoverableError, type Job } from 'bullmq';
 import { AiProxyService } from '../ai-proxy.service';
 
@@ -19,7 +21,10 @@ const TEACHER_AI_QUEUE_CONCURRENCY = 2;
 export class AiGenerationProcessor extends WorkerHost {
   private readonly logger = new Logger(AiGenerationProcessor.name);
 
-  constructor(private readonly proxy: AiProxyService) {
+  constructor(
+    private readonly proxy: AiProxyService,
+    @Optional() private readonly modules?: ModuleRef,
+  ) {
     super();
   }
 
@@ -30,6 +35,12 @@ export class AiGenerationProcessor extends WorkerHost {
       requestedByUserId: string;
       queuedAt?: string;
     }>,
+  ): Promise<void> {
+    return runSystemResetWork(this.modules, () => this.processAdmitted(job));
+  }
+
+  private async processAdmitted(
+    job: Parameters<AiGenerationProcessor['process']>[0],
   ): Promise<void> {
     if (
       ![

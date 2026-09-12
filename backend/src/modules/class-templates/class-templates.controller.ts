@@ -21,6 +21,7 @@ import { diskStorage } from 'multer';
 import * as fs from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import { resetStorageFilename } from '../system-reset/system-reset.context';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
 import { RoleName, Roles } from '../auth/decorators/roles.decorator';
@@ -186,7 +187,7 @@ export class ClassTemplatesController {
         },
         filename: (_req, file, cb) => {
           const ext = path.extname(file.originalname).toLowerCase();
-          cb(null, `${uuidv4()}_${Date.now()}${ext}`);
+          cb(null, resetStorageFilename(`${uuidv4()}_${Date.now()}${ext}`));
         },
       }),
       limits: { fileSize: MAX_IMAGE_SIZE, files: 1 },

@@ -9,6 +9,7 @@ import {
   AdminSection,
 } from "../components/admin/AdminMobilePrimitives";
 import type { MainTabParamList, RootStackParamList } from "../navigation/types";
+import { adminSettingsTaskRoutes } from "../navigation/admin-route-manifest";
 
 type Props = BottomTabScreenProps<MainTabParamList, "AdminSettings">;
 
@@ -35,6 +36,7 @@ export function AdminSettingsOverviewScreen({ navigation }: Props) {
       | "AdminSettingsLearnerCompletion"
       | "AdminSettingsAuditRecovery"
       | "AdminSettingsDemoMode"
+      | "AdminSettingsResetSchoolData"
       | "AdminStudentReadiness",
   ) => root.navigate(name);
   const blockers = readiness.data?.blockers.length ?? 0;
@@ -110,16 +112,28 @@ export function AdminSettingsOverviewScreen({ navigation }: Props) {
               subtitle="Audit first; repair only from manifest-bound evidence"
               onPress={() => open("AdminSettingsAuditRecovery")}
             />
-            <AdminDataRow
-              title="Demo Mode"
-              subtitle="Start a time-bound, audited evaluator walkthrough window"
-              status="Advanced"
-              statusTone="red"
-              onPress={() => open("AdminSettingsDemoMode")}
-            />
           </AdminSection>
         }
       />
+      <AdminSection
+        title="Testing tools"
+        subtitle="Consequential tools for demonstrations and fresh school setup"
+      >
+        <AdminDataRow
+          title="Demo Mode"
+          subtitle="Start a time-bound, audited evaluator walkthrough window"
+          status="Advanced"
+          statusTone="red"
+          onPress={() => open("AdminSettingsDemoMode")}
+        />
+        <AdminDataRow
+          title="Reset school data"
+          subtitle="Preview what is cleared and kept, then confirm a permanent reset"
+          status="Irreversible"
+          statusTone="red"
+          onPress={() => open(adminSettingsTaskRoutes.resetSchoolData)}
+        />
+      </AdminSection>
     </AdminScreen>
   );
 }

@@ -8,6 +8,7 @@ import {
   MODULE_COVER_MAX_FILE_SIZE_BYTES,
   persistValidatedModuleCover,
 } from './module-cover-upload.util';
+import { runResetWorkContext } from '../system-reset/system-reset.context';
 
 if (!global.crypto) {
   (global as any).crypto = crypto.webcrypto;
@@ -48,27 +49,31 @@ function makeFile(overrides: Partial<Express.Multer.File> = {}) {
   } as Express.Multer.File;
 }
 
+function persist(file: Express.Multer.File, destination: string) {
+  return runResetWorkContext(
+    { epoch: 7, storageGeneration: 'g-operation' },
+    () => persistValidatedModuleCover(file, destination),
+  );
+}
+
 describe('persistValidatedModuleCover', () => {
   afterEach(() => {
     jest.clearAllMocks();
   });
 
   it('stores a verified png using a server-generated filename', () => {
-    const result = persistValidatedModuleCover(
-      makeFile(),
-      './uploads/module-covers',
-    );
+    const result = persist(makeFile(), './uploads/module-covers');
 
     expect(mockMkdirSync).toHaveBeenCalledWith('./uploads/module-covers', {
       recursive: true,
     });
     expect(mockWriteFileSync).toHaveBeenCalled();
-    expect(result.filename).toMatch(/\.png$/);
+    expect(result.filename).toMatch(/^g-operation_.*\.png$/);
   });
 
   it('rejects a disallowed extension even when mime says image', () => {
     expect(() =>
-      persistValidatedModuleCover(
+      persist(
         makeFile({ originalname: 'cover.gif', mimetype: 'image/gif' }),
         './uploads/module-covers',
       ),
@@ -77,7 +82,7 @@ describe('persistValidatedModuleCover', () => {
 
   it('rejects a spoofed image mime when signature is not an image', () => {
     expect(() =>
-      persistValidatedModuleCover(
+      persist(
         makeFile({
           originalname: 'cover.png',
           mimetype: 'image/png',
@@ -91,7 +96,7 @@ describe('persistValidatedModuleCover', () => {
 
   it('rejects files larger than 5 mb', () => {
     expect(() =>
-      persistValidatedModuleCover(
+      persist(
         makeFile({
           size: MODULE_COVER_MAX_FILE_SIZE_BYTES + 1,
           buffer: Buffer.alloc(MODULE_COVER_MAX_FILE_SIZE_BYTES + 1, 1),
@@ -102,7 +107,7 @@ describe('persistValidatedModuleCover', () => {
   });
 
   it('accepts verified webp files', () => {
-    const result = persistValidatedModuleCover(
+    const result = persist(
       makeFile({
         originalname: 'cover.webp',
         mimetype: 'image/webp',

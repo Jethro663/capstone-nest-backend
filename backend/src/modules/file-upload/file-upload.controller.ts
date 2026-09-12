@@ -24,6 +24,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { createHash } from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
+import { resetStorageFilename } from '../system-reset/system-reset.context';
 
 import { FileUploadService } from './file-upload.service';
 import { StorageService } from './storage/storage.service';
@@ -58,7 +59,7 @@ const multerOptions = {
     },
     filename: (_req, _file, cb) => {
       const ext = path.extname(_file.originalname).toLowerCase();
-      cb(null, `${uuidv4()}_${Date.now()}${ext}`);
+      cb(null, resetStorageFilename(`${uuidv4()}_${Date.now()}${ext}`));
     },
   }),
   limits: {

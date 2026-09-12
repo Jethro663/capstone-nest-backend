@@ -4,7 +4,10 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
+import { runSystemResetWork } from '../system-reset/system-reset.work';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { and, desc, eq } from 'drizzle-orm';
 import { AcademicMutation } from '../../database/academic-transaction';
@@ -33,6 +36,7 @@ export class ClassRecordSyncService {
     private readonly eventEmitter: EventEmitter2,
     private readonly auditService: AuditService,
     private readonly policyService: AcademicPolicyService,
+    @Optional() private readonly modules?: ModuleRef,
   ) {}
   private get db() {
     return this.databaseService.db;
@@ -217,17 +221,24 @@ export class ClassRecordSyncService {
     event: AssessmentSubmittedEvent,
   ): Promise<void> {
     try {
-      await this.databaseService.academicTransaction(async () => {
-        const items = await this.db.query.classRecordItems.findMany({
-          where: eq(classRecordItems.assessmentId, event.assessmentId),
-          with: { classRecord: { with: { class: true } } },
-        });
-        for (const item of items) {
-          const owner = item.classRecord.class.teacherId;
-          if (item.classRecord.status !== 'draft' || !owner) continue;
-          await this.syncFromAssessment(item.id, owner, [], 'assessment_sync');
-        }
-      });
+      await runSystemResetWork(this.modules, () =>
+        this.databaseService.academicTransaction(async () => {
+          const items = await this.db.query.classRecordItems.findMany({
+            where: eq(classRecordItems.assessmentId, event.assessmentId),
+            with: { classRecord: { with: { class: true } } },
+          });
+          for (const item of items) {
+            const owner = item.classRecord.class.teacherId;
+            if (item.classRecord.status !== 'draft' || !owner) continue;
+            await this.syncFromAssessment(
+              item.id,
+              owner,
+              [],
+              'assessment_sync',
+            );
+          }
+        }),
+      );
     } catch (error) {
       // Readiness reports unsynchronized evidence; teachers can retry using the explicit sync endpoint.
       this.logger.error(

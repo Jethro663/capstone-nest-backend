@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { Pool } from 'pg';
+import { Pool, PoolClient } from 'pg';
 import {
   afterAcademicCommit,
   getAcademicConnection,
@@ -99,6 +99,19 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     try {
       await client.query('SELECT 1');
     } finally {
+      client.release();
+    }
+  }
+
+  /** Dedicated session ownership for durable coordinators/advisory locks. */
+  async withConnection<T>(
+    work: (client: PoolClient) => Promise<T>,
+  ): Promise<T> {
+    const client = await this.pool.connect();
+    try {
+      return await work(client);
+    } finally {
+      // Callers scope transactions and locks in their own try/finally blocks.
       client.release();
     }
   }

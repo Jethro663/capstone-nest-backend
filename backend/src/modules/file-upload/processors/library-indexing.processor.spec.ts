@@ -3,6 +3,12 @@ import { ConfigService } from '@nestjs/config';
 import { LibraryIndexStatusDto } from '../dto/file-upload.dto';
 import { LibraryIndexingProcessor } from './library-indexing.processor';
 
+// Admission/lifetime behavior is covered by the dedicated reset regression suites.
+jest.mock('../../system-reset/system-reset.work', () => ({
+  runSystemResetWork: (_modules: unknown, work: () => Promise<unknown>) =>
+    work(),
+}));
+
 describe('LibraryIndexingProcessor', () => {
   const buildDatabase = () => {
     const updates: Array<Record<string, unknown>> = [];

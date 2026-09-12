@@ -68,6 +68,7 @@ const expectedWebRoutes = [
   "/dashboard/admin/system-settings/audit-recovery",
   "/dashboard/admin/system-settings/demo-mode",
   "/dashboard/admin/system-settings/learner-completion",
+  "/dashboard/admin/system-settings/reset-school-data",
   "/dashboard/admin/system-settings/year-transition",
   "/dashboard/admin/user-reports",
   "/dashboard/admin/users",

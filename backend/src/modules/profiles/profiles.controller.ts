@@ -19,6 +19,7 @@ import type { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { v4 as uuidv4 } from 'uuid';
+import { resetStorageFilename } from '../system-reset/system-reset.context';
 import { ProfilesService } from './profiles.service';
 import { UpdateProfileDto } from './DTO/update-profile.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -204,7 +205,7 @@ export class ProfilesController {
         },
         filename: (_req, file, cb) => {
           const ext = path.extname(file.originalname).toLowerCase();
-          cb(null, `${uuidv4()}_${Date.now()}${ext}`);
+          cb(null, resetStorageFilename(`${uuidv4()}_${Date.now()}${ext}`));
         },
       }),
       limits: { fileSize: MAX_AVATAR_SIZE, files: 1 },

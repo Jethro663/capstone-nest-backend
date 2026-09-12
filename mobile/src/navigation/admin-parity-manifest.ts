@@ -550,6 +550,13 @@ export const adminWebRouteParity: readonly AdminWebRouteParityEntry[] = [
     evidence: "AdminDemoModeSettingsScreen.tsx",
   },
   {
+    webPath: "/dashboard/admin/system-settings/reset-school-data",
+    mobileRoute: "AdminSettingsResetSchoolData",
+    mobileTask:
+      "Preview cleared and kept data, confirm permanent reset, and reconnect to public progress",
+    evidence: "AdminSystemResetScreen.tsx",
+  },
+  {
     webPath: "/dashboard/admin/system-settings/learner-completion",
     mobileRoute: "AdminSettingsLearnerCompletion",
     mobileTask: "Manage back-subject and Grade 10 completion evidence",

@@ -17,6 +17,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { v4 as uuidv4 } from 'uuid';
+import { resetStorageFilename } from '../system-reset/system-reset.context';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles, RoleName } from '../auth/decorators/roles.decorator';
@@ -105,7 +106,7 @@ export class TeacherProfilesController {
         },
         filename: (_req, file, cb) => {
           const ext = path.extname(file.originalname).toLowerCase();
-          cb(null, `${uuidv4()}_${Date.now()}${ext}`);
+          cb(null, resetStorageFilename(`${uuidv4()}_${Date.now()}${ext}`));
         },
       }),
       limits: { fileSize: MAX_AVATAR_SIZE, files: 1 },

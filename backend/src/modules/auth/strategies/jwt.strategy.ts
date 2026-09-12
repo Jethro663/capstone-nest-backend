@@ -4,6 +4,12 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../../users/users.service';
 
+type AccessTokenPayload = {
+  userId: string;
+  type: string;
+  sessionVersion?: number;
+};
+
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   private readonly logger = new Logger(JwtStrategy.name);
@@ -28,9 +34,9 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     });
   }
 
-  async validate(payload: any) {
+  async validate(payload: AccessTokenPayload) {
     this.logger.debug(
-      `[JWT-STRAT] Validating token for userId: ${payload?.userId}`,
+      `[JWT-STRAT] Validating token for userId: ${payload.userId}`,
     );
     if (payload.type !== 'access') {
       throw new UnauthorizedException('Invalid token type');
@@ -43,6 +49,12 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
 
     if (!user) {
       throw new UnauthorizedException('User not found');
+    }
+
+    // Older access tokens implicitly belong to session version zero. A school
+    // reset retains the administrator account but advances this durable version.
+    if ((payload.sessionVersion ?? 0) !== (user.sessionVersion ?? 0)) {
+      throw new UnauthorizedException('Session expired. Please sign in again.');
     }
 
     if (user.status !== 'ACTIVE') {

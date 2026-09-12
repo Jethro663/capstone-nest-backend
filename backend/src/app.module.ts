@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 import { EventEmitterModule } from '@nestjs/event-emitter';
@@ -50,6 +50,11 @@ import adminLifecycleConfig from './config/admin-lifecycle.config';
 import adminDemoModeConfig from './config/admin-demo-mode.config';
 import { AdminLifecycleModule } from './modules/admin-lifecycle/admin-lifecycle.module';
 import { AdminDemoModeModule } from './modules/admin-demo-mode/admin-demo-mode.module';
+import { SystemResetModule } from './modules/system-reset/system-reset.module';
+import {
+  SystemResetGuard,
+  SystemResetInterceptor,
+} from './modules/system-reset/system-reset.interceptor';
 
 @Module({
   imports: [
@@ -122,11 +127,16 @@ import { AdminDemoModeModule } from './modules/admin-demo-mode/admin-demo-mode.m
     AppVersionModule,
     AdminLifecycleModule,
     AdminDemoModeModule,
+    SystemResetModule,
   ],
   providers: [
     {
       provide: APP_FILTER,
       useClass: GlobalExceptionFilter, // Sanitise all unhandled errors
+    },
+    {
+      provide: APP_GUARD,
+      useExisting: SystemResetGuard,
     },
     {
       provide: APP_GUARD,
@@ -136,6 +146,7 @@ import { AdminDemoModeModule } from './modules/admin-demo-mode/admin-demo-mode.m
       provide: APP_GUARD,
       useClass: AppThrottlerGuard, // Global rate-limit guard
     },
+    { provide: APP_INTERCEPTOR, useExisting: SystemResetInterceptor },
   ],
 })
 export class AppModule {}

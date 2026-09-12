@@ -1,0 +1,1 @@
+ALTER TABLE "system_reset_instances" ADD COLUMN "in_flight" integer DEFAULT 0 NOT NULL;

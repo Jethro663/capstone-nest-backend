@@ -44,6 +44,8 @@ describe('api-client auth refresh handling', () => {
     jest.clearAllMocks();
     responseRejected = null;
     jest.resetModules();
+    window.localStorage.clear();
+    window.sessionStorage.clear();
   });
 
   afterEach(() => {
@@ -66,5 +68,14 @@ describe('api-client auth refresh handling', () => {
     ).rejects.toThrow('Invalid refresh token');
 
     expect(getAccessToken()).toBeNull();
+  });
+
+  it('does not show a session-expired login warning while tracking a reset', async () => {
+    window.localStorage.setItem('nexora.systemReset.operationId', '9e84bb50-91f1-4fba-83e0-e1d84643a6d0');
+    refreshSessionAccessTokenMock.mockRejectedValue(new Error('Invalid refresh token'));
+    await import('./api-client');
+    await expect(responseRejected?.({ config: { url: '/notifications', headers: {} }, response: { status: 401 } })).rejects.toThrow('Invalid refresh token');
+    await Promise.resolve();
+    expect(toastErrorMock).not.toHaveBeenCalled();
   });
 });

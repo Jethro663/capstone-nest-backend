@@ -1,5 +1,7 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
+import { runSystemResetWork } from '../../system-reset/system-reset.work';
 import { ConfigService } from '@nestjs/config';
 import { Job, UnrecoverableError } from 'bullmq';
 import { eq } from 'drizzle-orm';
@@ -24,6 +26,7 @@ export class LibraryIndexingProcessor extends WorkerHost {
     private readonly configService: ConfigService,
     private readonly databaseService: DatabaseService,
     private readonly auditService: AuditService,
+    @Optional() private readonly modules?: ModuleRef,
   ) {
     super();
   }
@@ -42,6 +45,10 @@ export class LibraryIndexingProcessor extends WorkerHost {
   }
 
   async process(job: Job<LibraryIndexJobData>) {
+    return runSystemResetWork(this.modules, () => this.processAdmitted(job));
+  }
+
+  private async processAdmitted(job: Job<LibraryIndexJobData>) {
     if (job.name !== 'index-library-file') {
       throw new UnrecoverableError(
         `Unsupported library-indexing job: ${job.name}`,

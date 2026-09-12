@@ -23,6 +23,7 @@ import { diskStorage } from 'multer';
 import * as fs from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import { resetStorageFilename } from '../system-reset/system-reset.context';
 import type { Response } from 'express';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -52,7 +53,7 @@ const threadAttachmentMulterOptions = {
     },
     filename: (_req, file, cb) => {
       const ext = path.extname(file.originalname) || '';
-      cb(null, `${uuidv4()}_${Date.now()}${ext}`);
+      cb(null, resetStorageFilename(`${uuidv4()}_${Date.now()}${ext}`));
     },
   }),
   limits: {
@@ -81,7 +82,7 @@ const commentImageMulterOptions = {
     },
     filename: (_req, file, cb) => {
       const ext = path.extname(file.originalname) || '';
-      cb(null, `${uuidv4()}_${Date.now()}${ext}`);
+      cb(null, resetStorageFilename(`${uuidv4()}_${Date.now()}${ext}`));
     },
   }),
   limits: {

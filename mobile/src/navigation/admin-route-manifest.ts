@@ -1,4 +1,12 @@
-import type { AdminToolSection, MainTabParamList } from "./types";
+import type {
+  AdminToolSection,
+  MainTabParamList,
+  RootStackParamList,
+} from "./types";
+
+export const adminSettingsTaskRoutes = {
+  resetSchoolData: "AdminSettingsResetSchoolData",
+} as const satisfies Record<string, keyof RootStackParamList>;
 
 export const adminToolRouteMap = {
   AdminUsers: "users",

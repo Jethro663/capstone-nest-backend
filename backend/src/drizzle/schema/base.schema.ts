@@ -168,6 +168,7 @@ export const users = pgTable(
 
     status: accountStatusEnum('account_status').notNull().default('ACTIVE'),
     isEmailVerified: boolean('is_email_verified').notNull().default(false),
+    sessionVersion: integer('session_version').notNull().default(0),
 
     lastLoginAt: timestamp('last_login_at'),
     createdAt: timestamp('created_at').notNull().defaultNow(),

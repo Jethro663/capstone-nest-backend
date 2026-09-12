@@ -2,6 +2,12 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { EditorDocument } from "./model";
 
 const PREFIX = "assessment-editor:v1:";
+const SCHOOL_CONTENT_PREFIXES = [
+  PREFIX,
+  "assignment-creation:v1:",
+  "teacher-ai-draft:",
+  "teacher-extractions:",
+] as const;
 export const recoveryKey = (
   userId: string,
   assessmentId: string | undefined,
@@ -36,9 +42,12 @@ export async function readEditorRecovery(
 }
 export const clearEditorRecovery = (key: string) =>
   AsyncStorage.removeItem(key);
-export async function clearAllEditorRecovery() {
+export async function clearAllSchoolDataRecovery() {
   const keys = (await AsyncStorage.getAllKeys()).filter((key) =>
-    key.startsWith(PREFIX),
+    SCHOOL_CONTENT_PREFIXES.some((prefix) => key.startsWith(prefix)),
   );
   if (keys.length) await AsyncStorage.multiRemove(keys);
 }
+
+/** Existing logout callers also clear every account-owned workflow recovery key. */
+export const clearAllEditorRecovery = clearAllSchoolDataRecovery;

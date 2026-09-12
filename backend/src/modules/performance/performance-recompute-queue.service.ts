@@ -1,4 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
+import { runSystemResetWork } from '../system-reset/system-reset.work';
 import { InjectQueue } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import { createHash } from 'crypto';
@@ -10,6 +12,7 @@ export class PerformanceRecomputeQueueService {
   constructor(
     @InjectQueue('performance-recompute')
     private readonly queue: Queue,
+    @Optional() private readonly modules?: ModuleRef,
   ) {}
 
   async enqueueAssessmentSubmission(
@@ -17,14 +20,16 @@ export class PerformanceRecomputeQueueService {
     studentId: string,
   ): Promise<void> {
     try {
-      await this.queue.add(
-        'recompute-assessment',
-        { assessmentId, studentId },
-        {
-          jobId: `assess-${assessmentId}-${studentId}-${Math.floor(Date.now() / 15000)}`,
-          removeOnComplete: true,
-          removeOnFail: { age: 86400, count: 50 },
-        },
+      await runSystemResetWork(this.modules, () =>
+        this.queue.add(
+          'recompute-assessment',
+          { assessmentId, studentId },
+          {
+            jobId: `assess-${assessmentId}-${studentId}-${Math.floor(Date.now() / 15000)}`,
+            removeOnComplete: true,
+            removeOnFail: { age: 86400, count: 50 },
+          },
+        ),
       );
     } catch (error) {
       this.logger.error(
@@ -47,14 +52,16 @@ export class PerformanceRecomputeQueueService {
         )
         .digest('hex')
         .slice(0, 16);
-      await this.queue.add(
-        'recompute-class-scores',
-        { classId, studentIds, triggerSource },
-        {
-          jobId: `class-${classId}-${studentScope}-${Math.floor(Date.now() / 15000)}`,
-          removeOnComplete: true,
-          removeOnFail: { age: 86400, count: 50 },
-        },
+      await runSystemResetWork(this.modules, () =>
+        this.queue.add(
+          'recompute-class-scores',
+          { classId, studentIds, triggerSource },
+          {
+            jobId: `class-${classId}-${studentScope}-${Math.floor(Date.now() / 15000)}`,
+            removeOnComplete: true,
+            removeOnFail: { age: 86400, count: 50 },
+          },
+        ),
       );
     } catch (error) {
       this.logger.error(

@@ -91,6 +91,7 @@ export type RootStackParamList = {
   AdminSettingsLearnerCompletion: undefined;
   AdminSettingsAuditRecovery: undefined;
   AdminSettingsDemoMode: undefined;
+  AdminSettingsResetSchoolData: undefined;
   AdminStudentReadiness: undefined;
   AdminAnnouncements: undefined;
   AdminLifecycleReview: {

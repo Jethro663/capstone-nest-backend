@@ -1,5 +1,11 @@
 import { PerformanceRecomputeQueueService } from './performance-recompute-queue.service';
 
+// Admission/lifetime behavior is covered by the dedicated reset regression suites.
+jest.mock('../system-reset/system-reset.work', () => ({
+  runSystemResetWork: (_modules: unknown, work: () => Promise<unknown>) =>
+    work(),
+}));
+
 describe('PerformanceRecomputeQueueService', () => {
   const queue = { add: jest.fn().mockResolvedValue(undefined) };
   let service: PerformanceRecomputeQueueService;

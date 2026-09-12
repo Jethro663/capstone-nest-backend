@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import shutil
 import tempfile
 from pathlib import Path
 from urllib.parse import urlencode, urljoin, urlsplit
@@ -13,6 +14,24 @@ from .config import settings
 
 _upload_client: httpx.AsyncClient | None = None
 _REDIRECT_STATUS_CODES = frozenset({301, 302, 303, 307, 308})
+
+
+def backend_upload_cache_dir() -> Path:
+    return Path(tempfile.gettempdir()) / "nexora-backend-upload-cache"
+
+
+async def clear_backend_upload_cache(cache_dir: Path | None = None) -> None:
+    """Only call after local request draining; a failed deletion must not ACK."""
+    directory = cache_dir if cache_dir is not None else backend_upload_cache_dir()
+
+    def clear():
+        if directory.is_symlink():
+            raise RuntimeError("AI source cache directory must not be a symlink")
+        if directory.exists():
+            shutil.rmtree(directory)
+        directory.mkdir(parents=True, exist_ok=True)
+
+    await run_in_managed_thread(clear)
 
 
 def _get_upload_client() -> httpx.AsyncClient:
@@ -92,7 +111,7 @@ async def materialize_backend_upload(raw_path: str) -> str | None:
 
     suffix = Path(normalized).suffix
     cache_key = hashlib.sha1(normalized.encode("utf-8")).hexdigest()
-    cache_dir = Path(tempfile.gettempdir()) / "nexora-backend-upload-cache"
+    cache_dir = backend_upload_cache_dir()
     cache_dir.mkdir(parents=True, exist_ok=True)
     cached_path = cache_dir / f"{cache_key}{suffix}"
     if cached_path.exists():

@@ -24,7 +24,7 @@ jest.mock("@react-native-async-storage/async-storage", () => {
   };
 });
 
-it("scopes recovery to an account and clears only editor copies on logout", async () => {
+it("clears every known school-content cache without clearing reset recovery", async () => {
   const teacher = recoveryKey("teacher", undefined, "class");
   const other = recoveryKey("other", undefined, "class");
   const draft = {
@@ -34,8 +34,33 @@ it("scopes recovery to an account and clears only editor copies on logout", asyn
   await writeEditorRecovery(teacher, draft);
   expect(await readEditorRecovery(other)).toBeNull();
   expect(await readEditorRecovery(teacher)).toEqual(draft);
+  await AsyncStorage.setItem(
+    "assignment-creation:v1:teacher:class",
+    JSON.stringify({ questions: [{ prompt: "Old school content" }] }),
+  );
+  await AsyncStorage.setItem("teacher-ai-draft:class:active-job", "old-job");
+  await AsyncStorage.setItem(
+    "teacher-extractions:class:active",
+    JSON.stringify(["old-extraction"]),
+  );
+  await AsyncStorage.setItem(
+    "nexora.system-reset.operation",
+    "709de236-c128-4f6a-a4e3-e193ce605f3c",
+  );
   await AsyncStorage.setItem("unrelated-preference", "preserved");
   await clearAllEditorRecovery();
   expect(await readEditorRecovery(teacher)).toBeNull();
+  expect(
+    await AsyncStorage.getItem("assignment-creation:v1:teacher:class"),
+  ).toBeNull();
+  expect(
+    await AsyncStorage.getItem("teacher-ai-draft:class:active-job"),
+  ).toBeNull();
+  expect(
+    await AsyncStorage.getItem("teacher-extractions:class:active"),
+  ).toBeNull();
+  expect(await AsyncStorage.getItem("nexora.system-reset.operation")).toBe(
+    "709de236-c128-4f6a-a4e3-e193ce605f3c",
+  );
   expect(await AsyncStorage.getItem("unrelated-preference")).toBe("preserved");
 });

@@ -1,8 +1,10 @@
 import unittest
+from contextlib import asynccontextmanager
+from unittest.mock import patch
 
 import httpx
 
-from app.main import app
+from app.main import app, reset_maintenance
 
 
 @app.get("/metrics-test-raises")
@@ -43,7 +45,14 @@ class MetricsEndpointTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('path="/metrics"', metrics)
 
     async def test_metrics_middleware_records_failed_requests(self) -> None:
-        response = await self.client.get("/metrics-test-raises")
+        # This test intentionally omits app lifespan/DB; exercise metrics with
+        # an admitted request. Reset admission itself has its own integration tests.
+        @asynccontextmanager
+        async def admitted():
+            yield
+
+        with patch.object(reset_maintenance, "request", admitted):
+            response = await self.client.get("/metrics-test-raises")
         self.assertEqual(response.status_code, 500)
 
         metrics = (await self.client.get("/metrics")).text

@@ -12,6 +12,7 @@ import httpx
 from fastapi import HTTPException
 
 from . import cloud_fallback
+from .async_utils import run_in_managed_thread
 from .config import settings
 
 logger = logging.getLogger(__name__)
@@ -144,7 +145,7 @@ async def _resolve_image_payload(images: list[OllamaImage] | None) -> list[str]:
             with open(file_path, "rb") as file_obj:
                 return base64.b64encode(file_obj.read()).decode("utf-8")
 
-        encoded.append(await asyncio.to_thread(_read))
+        encoded.append(await run_in_managed_thread(_read))
     return encoded
 
 
@@ -395,7 +396,14 @@ async def embed(texts: list[str]) -> list[list[float]]:
             i, emb = await _embed_one(idx, text)
             results[i] = emb
 
-    await asyncio.gather(*[_bounded(i, t) for i, t in enumerate(texts)])
+    # Join every sibling before returning an error: request draining must not
+    # acknowledge an idle process while embedding HTTP calls still run.
+    outcomes = await asyncio.gather(
+        *[_bounded(i, t) for i, t in enumerate(texts)], return_exceptions=True,
+    )
+    for outcome in outcomes:
+        if isinstance(outcome, BaseException):
+            raise outcome
     return results
 
 

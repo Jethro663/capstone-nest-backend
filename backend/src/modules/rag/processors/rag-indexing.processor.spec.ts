@@ -1,6 +1,12 @@
 import { ConfigService } from '@nestjs/config';
 import { RagIndexingProcessor } from './rag-indexing.processor';
 
+// Admission/lifetime behavior is covered by the dedicated reset regression suites.
+jest.mock('../../system-reset/system-reset.work', () => ({
+  runSystemResetWork: (_modules: unknown, work: () => Promise<unknown>) =>
+    work(),
+}));
+
 describe('RagIndexingProcessor', () => {
   afterEach(() => {
     jest.restoreAllMocks();

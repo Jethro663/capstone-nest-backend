@@ -1,6 +1,8 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job, UnrecoverableError } from 'bullmq';
-import { Logger } from '@nestjs/common';
+import { Logger, Optional } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
+import { runSystemResetWork } from '../../system-reset/system-reset.work';
 import { and, eq } from 'drizzle-orm';
 import { DatabaseService } from '../../../database/database.service';
 import { classes, enrollments } from '../../../drizzle/schema';
@@ -25,6 +27,7 @@ export class AnnouncementFanOutProcessor extends WorkerHost {
     private readonly databaseService: DatabaseService,
     private readonly notificationsService: NotificationsService,
     private readonly notificationsGateway: NotificationsGateway,
+    @Optional() private readonly modules?: ModuleRef,
   ) {
     super();
   }
@@ -34,6 +37,10 @@ export class AnnouncementFanOutProcessor extends WorkerHost {
   }
 
   async process(job: Job<FanOutJobData>): Promise<void> {
+    return runSystemResetWork(this.modules, () => this.processAdmitted(job));
+  }
+
+  private async processAdmitted(job: Job<FanOutJobData>): Promise<void> {
     if (job.name !== 'fan-out') {
       throw new UnrecoverableError(
         `Unsupported announcements job: ${job.name}`,

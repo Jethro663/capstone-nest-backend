@@ -19,7 +19,7 @@ describe("SystemSettingsShell", () => {
   });
 
   it("provides route-backed navigation with the current section identified", () => {
-    render(
+    const { container } = render(
       <SystemSettingsShell>
         <p>Academic year content</p>
       </SystemSettingsShell>,
@@ -50,6 +50,7 @@ describe("SystemSettingsShell", () => {
       "/dashboard/admin/system-settings/demo-mode",
     );
     expect(screen.getByText("Academic year content")).toBeInTheDocument();
+    expect(container.querySelector("main")).toBeNull();
   });
 
   it("uses the mobile section selector for route navigation", () => {

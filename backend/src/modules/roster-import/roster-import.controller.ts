@@ -17,6 +17,7 @@ import { diskStorage } from 'multer';
 import * as path from 'path';
 import * as fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
+import { resetStorageFilename } from '../system-reset/system-reset.context';
 
 import { RosterImportService } from './roster-import.service';
 import { RosterFileValidationPipe } from './pipes/roster-file-validation.pipe';
@@ -43,7 +44,7 @@ const multerOptions = {
     },
     filename: (_req, file, cb) => {
       const ext = path.extname(file.originalname).toLowerCase();
-      cb(null, `${uuidv4()}_${Date.now()}${ext}`);
+      cb(null, resetStorageFilename(`${uuidv4()}_${Date.now()}${ext}`));
     },
   }),
   limits: {

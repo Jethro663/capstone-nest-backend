@@ -1,5 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AiGenerationProcessor } from './ai-generation.processor';
+
+// Admission/lifetime behavior is covered by the dedicated reset regression suites.
+jest.mock('../../system-reset/system-reset.work', () => ({
+  runSystemResetWork: (_modules: unknown, work: () => Promise<unknown>) =>
+    work(),
+}));
 import { AiProxyService } from '../ai-proxy.service';
 import type { Job } from 'bullmq';
 

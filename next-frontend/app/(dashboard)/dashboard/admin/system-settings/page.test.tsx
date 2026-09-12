@@ -92,6 +92,8 @@ describe("Admin system settings overview", () => {
     expect(
       screen.queryByText("Loading the academic state…"),
     ).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Reset school data/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Review or change the active period/ })).toBeInTheDocument();
 
     fireEvent.click(
       screen.getByRole("button", { name: "Retry current state" }),

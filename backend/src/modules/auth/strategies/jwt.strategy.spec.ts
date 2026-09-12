@@ -11,6 +11,43 @@ describe('JwtStrategy email verification', () => {
     { findById } as unknown as UsersService,
   );
 
+  it.each([undefined, 0, 1])(
+    'rejects an old session version %s after reset',
+    async (sessionVersion) => {
+      findById.mockResolvedValue({
+        id: 'admin-1',
+        status: 'ACTIVE',
+        isEmailVerified: true,
+        sessionVersion: 2,
+        roles: [{ name: 'admin' }],
+      });
+      await expect(
+        strategy.validate({
+          userId: 'admin-1',
+          type: 'access',
+          sessionVersion,
+        }),
+      ).rejects.toThrow('Session expired');
+    },
+  );
+
+  it('accepts the retained admin after a new sign-in', async () => {
+    findById.mockResolvedValue({
+      id: 'admin-1',
+      status: 'ACTIVE',
+      isEmailVerified: true,
+      sessionVersion: 2,
+      roles: [{ name: 'admin' }],
+    });
+    await expect(
+      strategy.validate({
+        userId: 'admin-1',
+        type: 'access',
+        sessionVersion: 2,
+      }),
+    ).resolves.toMatchObject({ userId: 'admin-1' });
+  });
+
   it.each(['student', 'teacher'])(
     'rejects an existing access token for an unverified %s',
     async (role) => {

@@ -1,5 +1,7 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
+import { runSystemResetWork } from '../../system-reset/system-reset.work';
 import { ConfigService } from '@nestjs/config';
 import { Job, UnrecoverableError } from 'bullmq';
 
@@ -16,7 +18,10 @@ type ReindexJobData = {
 export class RagIndexingProcessor extends WorkerHost {
   private readonly logger = new Logger(RagIndexingProcessor.name);
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    @Optional() private readonly modules?: ModuleRef,
+  ) {
     super();
   }
 
@@ -30,6 +35,10 @@ export class RagIndexingProcessor extends WorkerHost {
   }
 
   async process(job: Job<ReindexJobData>) {
+    return runSystemResetWork(this.modules, () => this.processAdmitted(job));
+  }
+
+  private async processAdmitted(job: Job<ReindexJobData>) {
     if (job.name !== 'reindex-class') {
       throw new UnrecoverableError(`Unsupported rag-indexing job: ${job.name}`);
     }

@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import { storageCleanupFailures } from '../../../monitoring/utils/metrics';
 import type { StorageProviderInterface } from './storage.provider';
 import { StorageService } from './storage.service';
+import { runResetWorkContext } from '../../system-reset/system-reset.context';
 
 jest.mock('fs', () => {
   const actual = jest.requireActual<typeof import('fs')>('fs');
@@ -39,17 +40,24 @@ describe('StorageService cleanup observability', () => {
       .spyOn(storageCleanupFailures, 'inc')
       .mockImplementation(() => undefined);
 
-    const result = await service.saveUploadedFile(
-      {
-        path: '/tmp/upload.pdf',
-        originalname: 'upload.pdf',
-        mimetype: 'application/pdf',
-        size: 3,
-      } as Express.Multer.File,
-      'library',
+    const result = await runResetWorkContext(
+      { epoch: 7, storageGeneration: 'g-fixture' },
+      () =>
+        service.saveUploadedFile(
+          {
+            path: '/tmp/upload.pdf',
+            originalname: 'upload.pdf',
+            mimetype: 'application/pdf',
+            size: 3,
+          } as Express.Multer.File,
+          'library',
+        ),
     );
 
     expect(result.storageProvider).toBe('s3');
+    expect(provider.putObject).toHaveBeenCalledWith(
+      expect.objectContaining({ key: expect.stringMatching(/^g-fixture\//) }),
+    );
     expect(warn).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'storage_cleanup_failed',

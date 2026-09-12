@@ -27,9 +27,10 @@ from sqlalchemy import text as sa_text, bindparam
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .backend_uploads import materialize_backend_upload
+from .backend_uploads import clear_backend_upload_cache, materialize_backend_upload
 from .config import settings
 from .database import AsyncSessionLocal, get_db
+from .system_reset import PostgresResetStore, ResetMaintenance, ResetMaintenanceMiddleware
 from . import ollama_client
 from . import embedding_provider
 from .extraction_job_service import (
@@ -105,6 +106,15 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="Nexora AI Service", version="1.0.0")
 _EMBEDDING_RUNTIME_CACHE: dict[str, Any] = {"expires_at": 0.0, "status": None}
 AI_JOB_RUNTIME: dict[str, dict[str, Any]] = {}
+
+
+async def clear_reset_caches() -> None:
+    await clear_backend_upload_cache()
+    AI_JOB_RUNTIME.clear()
+
+
+reset_maintenance = ResetMaintenance(PostgresResetStore(settings.database_url), clear_reset_caches)
+app.add_middleware(ResetMaintenanceMiddleware, maintenance=reset_maintenance)
 AI_JOB_EXECUTION_LEASE_SECONDS = 16 * 60
 _TEACHER_BG_SEMAPHORE = asyncio.Semaphore(settings.ai_teacher_bg_max_concurrency)
 _TUTOR_SEMAPHORE = asyncio.Semaphore(settings.ai_tutor_max_inflight)
@@ -349,6 +359,12 @@ APPROVED_ADMIN_ACTION_ROUTES = {
 
 
 @app.on_event("startup")
+async def start_reset_maintenance() -> None:
+    await reset_maintenance.start()
+    if not reset_maintenance.active:
+        await preload_ollama_models()
+
+
 async def preload_ollama_models() -> None:
     try:
         await ollama_client.preload_model("chat")
@@ -358,6 +374,11 @@ async def preload_ollama_models() -> None:
         await ollama_client.preload_model("vision_extraction")
     except Exception as err:
         logger.warning("Failed to preload vision model: %s", err)
+
+
+@app.on_event("shutdown")
+async def stop_reset_maintenance() -> None:
+    await reset_maintenance.stop()
 
 
 @app.on_event("shutdown")

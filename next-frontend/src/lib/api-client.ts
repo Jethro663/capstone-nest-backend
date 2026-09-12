@@ -15,6 +15,7 @@ import axios, {
   InternalAxiosRequestConfig,
 } from 'axios';
 import { refreshSessionAccessToken } from './session-refresh';
+import { openResetProgress, readResetOperationId } from './system-reset-session';
 
 let accessToken: string | null = null;
 
@@ -36,10 +37,20 @@ function expireClientSession(shouldRedirect: boolean) {
     return;
   }
 
-  import('sonner').then(({ toast }) => {
-    toast.error('Session expired. Please log in again.');
-  });
+  if (!readResetOperationId() && window.location.pathname !== '/system-maintenance') {
+    import('sonner').then(({ toast }) => {
+      toast.error('Session expired. Please log in again.');
+    });
+  }
   setTimeout(() => {
+    // Reset invalidates sessions deliberately. A late dashboard request must not
+    // pull the user away from public progress or lose an uncertain operation.
+    if (window.location.pathname === '/system-maintenance') return;
+    const resetOperationId = readResetOperationId();
+    if (resetOperationId) {
+      openResetProgress(resetOperationId);
+      return;
+    }
     window.location.href = '/login';
   }, 1500);
 }

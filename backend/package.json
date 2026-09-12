@@ -25,6 +25,7 @@
     "test:debug": "node --inspect-brk -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "test:academic": "jest --config ./test/jest-academic-integration.json --runInBand",
+    "test:system-reset": "node scripts/test-system-reset.cjs",
     "test:grade-migration": "npm run build && node scripts/test-grade-score-migration.cjs",
     "test:production-start": "node scripts/smoke-production-start.cjs",
     "academic:audit": "node dist/scripts/academic-audit.js",

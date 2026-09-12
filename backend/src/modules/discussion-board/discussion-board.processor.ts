@@ -1,4 +1,6 @@
-import { Logger } from '@nestjs/common';
+import { Logger, Optional } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
+import { runSystemResetWork } from '../system-reset/system-reset.work';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { UnrecoverableError, type Job } from 'bullmq';
 import { and, eq } from 'drizzle-orm';
@@ -31,6 +33,7 @@ export class DiscussionBoardProcessor extends WorkerHost {
     private readonly databaseService: DatabaseService,
     private readonly notificationsService: NotificationsService,
     private readonly notificationsGateway: NotificationsGateway,
+    @Optional() private readonly modules?: ModuleRef,
   ) {
     super();
   }
@@ -47,6 +50,12 @@ export class DiscussionBoardProcessor extends WorkerHost {
   }
 
   async process(
+    job: Job<ThreadPublishedJobData | CommentCreatedJobData>,
+  ): Promise<void> {
+    return runSystemResetWork(this.modules, () => this.processAdmitted(job));
+  }
+
+  private async processAdmitted(
     job: Job<ThreadPublishedJobData | CommentCreatedJobData>,
   ): Promise<void> {
     if (job.name === 'thread-published') {

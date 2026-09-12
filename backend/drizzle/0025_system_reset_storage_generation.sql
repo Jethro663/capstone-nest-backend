@@ -1,0 +1,1 @@
+ALTER TABLE "system_reset_state" ADD COLUMN "storage_generation" text DEFAULT 'legacy' NOT NULL;

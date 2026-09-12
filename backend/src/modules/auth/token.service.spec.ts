@@ -25,6 +25,11 @@ describe('TokenService', () => {
 
     mockDbService = {
       db: {
+        query: {
+          refreshTokens: {
+            findFirst: jest.fn().mockResolvedValue({ userId: 'user-123' }),
+          },
+        },
         transaction: jest.fn(async (cb) => cb(mockTx)),
         update: jest.fn().mockReturnThis(),
         set: jest.fn().mockReturnThis(),
@@ -79,6 +84,35 @@ describe('TokenService', () => {
 
       expect(secondResult).toEqual(firstResult);
       expect(mockTx.returning).not.toHaveBeenCalled();
+      expect(mockDbService.db.query.refreshTokens.findFirst).toHaveBeenCalled();
+    });
+
+    it('rejects a memory grace hit when reset removed its successor token', async () => {
+      mockTx.returning.mockResolvedValueOnce([{ userId: 'user-123' }]);
+      await service.validateAndRotate('old-raw-token');
+      mockDbService.db.query.refreshTokens.findFirst.mockResolvedValue(
+        undefined,
+      );
+      await expect(service.validateAndRotate('old-raw-token')).rejects.toThrow(
+        'Session expired',
+      );
+    });
+
+    it('rejects a Redis grace hit when its successor was removed', async () => {
+      (service as any).redisClient = {
+        get: jest
+          .fn()
+          .mockResolvedValue(
+            JSON.stringify({ newRawToken: 'successor', userId: 'user-123' }),
+          ),
+        quit: jest.fn().mockResolvedValue(undefined),
+      };
+      mockDbService.db.query.refreshTokens.findFirst.mockResolvedValue(
+        undefined,
+      );
+      await expect(service.validateAndRotate('old-raw-token')).rejects.toThrow(
+        'Session expired',
+      );
     });
 
     it('throws gentle retry error without revoking all sessions on benign concurrent race (within graceExpiresAt)', async () => {

@@ -7,6 +7,7 @@ import {
   HeadBucketCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { inspectResetS3Storage, purgeResetS3Storage } from './reset-s3-storage';
 import type {
   SignedUploadDescriptor,
   StorageProviderInterface,
@@ -20,6 +21,7 @@ export class S3StorageProvider implements StorageProviderInterface {
   private readonly bucket: string;
   private readonly region: string;
   private readonly publicUrl?: string;
+  private readonly endpoint?: string;
 
   constructor() {
     this.bucket =
@@ -33,6 +35,7 @@ export class S3StorageProvider implements StorageProviderInterface {
 
     const endpoint =
       process.env.STORAGE_ENDPOINT || process.env.AWS_S3_ENDPOINT;
+    this.endpoint = endpoint;
     const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
     const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
 
@@ -62,6 +65,28 @@ export class S3StorageProvider implements StorageProviderInterface {
       key: input.key,
       ...(publicUrl ? { url: publicUrl } : {}),
     };
+  }
+
+  inspectForReset() {
+    return inspectResetS3Storage(
+      this.s3Client,
+      this.bucket,
+      process.env.SYSTEM_RESET_STORAGE_OWNERSHIP === 'dedicated-upload-storage',
+      process.env.SYSTEM_RESET_STORAGE_ID ?? '',
+      this.endpoint,
+      this.region,
+    );
+  }
+
+  purgeForReset(preserveGeneration: string) {
+    return purgeResetS3Storage(
+      this.s3Client,
+      this.bucket,
+      process.env.SYSTEM_RESET_STORAGE_OWNERSHIP === 'dedicated-upload-storage',
+      process.env.SYSTEM_RESET_STORAGE_ID ?? '',
+      preserveGeneration,
+      this.endpoint,
+    );
   }
 
   async deleteObject(key: string): Promise<void> {

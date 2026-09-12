@@ -1,12 +1,16 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AnnouncementsScheduler } from './announcements.scheduler';
 import { AnnouncementsService } from './announcements.service';
+import { SystemResetParticipant } from '../system-reset/system-reset.participant';
 
 describe('AnnouncementsScheduler', () => {
   let scheduler: AnnouncementsScheduler;
 
   const mockService = {
     publishDueAnnouncements: jest.fn(),
+  };
+  const participant = {
+    run: jest.fn((work: () => Promise<unknown>) => work()),
   };
 
   beforeEach(async () => {
@@ -16,6 +20,7 @@ describe('AnnouncementsScheduler', () => {
       providers: [
         AnnouncementsScheduler,
         { provide: AnnouncementsService, useValue: mockService },
+        { provide: SystemResetParticipant, useValue: participant },
       ],
     }).compile();
 
@@ -39,5 +44,11 @@ describe('AnnouncementsScheduler', () => {
     await expect(
       scheduler.handleScheduledAnnouncements(),
     ).resolves.toBeUndefined();
+  });
+
+  it('does not publish when maintenance rejects admission', async () => {
+    participant.run.mockRejectedValueOnce(new Error('Maintenance'));
+    await scheduler.handleScheduledAnnouncements();
+    expect(mockService.publishDueAnnouncements).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,6 @@
-import { Logger } from '@nestjs/common';
+import { Logger, Optional } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
+import { runSystemResetWork } from '../system-reset/system-reset.work';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { UnrecoverableError, type Job } from 'bullmq';
 import { PerformanceService } from './performance.service';
@@ -18,11 +20,20 @@ interface RecomputeClassScoresJobData {
 export class PerformanceRecomputeProcessor extends WorkerHost {
   private readonly logger = new Logger(PerformanceRecomputeProcessor.name);
 
-  constructor(private readonly performanceService: PerformanceService) {
+  constructor(
+    private readonly performanceService: PerformanceService,
+    @Optional() private readonly modules?: ModuleRef,
+  ) {
     super();
   }
 
   async process(
+    job: Job<RecomputeAssessmentJobData | RecomputeClassScoresJobData>,
+  ): Promise<void> {
+    return runSystemResetWork(this.modules, () => this.processAdmitted(job));
+  }
+
+  private async processAdmitted(
     job: Job<RecomputeAssessmentJobData | RecomputeClassScoresJobData>,
   ): Promise<void> {
     if (job.name === 'recompute-assessment') {

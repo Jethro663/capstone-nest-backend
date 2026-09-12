@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import asyncio
 import base64
 from typing import Any
 
 from .backend_uploads import materialize_backend_upload, resolve_local_backend_upload_path
+from .async_utils import run_in_managed_thread
 
 
 async def encode_file_to_base64(file_path: str) -> str:
@@ -12,7 +12,7 @@ async def encode_file_to_base64(file_path: str) -> str:
         with open(file_path, "rb") as file_obj:
             return base64.b64encode(file_obj.read()).decode("utf-8")
 
-    return await asyncio.to_thread(_read)
+    return await run_in_managed_thread(_read)
 
 
 async def normalize_attachment_images(

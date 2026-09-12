@@ -15,6 +15,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { AdminPageShell } from "@/components/admin/AdminPageShell";
 import { cn } from "@/utils/cn";
+import { markResetEntrySource } from "@/lib/system-reset-navigation";
 import { SystemSettingsGuide } from "./SystemSettingsGuide";
 
 type SettingsItem = {
@@ -74,6 +75,17 @@ const settingsSections: Array<{
     ],
   },
   {
+    group: "Testing tools",
+    items: [
+      {
+        label: "Reset school data",
+        description: "Reviewed, irreversible testing reset",
+        href: "/dashboard/admin/system-settings/reset-school-data",
+        icon: FlaskConical,
+      },
+    ],
+  },
+  {
     group: "Advanced",
     items: [
       {
@@ -114,7 +126,15 @@ export function SystemSettingsShell({ children }: { children: ReactNode }) {
         <select
           id="system-settings-section"
           value={pathname}
-          onChange={(event) => router.push(event.target.value)}
+          onChange={(event) => {
+            if (event.target.value.endsWith("/reset-school-data"))
+              markResetEntrySource(pathname);
+            router.push(
+              event.target.value.endsWith("/reset-school-data")
+                ? `${event.target.value}?from=${encodeURIComponent(pathname)}`
+                : event.target.value,
+            );
+          }}
           className="h-11 w-full rounded-md border border-[var(--admin-outline-strong)] bg-white px-3 text-sm text-[var(--admin-text-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-accent)]"
         >
           {flatSections.map((item) => (
@@ -148,7 +168,15 @@ export function SystemSettingsShell({ children }: { children: ReactNode }) {
                   return (
                     <Link
                       key={item.href}
-                      href={item.href}
+                      onNavigate={() => {
+                        if (item.href.endsWith("/reset-school-data"))
+                          markResetEntrySource(pathname);
+                      }}
+                      href={
+                        item.href.endsWith("/reset-school-data")
+                          ? `${item.href}?from=${encodeURIComponent(pathname)}`
+                          : item.href
+                      }
                       aria-label={item.label}
                       aria-current={active ? "page" : undefined}
                       className={cn(
@@ -178,7 +206,7 @@ export function SystemSettingsShell({ children }: { children: ReactNode }) {
           ))}
         </aside>
 
-        <main className="min-w-0 space-y-5">{children}</main>
+        <div className="min-w-0 space-y-5">{children}</div>
       </div>
     </AdminPageShell>
   );

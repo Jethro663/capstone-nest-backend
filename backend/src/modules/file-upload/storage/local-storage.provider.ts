@@ -12,6 +12,10 @@ import type {
   StoredObjectDescriptor,
 } from './storage.provider';
 import { UPLOAD_ROOT } from '../constants/file-upload.constants';
+import {
+  inspectResetLocalStorage,
+  purgeResetLocalStorage,
+} from './reset-local-storage';
 
 @Injectable()
 export class LocalStorageProvider implements StorageProviderInterface {
@@ -96,5 +100,22 @@ export class LocalStorageProvider implements StorageProviderInterface {
       throw new NotFoundException(`Object not found: ${key}`);
     }
     return fs.promises.readFile(safePath);
+  }
+
+  inspectForReset() {
+    return inspectResetLocalStorage(
+      this.uploadRoot,
+      process.env.SYSTEM_RESET_STORAGE_OWNERSHIP === 'dedicated-upload-storage',
+      process.env.SYSTEM_RESET_STORAGE_ID ?? '',
+    );
+  }
+
+  purgeForReset(preserveGeneration: string) {
+    return purgeResetLocalStorage(
+      this.uploadRoot,
+      process.env.SYSTEM_RESET_STORAGE_OWNERSHIP === 'dedicated-upload-storage',
+      process.env.SYSTEM_RESET_STORAGE_ID ?? '',
+      preserveGeneration,
+    );
   }
 }

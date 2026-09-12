@@ -60,6 +60,26 @@ export class TokenService implements OnModuleDestroy {
     return createHash('sha256').update(rawToken).digest('hex');
   }
 
+  private async validateGraceSuccessor(cached: {
+    newRawToken: string;
+    userId: string;
+  }) {
+    // Memory/Redis are only an optimization, never session authority. In
+    // particular the retained administrator must not regain a deleted session.
+    const successor = await this.dbService.db.query.refreshTokens.findFirst({
+      where: and(
+        eq(refreshTokens.tokenHash, this.hashToken(cached.newRawToken)),
+        eq(refreshTokens.userId, cached.userId),
+        eq(refreshTokens.revoked, false),
+        gt(refreshTokens.expiresAt, new Date()),
+      ),
+      columns: { userId: true },
+    });
+    if (!successor)
+      throw new UnauthorizedException('Session expired. Please sign in again.');
+    return { newRawToken: cached.newRawToken, userId: cached.userId };
+  }
+
   generateRawRefreshToken(): string {
     return randomBytes(64).toString('hex');
   }
@@ -77,6 +97,10 @@ export class TokenService implements OnModuleDestroy {
   // ---------------------------------------------------------------------------
   // Public API
   // ---------------------------------------------------------------------------
+
+  clearResetCache(): void {
+    this.rotationGraceCache.clear();
+  }
 
   /**
    * Persist a hashed refresh-token row after a successful login or rotation.
@@ -122,21 +146,27 @@ export class TokenService implements OnModuleDestroy {
 
     const cached = this.rotationGraceCache.get(tokenHash);
     if (cached && Date.now() - cached.rotatedAt < 45000) {
-      return { newRawToken: cached.newRawToken, userId: cached.userId };
+      return this.validateGraceSuccessor(cached);
     }
 
     if (this.redisClient) {
+      let cachedRedis: { newRawToken: string; userId: string } | undefined;
       try {
         const redisVal = await this.redisClient.get(`auth:grace:${tokenHash}`);
         if (redisVal) {
           const parsed = JSON.parse(redisVal);
-          if (parsed && parsed.newRawToken && parsed.userId) {
-            return { newRawToken: parsed.newRawToken, userId: parsed.userId };
+          if (
+            typeof parsed?.newRawToken === 'string' &&
+            typeof parsed?.userId === 'string'
+          ) {
+            cachedRedis = parsed;
           }
         }
       } catch {
         // ignore redis read errors and fall through to DB
       }
+      // Outside the cache-read catch: a durable rejection must not be swallowed.
+      if (cachedRedis) return this.validateGraceSuccessor(cachedRedis);
     }
 
     return await this.dbService.db.transaction(async (tx) => {

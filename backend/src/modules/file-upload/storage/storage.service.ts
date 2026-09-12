@@ -17,6 +17,10 @@ import type {
 } from './storage.provider';
 import { UPLOAD_ROOT } from '../constants/file-upload.constants';
 import { storageCleanupFailures } from '../../../monitoring/utils/metrics';
+import {
+  assertResetUserStorageKey,
+  resetStorageKey,
+} from '../../system-reset/system-reset.context';
 
 @Injectable()
 export class StorageService implements StorageProviderInterface {
@@ -41,11 +45,14 @@ export class StorageService implements StorageProviderInterface {
     body: Buffer;
     contentType?: string;
   }): Promise<StoredObjectDescriptor> {
-    return this.provider.putObject(input);
+    return this.provider.putObject({
+      ...input,
+      key: resetStorageKey(input.key),
+    });
   }
 
   async deleteObject(key: string): Promise<void> {
-    return this.provider.deleteObject(key);
+    return this.provider.deleteObject(assertResetUserStorageKey(key));
   }
 
   async getSignedDownloadUrl(
@@ -53,7 +60,11 @@ export class StorageService implements StorageProviderInterface {
     filename?: string,
     expiresInSeconds?: number,
   ): Promise<string> {
-    return this.provider.getSignedDownloadUrl(key, filename, expiresInSeconds);
+    return this.provider.getSignedDownloadUrl(
+      assertResetUserStorageKey(key),
+      filename,
+      expiresInSeconds,
+    );
   }
 
   async getSignedUploadUrl(input: {
@@ -61,10 +72,14 @@ export class StorageService implements StorageProviderInterface {
     contentType?: string;
     expiresInSeconds?: number;
   }): Promise<SignedUploadDescriptor> {
-    return this.provider.getSignedUploadUrl(input);
+    return this.provider.getSignedUploadUrl({
+      ...input,
+      key: resetStorageKey(input.key),
+    });
   }
 
   resolvePublicUrl(key: string): string | null {
+    key = assertResetUserStorageKey(key);
     if (this.provider.resolvePublicUrl) {
       return this.provider.resolvePublicUrl(key);
     }
@@ -72,7 +87,7 @@ export class StorageService implements StorageProviderInterface {
   }
 
   async getObject(key: string): Promise<Buffer> {
-    return this.provider.getObject(key);
+    return this.provider.getObject(assertResetUserStorageKey(key));
   }
 
   async serveOrRedirect(
@@ -170,10 +185,12 @@ export class StorageService implements StorageProviderInterface {
     }
 
     const filePath =
-      this.driver === 'local' ? path.join(UPLOAD_ROOT, key) : `s3://${res.key}`;
+      this.driver === 'local'
+        ? path.join(UPLOAD_ROOT, res.key)
+        : `s3://${res.key}`;
 
     return {
-      storageKey: key,
+      storageKey: res.key,
       storageProvider: this.driver,
       storageBucket:
         process.env.STORAGE_BUCKET ||

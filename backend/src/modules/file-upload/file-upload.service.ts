@@ -487,11 +487,12 @@ export class FileUploadService {
       const localAbsPath = path.resolve(filePath);
       if (fs.existsSync(localAbsPath)) {
         const buffer = await fs.promises.readFile(localAbsPath);
-        await this.storageService.putObject({
+        const stored = await this.storageService.putObject({
           key: storageKey!,
           body: buffer,
           contentType: dto.mimeType,
         });
+        storageKey = stored.key;
         try {
           await fs.promises.unlink(localAbsPath);
         } catch (error: unknown) {
@@ -1144,11 +1145,12 @@ export class FileUploadService {
         if (this.storageService && this.storageService.driver === 's3') {
           if (!existsOnDisk) continue;
           const buffer = await fs.promises.readFile(finalPath);
-          await this.storageService.putObject({
+          const stored = await this.storageService.putObject({
             key: storageKey,
             body: buffer,
             contentType: record.mimeType,
           });
+          storageKey = stored.key;
           const storageBucket =
             process.env.STORAGE_BUCKET ||
             process.env.AWS_S3_BUCKET ||

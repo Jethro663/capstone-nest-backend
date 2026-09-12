@@ -1,5 +1,7 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Logger } from '@nestjs/common';
+import { Logger, Optional } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
+import { runSystemResetWork } from '../../system-reset/system-reset.work';
 import { Job, UnrecoverableError } from 'bullmq';
 import { and, eq, inArray } from 'drizzle-orm';
 import { DatabaseService } from '../../../database/database.service';
@@ -33,6 +35,7 @@ export class AssessmentNotificationProcessor extends WorkerHost {
     private readonly databaseService: DatabaseService,
     private readonly notificationsService: NotificationsService,
     private readonly notificationsGateway: NotificationsGateway,
+    @Optional() private readonly modules?: ModuleRef,
   ) {
     super();
   }
@@ -42,6 +45,12 @@ export class AssessmentNotificationProcessor extends WorkerHost {
   }
 
   async process(job: Job<AssessmentNotificationJobData>): Promise<void> {
+    return runSystemResetWork(this.modules, () => this.processAdmitted(job));
+  }
+
+  private async processAdmitted(
+    job: Job<AssessmentNotificationJobData>,
+  ): Promise<void> {
     if (job.name === ASSESSMENT_ASSIGNED_JOB) {
       await this.notifyAssessmentAssigned(job.data);
       return;

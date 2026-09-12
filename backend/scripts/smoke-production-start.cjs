@@ -15,7 +15,7 @@ async function main() {
     );
   }
   assert(
-    database.pathname.startsWith('/nexora_academic_test'),
+    /^\/nexora_(academic_test|reset_test_)[a-z0-9_]*$/.test(database.pathname),
     'Smoke database must be disposable',
   );
   // The deployed bootstrap binds port 3000. Refuse an occupied port rather than
@@ -76,9 +76,23 @@ async function main() {
             { signal: AbortSignal.timeout(1500) },
           );
           if (response.ok) {
+            const maintenance = await fetch(
+              `http://127.0.0.1:${port}/api/system-maintenance`,
+              { signal: AbortSignal.timeout(3000) },
+            );
+            assert.equal(maintenance.status, 200);
+            const receipt = await maintenance.json();
+            assert.equal(receipt.success, true);
+            assert.equal(receipt.data.active, false);
+            assert.equal(typeof receipt.data.status, 'string');
+            const protectedReset = await fetch(
+              `http://127.0.0.1:${port}/api/admin/system-reset`,
+              { signal: AbortSignal.timeout(3000) },
+            );
+            assert.equal(protectedReset.status, 401);
             assert.equal(exited, false);
             console.log(
-              'Production startup passed: npm run start:prod and /api/health/live',
+              'Production startup passed: health, public maintenance and protected reset authorization',
             );
             return;
           }

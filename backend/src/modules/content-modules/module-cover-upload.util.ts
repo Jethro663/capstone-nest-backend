@@ -5,6 +5,7 @@ import {
 import * as fs from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import { resetStorageFilename } from '../system-reset/system-reset.context';
 
 export const MODULE_COVER_ALLOWED_MIME_TYPES = new Set([
   'image/png',
@@ -101,7 +102,9 @@ export function persistValidatedModuleCover(
   }
 
   fs.mkdirSync(destination, { recursive: true });
-  const filename = `${uuidv4()}_${Date.now()}${detectedExtension}`;
+  const filename = resetStorageFilename(
+    `${uuidv4()}_${Date.now()}${detectedExtension}`,
+  );
   const storedPath = path.join(destination, filename);
   fs.writeFileSync(storedPath, file.buffer);
   return { filename, storedPath };

@@ -1,4 +1,10 @@
 import { ClassRecordSyncService } from './class-record-sync.service';
+
+// Admission/lifetime behavior is covered by the dedicated reset regression suites.
+jest.mock('../system-reset/system-reset.work', () => ({
+  runSystemResetWork: (_modules: unknown, work: () => Promise<unknown>) =>
+    work(),
+}));
 import {
   AssessmentSubmittedEvent,
   ClassRecordScoresUpdatedEvent,

@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotificationsGateway } from './notifications.gateway';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { DatabaseService } from '../../database/database.service';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -36,17 +37,37 @@ describe('NotificationsGateway', () => {
     get: jest.fn().mockReturnValue('test-jwt-secret'),
   };
 
+  const mockDatabase = {
+    db: {
+      query: {
+        users: { findFirst: jest.fn() },
+        systemResetState: { findFirst: jest.fn() },
+      },
+    },
+  };
+
   // Mock server — populated by afterInit
   const mockServer = { to: jest.fn(), emit: jest.fn() };
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockDatabase.db.query.users.findFirst.mockResolvedValue({
+      id: USER_ID,
+      status: 'ACTIVE',
+      isEmailVerified: true,
+      sessionVersion: 0,
+    });
+    mockDatabase.db.query.systemResetState.findFirst.mockResolvedValue({
+      active: false,
+      epoch: 0,
+    });
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         NotificationsGateway,
         { provide: JwtService, useValue: mockJwtService },
         { provide: ConfigService, useValue: mockConfigService },
+        { provide: DatabaseService, useValue: mockDatabase },
       ],
     }).compile();
 
@@ -63,6 +84,55 @@ describe('NotificationsGateway', () => {
   // ──────────────────────────────────────────────────────────────────────────
 
   describe('handleConnection()', () => {
+    it('drops an old epoch socket even when reset completes before the first poll', async () => {
+      mockJwtService.verify.mockReturnValue({
+        userId: USER_ID,
+        type: 'access',
+      });
+      const socket = makeSocket();
+      await gateway.handleConnection(socket);
+      const disconnectSockets = jest.fn();
+      const except = jest.fn().mockReturnValue({ disconnectSockets });
+      (gateway as any).server = { except, disconnectSockets: jest.fn() };
+      mockDatabase.db.query.systemResetState.findFirst.mockResolvedValue({
+        active: false,
+        epoch: 1,
+      });
+      await gateway.disconnectResetSessions();
+      expect(socket.join).toHaveBeenCalledWith('reset-epoch:0');
+      expect(except).toHaveBeenCalledWith('reset-epoch:1');
+      expect(disconnectSockets).toHaveBeenCalledWith(true);
+    });
+    it.each([
+      undefined,
+      { status: 'INACTIVE', isEmailVerified: true },
+      { status: 'ACTIVE', isEmailVerified: false },
+      { status: 'ACTIVE', isEmailVerified: true, sessionVersion: 1 },
+    ])('rejects a deleted, disabled or reset session (%j)', async (user) => {
+      mockJwtService.verify.mockReturnValue({
+        userId: USER_ID,
+        type: 'access',
+      });
+      mockDatabase.db.query.users.findFirst.mockResolvedValue(user);
+      const client = makeSocket();
+      await gateway.handleConnection(client);
+      expect(client.disconnect).toHaveBeenCalledWith(true);
+      expect(client.join).not.toHaveBeenCalled();
+    });
+
+    it('rejects sockets while reset maintenance is active', async () => {
+      mockJwtService.verify.mockReturnValue({
+        userId: USER_ID,
+        type: 'access',
+      });
+      mockDatabase.db.query.systemResetState.findFirst.mockResolvedValue({
+        active: true,
+        epoch: 0,
+      });
+      const client = makeSocket();
+      await gateway.handleConnection(client);
+      expect(client.disconnect).toHaveBeenCalledWith(true);
+    });
     it('joins the user room and stores userId on socket.data when token is valid', async () => {
       mockJwtService.verify.mockReturnValue({
         userId: USER_ID,

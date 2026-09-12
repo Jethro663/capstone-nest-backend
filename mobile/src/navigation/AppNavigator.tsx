@@ -29,6 +29,7 @@ import { AdminLearnerCompletionSettingsScreen } from "../screens/AdminLearnerCom
 import { AdminAuditRecoverySettingsScreen } from "../screens/AdminAuditRecoverySettingsScreen";
 import { AdminStudentReadinessScreen } from "../screens/AdminStudentReadinessScreen";
 import { AdminDemoModeSettingsScreen } from "../screens/AdminDemoModeSettingsScreen";
+import { AdminSystemResetScreen } from "../screens/AdminSystemResetScreen";
 import { AdminSectionDetailScreen } from "../screens/AdminSectionDetailScreen";
 import { AdminTemplatesScreen } from "../screens/AdminTemplatesScreen";
 import { AdminTemplateDetailScreen } from "../screens/AdminTemplateDetailScreen";
@@ -1019,6 +1020,10 @@ function AdminNavigator() {
       <RootStack.Screen
         name="AdminSettingsDemoMode"
         component={AdminDemoModeSettingsScreen}
+      />
+      <RootStack.Screen
+        name="AdminSettingsResetSchoolData"
+        component={AdminSystemResetScreen}
       />
       <RootStack.Screen
         name="AdminStudentReadiness"

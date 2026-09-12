@@ -16,6 +16,7 @@ const PUBLIC_ROUTES = [
   '/forgot-password',
   '/reset-password',
   '/set-initial-password',
+  '/system-maintenance',
 ];
 
 const PROTECTED_PREFIXES = ['/dashboard'];
