@@ -33,6 +33,7 @@ Prepare all of these items before installing anything:
 4. Use a cable that transfers data. A working cable causes Windows/iTunes to detect the iPhone and causes **Trust This Computer?** to appear on the phone.
 5. Prepare an Apple Account that the tester controls. A separate account used only for sideload testing is recommended. It does not have to be the Apple Account already signed into the iPhone.
 6. Prepare Nexora student, teacher, and administrator test accounts. Receive those credentials privately from the project owner; they are not included in the IPA or this guide.
+7. Confirm the Apple Account has room for Nexora. A free account allows three active sideloaded apps at once, including SideStore, and ten different App IDs in a seven-day period. SideStore plus Nexora use two of the three active-app slots.
 
 ### Privacy rule
 
@@ -65,9 +66,9 @@ LocalDevVPN creates an on-device connection that SideStore needs while installin
 7. When iOS asks to add a VPN configuration, tap **Allow**.
 8. Let the owner approve the requested passcode or Face ID.
 9. Confirm that LocalDevVPN shows a connected state or that a VPN indicator appears in Control Center.
-10. Disconnect LocalDevVPN for now. It will be enabled again during the first SideStore refresh.
+10. Leave LocalDevVPN connected for the remaining setup steps. If an iPhone restart disconnects it later, reconnect it before the first SideStore refresh.
 
-Expected result: LocalDevVPN is installed and can change between connected and disconnected states.
+Expected result: LocalDevVPN is installed and shows a connected state.
 
 If no VPN prompt appears, open **Settings → General → VPN & Device Management → VPN** and check whether LocalDevVPN is listed. If it is missing, reopen LocalDevVPN and tap Connect again. Do not install a similarly named VPN from an unofficial website.
 
@@ -106,18 +107,19 @@ If the MSI is unavailable, return to the SideStore prerequisites page and use it
 The iPhone owner must be present for this part.
 
 1. Unlock the iPhone and leave it on the Home Screen.
-2. Connect the iPhone to Windows with the USB data cable.
-3. If the iPhone asks **Trust This Computer?**, tap **Trust** and enter the device passcode.
-4. Open iTunes and wait for the small iPhone/device button to appear.
-5. If iTunes asks whether to trust or continue with this iPhone, approve it on Windows and approve the matching prompt on the iPhone.
-6. Close iTunes after the iPhone appears successfully. Leave the cable connected.
-7. Open iLoader.
-8. Select the connected iPhone. Check that the displayed device is the intended iPhone 11.
-9. Sign in inside iLoader with the dedicated sideload-testing Apple Account. Type the credentials yourself; do not send them to the Nexora team.
+2. Confirm LocalDevVPN still says **Connected**. Leave it connected.
+3. Connect the iPhone to Windows with the USB data cable.
+4. If the iPhone asks **Trust This Computer?**, tap **Trust** and enter the device passcode.
+5. Open iTunes and wait for the small iPhone/device button to appear.
+6. If iTunes asks whether to trust or continue with this iPhone, approve it on Windows and approve the matching prompt on the iPhone.
+7. Close iTunes after the iPhone appears successfully. Leave the cable connected.
+8. Open iLoader.
+9. Sign in inside iLoader with the dedicated sideload-testing Apple Account. Apple Account text is case-sensitive. Type the credentials yourself; do not send them to the Nexora team.
 10. Enter the Apple two-factor authentication code if Apple sends one.
-11. Select **Install SideStore (Stable)**. Do not choose a nightly or experimental build.
-12. Keep the iPhone unlocked and connected until iLoader reports completion.
-13. Check the iPhone Home Screen or App Library for **SideStore**.
+11. Select the connected iPhone. Check that the displayed device is the intended iPhone 11.
+12. Select **Install SideStore (Stable)**. Do not choose a nightly or experimental build.
+13. Keep the iPhone unlocked and connected until iLoader reports completion.
+14. Check the iPhone Home Screen or App Library for **SideStore**.
 
 Expected result: iLoader reports a successful installation and SideStore appears on the iPhone.
 
@@ -135,9 +137,9 @@ Do these steps on the iPhone immediately after iLoader finishes.
 2. Select **General**.
 3. Select **VPN & Device Management**.
 4. Under **Developer App**, tap the entry showing the Apple Account used in iLoader.
-5. Tap **Trust**, **Allow & Restart**, or the equivalent approval shown by iOS 26.5.
-6. Let the owner approve Face ID or the passcode.
-7. If iOS restarts, unlock the phone after it finishes.
+5. Because this iPhone runs iOS 26.5, tap **Allow & Restart**.
+6. Enter the iPhone passcode to confirm. There is no legitimate bypass for this owner-controlled approval.
+7. Wait for the iPhone to restart, then let the owner unlock it.
 
 Expected result: the Apple Account profile is shown as trusted and SideStore no longer displays an Untrusted Developer message.
 
@@ -387,7 +389,7 @@ Install SideStore first. Reconnect the phone to iLoader, reinstall Stable, resta
 
 ### Three-app or ten-App-ID limit appears
 
-A free Apple Account permits only three active sideloaded apps, including SideStore, and ten registered App IDs per seven-day period. Remove an unused sideloaded application—not an ordinary App Store app—or wait for old App IDs to expire. Do not use exploit-based limit bypasses on the test device.
+A free Apple Account permits only three active sideloaded apps, including SideStore, and ten different App IDs per seven-day period. Remove an unused sideloaded application—not an ordinary App Store app—or wait for old App IDs to expire. Do not use exploit-based limit bypasses on the test device.
 
 ### LocalDevVPN will not connect
 

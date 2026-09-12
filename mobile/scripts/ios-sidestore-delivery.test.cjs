@@ -92,4 +92,17 @@ test("the tester guide covers install, refresh, evidence, privacy, and recovery"
   ]) {
     assert.ok(guide.includes(required), `guide is missing: ${required}`);
   }
+
+  for (const officialRequirement of [
+    "Leave LocalDevVPN connected for the remaining setup steps",
+    "tap **Allow & Restart**",
+    "Enter the iPhone passcode",
+    "three active sideloaded apps",
+    "ten different App IDs",
+  ]) {
+    assert.ok(
+      guide.includes(officialRequirement),
+      `guide does not match the current SideStore instructions: ${officialRequirement}`,
+    );
+  }
 });
