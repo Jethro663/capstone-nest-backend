@@ -80,14 +80,14 @@ The workflow always uploads a diagnostic Actions artifact after successful verif
 
 ### Release delivery
 
-Use a stable prerelease tag named `ios-sidestore-latest`. A successful published build replaces the assets on that prerelease only after verification. The release contains:
+Use a stable prerelease tag named `ios-sidestore-latest`. A successful published build replaces the assets on that prerelease only after verification. The release uses stable convenience names so the tester can reuse the same direct download link:
 
-- `Nexora-iOS-<version>-build<buildNumber>-unsigned.ipa`
-- the matching `.sha256` file
-- a metadata text file containing the source commit, Expo version, Xcode version, application version/build, bundle identifier, API origin, build timestamp, and IPA size
+- `Nexora-iOS-latest-unsigned.ipa`
+- `Nexora-iOS-latest-unsigned.ipa.sha256`
+- `Nexora-iOS-latest-metadata.txt`, containing the source commit, Expo version, Xcode version, application version/build, bundle identifier, API origin, build timestamp, and IPA size
 - a release body explaining that SideStore will apply the installer's personal signature and that the installation expires after seven days unless refreshed
 
-The GitHub Actions artifact remains immutable per workflow run even though the convenience prerelease points to the newest verified build. This preserves traceability when the rolling release is updated.
+The GitHub Actions artifact uses a versioned name and remains immutable per workflow run even though the convenience prerelease points to the newest verified build. This preserves traceability when the rolling release is updated.
 
 ## Tester handoff
 
