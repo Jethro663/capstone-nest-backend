@@ -15,6 +15,7 @@
     "contract:admin": "node ../scripts/check-admin-client-contracts.cjs",
     "typecheck": "npm run contract:admin && tsc --noEmit",
     "test": "jest --runInBand",
+    "test:ios-sidestore": "node --test scripts/ios-sidestore-delivery.test.cjs",
     "test:release": "node --test scripts/app-version-release.test.cjs",
     "release:prepare": "node scripts/app-version-release.cjs prepare",
     "release:verify": "node scripts/app-version-release.cjs verify",

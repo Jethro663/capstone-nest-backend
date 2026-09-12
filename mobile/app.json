@@ -11,6 +11,7 @@
       "**/*"
     ],
     "ios": {
+      "bundleIdentifier": "com.nexora.lms.mobile",
       "buildNumber": "3"
     },
     "android": {
