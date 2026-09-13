@@ -149,12 +149,12 @@ describe('AcademicPolicyService', () => {
   });
 
   it('relaxes historical prepare, release, and grade windows only for an active administrator', async () => {
-    const demoMode = {
-      demoModeVersion: 8,
-      demoModeExpiresAt: '2026-09-12T05:00:00.000Z',
+    const maintenanceAccess = {
+      maintenanceAccessVersion: 8,
+      maintenanceAccessExpiresAt: '2026-09-12T05:00:00.000Z',
       bypassedRules: ['admin_academic_window'],
     };
-    const audit = jest.fn().mockReturnValue(demoMode);
+    const audit = jest.fn().mockReturnValue(maintenanceAccess);
     const { service, db, demo } = make({
       active: true,
       allows: jest.fn().mockReturnValue(true),
@@ -177,7 +177,7 @@ describe('AcademicPolicyService', () => {
           false,
           { userId: 'admin', roles: ['admin'] },
         ),
-      ).resolves.toEqual(expect.objectContaining({ demoMode }));
+      ).resolves.toEqual(expect.objectContaining({ maintenanceAccess }));
     }
 
     expect(demo.resolveForActor).toHaveBeenCalledWith('admin', ['admin']);
@@ -214,7 +214,7 @@ describe('AcademicPolicyService', () => {
     },
   );
 
-  it('keeps expired or unavailable Demo mode fail-closed', async () => {
+  it('keeps expired or unavailable Maintenance Access fail-closed', async () => {
     const { service, db } = make();
     db.query.classes.findFirst.mockResolvedValue({
       id: 'class',
@@ -235,7 +235,7 @@ describe('AcademicPolicyService', () => {
     ).rejects.toThrow('closed school year');
   });
 
-  it('keeps invalid policy periods and student work rules protected while Demo mode is active', async () => {
+  it('keeps invalid policy periods and student work rules protected while Maintenance Access is active', async () => {
     const { service } = make({
       active: true,
       allows: jest.fn().mockReturnValue(true),

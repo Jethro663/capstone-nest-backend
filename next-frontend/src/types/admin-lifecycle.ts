@@ -15,6 +15,29 @@ export interface AdminLifecycleEffect {
   details?: Record<string, unknown>;
 }
 
+export type AdminMaintenanceDecisionState =
+  | "READY"
+  | "AUTO_RESOLVABLE"
+  | "NEEDS_CHOICE"
+  | "OVERRIDABLE_WARNING"
+  | "IMMUTABLE";
+
+export interface AdminMaintenanceNextAction {
+  id: string;
+  label: string;
+  kind: "REPREVIEW" | "NAVIGATE_REPAIR" | "CANCEL";
+  intent?: string;
+  requiredFields?: string[];
+  href?: string;
+}
+
+export interface AdminMaintenanceDecisionSummary {
+  state: AdminMaintenanceDecisionState;
+  code: string;
+  message: string;
+  nextActions: AdminMaintenanceNextAction[];
+}
+
 export interface AdminLifecycleManifest {
   schemaVersion: 1;
   action:
@@ -22,7 +45,8 @@ export interface AdminLifecycleManifest {
     | "ARCHIVE_CLASS"
     | "ARCHIVE_SECTION"
     | "PURGE_CLASS"
-    | "PURGE_SECTION";
+    | "PURGE_SECTION"
+    | "PURGE_USER";
   targetType: string;
   targetId: string;
   request: Record<string, unknown>;
@@ -36,6 +60,7 @@ export interface AdminLifecycleManifest {
   generatedAt: string;
   expiresAt: string;
   safeToExecute: boolean;
+  decision: AdminMaintenanceDecisionSummary;
   manifestHash: string;
 }
 
@@ -48,7 +73,7 @@ export interface AdminLifecyclePreview {
 export interface AdminLifecycleExecutionEvidence {
   manifestHash: string;
   manifestExpiresAt: string;
-  currentPassword: string;
+  currentPassword?: string;
   reasonCode:
     | "ERRONEOUS_ENROLLMENT"
     | "TRANSFERRED_SECTION"
@@ -83,7 +108,11 @@ export interface AdminLifecycleResponse<T> {
 }
 
 export type StudentLifecycleResolution =
-  "CORRECT_ENROLLMENT" | "WITHDRAW" | "TRANSFER_SECTION" | "TRANSFER_CLASS";
+  | "CORRECT_ENROLLMENT"
+  | "CORRECT_CLASS_ENROLLMENT"
+  | "WITHDRAW"
+  | "TRANSFER_SECTION"
+  | "TRANSFER_CLASS";
 
 export type ClassLifecycleResolution =
   "ARCHIVE_EMPTY" | "COMPLETE" | "DROP" | "TRANSFER";
@@ -116,6 +145,6 @@ export interface PreviewSectionLifecycleInput {
 }
 
 export interface PreviewPurgeLifecycleInput {
-  targetType: "CLASS" | "SECTION";
+  targetType: "CLASS" | "SECTION" | "USER";
   targetId: string;
 }

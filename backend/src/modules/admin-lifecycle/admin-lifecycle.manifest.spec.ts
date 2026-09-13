@@ -76,6 +76,52 @@ describe('admin lifecycle manifest', () => {
     expect(second.expiresAt).toBe('2026-09-11T01:05:00.000Z');
   });
 
+  it('classifies deterministic dependent effects as auto-resolvable', () => {
+    const manifest = buildAdminLifecycleManifest(base);
+    expect(manifest.decision).toEqual(
+      expect.objectContaining({
+        state: 'AUTO_RESOLVABLE',
+        code: 'DEPENDENCIES_AUTO_RESOLVED',
+        nextActions: [],
+      }),
+    );
+  });
+
+  it('turns supported resolution options into typed next actions', () => {
+    const manifest = buildAdminLifecycleManifest({
+      ...base,
+      blockers: [
+        {
+          code: 'CORRECTION_HAS_EVIDENCE',
+          message: 'Choose a history-preserving outcome.',
+          resolvable: true,
+          resolutionOptions: [
+            'WITHDRAW',
+            'TRANSFER_SECTION',
+            'ACADEMIC_REPAIR',
+          ],
+        },
+      ],
+    });
+
+    expect(manifest.decision.state).toBe('NEEDS_CHOICE');
+    expect(manifest.decision.nextActions).toEqual([
+      expect.objectContaining({
+        id: 'WITHDRAW',
+        kind: 'REPREVIEW',
+        intent: 'WITHDRAW',
+      }),
+      expect.objectContaining({
+        id: 'TRANSFER_SECTION',
+        requiredFields: ['destinationSectionId'],
+      }),
+      expect.objectContaining({
+        id: 'ACADEMIC_REPAIR',
+        kind: 'NAVIGATE_REPAIR',
+      }),
+    ]);
+  });
+
   it('signs the expiry so a client cannot extend a stale review', () => {
     const first = buildAdminLifecycleManifest(
       base,
@@ -117,6 +163,10 @@ describe('admin lifecycle manifest', () => {
     expect(manifest.safeToExecute).toBe(false);
     expect(manifest.blockers[0]).toEqual(
       expect.objectContaining({ resolvable: false }),
+    );
+    expect(manifest.decision.state).toBe('IMMUTABLE');
+    expect(manifest.decision.nextActions).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'CONTINUE' })]),
     );
   });
 

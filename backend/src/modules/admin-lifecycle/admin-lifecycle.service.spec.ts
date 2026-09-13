@@ -25,7 +25,8 @@ function chain(result: unknown[] = []) {
 
 function setup(
   enabled = true,
-  demoAllowsGovernedExecutionAvailability = false,
+  maintenanceAllowsGovernedExecutionAvailability = false,
+  maintenanceActive = maintenanceAllowsGovernedExecutionAvailability,
 ) {
   const operationRows: any[] = [];
   const insertChain = chain([{ id: operationId }]);
@@ -79,6 +80,28 @@ function setup(
     }),
   };
   const audit = { log: jest.fn().mockResolvedValue({ id: 'audit-id' }) };
+  const maintenanceContext = {
+    active: maintenanceActive,
+    sessionId: maintenanceActive
+      ? '00000000-0000-4000-8000-000000000499'
+      : null,
+    allows: jest
+      .fn()
+      .mockReturnValue(maintenanceAllowsGovernedExecutionAvailability),
+    audit: jest.fn().mockReturnValue(
+      maintenanceAllowsGovernedExecutionAvailability
+        ? {
+            maintenanceSessionId: '00000000-0000-4000-8000-000000000499',
+            maintenanceExpiresAt: '2026-09-12T05:00:00.000Z',
+            maintenanceRuleCodes: ['governed_execution_availability'],
+          }
+        : undefined,
+    ),
+  };
+  const maintenance = {
+    resolveForActor: jest.fn().mockResolvedValue(maintenanceContext),
+    requireActiveSession: jest.fn().mockResolvedValue(maintenanceContext),
+  };
   const service = new AdminLifecycleService(
     database,
     { get: jest.fn().mockReturnValue(enabled) } as any,
@@ -88,22 +111,7 @@ function setup(
     {} as any,
     audit as any,
     { createBulkDeduped: jest.fn().mockResolvedValue([]) } as any,
-    {
-      resolveForActor: jest.fn().mockResolvedValue({
-        allows: jest
-          .fn()
-          .mockReturnValue(demoAllowsGovernedExecutionAvailability),
-        audit: jest.fn().mockReturnValue(
-          demoAllowsGovernedExecutionAvailability
-            ? {
-                demoModeVersion: 9,
-                demoModeExpiresAt: '2026-09-12T05:00:00.000Z',
-                bypassedRules: ['governed_execution_availability'],
-              }
-            : undefined,
-        ),
-      }),
-    } as any,
+    maintenance as any,
   );
   const dto = {
     studentId: targetId,
@@ -118,7 +126,17 @@ function setup(
     confirmations: [...manifest.requiredConfirmations],
     idempotencyKey,
   };
-  return { service, dto, db, database, student, audit, operationRows };
+  return {
+    service,
+    dto,
+    db,
+    database,
+    student,
+    audit,
+    operationRows,
+    maintenance,
+    maintenanceContext,
+  };
 }
 
 describe('AdminLifecycleService execution', () => {
@@ -135,7 +153,7 @@ describe('AdminLifecycleService execution', () => {
     expect(db.insert).not.toHaveBeenCalled();
   });
 
-  it('lets active Demo mode satisfy only the lifecycle availability gate', async () => {
+  it('lets active Maintenance Access satisfy only the lifecycle availability gate', async () => {
     const { service, dto, db, student, audit } = setup(false, true);
 
     await expect(service.executeStudent(dto, actorId)).resolves.toEqual(
@@ -146,17 +164,17 @@ describe('AdminLifecycleService execution', () => {
     expect(audit.log).toHaveBeenCalledWith(
       expect.objectContaining({
         metadata: expect.objectContaining({
-          demoMode: expect.objectContaining({
-            bypassedRules: ['governed_execution_availability'],
+          maintenanceAccess: expect.objectContaining({
+            maintenanceRuleCodes: ['governed_execution_availability'],
           }),
         }),
       }),
     );
   });
 
-  it('still requires the current password after Demo mode opens availability', async () => {
+  it('requires the current password when Maintenance Access is inactive', async () => {
     (bcrypt.compare as jest.Mock).mockResolvedValue(false);
-    const { service, dto, db } = setup(false, true);
+    const { service, dto, db } = setup(true, false, false);
 
     await expect(service.executeStudent(dto, actorId)).rejects.toThrow(
       ForbiddenException,
@@ -164,7 +182,7 @@ describe('AdminLifecycleService execution', () => {
     expect(db.insert).not.toHaveBeenCalled();
   });
 
-  it('still requires exact reviewed confirmations after Demo mode opens availability', async () => {
+  it('still requires exact reviewed confirmations after Maintenance Access opens availability', async () => {
     const { service, dto, student } = setup(false, true);
     dto.confirmations = [];
 
@@ -172,6 +190,48 @@ describe('AdminLifecycleService execution', () => {
       'Confirm every reviewed lifecycle effect exactly once',
     );
     expect(student.apply).not.toHaveBeenCalled();
+  });
+
+  it('does not repeat password verification for routine execution in an active maintenance session', async () => {
+    const { service, dto, audit } = setup(true, true, true);
+    dto.currentPassword = undefined as never;
+
+    await expect(service.executeStudent(dto, actorId)).resolves.toEqual(
+      expect.objectContaining({ action: 'STUDENT_RESOLUTION' }),
+    );
+    expect(bcrypt.compare).not.toHaveBeenCalled();
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          maintenanceAccess: expect.objectContaining({
+            maintenanceSessionId: '00000000-0000-4000-8000-000000000499',
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('requires the same active maintenance session immediately before mutation', async () => {
+    const {
+      service,
+      dto,
+      student,
+      maintenance,
+      maintenanceContext,
+      db,
+    } = setup(true, true, true);
+    maintenance.requireActiveSession
+      .mockResolvedValueOnce(maintenanceContext)
+      .mockRejectedValueOnce(
+        new ForbiddenException({ code: 'MAINTENANCE_SESSION_REQUIRED' }),
+      );
+
+    await expect(
+      service.executeStudent(dto, actorId, { requireMaintenance: true }),
+    ).rejects.toThrow(ForbiddenException);
+    expect(maintenance.requireActiveSession).toHaveBeenCalledTimes(2);
+    expect(student.apply).not.toHaveBeenCalled();
+    expect(db.update).toHaveBeenCalled();
   });
 
   it('rejects an incorrect current password before claiming an operation', async () => {

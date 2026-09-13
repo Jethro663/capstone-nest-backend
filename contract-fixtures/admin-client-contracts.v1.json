@@ -75,6 +75,50 @@
       }
     },
     {
+      "id": "admin.maintenance-access",
+      "fields": [
+        "currentPassword",
+        "confirmation",
+        "reason",
+        "acknowledgements",
+        "active",
+        "state",
+        "sessionId",
+        "serverTime",
+        "startedAt",
+        "expiresAt",
+        "scopeCodes",
+        "rules",
+        "protectedRules"
+      ],
+      "layers": {
+        "backend": {
+          "sources": [
+            "backend/src/modules/admin-maintenance/DTO/admin-maintenance.dto.ts",
+            "backend/src/modules/admin-maintenance/admin-maintenance.controller.ts",
+            "backend/src/modules/admin-maintenance/admin-maintenance.policy.ts"
+          ],
+          "endpoint": "admin/maintenance"
+        },
+        "web": {
+          "sources": [
+            "next-frontend/src/services/admin-maintenance-service.ts",
+            "next-frontend/src/types/admin-maintenance.ts",
+            "next-frontend/src/providers/AdminMaintenanceProvider.tsx"
+          ],
+          "endpoint": "/admin/maintenance/session"
+        },
+        "mobile": {
+          "sources": [
+            "mobile/src/api/services/admin-maintenance.ts",
+            "mobile/src/types/admin-maintenance.ts",
+            "mobile/src/hooks/useAdminMaintenance.ts"
+          ],
+          "endpoint": "/admin/maintenance/session"
+        }
+      }
+    },
+    {
       "id": "admin.governed-lifecycle",
       "fields": [
         "manifestHash",
@@ -88,16 +132,28 @@
         "replayed",
         "changed",
         "preserved",
-        "auditLogId"
+        "auditLogId",
+        "decision",
+        "state",
+        "code",
+        "message",
+        "nextActions",
+        "id",
+        "label",
+        "kind",
+        "intent",
+        "requiredFields",
+        "href"
       ],
       "layers": {
         "backend": {
           "sources": [
             "backend/src/modules/admin-lifecycle/DTO/admin-lifecycle.dto.ts",
             "backend/src/modules/admin-lifecycle/admin-lifecycle.types.ts",
-            "backend/src/modules/admin-lifecycle/admin-lifecycle.controller.ts"
+            "backend/src/modules/admin-lifecycle/admin-lifecycle.controller.ts",
+            "backend/src/modules/admin-lifecycle/admin-maintenance-lifecycle.controller.ts"
           ],
-          "endpoint": "lifecycle"
+          "endpoint": "maintenance"
         },
         "web": {
           "sources": [
@@ -105,7 +161,7 @@
             "next-frontend/src/types/admin-lifecycle.ts",
             "next-frontend/src/components/admin/AdminLifecycleDialog.tsx"
           ],
-          "endpoint": "/admin/lifecycle"
+          "endpoint": "/admin/maintenance"
         },
         "mobile": {
           "sources": [
@@ -113,7 +169,7 @@
             "mobile/src/types/admin-lifecycle.ts",
             "mobile/src/screens/AdminLifecycleReviewScreen.tsx"
           ],
-          "endpoint": "/admin/lifecycle"
+          "endpoint": "/admin/maintenance"
         }
       }
     },
@@ -736,129 +792,6 @@
             "mobile/src/types/admin-lifecycle.ts"
           ],
           "endpoint": "fieldErrors"
-        }
-      }
-    },
-    {
-      "id": "admin-demo-mode.status",
-      "fields": [
-        "available",
-        "active",
-        "state",
-        "version",
-        "serverTime",
-        "activatedAt",
-        "expiresAt",
-        "reason",
-        "activatedBy",
-        "relaxedRules",
-        "protectedRules",
-        "user_lifecycle_sequence",
-        "class_membership_window",
-        "section_membership_window",
-        "section_capacity",
-        "schedule_collision",
-        "room_adviser_exclusivity",
-        "archive_active_memberships",
-        "restore_archived_class",
-        "admin_academic_window",
-        "governed_execution_availability"
-      ],
-      "layers": {
-        "backend": {
-          "sources": [
-            "backend/src/modules/admin-demo-mode/DTO/admin-demo-mode.dto.ts",
-            "backend/src/modules/admin-demo-mode/admin-demo-mode.controller.ts",
-            "backend/src/modules/admin-demo-mode/admin-demo-mode.policy.ts"
-          ],
-          "endpoint": "admin/demo-mode",
-          "tokens": ["@Roles(RoleName.Admin)"]
-        },
-        "web": {
-          "sources": [
-            "next-frontend/src/types/admin-demo-mode.ts",
-            "next-frontend/src/services/admin-demo-mode-service.ts",
-            "next-frontend/src/components/admin/system-settings/SystemSettingsShell.tsx",
-            "next-frontend/app/(dashboard)/dashboard/admin/system-settings/demo-mode/page.tsx"
-          ],
-          "endpoint": "/admin/demo-mode",
-          "tokens": ["/dashboard/admin/system-settings/demo-mode"]
-        },
-        "mobile": {
-          "sources": [
-            "mobile/src/types/admin-demo-mode.ts",
-            "mobile/src/api/services/admin-demo-mode.ts",
-            "mobile/src/navigation/types.ts",
-            "mobile/src/navigation/AppNavigator.tsx",
-            "mobile/src/screens/AdminDemoModeSettingsScreen.tsx"
-          ],
-          "endpoint": "/admin/demo-mode",
-          "tokens": ["AdminSettingsDemoMode"]
-        }
-      }
-    },
-    {
-      "id": "admin-demo-mode.activate",
-      "fields": [
-        "currentPassword",
-        "confirmation",
-        "reason",
-        "durationMinutes",
-        "expectedVersion",
-        "acknowledgements"
-      ],
-      "layers": {
-        "backend": {
-          "sources": [
-            "backend/src/modules/admin-demo-mode/DTO/admin-demo-mode.dto.ts",
-            "backend/src/modules/admin-demo-mode/admin-demo-mode.controller.ts"
-          ],
-          "endpoint": "activate"
-        },
-        "web": {
-          "sources": [
-            "next-frontend/src/types/admin-demo-mode.ts",
-            "next-frontend/src/services/admin-demo-mode-service.ts",
-            "next-frontend/app/(dashboard)/dashboard/admin/system-settings/demo-mode/page.tsx"
-          ],
-          "endpoint": "/admin/demo-mode/activate"
-        },
-        "mobile": {
-          "sources": [
-            "mobile/src/types/admin-demo-mode.ts",
-            "mobile/src/api/services/admin-demo-mode.ts",
-            "mobile/src/screens/AdminDemoModeSettingsScreen.tsx"
-          ],
-          "endpoint": "/admin/demo-mode/activate"
-        }
-      }
-    },
-    {
-      "id": "admin-demo-mode.deactivate",
-      "fields": ["confirmation", "expectedVersion"],
-      "layers": {
-        "backend": {
-          "sources": [
-            "backend/src/modules/admin-demo-mode/DTO/admin-demo-mode.dto.ts",
-            "backend/src/modules/admin-demo-mode/admin-demo-mode.controller.ts"
-          ],
-          "endpoint": "deactivate"
-        },
-        "web": {
-          "sources": [
-            "next-frontend/src/types/admin-demo-mode.ts",
-            "next-frontend/src/services/admin-demo-mode-service.ts",
-            "next-frontend/app/(dashboard)/dashboard/admin/system-settings/demo-mode/page.tsx"
-          ],
-          "endpoint": "/admin/demo-mode/deactivate"
-        },
-        "mobile": {
-          "sources": [
-            "mobile/src/types/admin-demo-mode.ts",
-            "mobile/src/api/services/admin-demo-mode.ts",
-            "mobile/src/screens/AdminDemoModeSettingsScreen.tsx"
-          ],
-          "endpoint": "/admin/demo-mode/deactivate"
         }
       }
     }

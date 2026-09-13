@@ -16,8 +16,8 @@ import {
 import type { ClassItem } from "@/types/class";
 import type { ClassTemplate } from "@/types/class-template";
 import type { Section } from "@/types/section";
-import { useAdminDemoMode } from "@/providers/AdminDemoModeProvider";
-import { hasAdminDemoModeRule } from "@/types/admin-demo-mode";
+import { useAdminMaintenance } from "@/providers/AdminMaintenanceProvider";
+import { hasAdminMaintenanceRule } from "@/types/admin-maintenance";
 import type { User } from "@/types/user";
 
 const SUBJECTS = [
@@ -161,9 +161,9 @@ export default function ClassForm({
   onValuesChange,
   showGradingProfile = false,
 }: ClassFormProps) {
-  const { status: demoModeStatus } = useAdminDemoMode();
-  const canRelaxScheduleCollisions = hasAdminDemoModeRule(
-    demoModeStatus,
+  const { status: maintenanceStatus } = useAdminMaintenance();
+  const canRelaxScheduleCollisions = hasAdminMaintenanceRule(
+    maintenanceStatus,
     "schedule_collision",
   );
   const [form, setForm] = useState<ClassFormValues>(initialValues);
@@ -347,8 +347,8 @@ export default function ClassForm({
   );
   const selectedTeacherUnavailable = Boolean(
     !canRelaxScheduleCollisions &&
-      form.teacherId &&
-      isTeacherUnavailable(form.teacherId),
+    form.teacherId &&
+    isTeacherUnavailable(form.teacherId),
   );
   const sectionRoomNumber = selectedSection?.roomNumber?.trim() ?? "";
   const sectionHasAssignedRoom = Boolean(sectionRoomNumber);
@@ -760,7 +760,7 @@ export default function ClassForm({
                   {getTeacherDisplayName(teacher)}
                   {unavailable
                     ? canRelaxScheduleCollisions
-                      ? " (conflict allowed in Demo mode)"
+                      ? " (conflict allowed in Maintenance Access)"
                       : " (already assigned in this section)"
                     : ""}
                 </option>
@@ -781,7 +781,7 @@ export default function ClassForm({
                   ? "This teacher already has a class in the selected section."
                   : assignedTeacherIds.size > 0
                     ? canRelaxScheduleCollisions
-                      ? `${assignedTeacherIds.size} teacher conflict${assignedTeacherIds.size === 1 ? " is" : "s are"} selectable while Demo mode is active.`
+                      ? `${assignedTeacherIds.size} teacher conflict${assignedTeacherIds.size === 1 ? " is" : "s are"} selectable while Maintenance Access is active.`
                       : `${assignedTeacherIds.size} teacher${assignedTeacherIds.size === 1 ? " is" : "s are"} already assigned here and disabled.`
                     : "All teachers are available for this section."}
             </p>

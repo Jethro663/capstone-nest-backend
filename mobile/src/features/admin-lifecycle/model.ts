@@ -15,7 +15,9 @@ export function buildExecutionEvidence(input: {
   return {
     manifestHash: input.manifest.manifestHash,
     manifestExpiresAt: input.manifest.expiresAt,
-    currentPassword: input.currentPassword,
+    ...(input.currentPassword
+      ? { currentPassword: input.currentPassword }
+      : {}),
     reasonCode: input.reasonCode,
     notes: input.notes.trim(),
     confirmations: input.confirmations,
@@ -28,6 +30,7 @@ export function canExecuteManifest(input: {
   confirmations: string[];
   notes: string;
   currentPassword: string;
+  passwordRequired?: boolean;
 }) {
   return (
     input.manifest.safeToExecute &&
@@ -35,6 +38,6 @@ export function canExecuteManifest(input: {
       input.confirmations.includes(confirmation),
     ) &&
     input.notes.trim().length >= 5 &&
-    input.currentPassword.length > 0
+    (input.passwordRequired === false || input.currentPassword.length > 0)
   );
 }

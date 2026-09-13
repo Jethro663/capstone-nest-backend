@@ -35,7 +35,7 @@ export function AdminSettingsOverviewScreen({ navigation }: Props) {
       | "AdminSettingsYearTransition"
       | "AdminSettingsLearnerCompletion"
       | "AdminSettingsAuditRecovery"
-      | "AdminSettingsDemoMode"
+      | "AdminSettingsMaintenance"
       | "AdminSettingsResetSchoolData"
       | "AdminStudentReadiness",
   ) => root.navigate(name);
@@ -120,11 +120,11 @@ export function AdminSettingsOverviewScreen({ navigation }: Props) {
         subtitle="Consequential tools for demonstrations and fresh school setup"
       >
         <AdminDataRow
-          title="Demo Mode"
-          subtitle="Start a time-bound, audited evaluator walkthrough window"
+          title="Maintenance Access"
+          subtitle="Open a short, audited academic cleanup window"
           status="Advanced"
           statusTone="red"
-          onPress={() => open("AdminSettingsDemoMode")}
+          onPress={() => open("AdminSettingsMaintenance")}
         />
         <AdminDataRow
           title="Reset school data"

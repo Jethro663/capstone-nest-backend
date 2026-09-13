@@ -4,6 +4,7 @@ import { DatabaseService } from '../../database/database.service';
 import { auditLogs } from '../../drizzle/schema';
 
 type AuditMetadata = Record<string, unknown>;
+type AuditDb = Pick<DatabaseService['db'], 'insert'>;
 
 @Injectable()
 export class AuditService {
@@ -13,14 +14,17 @@ export class AuditService {
     return this.databaseService.db;
   }
 
-  async log(params: {
-    actorId: string;
-    action: string;
-    targetType: string;
-    targetId: string;
-    metadata?: AuditMetadata;
-  }) {
-    const [created] = await this.db
+  async log(
+    params: {
+      actorId: string;
+      action: string;
+      targetType: string;
+      targetId: string;
+      metadata?: AuditMetadata;
+    },
+    db: AuditDb = this.db,
+  ) {
+    const [created] = await db
       .insert(auditLogs)
       .values({
         actorId: params.actorId,
@@ -42,6 +46,7 @@ export class AuditService {
       targetId: string;
       metadata?: AuditMetadata;
     }[],
+    db: AuditDb = this.db,
   ) {
     if (entries.length === 0) return [];
 
@@ -53,7 +58,7 @@ export class AuditService {
       metadata: entry.metadata ?? null,
     }));
 
-    const created = await this.db.insert(auditLogs).values(values).returning();
+    const created = await db.insert(auditLogs).values(values).returning();
     return created;
   }
 

@@ -40,12 +40,12 @@ describe("administrator governed lifecycle API", () => {
 
     expect(apiClient.post).toHaveBeenNthCalledWith(
       1,
-      "/admin/lifecycle/classes/preview",
+      "/admin/maintenance/classes/preview",
       input,
     );
     expect(apiClient.post).toHaveBeenNthCalledWith(
       2,
-      "/admin/lifecycle/classes/execute",
+      "/admin/maintenance/classes/execute",
       { ...input, ...evidence },
     );
   });
@@ -79,21 +79,21 @@ describe("administrator governed lifecycle API", () => {
 
     expect(apiClient.post).toHaveBeenNthCalledWith(
       1,
-      "/admin/lifecycle/students/preview",
+      "/admin/maintenance/students/preview",
       expect.any(Object),
     );
     expect(apiClient.post).toHaveBeenNthCalledWith(
       2,
-      "/admin/lifecycle/sections/preview",
+      "/admin/maintenance/sections/preview",
       expect.any(Object),
     );
     expect(apiClient.post).toHaveBeenNthCalledWith(
       3,
-      "/admin/lifecycle/purge/preview",
+      "/admin/maintenance/purge/preview",
       expect.any(Object),
     );
     expect(apiClient.get).toHaveBeenCalledWith(
-      "/admin/lifecycle/operations/00000000-0000-4000-8000-000000000003",
+      "/admin/maintenance/operations/00000000-0000-4000-8000-000000000003",
     );
   });
 });

@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, School, UserPlus } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { ArrowLeft, School, UserPlus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -12,34 +12,40 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import SectionForm, { type SectionFormValues } from '@/components/admin/SectionForm';
-import { AdminEmptyState, AdminPageShell, AdminSectionCard } from '@/components/admin/AdminPageShell';
-import { AdminLifecycleDialog } from '@/components/admin/AdminLifecycleDialog';
-import { academicStateService } from '@/services/academic-state-service';
-import { adminLifecycleService } from '@/services/admin-lifecycle-service';
-import { sectionService, type RosterStudent } from '@/services/section-service';
-import { userService } from '@/services/user-service';
-import { getCurrentToFutureSchoolYears } from '@/lib/school-year';
-import { getApiErrorMessage } from '@/lib/api-error';
-import { toast } from 'sonner';
-import type { Section } from '@/types/section';
-import type { User } from '@/types/user';
-import type { AcademicPeriodKey } from '@/types/admin-lifecycle';
-import { useAdminDemoMode } from '@/providers/AdminDemoModeProvider';
+} from "@/components/ui/table";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import SectionForm, {
+  type SectionFormValues,
+} from "@/components/admin/SectionForm";
+import {
+  AdminEmptyState,
+  AdminPageShell,
+  AdminSectionCard,
+} from "@/components/admin/AdminPageShell";
+import { AdminLifecycleDialog } from "@/components/admin/AdminLifecycleDialog";
+import { academicStateService } from "@/services/academic-state-service";
+import { adminLifecycleService } from "@/services/admin-lifecycle-service";
+import { sectionService, type RosterStudent } from "@/services/section-service";
+import { userService } from "@/services/user-service";
+import { getCurrentToFutureSchoolYears } from "@/lib/school-year";
+import { getApiErrorMessage } from "@/lib/api-error";
+import { toast } from "sonner";
+import type { Section } from "@/types/section";
+import type { User } from "@/types/user";
+import type { AcademicPeriodKey } from "@/types/admin-lifecycle";
+import { useAdminMaintenance } from "@/providers/AdminMaintenanceProvider";
 
 function getInitials(firstName?: string, lastName?: string) {
-  const firstInitial = firstName?.trim()?.charAt(0) || '';
-  const lastInitial = lastName?.trim()?.charAt(0) || '';
-  return `${firstInitial}${lastInitial}`.toUpperCase() || 'ST';
+  const firstInitial = firstName?.trim()?.charAt(0) || "";
+  const lastInitial = lastName?.trim()?.charAt(0) || "";
+  return `${firstInitial}${lastInitial}`.toUpperCase() || "ST";
 }
 
 export default function EditSectionPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const sectionId = params?.id;
-  const { refresh: refreshDemoMode } = useAdminDemoMode();
+  const { refresh: refreshMaintenance } = useAdminMaintenance();
 
   const [section, setSection] = useState<Section | null>(null);
   const [roster, setRoster] = useState<RosterStudent[]>([]);
@@ -48,9 +54,10 @@ export default function EditSectionPage() {
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [lifecycleStudent, setLifecycleStudent] = useState<RosterStudent | null>(null);
-  const [destinationSectionId, setDestinationSectionId] = useState('');
-  const [activePeriod, setActivePeriod] = useState<AcademicPeriodKey>('Q1');
+  const [lifecycleStudent, setLifecycleStudent] =
+    useState<RosterStudent | null>(null);
+  const [destinationSectionId, setDestinationSectionId] = useState("");
+  const [activePeriod, setActivePeriod] = useState<AcademicPeriodKey>("Q1");
 
   const schoolYears = useMemo(() => getCurrentToFutureSchoolYears(4), []);
   const availableSchoolYears = useMemo(() => {
@@ -63,12 +70,12 @@ export default function EditSectionPage() {
 
   const initialValues = useMemo<SectionFormValues>(() => {
     return {
-      name: section?.name || '',
-      gradeLevel: (section?.gradeLevel as '7' | '8' | '9' | '10') || '7',
-      schoolYear: section?.schoolYear || schoolYears[0] || '',
+      name: section?.name || "",
+      gradeLevel: (section?.gradeLevel as "7" | "8" | "9" | "10") || "7",
+      schoolYear: section?.schoolYear || schoolYears[0] || "",
       capacity: section?.capacity || 40,
-      roomNumber: section?.roomNumber || '',
-      adviserId: section?.adviserId || '',
+      roomNumber: section?.roomNumber || "",
+      adviserId: section?.adviserId || "",
     };
   }, [schoolYears, section]);
 
@@ -77,10 +84,16 @@ export default function EditSectionPage() {
 
     try {
       setLoading(true);
-      const [sectionRes, rosterRes, teachersRes, sectionsRes, academicStateRes] = await Promise.all([
+      const [
+        sectionRes,
+        rosterRes,
+        teachersRes,
+        sectionsRes,
+        academicStateRes,
+      ] = await Promise.all([
         sectionService.getById(sectionId),
         sectionService.getRoster(sectionId),
-        userService.getAll({ role: 'teacher', limit: 200 }),
+        userService.getAll({ role: "teacher", limit: 200 }),
         sectionService.getAll({ limit: 100 }),
         academicStateService.getCurrent(),
       ]);
@@ -92,8 +105,8 @@ export default function EditSectionPage() {
       setActivePeriod(academicStateRes.data.quarter as AcademicPeriodKey);
       setSelectedStudentIds([]);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to load section details'));
-      router.push('/dashboard/admin/sections');
+      toast.error(getApiErrorMessage(error, "Failed to load section details"));
+      router.push("/dashboard/admin/sections");
     } finally {
       setLoading(false);
     }
@@ -143,11 +156,11 @@ export default function EditSectionPage() {
         roomNumber: values.roomNumber || undefined,
         adviserId: values.adviserId || undefined,
       });
-      toast.success('Section updated');
+      toast.success("Section updated");
       fetchData();
     } catch (error) {
-      await refreshDemoMode();
-      toast.error(getApiErrorMessage(error, 'Failed to update section'));
+      await refreshMaintenance();
+      toast.error(getApiErrorMessage(error, "Failed to update section"));
     } finally {
       setSaving(false);
     }
@@ -174,7 +187,7 @@ export default function EditSectionPage() {
     if (!sectionId || selectedStudentIds.length === 0) return;
     const next = roster.find((student) => student.id === selectedStudentIds[0]);
     if (!next) return;
-    setDestinationSectionId('');
+    setDestinationSectionId("");
     setLifecycleStudent(next);
     toast.info(
       `${selectedStudentIds.length} selected. Review begins with ${next.firstName} ${next.lastName}; failed or unreviewed learners stay selected.`,
@@ -202,26 +215,28 @@ export default function EditSectionPage() {
       description="Update section settings and manage the roster from a tighter admin workspace."
       icon={School}
       variant="compact-form"
-      actions={(
+      actions={
         <>
           <Button
             variant="outline"
             className="admin-button-outline rounded-xl font-black"
-            onClick={() => router.push('/dashboard/admin/sections')}
+            onClick={() => router.push("/dashboard/admin/sections")}
           >
             <ArrowLeft className="h-4 w-4" />
             Back to Sections
           </Button>
           <Button
             className="admin-button-solid rounded-xl font-black"
-            onClick={() => router.push(`/dashboard/admin/sections/${sectionId}/students/add`)}
+            onClick={() =>
+              router.push(`/dashboard/admin/sections/${sectionId}/students/add`)
+            }
           >
             <UserPlus className="h-4 w-4" />
             Add Students
           </Button>
         </>
-      )}
-      meta={(
+      }
+      meta={
         <>
           <div className="admin-compact-meta__item">
             <span className="admin-compact-meta__label">Grade Level</span>
@@ -229,7 +244,7 @@ export default function EditSectionPage() {
           </div>
           <div className="admin-compact-meta__item">
             <span className="admin-compact-meta__label">Enrolled</span>
-            {roster.length} / {section.capacity || '-'}
+            {roster.length} / {section.capacity || "-"}
           </div>
           <div className="admin-compact-meta__item">
             <span className="admin-compact-meta__label">Selected</span>
@@ -237,10 +252,10 @@ export default function EditSectionPage() {
           </div>
           <div className="admin-compact-meta__item">
             <span className="admin-compact-meta__label">School Year</span>
-            {section.schoolYear || '-'}
+            {section.schoolYear || "-"}
           </div>
         </>
-      )}
+      }
     >
       <AdminSectionCard
         title="Section Information"
@@ -256,7 +271,7 @@ export default function EditSectionPage() {
           saving={saving}
           submitLabel="Save Changes"
           onSubmit={handleSave}
-          onCancel={() => router.push('/dashboard/admin/sections')}
+          onCancel={() => router.push("/dashboard/admin/sections")}
         />
       </AdminSectionCard>
 
@@ -264,10 +279,17 @@ export default function EditSectionPage() {
         title={`Students (${roster.length})`}
         description="Resolve selected learner memberships one at a time so failures remain selected and completed work cannot be duplicated."
         density="compact"
-        action={(
+        action={
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" size="sm" className="admin-button-outline rounded-xl font-black" onClick={handleToggleAll}>
-              {selectedStudentIds.length === roster.length ? 'Clear Selection' : 'Select All'}
+            <Button
+              variant="outline"
+              size="sm"
+              className="admin-button-outline rounded-xl font-black"
+              onClick={handleToggleAll}
+            >
+              {selectedStudentIds.length === roster.length
+                ? "Clear Selection"
+                : "Select All"}
             </Button>
             <Button
               variant="outline"
@@ -279,21 +301,25 @@ export default function EditSectionPage() {
               Resolve Selected ({selectedStudentIds.length})
             </Button>
           </div>
-        )}
+        }
       >
         {roster.length === 0 ? (
           <AdminEmptyState
             title="No students enrolled yet"
             description="This section is ready, but no roster entries have been assigned yet. Add students when you are ready to populate the class."
-            action={(
+            action={
               <Button
                 className="admin-button-solid rounded-xl font-black"
-                onClick={() => router.push(`/dashboard/admin/sections/${sectionId}/students/add`)}
+                onClick={() =>
+                  router.push(
+                    `/dashboard/admin/sections/${sectionId}/students/add`,
+                  )
+                }
               >
                 <UserPlus className="h-4 w-4" />
                 Add Students
               </Button>
-            )}
+            }
           />
         ) : (
           <div className="admin-table-shell">
@@ -309,7 +335,10 @@ export default function EditSectionPage() {
               </TableHeader>
               <TableBody>
                 {roster.map((student) => (
-                  <TableRow key={student.id} className="transition-colors duration-200 hover:bg-emerald-50/45">
+                  <TableRow
+                    key={student.id}
+                    className="transition-colors duration-200 hover:bg-emerald-50/45"
+                  >
                     <TableCell>
                       <input
                         type="checkbox"
@@ -321,24 +350,38 @@ export default function EditSectionPage() {
                     <TableCell>
                       <button
                         type="button"
-                        onClick={() => router.push(`/dashboard/admin/users/${student.id}`)}
+                        onClick={() =>
+                          router.push(`/dashboard/admin/users/${student.id}`)
+                        }
                         className="flex items-center gap-3 rounded-xl px-1 py-1 text-left transition-colors hover:bg-emerald-50/70"
                       >
                         <Avatar className="h-9 w-9 border border-white/70 shadow-sm">
                           <AvatarImage
-                            src={(student as User).profilePicture as string | undefined}
-                            alt={`${student.firstName || ''} ${student.lastName || ''}`.trim()}
+                            src={
+                              (student as User).profilePicture as
+                                | string
+                                | undefined
+                            }
+                            alt={`${student.firstName || ""} ${student.lastName || ""}`.trim()}
                           />
-                          <AvatarFallback>{getInitials(student.firstName, student.lastName)}</AvatarFallback>
+                          <AvatarFallback>
+                            {getInitials(student.firstName, student.lastName)}
+                          </AvatarFallback>
                         </Avatar>
                         <span className="font-semibold text-[var(--admin-text-strong)]">
                           {student.firstName} {student.lastName}
                         </span>
                       </button>
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{student.email || 'N/A'}</TableCell>
-                    <TableCell className="text-muted-foreground">{student.gradeLevel || 'N/A'}</TableCell>
-                    <TableCell className="text-muted-foreground">{student.lrn || 'N/A'}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {student.email || "N/A"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {student.gradeLevel || "N/A"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {student.lrn || "N/A"}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -356,27 +399,32 @@ export default function EditSectionPage() {
           targetLabel={`${lifecycleStudent.firstName} ${lifecycleStudent.lastName}`}
           intents={[
             {
-              value: 'CORRECT_ENROLLMENT',
-              label: 'Correct erroneous enrollment',
-              description: 'Close a mistaken membership and retain the correction event.',
+              value: "CORRECT_ENROLLMENT",
+              label: "Correct erroneous enrollment",
+              description:
+                "Close a mistaken membership and retain the correction event.",
             },
             {
-              value: 'WITHDRAW',
-              label: 'Withdraw from school',
-              description: 'Close current memberships while preserving submitted academic work.',
+              value: "WITHDRAW",
+              label: "Withdraw from school",
+              description:
+                "Close current memberships while preserving submitted academic work.",
             },
             {
-              value: 'TRANSFER_SECTION',
-              label: 'Transfer to another section',
-              description: 'Create compatible destination memberships before closing the source.',
+              value: "TRANSFER_SECTION",
+              label: "Transfer to another section",
+              description:
+                "Create compatible destination memberships before closing the source.",
             },
           ]}
           renderIntentFields={(intent) =>
-            intent === 'TRANSFER_SECTION' ? (
+            intent === "TRANSFER_SECTION" ? (
               <select
                 aria-label="Destination section"
                 value={destinationSectionId}
-                onChange={(event) => setDestinationSectionId(event.target.value)}
+                onChange={(event) =>
+                  setDestinationSectionId(event.target.value)
+                }
                 className="admin-select mt-3 w-full"
               >
                 <option value="">Choose destination section</option>
@@ -397,16 +445,21 @@ export default function EditSectionPage() {
             ) : null
           }
           canPreview={(intent) =>
-            intent !== 'TRANSFER_SECTION' || Boolean(destinationSectionId)
+            intent !== "TRANSFER_SECTION" || Boolean(destinationSectionId)
           }
           preview={async (intent) =>
             (
               await adminLifecycleService.previewStudent({
                 studentId: lifecycleStudent.id,
                 sectionId,
-                resolution: intent as 'CORRECT_ENROLLMENT' | 'WITHDRAW' | 'TRANSFER_SECTION',
+                resolution: intent as
+                  | "CORRECT_ENROLLMENT"
+                  | "WITHDRAW"
+                  | "TRANSFER_SECTION",
                 destinationSectionId:
-                  intent === 'TRANSFER_SECTION' ? destinationSectionId : undefined,
+                  intent === "TRANSFER_SECTION"
+                    ? destinationSectionId
+                    : undefined,
                 effectivePeriod: activePeriod,
               })
             ).data
@@ -416,9 +469,14 @@ export default function EditSectionPage() {
               await adminLifecycleService.executeStudent({
                 studentId: lifecycleStudent.id,
                 sectionId,
-                resolution: intent as 'CORRECT_ENROLLMENT' | 'WITHDRAW' | 'TRANSFER_SECTION',
+                resolution: intent as
+                  | "CORRECT_ENROLLMENT"
+                  | "WITHDRAW"
+                  | "TRANSFER_SECTION",
                 destinationSectionId:
-                  intent === 'TRANSFER_SECTION' ? destinationSectionId : undefined,
+                  intent === "TRANSFER_SECTION"
+                    ? destinationSectionId
+                    : undefined,
                 effectivePeriod: activePeriod,
                 ...evidence,
               })

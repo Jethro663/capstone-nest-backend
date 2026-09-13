@@ -1,17 +1,25 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { eq, inArray, or } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import {
   assessmentAttempts,
   assessments,
+  archivedUsers,
   classes,
+  classRecordFinalGrades,
   classRecordItems,
+  classRecordParticipants,
   classRecords,
   classRecordScores,
   enrollmentLifecycleEvents,
   enrollments,
   lessons,
   sections,
+  users,
 } from '../../drizzle/schema';
 import type { PreviewPurgeLifecycleDto } from './DTO/admin-lifecycle.dto';
 import {
@@ -30,7 +38,7 @@ import type { LifecycleExecutionContext } from './student-lifecycle.service';
 type LifecycleDb = DatabaseService['db'];
 
 export interface PurgeLifecycleSnapshot {
-  targetType: 'CLASS' | 'SECTION';
+  targetType: 'CLASS' | 'SECTION' | 'USER';
   targetId: string;
   targetName: string;
   isActive: boolean;
@@ -63,7 +71,7 @@ export function planPurgeLifecycle(
   if (snapshot.isActive) {
     blockers.push({
       code: 'TARGET_NOT_ARCHIVED',
-      message: `${snapshot.targetType === 'CLASS' ? 'Class' : 'Section'} must be archived before permanent deletion.`,
+      message: `${snapshot.targetType === 'CLASS' ? 'Class' : snapshot.targetType === 'SECTION' ? 'Section' : 'Account'} must be archived before permanent deletion.`,
       resolvable: false,
     });
   }
@@ -183,6 +191,88 @@ export async function collectPurgeLifecycleSnapshot(
     };
   }
 
+  if (dto.targetType === 'USER') {
+    const target = await db.query.users.findFirst({
+      where: eq(users.id, dto.targetId),
+      columns: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        status: true,
+        updatedAt: true,
+      },
+    });
+    if (!target) throw new NotFoundException('User not found');
+    const enrollmentRows = await db.query.enrollments.findMany({
+      where: eq(enrollments.studentId, target.id),
+      columns: { id: true },
+    });
+    const eventRows = await db.query.enrollmentLifecycleEvents.findMany({
+      where: eq(enrollmentLifecycleEvents.studentId, target.id),
+      columns: { id: true },
+    });
+    const participantRows = await db.query.classRecordParticipants.findMany({
+      where: eq(classRecordParticipants.studentId, target.id),
+      columns: { id: true, classRecordId: true },
+    });
+    const participantRecordIds = [
+      ...new Set(participantRows.map((entry) => entry.classRecordId)),
+    ];
+    const participantRecords = participantRecordIds.length
+      ? await db.query.classRecords.findMany({
+          where: inArray(classRecords.id, participantRecordIds),
+          columns: { id: true, status: true },
+        })
+      : [];
+    const recordStatus = new Map(
+      participantRecords.map((entry) => [entry.id, entry.status]),
+    );
+    const scoreRows = await db.query.classRecordScores.findMany({
+      where: eq(classRecordScores.studentId, target.id),
+      columns: { id: true },
+    });
+    const finalGradeRows = await db.query.classRecordFinalGrades.findMany({
+      where: eq(classRecordFinalGrades.studentId, target.id),
+      columns: { id: true },
+    });
+    const attemptRows = await db.query.assessmentAttempts.findMany({
+      where: eq(assessmentAttempts.studentId, target.id),
+      columns: { id: true },
+    });
+    const taughtClasses = await db.query.classes.findMany({
+      where: eq(classes.teacherId, target.id),
+      columns: { id: true },
+    });
+    const taughtRecords = await db.query.classRecords.findMany({
+      where: eq(classRecords.teacherId, target.id),
+      columns: { id: true },
+    });
+    return {
+      targetType: dto.targetType,
+      targetId: target.id,
+      targetName:
+        `${target.firstName} ${target.lastName}`.trim() || target.email,
+      isActive: target.status !== 'DELETED',
+      version: target.updatedAt.toISOString(),
+      evidence: {
+        enrollmentHistory: enrollmentRows.length,
+        lifecycleEvents: eventRows.length,
+        classRecords: taughtRecords.length,
+        draftParticipants: participantRows.filter(
+          (entry) => recordStatus.get(entry.classRecordId) === 'draft',
+        ).length,
+        finalizedParticipants:
+          participantRows.filter(
+            (entry) => recordStatus.get(entry.classRecordId) !== 'draft',
+          ).length + finalGradeRows.length,
+        scores: scoreRows.length,
+        attempts: attemptRows.length,
+        linkedClasses: taughtClasses.length,
+      },
+    };
+  }
+
   const target = await db.query.sections.findFirst({
     where: eq(sections.id, dto.targetId),
     columns: {
@@ -249,7 +339,12 @@ export class PurgeLifecycleService {
     const snapshot = await collectPurgeLifecycleSnapshot(db, dto);
     const plan = planPurgeLifecycle(snapshot);
     const manifest = buildAdminLifecycleManifest({
-      action: dto.targetType === 'CLASS' ? 'PURGE_CLASS' : 'PURGE_SECTION',
+      action:
+        dto.targetType === 'CLASS'
+          ? 'PURGE_CLASS'
+          : dto.targetType === 'SECTION'
+            ? 'PURGE_SECTION'
+            : 'PURGE_USER',
       targetType: dto.targetType.toLowerCase(),
       targetId: dto.targetId,
       request: { ...dto },
@@ -278,9 +373,26 @@ export class PurgeLifecycleService {
   async apply(
     dto: PreviewPurgeLifecycleDto,
     prepared: PurgeLifecyclePrepared,
-    _context: LifecycleExecutionContext,
+    context: LifecycleExecutionContext,
   ) {
-    if (dto.targetType === 'CLASS') {
+    if (dto.targetType === 'USER') {
+      if (dto.targetId === context.actorId) {
+        throw new ForbiddenException('You cannot purge your own account');
+      }
+      await this.db
+        .update(archivedUsers)
+        .set({ purgedAt: new Date() })
+        .where(eq(archivedUsers.originalUserId, dto.targetId));
+      await this.db
+        .update(classes)
+        .set({ teacherId: null, updatedAt: new Date() })
+        .where(eq(classes.teacherId, dto.targetId));
+      await this.db
+        .update(classRecords)
+        .set({ teacherId: null, updatedAt: new Date() })
+        .where(eq(classRecords.teacherId, dto.targetId));
+      await this.db.delete(users).where(eq(users.id, dto.targetId));
+    } else if (dto.targetType === 'CLASS') {
       await this.db.delete(classes).where(eq(classes.id, dto.targetId));
     } else {
       await this.db.delete(sections).where(eq(sections.id, dto.targetId));

@@ -145,4 +145,49 @@ describe('section lifecycle planning', () => {
       expect.objectContaining({ code: 'DESTINATION_GROUP_EXCEEDS_CAPACITY' }),
     );
   });
+
+  it('turns grouped capacity excess into an acknowledged Maintenance warning', () => {
+    const secondStudent = '00000000-0000-4000-8000-000000000205';
+    const destination = '00000000-0000-4000-8000-000000000204';
+    const emptyPlan = {
+      blockers: [],
+      warnings: [],
+      effects: [],
+      preserved: [],
+      requiredConfirmations: [],
+      affectedUserIds: [],
+    };
+    const result = planSectionLifecycle(
+      snapshot({
+        activeStudentIds: [studentId, secondStudent],
+        learnerPlans: {
+          [studentId]: emptyPlan,
+          [secondStudent]: emptyPlan,
+        },
+        destinationCapacity: {
+          [destination]: { currentStudents: 39, capacity: 40 },
+        },
+      }),
+      {
+        sectionId,
+        effectivePeriod: 'Q3',
+        studentResolutions: [studentId, secondStudent].map((id) => ({
+          studentId: id,
+          resolution: 'TRANSFER_SECTION' as const,
+          destinationSectionId: destination,
+        })),
+      },
+      { allowSectionCapacityOverride: true },
+    );
+
+    expect(result.blockers).not.toContainEqual(
+      expect.objectContaining({ code: 'DESTINATION_GROUP_EXCEEDS_CAPACITY' }),
+    );
+    expect(result.warnings).toContainEqual(
+      expect.objectContaining({ code: 'SECTION_CAPACITY' }),
+    );
+    expect(result.requiredConfirmations).toContain(
+      'ACKNOWLEDGE_SECTION_CAPACITY',
+    );
+  });
 });

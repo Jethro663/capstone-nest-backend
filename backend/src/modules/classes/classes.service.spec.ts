@@ -10,7 +10,7 @@ import { DatabaseService } from '../../database/database.service';
 import { AuditService } from '../audit/audit.service';
 import { ClassRecordService } from '../class-record/class-record.service';
 import { AcademicStateService } from '../academic-state/academic-state.service';
-import { AdminDemoModeService } from '../admin-demo-mode/admin-demo-mode.service';
+import { AdminMaintenanceService } from '../admin-maintenance/admin-maintenance.service';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -172,11 +172,11 @@ describe('ClassesService', () => {
     allows: jest.fn().mockReturnValue(false),
     audit: jest.fn().mockReturnValue(undefined),
   };
-  const mockAdminDemoModeService = { resolveForActor: jest.fn() };
+  const mockAdminMaintenanceService = { resolveForActor: jest.fn() };
 
   beforeEach(async () => {
     jest.resetAllMocks();
-    mockAdminDemoModeService.resolveForActor.mockResolvedValue(
+    mockAdminMaintenanceService.resolveForActor.mockResolvedValue(
       inactiveDemoContext,
     );
     mockDb.transaction.mockImplementation(
@@ -237,8 +237,8 @@ describe('ClassesService', () => {
         { provide: ClassRecordService, useValue: mockClassRecordService },
         { provide: AcademicStateService, useValue: mockAcademicStateService },
         {
-          provide: AdminDemoModeService,
-          useValue: mockAdminDemoModeService,
+          provide: AdminMaintenanceService,
+          useValue: mockAdminMaintenanceService,
         },
       ],
     }).compile();
@@ -924,17 +924,17 @@ describe('ClassesService', () => {
     });
 
     it('allows an otherwise valid collision for an active Demo administrator and audits the bypass', async () => {
-      const demoMode = {
-        demoModeVersion: 2,
-        demoModeExpiresAt: '2026-09-12T04:30:00.000Z',
+      const maintenanceAccess = {
+        maintenanceAccessVersion: 2,
+        maintenanceAccessExpiresAt: '2026-09-12T04:30:00.000Z',
         bypassedRules: ['schedule_collision'],
       };
-      mockAdminDemoModeService.resolveForActor.mockResolvedValue({
+      mockAdminMaintenanceService.resolveForActor.mockResolvedValue({
         active: true,
         version: 2,
         expiresAt: new Date('2026-09-12T04:30:00.000Z'),
         allows: jest.fn((rule) => rule === 'schedule_collision'),
-        audit: jest.fn().mockReturnValue(demoMode),
+        audit: jest.fn().mockReturnValue(maintenanceAccess),
       });
       mockDb.query.sections.findFirst.mockResolvedValue({
         id: SECTION_ID,
@@ -968,13 +968,13 @@ describe('ClassesService', () => {
 
       expect(mockAuditService.log).toHaveBeenCalledWith(
         expect.objectContaining({
-          metadata: expect.objectContaining({ demoMode }),
+          metadata: expect.objectContaining({ maintenanceAccess }),
         }),
       );
     });
 
-    it('keeps invalid time shape rejected under active Demo mode', async () => {
-      mockAdminDemoModeService.resolveForActor.mockResolvedValue({
+    it('keeps invalid time shape rejected under active Maintenance Access', async () => {
+      mockAdminMaintenanceService.resolveForActor.mockResolvedValue({
         ...inactiveDemoContext,
         active: true,
         allows: jest.fn().mockReturnValue(true),
@@ -1656,17 +1656,17 @@ describe('ClassesService', () => {
     });
 
     it('allows historical class enrollment for an active Demo administrator while retaining student checks', async () => {
-      const demoMode = {
-        demoModeVersion: 3,
-        demoModeExpiresAt: '2026-09-12T04:30:00.000Z',
+      const maintenanceAccess = {
+        maintenanceAccessVersion: 3,
+        maintenanceAccessExpiresAt: '2026-09-12T04:30:00.000Z',
         bypassedRules: ['class_membership_window'],
       };
-      mockAdminDemoModeService.resolveForActor.mockResolvedValue({
+      mockAdminMaintenanceService.resolveForActor.mockResolvedValue({
         active: true,
         version: 3,
         expiresAt: new Date('2026-09-12T04:30:00.000Z'),
         allows: jest.fn((rule) => rule === 'class_membership_window'),
-        audit: jest.fn().mockReturnValue(demoMode),
+        audit: jest.fn().mockReturnValue(maintenanceAccess),
       });
       const txMock: any = {
         query: { enrollments: { findFirst: jest.fn() } },
@@ -1693,7 +1693,7 @@ describe('ClassesService', () => {
 
       expect(mockAuditService.log).toHaveBeenCalledWith(
         expect.objectContaining({
-          metadata: expect.objectContaining({ demoMode }),
+          metadata: expect.objectContaining({ maintenanceAccess }),
         }),
       );
     });
@@ -2319,17 +2319,17 @@ describe('ClassesService', () => {
     });
 
     it('restores only the archived class shell for an active Demo administrator', async () => {
-      const demoMode = {
-        demoModeVersion: 4,
-        demoModeExpiresAt: '2026-09-12T04:30:00.000Z',
+      const maintenanceAccess = {
+        maintenanceAccessVersion: 4,
+        maintenanceAccessExpiresAt: '2026-09-12T04:30:00.000Z',
         bypassedRules: ['restore_archived_class'],
       };
-      mockAdminDemoModeService.resolveForActor.mockResolvedValue({
+      mockAdminMaintenanceService.resolveForActor.mockResolvedValue({
         active: true,
         version: 4,
         expiresAt: new Date('2026-09-12T04:30:00.000Z'),
         allows: jest.fn((rule) => rule === 'restore_archived_class'),
-        audit: jest.fn().mockReturnValue(demoMode),
+        audit: jest.fn().mockReturnValue(maintenanceAccess),
       });
       mockDb.query.classes.findFirst
         .mockResolvedValueOnce(makeClass({ isActive: false }))
@@ -2347,23 +2347,23 @@ describe('ClassesService', () => {
       );
       expect(mockAuditService.log).toHaveBeenCalledWith(
         expect.objectContaining({
-          metadata: expect.objectContaining({ demoMode }),
+          metadata: expect.objectContaining({ maintenanceAccess }),
         }),
       );
     });
 
     it('archives active memberships through the existing transaction for an active Demo administrator', async () => {
-      const demoMode = {
-        demoModeVersion: 4,
-        demoModeExpiresAt: '2026-09-12T04:30:00.000Z',
+      const maintenanceAccess = {
+        maintenanceAccessVersion: 4,
+        maintenanceAccessExpiresAt: '2026-09-12T04:30:00.000Z',
         bypassedRules: ['archive_active_memberships'],
       };
-      mockAdminDemoModeService.resolveForActor.mockResolvedValue({
+      mockAdminMaintenanceService.resolveForActor.mockResolvedValue({
         active: true,
         version: 4,
         expiresAt: new Date('2026-09-12T04:30:00.000Z'),
         allows: jest.fn((rule) => rule === 'archive_active_memberships'),
-        audit: jest.fn().mockReturnValue(demoMode),
+        audit: jest.fn().mockReturnValue(maintenanceAccess),
       });
       mockDb.query.classes.findFirst
         .mockResolvedValueOnce(makeClass({ isActive: true }))
@@ -2381,7 +2381,7 @@ describe('ClassesService', () => {
       );
       expect(mockAuditService.log).toHaveBeenCalledWith(
         expect.objectContaining({
-          metadata: expect.objectContaining({ demoMode }),
+          metadata: expect.objectContaining({ maintenanceAccess }),
         }),
       );
     });

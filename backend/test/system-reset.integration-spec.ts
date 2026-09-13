@@ -354,6 +354,10 @@ describe('system reset real PostgreSQL write barrier', () => {
         [record, cls, admin],
       );
       await client.query(
+        "INSERT INTO class_record_final_grades (gradebook_id,student_id,revision,final_percentage,remarks) VALUES ($1,$2,3,89.125,'Passed')",
+        [record, student],
+      );
+      await client.query(
         "INSERT INTO academic_legacy_grade_evidence (id,source_final_grade_id,class_record_id,student_id,school_year,period,source_snapshot) VALUES ($1,$2,$3,$4,'2026-2027','Q1',$5)",
         [
           legacy,
@@ -393,6 +397,17 @@ describe('system reset real PostgreSQL write barrier', () => {
         'INSERT INTO admin_demo_mode_states (id,enabled) VALUES ($1,true)',
         [randomUUID()],
       );
+      await client.query(
+        "INSERT INTO admin_maintenance_sessions (actor_user_id,actor_session_version,status,scope_codes,reason,expires_at) VALUES ($1,0,'ACTIVE',$2,'Disposable reset fixture',now()+interval '15 minutes')",
+        [
+          admin,
+          JSON.stringify([
+            'ACADEMIC_STRUCTURE',
+            'ROSTER',
+            'ACCOUNT_LIFECYCLE',
+          ]),
+        ],
+      );
       const policy = {
         ...getDefaultAcademicPolicy('2026-2027'),
         passingGrade: 80,
@@ -427,6 +442,8 @@ describe('system reset real PostgreSQL write barrier', () => {
         await client.query('SELECT count(*) FROM _applied_migrations')
       ).rows[0].count;
       const inventory = await inspectResetDatabase(client);
+      expect(inventory.counts.class_record_final_grades).toBe(1);
+      expect(inventory.counts.admin_maintenance_sessions).toBe(1);
       await client.query(
         "INSERT INTO system_reset_operations (id,idempotency_key,actor_id,actor_email,environment,school_year,period,reason,request_hash,manifest) VALUES ($1,$2,$3,'retained@example.invalid','disposable-test','2026-2027','Q2','Integration rehearsal','test-hash','{}')",
         [resetId, randomUUID(), admin],
@@ -480,6 +497,8 @@ describe('system reset real PostgreSQL write barrier', () => {
       expect(verified.counts.content_chunk_embeddings).toBe(0);
       expect(verified.counts.refresh_tokens).toBe(0);
       expect(verified.counts.admin_demo_mode_states).toBe(0);
+      expect(verified.counts.admin_maintenance_sessions).toBe(0);
+      expect(verified.counts.class_record_final_grades).toBe(0);
       expect(
         (await client.query('SELECT id,password,session_version FROM users'))
           .rows,

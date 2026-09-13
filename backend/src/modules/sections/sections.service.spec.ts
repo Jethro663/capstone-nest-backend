@@ -11,7 +11,7 @@ import { SectionsService } from './sections.service';
 import { DatabaseService } from '../../database/database.service';
 import { AuditService } from '../audit/audit.service';
 import { ClassRecordService } from '../class-record/class-record.service';
-import { AdminDemoModeService } from '../admin-demo-mode/admin-demo-mode.service';
+import { AdminMaintenanceService } from '../admin-maintenance/admin-maintenance.service';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -146,7 +146,7 @@ describe('SectionsService', () => {
     allows: jest.fn().mockReturnValue(false),
     audit: jest.fn().mockReturnValue(undefined),
   };
-  const mockAdminDemoModeService = { resolveForActor: jest.fn() };
+  const mockAdminMaintenanceService = { resolveForActor: jest.fn() };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -164,7 +164,7 @@ describe('SectionsService', () => {
     mockDb.delete.mockReset();
     mockDb.transaction.mockReset();
     mockAuditService.log.mockResolvedValue(undefined);
-    mockAdminDemoModeService.resolveForActor.mockResolvedValue(
+    mockAdminMaintenanceService.resolveForActor.mockResolvedValue(
       inactiveDemoContext,
     );
 
@@ -175,8 +175,8 @@ describe('SectionsService', () => {
         { provide: AuditService, useValue: mockAuditService },
         { provide: ClassRecordService, useValue: mockClassRecordService },
         {
-          provide: AdminDemoModeService,
-          useValue: mockAdminDemoModeService,
+          provide: AdminMaintenanceService,
+          useValue: mockAdminMaintenanceService,
         },
         {
           provide: AcademicTransitionReadinessService,
@@ -554,19 +554,19 @@ describe('SectionsService', () => {
     });
 
     it('allows historical overbooking only for an active Demo administrator and retains student validation', async () => {
-      const demoMode = {
-        demoModeVersion: 6,
-        demoModeExpiresAt: '2026-09-12T04:30:00.000Z',
+      const maintenanceAccess = {
+        maintenanceAccessVersion: 6,
+        maintenanceAccessExpiresAt: '2026-09-12T04:30:00.000Z',
         bypassedRules: ['section_membership_window', 'section_capacity'],
       };
-      mockAdminDemoModeService.resolveForActor.mockResolvedValue({
+      mockAdminMaintenanceService.resolveForActor.mockResolvedValue({
         active: true,
         version: 6,
         expiresAt: new Date('2026-09-12T04:30:00.000Z'),
         allows: jest.fn((rule) =>
           ['section_membership_window', 'section_capacity'].includes(rule),
         ),
-        audit: jest.fn().mockReturnValue(demoMode),
+        audit: jest.fn().mockReturnValue(maintenanceAccess),
       });
       mockDb.query.sections.findFirst.mockResolvedValue(
         makeSection({
@@ -603,7 +603,7 @@ describe('SectionsService', () => {
       ).resolves.toMatchObject({ createdCount: 2 });
       expect(mockAuditService.log).toHaveBeenCalledWith(
         expect.objectContaining({
-          metadata: expect.objectContaining({ demoMode }),
+          metadata: expect.objectContaining({ maintenanceAccess }),
         }),
       );
     });
@@ -738,17 +738,17 @@ describe('SectionsService', () => {
     });
 
     it('removes a section-only membership from a historical section for an active Demo administrator', async () => {
-      const demoMode = {
-        demoModeVersion: 6,
-        demoModeExpiresAt: '2026-09-12T04:30:00.000Z',
+      const maintenanceAccess = {
+        maintenanceAccessVersion: 6,
+        maintenanceAccessExpiresAt: '2026-09-12T04:30:00.000Z',
         bypassedRules: ['section_membership_window'],
       };
-      mockAdminDemoModeService.resolveForActor.mockResolvedValue({
+      mockAdminMaintenanceService.resolveForActor.mockResolvedValue({
         active: true,
         version: 6,
         expiresAt: new Date('2026-09-12T04:30:00.000Z'),
         allows: jest.fn((rule) => rule === 'section_membership_window'),
-        audit: jest.fn().mockReturnValue(demoMode),
+        audit: jest.fn().mockReturnValue(maintenanceAccess),
       });
       mockDb.query.sections.findFirst.mockResolvedValue(
         makeSection({ isActive: false, schoolYear: '2025-2026' }),
@@ -761,7 +761,7 @@ describe('SectionsService', () => {
       ).resolves.toEqual({ removed: true });
       expect(mockAuditService.log).toHaveBeenCalledWith(
         expect.objectContaining({
-          metadata: expect.objectContaining({ demoMode }),
+          metadata: expect.objectContaining({ maintenanceAccess }),
         }),
       );
     });
@@ -947,17 +947,17 @@ describe('SectionsService', () => {
     });
 
     it('allows reused adviser and room only for an active Demo administrator and audits the bypass', async () => {
-      const demoMode = {
-        demoModeVersion: 7,
-        demoModeExpiresAt: '2026-09-12T04:30:00.000Z',
+      const maintenanceAccess = {
+        maintenanceAccessVersion: 7,
+        maintenanceAccessExpiresAt: '2026-09-12T04:30:00.000Z',
         bypassedRules: ['room_adviser_exclusivity'],
       };
-      mockAdminDemoModeService.resolveForActor.mockResolvedValue({
+      mockAdminMaintenanceService.resolveForActor.mockResolvedValue({
         active: true,
         version: 7,
         expiresAt: new Date('2026-09-12T04:30:00.000Z'),
         allows: jest.fn((rule) => rule === 'room_adviser_exclusivity'),
-        audit: jest.fn().mockReturnValue(demoMode),
+        audit: jest.fn().mockReturnValue(maintenanceAccess),
       });
       mockDb.query.sections.findFirst
         .mockResolvedValueOnce(null)
@@ -980,7 +980,7 @@ describe('SectionsService', () => {
 
       expect(mockAuditService.log).toHaveBeenCalledWith(
         expect.objectContaining({
-          metadata: expect.objectContaining({ demoMode }),
+          metadata: expect.objectContaining({ maintenanceAccess }),
         }),
       );
     });
@@ -1107,17 +1107,17 @@ describe('SectionsService', () => {
     });
 
     it('allows capacity below current headcount only for an active Demo administrator', async () => {
-      const demoMode = {
-        demoModeVersion: 8,
-        demoModeExpiresAt: '2026-09-12T04:30:00.000Z',
+      const maintenanceAccess = {
+        maintenanceAccessVersion: 8,
+        maintenanceAccessExpiresAt: '2026-09-12T04:30:00.000Z',
         bypassedRules: ['section_capacity'],
       };
-      mockAdminDemoModeService.resolveForActor.mockResolvedValue({
+      mockAdminMaintenanceService.resolveForActor.mockResolvedValue({
         active: true,
         version: 8,
         expiresAt: new Date('2026-09-12T04:30:00.000Z'),
         allows: jest.fn((rule) => rule === 'section_capacity'),
-        audit: jest.fn().mockReturnValue(demoMode),
+        audit: jest.fn().mockReturnValue(maintenanceAccess),
       });
       mockDb.query.sections.findFirst
         .mockResolvedValueOnce(makeSection({ capacity: 40 }))
@@ -1134,7 +1134,7 @@ describe('SectionsService', () => {
 
       expect(mockAuditService.log).toHaveBeenCalledWith(
         expect.objectContaining({
-          metadata: expect.objectContaining({ demoMode }),
+          metadata: expect.objectContaining({ maintenanceAccess }),
         }),
       );
     });
@@ -1720,17 +1720,17 @@ describe('SectionsService', () => {
   });
 
   it('archives active memberships through the existing transaction for an active Demo administrator', async () => {
-    const demoMode = {
-      demoModeVersion: 9,
-      demoModeExpiresAt: '2026-09-12T04:30:00.000Z',
+    const maintenanceAccess = {
+      maintenanceAccessVersion: 9,
+      maintenanceAccessExpiresAt: '2026-09-12T04:30:00.000Z',
       bypassedRules: ['archive_active_memberships'],
     };
-    mockAdminDemoModeService.resolveForActor.mockResolvedValue({
+    mockAdminMaintenanceService.resolveForActor.mockResolvedValue({
       active: true,
       version: 9,
       expiresAt: new Date('2026-09-12T04:30:00.000Z'),
       allows: jest.fn((rule) => rule === 'archive_active_memberships'),
-      audit: jest.fn().mockReturnValue(demoMode),
+      audit: jest.fn().mockReturnValue(maintenanceAccess),
     });
     mockDb.query.sections.findFirst.mockResolvedValue(makeSection());
     mockDb.query.enrollments.findFirst.mockResolvedValue(makeEnrollment());
@@ -1748,7 +1748,7 @@ describe('SectionsService', () => {
     expect(update.set.mock.calls[0][0]).toEqual({ status: 'completed' });
     expect(mockAuditService.log).toHaveBeenCalledWith(
       expect.objectContaining({
-        metadata: expect.objectContaining({ demoMode }),
+        metadata: expect.objectContaining({ maintenanceAccess }),
       }),
     );
   });

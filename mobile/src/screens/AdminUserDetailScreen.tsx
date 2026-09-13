@@ -14,7 +14,7 @@ import type {
 } from "../types/admin";
 import type { User } from "../types/user";
 import { useAdminNetworkStatus } from "../hooks/useAdminNetworkStatus";
-import { useAdminDemoMode } from "../hooks/useAdminDemoMode";
+import { useAdminMaintenance } from "../hooks/useAdminMaintenance";
 import {
   AdminButton,
   AdminChip,
@@ -90,11 +90,9 @@ const formSignature = (form: UserEditForm | null) =>
 export function AdminUserDetailScreen({ navigation, route }: Props) {
   const queryClient = useQueryClient();
   const network = useAdminNetworkStatus();
-  const demoMode = useAdminDemoMode();
+  const maintenance = useAdminMaintenance();
   const [resetResult, setResetResult] =
     useState<ResetAdminUserPasswordResponse | null>(null);
-  const [showPurge, setShowPurge] = useState(false);
-  const [purgeConfirmName, setPurgeConfirmName] = useState("");
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<UserEditForm | null>(null);
   const [baseline, setBaseline] = useState("");
@@ -106,7 +104,7 @@ export function AdminUserDetailScreen({ navigation, route }: Props) {
     queryFn: () => adminApi.getUser(route.params.userId),
   });
   const record = user.data;
-  const canRelaxUserLifecycle = demoMode.hasExactRule(
+  const canRelaxUserLifecycle = maintenance.hasExactRule(
     "user_lifecycle_sequence",
   );
   const canEditDeletedUser = Boolean(
@@ -173,7 +171,7 @@ export function AdminUserDetailScreen({ navigation, route }: Props) {
       await adminApi.setUserLifecycle(route.params.userId, action);
       await refreshLists();
     } catch (error) {
-      await demoMode.refresh();
+      await maintenance.refresh();
       Alert.alert("Lifecycle rejected", toAppError(error).message);
     } finally {
       setBusy(false);
@@ -266,35 +264,8 @@ export function AdminUserDetailScreen({ navigation, route }: Props) {
         queryClient.invalidateQueries({ queryKey: ["admin-user-monitoring"] }),
       ]);
     } catch (error) {
-      await demoMode.refresh();
+      await maintenance.refresh();
       setFormError(toAppError(error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-  const purge = async () => {
-    if (!record) return;
-    const exactName =
-      `${record.firstName ?? ""} ${record.lastName ?? ""}`.trim();
-    if (
-      !requireConnection("Permanent deletion is never queued while offline.") ||
-      record.status !== "DELETED" ||
-      purgeConfirmName !== exactName
-    )
-      return;
-    try {
-      setBusy(true);
-      await adminApi.purgeUser(route.params.userId);
-      queryClient.removeQueries({
-        queryKey: ["admin-user", route.params.userId],
-      });
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["admin-users"] }),
-        queryClient.invalidateQueries({ queryKey: ["admin-user-monitoring"] }),
-      ]);
-      navigation.goBack();
-    } catch (error) {
-      Alert.alert("Purge rejected", toAppError(error).message);
     } finally {
       setBusy(false);
     }
@@ -391,7 +362,7 @@ export function AdminUserDetailScreen({ navigation, route }: Props) {
           ) : null}
           {record.status === "DELETED" && canRelaxUserLifecycle ? (
             <AdminNotice
-              title="Demo mode · archived account exception"
+              title="Maintenance Access · archived account exception"
               description="Editing and reactivation are available as audited lifecycle exceptions. Permanent purge still requires the archived state and exact full-name confirmation."
               tone="amber"
               icon="shield-alert-outline"
@@ -730,7 +701,7 @@ export function AdminUserDetailScreen({ navigation, route }: Props) {
                         Alert.alert(
                           "Reactivate account?",
                           record.status === "DELETED"
-                            ? "Demo mode will restore this archived account as an audited exception."
+                            ? "Maintenance Access will restore this archived account as an audited exception."
                             : "The user will regain sign-in access.",
                           [
                             { text: "Cancel", style: "cancel" },
@@ -790,66 +761,23 @@ export function AdminUserDetailScreen({ navigation, route }: Props) {
                   ) : null}
                   {record.status === "DELETED" ? (
                     <AdminButton
-                      label={
-                        showPurge
-                          ? "Cancel permanent deletion"
-                          : "Purge permanently"
-                      }
-                      icon={showPurge ? "close" : "delete-forever"}
+                      label="Review permanent deletion"
+                      icon="delete-forever"
                       tone="red"
                       variant="solid"
                       disabled={busy || network.isOffline}
-                      onPress={() => {
-                        setShowPurge((value) => !value);
-                        setPurgeConfirmName("");
-                      }}
+                      onPress={() =>
+                        navigation.navigate("AdminLifecycleReview", {
+                          targetType: "USER",
+                          targetId: route.params.userId,
+                          targetLabel: fullName || record.email,
+                          isActive: false,
+                        })
+                      }
                     />
                   ) : null}
                 </View>
               </AdminSection>
-              {record.status === "DELETED" && showPurge ? (
-                <AdminSection
-                  title="Permanent deletion"
-                  subtitle="This matches the web guard and cannot be undone"
-                >
-                  <View style={{ padding: 16, gap: 10 }}>
-                    <AdminNotice
-                      title="Export first"
-                      description="Purging removes the archived account permanently. Export its archive before continuing."
-                      tone="red"
-                      icon="alert-octagon-outline"
-                    />
-                    <Text
-                      style={{
-                        color: theme.text,
-                        fontSize: 12,
-                        lineHeight: 18,
-                      }}
-                    >
-                      Type the full name exactly: {fullName}
-                    </Text>
-                    <AdminField
-                      label="Full name confirmation"
-                      value={purgeConfirmName}
-                      onChangeText={setPurgeConfirmName}
-                      autoCapitalize="words"
-                    />
-                    <AdminButton
-                      label={busy ? "Purging…" : "Purge user permanently"}
-                      icon="delete-forever"
-                      tone="red"
-                      variant="solid"
-                      disabled={
-                        busy ||
-                        network.isOffline ||
-                        !fullName ||
-                        purgeConfirmName !== fullName
-                      }
-                      onPress={() => void purge()}
-                    />
-                  </View>
-                </AdminSection>
-              ) : null}
             </>
           )}
         </>

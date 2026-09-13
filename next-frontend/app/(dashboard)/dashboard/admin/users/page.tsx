@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   ChevronDown,
   Download,
@@ -10,34 +10,26 @@ import {
   UserPlus,
   UserX,
   RotateCcw,
-} from 'lucide-react';
+} from "lucide-react";
 import {
   type BulkUserLifecycleAction,
   userService,
-} from '@/services/user-service';
+} from "@/services/user-service";
 import {
   AdminEmptyState,
   AdminPageShell,
   AdminSectionCard,
-} from '@/components/admin/AdminPageShell';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+} from "@/components/admin/AdminPageShell";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import {
   ConfirmationDialog,
   type ConfirmationDialogConfig,
   type ConfirmationTone,
-} from '@/components/shared/ConfirmationDialog';
-import { Input } from '@/components/ui/input';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+} from "@/components/shared/ConfirmationDialog";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -45,16 +37,16 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
-import { toast } from 'sonner';
-import { useAuth } from '@/providers/AuthProvider';
-import type { User } from '@/types/user';
-import { getRoleName } from '@/utils/helpers';
-import { resolveUserProfilePicture } from '@/utils/profile';
+} from "@/components/ui/table";
+import { toast } from "sonner";
+import { useAuth } from "@/providers/AuthProvider";
+import type { User } from "@/types/user";
+import { getRoleName } from "@/utils/helpers";
+import { resolveUserProfilePicture } from "@/utils/profile";
 
-type StatusTab = 'active' | 'pending' | 'suspended' | 'deleted';
-type RoleFilter = 'all' | 'student' | 'teacher' | 'admin';
-type GradeLevelFilter = 'all' | '7' | '8' | '9' | '10' | 'graduated';
+type StatusTab = "active" | "pending" | "suspended" | "deleted";
+type RoleFilter = "all" | "student" | "teacher" | "admin";
+type GradeLevelFilter = "all" | "7" | "8" | "9" | "10" | "graduated";
 
 interface BulkActionOption {
   action: BulkUserLifecycleAction;
@@ -66,130 +58,120 @@ interface BulkActionOption {
 }
 
 const STATUS_MAP: Record<StatusTab, string> = {
-  active: 'ACTIVE',
-  pending: 'PENDING',
-  suspended: 'SUSPENDED',
-  deleted: 'DELETED',
+  active: "ACTIVE",
+  pending: "PENDING",
+  suspended: "SUSPENDED",
+  deleted: "DELETED",
 };
 
 const ROLE_FILTER_LABELS: Record<RoleFilter, string> = {
-  all: 'All roles',
-  student: 'Students',
-  teacher: 'Teachers',
-  admin: 'Admins',
+  all: "All roles",
+  student: "Students",
+  teacher: "Teachers",
+  admin: "Admins",
 };
 
 const GRADE_LEVEL_FILTER_LABELS: Record<GradeLevelFilter, string> = {
-  all: 'All grade levels',
-  '7': 'Grade 7',
-  '8': 'Grade 8',
-  '9': 'Grade 9',
-  '10': 'Grade 10',
-  graduated: 'Graduated',
+  all: "All grade levels",
+  "7": "Grade 7",
+  "8": "Grade 8",
+  "9": "Grade 9",
+  "10": "Grade 10",
+  graduated: "Graduated",
 };
 
 function getStudentLevel(user: User) {
-  if (user.profile?.graduatedAt || user.graduatedAt) return 'Graduated';
+  if (user.profile?.graduatedAt || user.graduatedAt) return "Graduated";
   const gradeLevel = user.profile?.gradeLevel ?? user.gradeLevel;
-  return gradeLevel ? `Grade ${gradeLevel}` : '-';
+  return gradeLevel ? `Grade ${gradeLevel}` : "-";
 }
 
 function formatDate(value?: string) {
-  if (!value) return 'Never';
+  if (!value) return "Never";
   const date = new Date(value);
   return Number.isNaN(date.getTime())
-    ? 'Never'
+    ? "Never"
     : date.toISOString().slice(0, 10);
 }
 
 function getInitials(user: User) {
-  const first = user.firstName?.[0] ?? '';
-  const last = user.lastName?.[0] ?? '';
-  return `${first}${last}`.toUpperCase() || 'U';
+  const first = user.firstName?.[0] ?? "";
+  const last = user.lastName?.[0] ?? "";
+  return `${first}${last}`.toUpperCase() || "U";
 }
 
 function getRoleTone(role: string) {
   switch (role) {
-    case 'teacher':
-      return 'admin-role-pill admin-role-pill--teacher';
-    case 'admin':
-      return 'admin-role-pill admin-role-pill--admin';
+    case "teacher":
+      return "admin-role-pill admin-role-pill--teacher";
+    case "admin":
+      return "admin-role-pill admin-role-pill--admin";
     default:
-      return 'admin-role-pill admin-role-pill--student';
+      return "admin-role-pill admin-role-pill--student";
   }
 }
 
 function getStatusTone(status?: string) {
   switch (status) {
-    case 'PENDING':
-      return 'admin-status-pill admin-status-pill--pending';
-    case 'SUSPENDED':
-      return 'admin-status-pill admin-status-pill--suspended';
-    case 'DELETED':
-      return 'admin-status-pill admin-status-pill--archived';
+    case "PENDING":
+      return "admin-status-pill admin-status-pill--pending";
+    case "SUSPENDED":
+      return "admin-status-pill admin-status-pill--suspended";
+    case "DELETED":
+      return "admin-status-pill admin-status-pill--archived";
     default:
-      return 'admin-status-pill admin-status-pill--active';
+      return "admin-status-pill admin-status-pill--active";
   }
 }
 
 function getStatusLabel(status?: string) {
   switch (status) {
-    case 'PENDING':
-      return 'Pending';
-    case 'SUSPENDED':
-      return 'Suspended';
-    case 'DELETED':
-      return 'Deleted';
+    case "PENDING":
+      return "Pending";
+    case "SUSPENDED":
+      return "Suspended";
+    case "DELETED":
+      return "Deleted";
     default:
-      return 'Active';
+      return "Active";
   }
 }
 
 function getBulkActions(tab: StatusTab): BulkActionOption[] {
   switch (tab) {
-    case 'suspended':
+    case "suspended":
       return [
         {
-          action: 'reactivate',
-          label: 'Reactivate selected',
-          confirmLabel: 'Reactivate users',
-          title: 'Reactivate selected users?',
+          action: "reactivate",
+          label: "Reactivate selected",
+          confirmLabel: "Reactivate users",
+          title: "Reactivate selected users?",
           description:
-            'Selected suspended accounts will regain access immediately.',
-          tone: 'default',
+            "Selected suspended accounts will regain access immediately.",
+          tone: "default",
         },
         {
-          action: 'archive',
-          label: 'Archive selected',
-          confirmLabel: 'Archive users',
-          title: 'Archive selected users?',
+          action: "archive",
+          label: "Archive selected",
+          confirmLabel: "Archive users",
+          title: "Archive selected users?",
           description:
-            'Selected suspended accounts will move to deleted status and can still be purged later.',
-          tone: 'danger',
+            "Selected suspended accounts will move to deleted status and can still be purged later.",
+          tone: "danger",
         },
       ];
-    case 'deleted':
-      return [
-        {
-          action: 'purge',
-          label: 'Purge selected',
-          confirmLabel: 'Purge users',
-          title: 'Permanently delete selected users?',
-          description:
-            'This permanently removes the selected deleted accounts from the system.',
-          tone: 'danger',
-        },
-      ];
+    case "deleted":
+      return [];
     default:
       return [
         {
-          action: 'suspend',
-          label: 'Suspend selected',
-          confirmLabel: 'Suspend users',
-          title: 'Suspend selected users?',
+          action: "suspend",
+          label: "Suspend selected",
+          confirmLabel: "Suspend users",
+          title: "Suspend selected users?",
           description:
-            'Selected active or pending accounts will lose login access but remain restorable.',
-          tone: 'danger',
+            "Selected active or pending accounts will lose login access but remain restorable.",
+          tone: "danger",
         },
       ];
   }
@@ -201,14 +183,14 @@ function getBulkResultMessage(
   failureCount: number,
 ) {
   if (failureCount === 0) {
-    return `${actionLabel} completed for ${successCount} user${successCount === 1 ? '' : 's'}.`;
+    return `${actionLabel} completed for ${successCount} user${successCount === 1 ? "" : "s"}.`;
   }
 
   if (successCount === 0) {
     return `${actionLabel} failed for all selected users.`;
   }
 
-  return `${actionLabel} completed for ${successCount} user${successCount === 1 ? '' : 's'}; ${failureCount} failed.`;
+  return `${actionLabel} completed for ${successCount} user${successCount === 1 ? "" : "s"}; ${failureCount} failed.`;
 }
 
 export default function UserManagementPage() {
@@ -224,21 +206,19 @@ export default function UserManagementPage() {
   });
   const [initialLoading, setInitialLoading] = useState(true);
   const [tableLoading, setTableLoading] = useState(false);
-  const [tab, setTab] = useState<StatusTab>('active');
-  const [search, setSearch] = useState('');
-  const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
+  const [tab, setTab] = useState<StatusTab>("active");
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
   const [gradeLevelFilter, setGradeLevelFilter] =
-    useState<GradeLevelFilter>('all');
+    useState<GradeLevelFilter>("all");
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
-  const [showPurge, setShowPurge] = useState<User | null>(null);
-  const [purgeConfirmName, setPurgeConfirmName] = useState('');
   const [confirmation, setConfirmation] =
     useState<ConfirmationDialogConfig | null>(null);
 
   const fetchUsers = useCallback(
-    async (mode: 'initial' | 'table') => {
+    async (mode: "initial" | "table") => {
       try {
-        if (mode === 'initial') {
+        if (mode === "initial") {
           setInitialLoading(true);
         } else {
           setTableLoading(true);
@@ -246,8 +226,8 @@ export default function UserManagementPage() {
 
         const res = await userService.getAll({
           status: STATUS_MAP[tab],
-          role: roleFilter === 'all' ? undefined : roleFilter,
-          gradeLevel: gradeLevelFilter === 'all' ? undefined : gradeLevelFilter,
+          role: roleFilter === "all" ? undefined : roleFilter,
+          gradeLevel: gradeLevelFilter === "all" ? undefined : gradeLevelFilter,
           limit: 100,
           includeStatusCounts: true,
         });
@@ -261,9 +241,9 @@ export default function UserManagementPage() {
           });
         }
       } catch {
-        toast.error('Failed to load users');
+        toast.error("Failed to load users");
       } finally {
-        if (mode === 'initial') {
+        if (mode === "initial") {
           setInitialLoading(false);
         } else {
           setTableLoading(false);
@@ -274,13 +254,13 @@ export default function UserManagementPage() {
   );
 
   useEffect(() => {
-    if (!['all', 'student'].includes(roleFilter)) {
-      setGradeLevelFilter('all');
+    if (!["all", "student"].includes(roleFilter)) {
+      setGradeLevelFilter("all");
     }
   }, [roleFilter]);
 
   useEffect(() => {
-    const mode = hasLoadedRef.current ? 'table' : 'initial';
+    const mode = hasLoadedRef.current ? "table" : "initial";
     hasLoadedRef.current = true;
     void fetchUsers(mode);
   }, [fetchUsers]);
@@ -324,7 +304,7 @@ export default function UserManagementPage() {
   );
 
   const refreshTable = useCallback(async () => {
-    await fetchUsers('table');
+    await fetchUsers("table");
   }, [fetchUsers]);
 
   const toggleUserSelection = (userId: string) => {
@@ -341,11 +321,11 @@ export default function UserManagementPage() {
 
   const handleSuspendPrompt = (user: User) => {
     setConfirmation({
-      title: 'Suspend user?',
+      title: "Suspend user?",
       description:
-        'The user will lose login access but all account data will stay intact.',
-      confirmLabel: 'Suspend user',
-      tone: 'danger',
+        "The user will lose login access but all account data will stay intact.",
+      confirmLabel: "Suspend user",
+      tone: "danger",
       details: (
         <p className="text-sm font-black text-[var(--student-text-strong)]">
           {user.firstName} {user.lastName}
@@ -354,10 +334,10 @@ export default function UserManagementPage() {
       onConfirm: async () => {
         try {
           await userService.suspend(user.id);
-          toast.success('User suspended');
+          toast.success("User suspended");
           await refreshTable();
         } catch {
-          toast.error('Failed to suspend user');
+          toast.error("Failed to suspend user");
         }
       },
     });
@@ -366,20 +346,20 @@ export default function UserManagementPage() {
   const handleReactivate = async (id: string) => {
     try {
       await userService.reactivate(id);
-      toast.success('User reactivated');
+      toast.success("User reactivated");
       await refreshTable();
     } catch {
-      toast.error('Failed to reactivate user');
+      toast.error("Failed to reactivate user");
     }
   };
 
   const handleArchivePrompt = (user: User) => {
     setConfirmation({
-      title: 'Archive user account?',
+      title: "Archive user account?",
       description:
-        'The user will move to deleted status and can still be purged later.',
-      confirmLabel: 'Archive user',
-      tone: 'danger',
+        "The user will move to deleted status and can still be purged later.",
+      confirmLabel: "Archive user",
+      tone: "danger",
       details: (
         <p className="text-sm font-black text-[var(--student-text-strong)]">
           {user.firstName} {user.lastName}
@@ -388,10 +368,10 @@ export default function UserManagementPage() {
       onConfirm: async () => {
         try {
           await userService.softDelete(user.id);
-          toast.success('User archived');
+          toast.success("User archived");
           await refreshTable();
         } catch {
-          toast.error('Failed to archive user');
+          toast.error("Failed to archive user");
         }
       },
     });
@@ -401,33 +381,14 @@ export default function UserManagementPage() {
     try {
       const blob = await userService.exportUser(id);
       const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
+      const link = document.createElement("a");
       link.href = url;
       link.download = `user-data-${id}.json`;
       link.click();
       URL.revokeObjectURL(url);
-      toast.success('User data exported');
+      toast.success("User data exported");
     } catch {
-      toast.error('Failed to export user data');
-    }
-  };
-
-  const handlePurge = async () => {
-    if (!showPurge) return;
-    const fullName = `${showPurge.firstName} ${showPurge.lastName}`;
-    if (purgeConfirmName !== fullName) {
-      toast.error('Name does not match');
-      return;
-    }
-
-    try {
-      await userService.purge(showPurge.id);
-      toast.success('User permanently deleted');
-      setShowPurge(null);
-      setPurgeConfirmName('');
-      await refreshTable();
-    } catch {
-      toast.error('Failed to purge user');
+      toast.error("Failed to export user data");
     }
   };
 
@@ -456,7 +417,7 @@ export default function UserManagementPage() {
       if (failureCount > 0) {
         toast.error(
           result.data.failed[0]?.reason ??
-            'Some selected users could not be updated.',
+            "Some selected users could not be updated.",
         );
       }
 
@@ -480,10 +441,10 @@ export default function UserManagementPage() {
             {selectedUsers
               .slice(0, 3)
               .map((user) => `${user.firstName} ${user.lastName}`)
-              .join(', ')}
+              .join(", ")}
             {selectedUsers.length > 3
               ? ` and ${selectedUsers.length - 3} more`
-              : ''}
+              : ""}
           </p>
         </div>
       ),
@@ -505,15 +466,15 @@ export default function UserManagementPage() {
       isEmailVerified: entry.isEmailVerified,
     }));
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
-      type: 'application/json',
+      type: "application/json",
     });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
+    const link = document.createElement("a");
     link.href = url;
     link.download = `admin-users-${tab}.json`;
     link.click();
     URL.revokeObjectURL(url);
-    toast.success('Visible users exported');
+    toast.success("Visible users exported");
   };
 
   if (initialLoading) {
@@ -532,7 +493,7 @@ export default function UserManagementPage() {
       actions={
         <Button
           className="admin-button-solid rounded-[1rem] px-4 font-bold"
-          onClick={() => router.push('/dashboard/admin/users/create')}
+          onClick={() => router.push("/dashboard/admin/users/create")}
         >
           <UserPlus className="h-4 w-4" />
           Create User
@@ -547,23 +508,23 @@ export default function UserManagementPage() {
         >
           <TabsList className="admin-tab-list h-auto flex-wrap justify-start">
             <TabsTrigger value="active" className="admin-tab">
-              Active{' '}
+              Active{" "}
               <span className="admin-segment-count">{statusCounts.active}</span>
             </TabsTrigger>
             <TabsTrigger value="pending" className="admin-tab">
-              Pending{' '}
+              Pending{" "}
               <span className="admin-segment-count">
                 {statusCounts.pending}
               </span>
             </TabsTrigger>
             <TabsTrigger value="suspended" className="admin-tab">
-              Suspended{' '}
+              Suspended{" "}
               <span className="admin-segment-count">
                 {statusCounts.suspended}
               </span>
             </TabsTrigger>
             <TabsTrigger value="deleted" className="admin-tab">
-              Deleted{' '}
+              Deleted{" "}
               <span className="admin-segment-count">
                 {statusCounts.deleted}
               </span>
@@ -598,7 +559,7 @@ export default function UserManagementPage() {
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8ea0bc]" />
               </div>
-              {roleFilter === 'all' || roleFilter === 'student' ? (
+              {roleFilter === "all" || roleFilter === "student" ? (
                 <div className="relative">
                   <Filter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8ea0bc]" />
                   <select
@@ -634,7 +595,7 @@ export default function UserManagementPage() {
             </div>
           </div>
 
-          {filtered.length > 0 ? (
+          {filtered.length > 0 && tab !== "deleted" ? (
             <div className="admin-bulk-bar">
               <div className="admin-controls">
                 <span className="admin-pill">
@@ -649,15 +610,15 @@ export default function UserManagementPage() {
                   disabled={selectableVisibleIds.length === 0}
                 >
                   {allVisibleSelected
-                    ? 'Clear visible selection'
-                    : 'Select all visible'}
+                    ? "Clear visible selection"
+                    : "Select all visible"}
                 </Button>
-                {roleFilter !== 'all' ? (
+                {roleFilter !== "all" ? (
                   <span className="admin-filter-badge">
                     Filtered by {ROLE_FILTER_LABELS[roleFilter]}
                   </span>
                 ) : null}
-                {gradeLevelFilter !== 'all' ? (
+                {gradeLevelFilter !== "all" ? (
                   <span className="admin-filter-badge">
                     Filtered by {GRADE_LEVEL_FILTER_LABELS[gradeLevelFilter]}
                   </span>
@@ -669,13 +630,13 @@ export default function UserManagementPage() {
                     key={option.action}
                     type="button"
                     variant={
-                      option.tone === 'danger' ? 'destructive' : 'outline'
+                      option.tone === "danger" ? "destructive" : "outline"
                     }
                     size="sm"
                     className={
-                      option.tone === 'danger'
-                        ? 'rounded-[1rem] px-4 font-bold'
-                        : 'admin-button-outline rounded-[1rem] px-4 font-bold'
+                      option.tone === "danger"
+                        ? "rounded-[1rem] px-4 font-bold"
+                        : "admin-button-outline rounded-[1rem] px-4 font-bold"
                     }
                     onClick={() => openBulkConfirmation(option)}
                     disabled={selectedUserIds.length === 0}
@@ -694,7 +655,7 @@ export default function UserManagementPage() {
             />
           ) : (
             <div
-              className={`admin-table-shell${tableLoading ? ' admin-table-shell--loading' : ''}`}
+              className={`admin-table-shell${tableLoading ? " admin-table-shell--loading" : ""}`}
             >
               {tableLoading ? (
                 <div className="admin-table-loading">Refreshing users...</div>
@@ -702,7 +663,9 @@ export default function UserManagementPage() {
               <Table>
                 <TableHeader className="admin-table-head">
                   <TableRow>
-                    <TableHead className="w-[6rem]">Select</TableHead>
+                    <TableHead className="w-[6rem]">
+                      {tab === "deleted" ? "Review" : "Select"}
+                    </TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Role</TableHead>
@@ -730,15 +693,21 @@ export default function UserManagementPage() {
                         className="border-t border-[var(--admin-outline)] hover:bg-[#fbfcfe]"
                       >
                         <TableCell onClick={(event) => event.stopPropagation()}>
-                          <input
-                            type="checkbox"
-                            role="checkbox"
-                            aria-label={`Select ${entry.firstName} ${entry.lastName}`}
-                            className="admin-row-checkbox"
-                            checked={isSelected}
-                            disabled={isSelf}
-                            onChange={() => toggleUserSelection(entry.id)}
-                          />
+                          {tab === "deleted" ? (
+                            <span className="text-xs font-semibold text-[var(--admin-text-muted)]">
+                              Individual
+                            </span>
+                          ) : (
+                            <input
+                              type="checkbox"
+                              role="checkbox"
+                              aria-label={`Select ${entry.firstName} ${entry.lastName}`}
+                              className="admin-row-checkbox"
+                              checked={isSelected}
+                              disabled={isSelf}
+                              onChange={() => toggleUserSelection(entry.id)}
+                            />
+                          )}
                         </TableCell>
                         <TableCell
                           className="admin-table-row-link"
@@ -787,18 +756,18 @@ export default function UserManagementPage() {
                           className="admin-table-row-link"
                           onClick={() => router.push(profilePath)}
                         >
-                          {primaryRole === 'student' ? (
+                          {primaryRole === "student" ? (
                             <span
                               className={
-                                getStudentLevel(entry) === 'Graduated'
-                                  ? 'admin-status-pill admin-status-pill--active'
-                                  : 'font-semibold text-[var(--admin-text-strong)]'
+                                getStudentLevel(entry) === "Graduated"
+                                  ? "admin-status-pill admin-status-pill--active"
+                                  : "font-semibold text-[var(--admin-text-strong)]"
                               }
                             >
                               {getStudentLevel(entry)}
                             </span>
                           ) : (
-                            '-'
+                            "-"
                           )}
                         </TableCell>
                         <TableCell
@@ -817,7 +786,7 @@ export default function UserManagementPage() {
                         </TableCell>
                         <TableCell onClick={(event) => event.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1">
-                            {tab === 'suspended' ? (
+                            {tab === "suspended" ? (
                               <>
                                 <button
                                   type="button"
@@ -836,7 +805,7 @@ export default function UserManagementPage() {
                                   <Trash2 className="h-4 w-4" />
                                 </button>
                               </>
-                            ) : tab === 'deleted' ? (
+                            ) : tab === "deleted" ? (
                               <>
                                 <button
                                   type="button"
@@ -849,11 +818,12 @@ export default function UserManagementPage() {
                                 <button
                                   type="button"
                                   className="admin-icon-button"
-                                  onClick={() => {
-                                    setShowPurge(entry);
-                                    setPurgeConfirmName('');
-                                  }}
-                                  title="Purge user"
+                                  onClick={() =>
+                                    router.push(
+                                      `/dashboard/admin/users/${entry.id}`,
+                                    )
+                                  }
+                                  title="Review permanent deletion"
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </button>
@@ -879,63 +849,6 @@ export default function UserManagementPage() {
           )}
         </Tabs>
       </AdminSectionCard>
-
-      <Dialog open={!!showPurge} onOpenChange={() => setShowPurge(null)}>
-        <DialogContent
-          variant="admin"
-          className="rounded-[1.6rem] border-white/40 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(236,253,245,0.92))] shadow-2xl"
-        >
-          <DialogHeader>
-            <DialogTitle className="text-rose-600">
-              Permanently Delete User
-            </DialogTitle>
-            <DialogDescription>
-              This action is <strong>irreversible</strong>. All data will be
-              permanently removed.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3 text-sm">
-            <p>Type the user&apos;s full name to confirm:</p>
-            <p className="font-mono text-muted-foreground">
-              {showPurge?.firstName} {showPurge?.lastName}
-            </p>
-            <Input
-              value={purgeConfirmName}
-              onChange={(event) => setPurgeConfirmName(event.target.value)}
-              placeholder="Type full name here..."
-              className="admin-input"
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              className="admin-button-outline rounded-xl font-black"
-              onClick={() => showPurge && handleExport(showPurge.id)}
-            >
-              Download Data Export First
-            </Button>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              className="admin-button-outline rounded-xl font-black"
-              onClick={() => setShowPurge(null)}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              className="rounded-xl font-black"
-              onClick={handlePurge}
-              disabled={
-                purgeConfirmName !==
-                `${showPurge?.firstName} ${showPurge?.lastName}`
-              }
-            >
-              Permanently Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <ConfirmationDialog
         config={confirmation}

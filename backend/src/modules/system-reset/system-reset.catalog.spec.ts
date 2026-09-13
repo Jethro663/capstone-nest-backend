@@ -49,6 +49,7 @@ describe('system reset preservation contract', () => {
     'assessment_attempts',
     'refresh_tokens',
     'otp_verifications',
+    'admin_maintenance_sessions',
   ])('clears %s, even when created by the retained admin', (name) => {
     expect(RESET_CATALOG[name].action).toBe('clear');
   });

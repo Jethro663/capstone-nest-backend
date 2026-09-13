@@ -1,7 +1,7 @@
 import { Pressable, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
-import { useAdminDemoMode } from "../../hooks/useAdminDemoMode";
+import { useAdminMaintenance } from "../../hooks/useAdminMaintenance";
 import { adminTheme as theme } from "../../theme/admin";
 
 function formatTimeRemaining(expiresAt: string | null) {
@@ -15,14 +15,14 @@ function formatTimeRemaining(expiresAt: string | null) {
   return `${minutes}:${String(seconds).padStart(2, "0")} remaining`;
 }
 
-export function AdminDemoModeNotice() {
+export function AdminMaintenanceNotice() {
   const navigation = useNavigation();
-  const { status, isCachedOffline } = useAdminDemoMode();
+  const { status, isCachedOffline } = useAdminMaintenance();
   if (!status?.active) return null;
 
   const manage = () => {
     const target = navigation.getParent() ?? navigation;
-    (target.navigate as (name: string) => void)("AdminSettingsDemoMode");
+    (target.navigate as (name: string) => void)("AdminSettingsMaintenance");
   };
 
   return (
@@ -41,27 +41,34 @@ export function AdminDemoModeNotice() {
         gap: 9,
       }}
     >
-      <MaterialCommunityIcons
-        name="shield-alert-outline"
-        size={18}
-        color={theme.red}
-      />
+      <MaterialCommunityIcons name="tools" size={18} color={theme.red} />
       <View style={{ flex: 1 }}>
         <Text style={{ fontSize: 12, fontWeight: "900", color: theme.text }}>
-          Demo mode active
+          Maintenance Access active
         </Text>
         <Text
-          style={{ marginTop: 2, fontSize: 11, lineHeight: 16, color: theme.subtext }}
+          style={{
+            marginTop: 2,
+            fontSize: 11,
+            lineHeight: 16,
+            color: theme.subtext,
+          }}
         >
           {formatTimeRemaining(status.expiresAt)}
-          {isCachedOffline ? " · cached while offline" : " · actions are audited"}
+          {isCachedOffline
+            ? " · cached while offline"
+            : " · evidence safeguards remain"}
         </Text>
       </View>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Manage Demo mode"
+        accessibilityLabel="Manage Maintenance Access"
         onPress={manage}
-        style={{ minHeight: 48, justifyContent: "center", paddingHorizontal: 8 }}
+        style={{
+          minHeight: 48,
+          justifyContent: "center",
+          paddingHorizontal: 8,
+        }}
       >
         <Text style={{ color: theme.red, fontSize: 11, fontWeight: "900" }}>
           Manage

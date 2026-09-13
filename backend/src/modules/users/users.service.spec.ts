@@ -12,7 +12,7 @@ import { DatabaseService } from '../../database/database.service';
 import { OtpService } from '../otp/otp.service';
 import { MailService } from '../mail/mail.service';
 import { AuditService } from '../audit/audit.service';
-import { AdminDemoModeService } from '../admin-demo-mode/admin-demo-mode.service';
+import { AdminMaintenanceService } from '../admin-maintenance/admin-maintenance.service';
 import { archivedUsers, studentProfiles, users } from '../../drizzle/schema';
 
 jest.mock('bcrypt', () => ({
@@ -74,7 +74,7 @@ describe('UsersService', () => {
     audit: jest.fn().mockReturnValue(undefined),
   };
 
-  const mockAdminDemoModeService = {
+  const mockAdminMaintenanceService = {
     resolveForActor: jest.fn().mockResolvedValue(inactiveDemoContext),
   };
 
@@ -83,7 +83,7 @@ describe('UsersService', () => {
     bcrypt.hash.mockResolvedValue('hashed-password');
     mockOtpService.createAndSendOTP.mockResolvedValue(undefined);
     mockAuditService.log.mockResolvedValue(undefined);
-    mockAdminDemoModeService.resolveForActor.mockResolvedValue(
+    mockAdminMaintenanceService.resolveForActor.mockResolvedValue(
       inactiveDemoContext,
     );
 
@@ -138,8 +138,8 @@ describe('UsersService', () => {
         { provide: EventEmitter2, useValue: mockEventEmitter },
         { provide: AuditService, useValue: mockAuditService },
         {
-          provide: AdminDemoModeService,
-          useValue: mockAdminDemoModeService,
+          provide: AdminMaintenanceService,
+          useValue: mockAdminMaintenanceService,
         },
       ],
     }).compile();
@@ -426,7 +426,7 @@ describe('UsersService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('rejects editing a deleted account when Demo mode is inactive', async () => {
+    it('rejects editing a deleted account when Maintenance Access is inactive', async () => {
       jest
         .spyOn(service, 'findById')
         .mockResolvedValue(makeUser({ status: 'DELETED' }));
@@ -437,18 +437,20 @@ describe('UsersService', () => {
           { firstName: 'Archived' } as any,
           'admin-1',
         ),
-      ).rejects.toThrow('Deleted accounts can only be edited in Demo mode');
+      ).rejects.toThrow(
+        'Deleted accounts can only be edited during Maintenance Access',
+      );
 
       expect(mockDb.transaction).not.toHaveBeenCalled();
     });
 
-    it('audits editing a deleted account when Demo mode allows the sequence bypass', async () => {
+    it('audits editing a deleted account when Maintenance Access allows the sequence', async () => {
       const demoMetadata = {
         demoModeVersion: 7,
         demoModeExpiresAt: '2026-09-12T04:30:00.000Z',
         bypassedRules: ['user_lifecycle_sequence'],
       };
-      mockAdminDemoModeService.resolveForActor.mockResolvedValue({
+      mockAdminMaintenanceService.resolveForActor.mockResolvedValue({
         active: true,
         version: 7,
         expiresAt: new Date('2026-09-12T04:30:00.000Z'),
@@ -486,7 +488,9 @@ describe('UsersService', () => {
       expect(mockAuditService.log).toHaveBeenCalledWith(
         expect.objectContaining({
           action: 'user.updated',
-          metadata: expect.objectContaining({ demoMode: demoMetadata }),
+          metadata: expect.objectContaining({
+            maintenanceAccess: demoMetadata,
+          }),
         }),
       );
     });
@@ -884,13 +888,13 @@ describe('UsersService', () => {
       });
     });
 
-    it('archives an active non-self account only when Demo mode allows the sequence bypass', async () => {
+    it('archives an active non-self account only when Maintenance Access allows the sequence', async () => {
       const demoMetadata = {
         demoModeVersion: 2,
         demoModeExpiresAt: '2026-09-12T04:30:00.000Z',
         bypassedRules: ['user_lifecycle_sequence'],
       };
-      mockAdminDemoModeService.resolveForActor.mockResolvedValue({
+      mockAdminMaintenanceService.resolveForActor.mockResolvedValue({
         active: true,
         version: 2,
         expiresAt: new Date('2026-09-12T04:30:00.000Z'),
@@ -919,18 +923,20 @@ describe('UsersService', () => {
 
       await service.softDeleteUser('user-1', 'admin-1');
 
-      expect(mockAdminDemoModeService.resolveForActor).toHaveBeenCalledWith(
+      expect(mockAdminMaintenanceService.resolveForActor).toHaveBeenCalledWith(
         'admin-1',
       );
       expect(mockAuditService.log).toHaveBeenCalledWith(
         expect.objectContaining({
-          metadata: expect.objectContaining({ demoMode: demoMetadata }),
+          metadata: expect.objectContaining({
+            maintenanceAccess: demoMetadata,
+          }),
         }),
       );
     });
 
-    it('keeps self-account archive protection while Demo mode is active', async () => {
-      mockAdminDemoModeService.resolveForActor.mockResolvedValue({
+    it('keeps self-account archive protection while Maintenance Access is active', async () => {
+      mockAdminMaintenanceService.resolveForActor.mockResolvedValue({
         ...inactiveDemoContext,
         active: true,
         allows: jest.fn().mockReturnValue(true),
@@ -938,7 +944,9 @@ describe('UsersService', () => {
       await expect(
         service.softDeleteUser('admin-1', 'admin-1'),
       ).rejects.toBeInstanceOf(ForbiddenException);
-      expect(mockAdminDemoModeService.resolveForActor).not.toHaveBeenCalled();
+      expect(
+        mockAdminMaintenanceService.resolveForActor,
+      ).not.toHaveBeenCalled();
     });
   });
 
@@ -969,66 +977,12 @@ describe('UsersService', () => {
   });
 
   describe('purgeUser', () => {
-    it('still requires DELETED status while Demo mode is active', async () => {
-      mockAdminDemoModeService.resolveForActor.mockResolvedValue({
-        ...inactiveDemoContext,
-        active: true,
-        allows: jest.fn().mockReturnValue(true),
-      });
-      jest
-        .spyOn(service, 'findById')
-        .mockResolvedValue(makeUser({ status: 'ACTIVE' }));
-
+    it('retires the direct purge path in favor of reviewed Maintenance Access', async () => {
       await expect(service.purgeUser('user-1', 'admin-1')).rejects.toThrow(
-        'User must have DELETED status before permanent removal.',
+        'Direct account purge is retired.',
       );
-    });
-
-    it('keeps self-account purge protection while Demo mode is active', async () => {
-      mockAdminDemoModeService.resolveForActor.mockResolvedValue({
-        ...inactiveDemoContext,
-        active: true,
-        allows: jest.fn().mockReturnValue(true),
-      });
-      await expect(
-        service.purgeUser('admin-1', 'admin-1'),
-      ).rejects.toBeInstanceOf(ForbiddenException);
-    });
-
-    it('marks archive as purged and deletes user in transaction', async () => {
-      jest
-        .spyOn(service, 'findById')
-        .mockResolvedValue(makeUser({ status: 'DELETED' }));
-
-      const tx = {
-        query: {
-          archivedUsers: {
-            findMany: jest.fn().mockResolvedValue([{ id: 'archive-1' }]),
-          },
-        },
-        update: jest.fn().mockImplementation(() => ({
-          set: jest.fn().mockReturnValue({
-            where: jest.fn().mockResolvedValue(undefined),
-          }),
-        })),
-        delete: jest.fn().mockImplementation(() => ({
-          where: jest.fn().mockResolvedValue(undefined),
-        })),
-      };
-      mockDb.transaction.mockImplementation(async (cb: Function) => cb(tx));
-
-      const result = await service.purgeUser('user-1', 'admin-1');
-      expect(result.userId).toBe('user-1');
-      expect(tx.delete).toHaveBeenCalledWith(users);
-      expect(mockAuditService.log).toHaveBeenCalledWith({
-        actorId: 'admin-1',
-        action: 'user.purged',
-        targetType: 'user',
-        targetId: 'user-1',
-        metadata: {
-          previousStatus: 'DELETED',
-        },
-      });
+      expect(mockDb.delete).not.toHaveBeenCalled();
+      expect(mockAuditService.log).not.toHaveBeenCalled();
     });
   });
 
@@ -1068,13 +1022,13 @@ describe('UsersService', () => {
       });
     });
 
-    it('reactivates a deleted non-self account only when Demo mode allows the sequence bypass', async () => {
+    it('reactivates a deleted non-self account only when Maintenance Access allows the sequence', async () => {
       const demoMetadata = {
         demoModeVersion: 5,
         demoModeExpiresAt: '2026-09-12T04:30:00.000Z',
         bypassedRules: ['user_lifecycle_sequence'],
       };
-      mockAdminDemoModeService.resolveForActor.mockResolvedValue({
+      mockAdminMaintenanceService.resolveForActor.mockResolvedValue({
         active: true,
         version: 5,
         expiresAt: new Date('2026-09-12T04:30:00.000Z'),
@@ -1094,15 +1048,17 @@ describe('UsersService', () => {
 
       expect(mockAuditService.log).toHaveBeenCalledWith(
         expect.objectContaining({
-          metadata: expect.objectContaining({ demoMode: demoMetadata }),
+          metadata: expect.objectContaining({
+            maintenanceAccess: demoMetadata,
+          }),
         }),
       );
     });
   });
 
   describe('suspendUser', () => {
-    it('keeps self-account suspension protection while Demo mode is active', async () => {
-      mockAdminDemoModeService.resolveForActor.mockResolvedValue({
+    it('keeps self-account suspension protection while Maintenance Access is active', async () => {
+      mockAdminMaintenanceService.resolveForActor.mockResolvedValue({
         ...inactiveDemoContext,
         active: true,
         allows: jest.fn().mockReturnValue(true),

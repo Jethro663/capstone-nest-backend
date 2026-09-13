@@ -10,7 +10,7 @@ import { adminApi } from "../api/services/admin";
 import { classesApi } from "../api/services/classes";
 import { sectionsApi } from "../api/services/sections";
 import { toAppError } from "../api/http";
-import { useAdminDemoMode } from "../hooks/useAdminDemoMode";
+import { useAdminMaintenance } from "../hooks/useAdminMaintenance";
 import { useAdminNetworkStatus } from "../hooks/useAdminNetworkStatus";
 import { AdminPaginatedList } from "../components/admin/AdminPaginatedList";
 import {
@@ -50,7 +50,7 @@ const schedulesOverlap = (
 export function AdminClassesWorkspaceScreen({ navigation }: Props) {
   const queryClient = useQueryClient();
   const network = useAdminNetworkStatus();
-  const demoMode = useAdminDemoMode();
+  const maintenance = useAdminMaintenance();
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [status, setStatus] = useState<Status>("all");
@@ -144,8 +144,9 @@ export function AdminClassesWorkspaceScreen({ navigation }: Props) {
     [query.data?.pages],
   );
   const total = query.data?.pages[0]?.total ?? rows.length;
-  const canRelaxScheduleCollision = demoMode.hasExactRule("schedule_collision");
-  const canRestoreArchivedClass = demoMode.hasExactRule(
+  const canRelaxScheduleCollision =
+    maintenance.hasExactRule("schedule_collision");
+  const canRestoreArchivedClass = maintenance.hasExactRule(
     "restore_archived_class",
   );
   const candidateRows = conflictCandidates.data ?? [];
@@ -314,7 +315,7 @@ export function AdminClassesWorkspaceScreen({ navigation }: Props) {
       reset();
       await queryClient.invalidateQueries({ queryKey: ["admin-classes"] });
     } catch (error) {
-      await demoMode.refresh();
+      await maintenance.refresh();
       setFormError(toAppError(error).message);
     } finally {
       setBusy(false);
@@ -335,7 +336,7 @@ export function AdminClassesWorkspaceScreen({ navigation }: Props) {
         : classesApi.hide(entry.id));
       await queryClient.invalidateQueries({ queryKey: ["admin-classes"] });
     } catch (error) {
-      await demoMode.refresh();
+      await maintenance.refresh();
       Alert.alert("Visibility update rejected", toAppError(error).message);
     } finally {
       setBusy(false);
@@ -354,10 +355,10 @@ export function AdminClassesWorkspaceScreen({ navigation }: Props) {
       await classesApi.toggleStatus(entry.id);
       await queryClient.invalidateQueries({ queryKey: ["admin-classes"] });
     } catch (error) {
-      await demoMode.refresh();
+      await maintenance.refresh();
       Alert.alert(
         "Restore rejected",
-        `Demo mode expired or the server rejected this exception. ${toAppError(error).message}`,
+        `Maintenance Access expired or the server rejected this exception. ${toAppError(error).message}`,
       );
     } finally {
       setBusy(false);
@@ -474,8 +475,8 @@ export function AdminClassesWorkspaceScreen({ navigation }: Props) {
               title="Schedule conflict"
               description={
                 canRelaxScheduleCollision
-                  ? `Demo mode permits this audited collision with ${scheduleConflict.subjectName}; the server will still validate the request.`
-                  : `Conflicts with ${scheduleConflict.subjectName}. Change the assignment or activate the exact Demo mode schedule capability.`
+                  ? `Maintenance Access permits this audited collision with ${scheduleConflict.subjectName}; the server will still validate the request.`
+                  : `Conflicts with ${scheduleConflict.subjectName}. Change the assignment or activate the exact Maintenance Access schedule capability.`
               }
               tone={canRelaxScheduleCollision ? "amber" : "red"}
               icon="calendar-alert"
@@ -772,7 +773,7 @@ export function AdminClassesWorkspaceScreen({ navigation }: Props) {
                 onPress={() =>
                   Alert.alert(
                     "Restore archived class?",
-                    "Demo mode will restore this class as an audited exception. Existing records remain preserved.",
+                    "Maintenance Access will restore this class as an audited exception. Existing records remain preserved.",
                     [
                       { text: "Cancel", style: "cancel" },
                       {

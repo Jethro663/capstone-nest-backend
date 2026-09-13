@@ -12,38 +12,41 @@ import {
 } from "react";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { useAuth } from "@/providers/AuthProvider";
-import { adminDemoModeService } from "@/services/admin-demo-mode-service";
+import { adminMaintenanceService } from "@/services/admin-maintenance-service";
 import type {
-  ActivateAdminDemoMode,
-  AdminDemoModeStatus,
-  DeactivateAdminDemoMode,
-} from "@/types/admin-demo-mode";
+  AdminMaintenanceStatus,
+  OpenAdminMaintenanceSession,
+} from "@/types/admin-maintenance";
 
-type AdminDemoModeContextValue = {
-  status: AdminDemoModeStatus | null;
+type AdminMaintenanceContextValue = {
+  status: AdminMaintenanceStatus | null;
   loading: boolean;
   error: string | null;
   mutating: boolean;
   refresh: () => Promise<void>;
-  activate: (payload: ActivateAdminDemoMode) => Promise<void>;
-  deactivate: (payload: DeactivateAdminDemoMode) => Promise<void>;
+  open: (payload: OpenAdminMaintenanceSession) => Promise<void>;
+  close: () => Promise<void>;
 };
 
-const AdminDemoModeContext = createContext<
-  AdminDemoModeContextValue | undefined
+const AdminMaintenanceContext = createContext<
+  AdminMaintenanceContextValue | undefined
 >(undefined);
 
-export function AdminDemoModeProvider({ children }: { children: ReactNode }) {
+export function AdminMaintenanceProvider({
+  children,
+}: {
+  children: ReactNode;
+}) {
   const { role } = useAuth();
   const isAdmin = role === "admin";
-  const [status, setStatus] = useState<AdminDemoModeStatus | null>(null);
+  const [status, setStatus] = useState<AdminMaintenanceStatus | null>(null);
   const [loading, setLoading] = useState(isAdmin);
   const [error, setError] = useState<string | null>(null);
   const [mutating, setMutating] = useState(false);
   const [clockNow, setClockNow] = useState(() => Date.now());
   const serverOffsetMs = useRef(0);
 
-  const acceptStatus = useCallback((next: AdminDemoModeStatus) => {
+  const acceptStatus = useCallback((next: AdminMaintenanceStatus) => {
     const serverTime = Date.parse(next.serverTime);
     serverOffsetMs.current = Number.isFinite(serverTime)
       ? serverTime - Date.now()
@@ -61,13 +64,13 @@ export function AdminDemoModeProvider({ children }: { children: ReactNode }) {
     }
     setLoading(true);
     try {
-      acceptStatus(await adminDemoModeService.getStatus());
+      acceptStatus(await adminMaintenanceService.getStatus());
       setError(null);
     } catch (requestError) {
       setError(
         getApiErrorMessage(
           requestError,
-          "Demo mode status could not be loaded.",
+          "Maintenance Access status could not be loaded.",
         ),
       );
     } finally {
@@ -78,7 +81,6 @@ export function AdminDemoModeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void refresh();
     if (!isAdmin) return;
-
     const onFocus = () => void refresh();
     window.addEventListener("focus", onFocus);
     const poll = window.setInterval(() => void refresh(), 30_000);
@@ -86,7 +88,6 @@ export function AdminDemoModeProvider({ children }: { children: ReactNode }) {
       () => setClockNow((current) => Math.max(Date.now(), current + 1_000)),
       1_000,
     );
-
     return () => {
       window.removeEventListener("focus", onFocus);
       window.clearInterval(poll);
@@ -97,22 +98,24 @@ export function AdminDemoModeProvider({ children }: { children: ReactNode }) {
   const effectiveStatus = useMemo(() => {
     if (!status?.active || !status.expiresAt) return status;
     const now = clockNow + serverOffsetMs.current;
-    if (Date.parse(status.expiresAt) > now) return status;
-    return { ...status, active: false, state: "expired" as const };
+    return Date.parse(status.expiresAt) > now
+      ? status
+      : { ...status, active: false, state: "expired" as const };
   }, [clockNow, status]);
 
-  const activate = useCallback(
-    async (payload: ActivateAdminDemoMode) => {
+  const open = useCallback(
+    async (payload: OpenAdminMaintenanceSession) => {
       setMutating(true);
       setError(null);
       try {
-        acceptStatus(await adminDemoModeService.activate(payload));
+        acceptStatus(await adminMaintenanceService.open(payload));
       } catch (requestError) {
-        const message = getApiErrorMessage(
-          requestError,
-          "Demo mode could not be activated.",
+        setError(
+          getApiErrorMessage(
+            requestError,
+            "Maintenance Access could not be opened.",
+          ),
         );
-        setError(message);
         throw requestError;
       } finally {
         setMutating(false);
@@ -121,25 +124,20 @@ export function AdminDemoModeProvider({ children }: { children: ReactNode }) {
     [acceptStatus],
   );
 
-  const deactivate = useCallback(
-    async (payload: DeactivateAdminDemoMode) => {
-      setMutating(true);
-      setError(null);
-      try {
-        acceptStatus(await adminDemoModeService.deactivate(payload));
-      } catch (requestError) {
-        const message = getApiErrorMessage(
-          requestError,
-          "Demo mode could not be deactivated.",
-        );
-        setError(message);
-        throw requestError;
-      } finally {
-        setMutating(false);
-      }
-    },
-    [acceptStatus],
-  );
+  const close = useCallback(async () => {
+    setMutating(true);
+    setError(null);
+    try {
+      acceptStatus(await adminMaintenanceService.close());
+    } catch (requestError) {
+      setError(
+        getApiErrorMessage(requestError, "Maintenance Access could not close."),
+      );
+      throw requestError;
+    } finally {
+      setMutating(false);
+    }
+  }, [acceptStatus]);
 
   const value = useMemo(
     () => ({
@@ -148,25 +146,29 @@ export function AdminDemoModeProvider({ children }: { children: ReactNode }) {
       error,
       mutating,
       refresh,
-      activate,
-      deactivate,
+      open,
+      close,
     }),
-    [effectiveStatus, loading, error, mutating, refresh, activate, deactivate],
+    [effectiveStatus, loading, error, mutating, refresh, open, close],
   );
 
   return (
-    <AdminDemoModeContext.Provider value={value}>
+    <AdminMaintenanceContext.Provider value={value}>
       {children}
-    </AdminDemoModeContext.Provider>
+    </AdminMaintenanceContext.Provider>
   );
 }
 
-export function useAdminDemoMode() {
-  const context = useContext(AdminDemoModeContext);
+export function useAdminMaintenance() {
+  const context = useContext(AdminMaintenanceContext);
   if (!context) {
     throw new Error(
-      "useAdminDemoMode must be used within AdminDemoModeProvider",
+      "useAdminMaintenance must be used within AdminMaintenanceProvider",
     );
   }
   return context;
+}
+
+export function useOptionalAdminMaintenance() {
+  return useContext(AdminMaintenanceContext);
 }

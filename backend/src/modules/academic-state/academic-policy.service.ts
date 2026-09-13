@@ -15,8 +15,8 @@ import {
 } from '../../drizzle/schema';
 import { getDefaultAcademicPolicy } from './academic-policy';
 import type { AcademicPolicy } from './academic-policy';
-import { AdminDemoModeService } from '../admin-demo-mode/admin-demo-mode.service';
-import type { AdminDemoModeRelaxedRuleCode } from '../admin-demo-mode/admin-demo-mode.policy';
+import { AdminMaintenanceService } from '../admin-maintenance/admin-maintenance.service';
+import type { AdminMaintenanceRuleCode } from '../admin-maintenance/admin-maintenance.policy';
 
 export const ACADEMIC_STATE_ID = '00000000-0000-0000-0000-000000000001';
 export type AssessmentAcademicAction =
@@ -37,7 +37,7 @@ export class AcademicPolicyService {
   constructor(
     private readonly databaseService: DatabaseService,
     @Optional()
-    private readonly adminDemoModeService?: AdminDemoModeService,
+    private readonly adminMaintenanceService?: AdminMaintenanceService,
   ) {}
   private get db() {
     return this.databaseService.db;
@@ -145,8 +145,8 @@ export class AcademicPolicyService {
       (sameYear &&
         policy.periods.findIndex((p) => p.key === period.key) >
           policy.periods.findIndex((p) => p.key === current.quarter));
-    const demo = this.adminDemoModeService
-      ? await this.adminDemoModeService.resolveForActor(
+    const maintenance = this.adminMaintenanceService
+      ? await this.adminMaintenanceService.resolveForActor(
           actor?.userId,
           actor?.roles,
         )
@@ -157,9 +157,9 @@ export class AcademicPolicyService {
     const canRelaxAcademicWindow = Boolean(
       actor?.roles.includes('admin') &&
       (action === 'prepare' || action === 'release' || action === 'grade') &&
-      demo.allows('admin_academic_window'),
+      maintenance.allows('admin_academic_window'),
     );
-    const bypassedRules: AdminDemoModeRelaxedRuleCode[] = [];
+    const bypassedRules: AdminMaintenanceRuleCode[] = [];
     const bypassAcademicWindow = () => {
       if (!bypassedRules.includes('admin_academic_window')) {
         bypassedRules.push('admin_academic_window');
@@ -198,7 +198,7 @@ export class AcademicPolicyService {
           policy,
           current,
           period,
-          demoMode: demo.audit(bypassedRules),
+          maintenanceAccess: maintenance.audit(bypassedRules),
         };
       if (action === 'grade') {
         if (future) {
@@ -226,7 +226,7 @@ export class AcademicPolicyService {
       policy,
       current,
       period,
-      demoMode: demo.audit(bypassedRules),
+      maintenanceAccess: maintenance.audit(bypassedRules),
     };
   }
 }

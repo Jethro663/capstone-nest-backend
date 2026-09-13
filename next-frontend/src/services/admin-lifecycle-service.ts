@@ -19,37 +19,37 @@ async function post<T>(path: string, payload: unknown) {
 
 export const adminLifecycleService = {
   previewStudent: (input: PreviewStudentLifecycleInput) =>
-    post<AdminLifecyclePreview>("/admin/lifecycle/students/preview", input),
+    post<AdminLifecyclePreview>("/admin/maintenance/students/preview", input),
   executeStudent: (input: Execute<PreviewStudentLifecycleInput>) =>
     post<AdminLifecycleExecutionResult>(
-      "/admin/lifecycle/students/execute",
+      "/admin/maintenance/students/execute",
       input,
     ),
   previewClass: (input: PreviewClassLifecycleInput) =>
-    post<AdminLifecyclePreview>("/admin/lifecycle/classes/preview", input),
+    post<AdminLifecyclePreview>("/admin/maintenance/classes/preview", input),
   executeClass: (input: Execute<PreviewClassLifecycleInput>) =>
     post<AdminLifecycleExecutionResult>(
-      "/admin/lifecycle/classes/execute",
+      "/admin/maintenance/classes/execute",
       input,
     ),
   previewSection: (input: PreviewSectionLifecycleInput) =>
-    post<AdminLifecyclePreview>("/admin/lifecycle/sections/preview", input),
+    post<AdminLifecyclePreview>("/admin/maintenance/sections/preview", input),
   executeSection: (input: Execute<PreviewSectionLifecycleInput>) =>
     post<AdminLifecycleExecutionResult>(
-      "/admin/lifecycle/sections/execute",
+      "/admin/maintenance/sections/execute",
       input,
     ),
   previewPurge: (input: PreviewPurgeLifecycleInput) =>
-    post<AdminLifecyclePreview>("/admin/lifecycle/purge/preview", input),
+    post<AdminLifecyclePreview>("/admin/maintenance/purge/preview", input),
   executePurge: (input: Execute<PreviewPurgeLifecycleInput>) =>
     post<AdminLifecycleExecutionResult>(
-      "/admin/lifecycle/purge/execute",
+      "/admin/maintenance/purge/execute",
       input,
     ),
   async getOperation(operationId: string) {
     const { data } = await api.get<
       AdminLifecycleResponse<Record<string, unknown>>
-    >(`/admin/lifecycle/operations/${operationId}`);
+    >(`/admin/maintenance/operations/${operationId}`);
     return data;
   },
 };

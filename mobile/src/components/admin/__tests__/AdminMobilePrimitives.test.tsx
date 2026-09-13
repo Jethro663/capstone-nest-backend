@@ -54,8 +54,8 @@ jest.mock("../../ui/primitives", () => {
   };
 });
 
-jest.mock("../AdminDemoModeNotice", () => ({
-  AdminDemoModeNotice: () => null,
+jest.mock("../AdminMaintenanceNotice", () => ({
+  AdminMaintenanceNotice: () => null,
 }));
 
 function renderedText(root: TestRenderer.ReactTestInstance) {
@@ -84,13 +84,13 @@ beforeAll(() => {
 afterAll(() => consoleErrorSpy.mockRestore());
 
 describe("admin mobile primitives", () => {
-  it("places the shared Demo mode notice below AdminScreen headers", () => {
+  it("places the shared Maintenance Access notice below AdminScreen headers", () => {
     const source = fs.readFileSync(
       path.resolve(__dirname, "../AdminMobilePrimitives.tsx"),
       "utf8",
     );
-    expect(source).toContain("<AdminDemoModeNotice");
-    expect(source.indexOf("<AdminDemoModeNotice")).toBeGreaterThan(
+    expect(source).toContain("<AdminMaintenanceNotice");
+    expect(source.indexOf("<AdminMaintenanceNotice")).toBeGreaterThan(
       source.indexOf('testID="admin-compact-header"'),
     );
   });

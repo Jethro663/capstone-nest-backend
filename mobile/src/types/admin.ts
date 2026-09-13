@@ -111,11 +111,7 @@ export interface UserMonitoringReportPage {
   totalPages: number;
 }
 
-export type BulkUserLifecycleAction =
-  | "suspend"
-  | "reactivate"
-  | "archive"
-  | "purge";
+export type BulkUserLifecycleAction = "suspend" | "reactivate" | "archive";
 export interface BulkUserLifecycleDto {
   action: BulkUserLifecycleAction;
   userIds: string[];

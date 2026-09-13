@@ -5,6 +5,7 @@ describe('purge lifecycle planning', () => {
     'enrollmentHistory',
     'lifecycleEvents',
     'classRecords',
+    'finalizedParticipants',
     'scores',
     'attempts',
     'assessments',
@@ -53,6 +54,24 @@ describe('purge lifecycle planning', () => {
 
     expect(result.blockers).toContainEqual(
       expect.objectContaining({ code: 'TARGET_NOT_ARCHIVED' }),
+    );
+  });
+
+  it('blocks archived-account deletion when finalized grades or attempts exist', () => {
+    const result = planPurgeLifecycle({
+      targetType: 'USER',
+      targetId: '00000000-0000-4000-8000-000000000304',
+      targetName: 'Archived Learner',
+      isActive: false,
+      version: '2026-09-11T00:00:00.000Z',
+      evidence: { finalizedParticipants: 1, attempts: 1 },
+    });
+
+    expect(result.blockers).toContainEqual(
+      expect.objectContaining({ code: 'RETAINED_EVIDENCE' }),
+    );
+    expect(result.effects).toContainEqual(
+      expect.objectContaining({ entityType: 'user', kind: 'purge' }),
     );
   });
 });

@@ -16,11 +16,7 @@ export type {
 } from "./teacher-route-manifest";
 
 export type ClassDetailInitialTab =
-  | "modules"
-  | "assignments"
-  | "announcements"
-  | "discussion"
-  | "calendar";
+  "modules" | "assignments" | "announcements" | "discussion" | "calendar";
 export type JaPanel = "practice" | "ask" | "review" | "lxp";
 export type LxpMobileTab = "paths" | "steps" | "replays" | "case" | "overview";
 export type TeacherClassDetailTab =
@@ -34,27 +30,16 @@ export type TeacherClassDetailTab =
   | "students";
 
 export type TeacherClassDetailSource =
-  | "classes"
-  | "home"
-  | "announcements"
-  | "calendar";
+  "classes" | "home" | "announcements" | "calendar";
 export type TeacherModuleDetailSource = "class" | "library";
 export type TeacherLessonDetailSource = "module" | "lessons";
 export type TeacherAiDraftSource = "class" | "assessments";
 export type StudentClassDetailSource =
-  | "classes"
-  | "home"
-  | "calendar"
-  | "courses"
-  | "assessments";
+  "classes" | "home" | "calendar" | "courses" | "assessments";
 export type StudentModuleDetailSource = "class";
 export type StudentLessonDetailSource = "module" | "class" | "home" | "ja";
 export type StudentAssessmentDetailSource =
-  | "assessments"
-  | "class"
-  | "home"
-  | "calendar"
-  | "history";
+  "assessments" | "class" | "home" | "calendar" | "history";
 
 export type AdminToolSection =
   | "users"
@@ -90,12 +75,12 @@ export type RootStackParamList = {
   AdminSettingsYearTransition: undefined;
   AdminSettingsLearnerCompletion: undefined;
   AdminSettingsAuditRecovery: undefined;
-  AdminSettingsDemoMode: undefined;
+  AdminSettingsMaintenance: undefined;
   AdminSettingsResetSchoolData: undefined;
   AdminStudentReadiness: undefined;
   AdminAnnouncements: undefined;
   AdminLifecycleReview: {
-    targetType: "CLASS" | "SECTION" | "STUDENT";
+    targetType: "CLASS" | "SECTION" | "STUDENT" | "USER";
     targetId: string;
     targetLabel: string;
     isActive: boolean;
@@ -175,8 +160,7 @@ export type RootStackParamList = {
   TeacherLessons: undefined;
   TeacherAssessmentDetail: { assessmentId: string; classId?: string };
   TeacherAssessmentEditor:
-    | { assessmentId?: string; classId?: string; created?: boolean }
-    | undefined;
+    { assessmentId?: string; classId?: string; created?: boolean } | undefined;
   TeacherAssessmentReview: {
     attemptId: string;
     assessmentId?: string;

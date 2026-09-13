@@ -625,8 +625,9 @@ export function ResetSchoolData() {
                             accounts
                           </li>
                           <li>
-                            All school content, classes, assessments, grades,
-                            messages and chats, including your own content
+                            All live academic data, including classes,
+                            assessments, finalized grades, messages, chats, and
+                            your own school content
                           </li>
                           <li>
                             Uploaded files, search vectors and indexes, and

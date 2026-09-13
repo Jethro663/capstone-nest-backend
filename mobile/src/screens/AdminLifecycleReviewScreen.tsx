@@ -9,6 +9,7 @@ import { classesApi } from "../api/services/classes";
 import { sectionsApi } from "../api/services/sections";
 import { toAppError } from "../api/http";
 import { useAdminNetworkStatus } from "../hooks/useAdminNetworkStatus";
+import { useAdminMaintenance } from "../hooks/useAdminMaintenance";
 import {
   buildExecutionEvidence,
   canExecuteManifest,
@@ -19,6 +20,7 @@ import type {
   AdminLifecycleExecutionResult,
   AdminLifecyclePreview,
   AdminLifecycleReasonCode,
+  AdminMaintenanceNextAction,
   ClassLifecycleResolution,
   PreviewClassLifecycleInput,
   PreviewPurgeLifecycleInput,
@@ -56,6 +58,12 @@ const studentOutcomes: Array<{
     label: "Correct error",
     description:
       "Remove an enrollment that was created in error when no retained evidence blocks correction.",
+  },
+  {
+    value: "CORRECT_CLASS_ENROLLMENT",
+    label: "Correct class",
+    description:
+      "Remove only one mistaken class membership without dropping the section enrollment.",
   },
   {
     value: "WITHDRAW",
@@ -134,13 +142,16 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
   } = route.params;
   const queryClient = useQueryClient();
   const network = useAdminNetworkStatus();
+  const maintenance = useAdminMaintenance();
   const [effectivePeriod, setEffectivePeriod] =
     useState<AcademicPeriodKey>("Q1");
   const [classResolution, setClassResolution] =
     useState<ClassLifecycleResolution>("ARCHIVE_EMPTY");
   const [replacementClassId, setReplacementClassId] = useState("");
   const [studentResolution, setStudentResolution] =
-    useState<StudentLifecycleResolution>("CORRECT_ENROLLMENT");
+    useState<StudentLifecycleResolution>(
+      initialClassId ? "CORRECT_CLASS_ENROLLMENT" : "CORRECT_ENROLLMENT",
+    );
   const [studentSourceClassId, setStudentSourceClassId] =
     useState(initialClassId);
   const [studentDestinationSectionId, setStudentDestinationSectionId] =
@@ -308,7 +319,10 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
     sectionId,
     resolution: studentResolution,
     classId:
-      studentResolution === "TRANSFER_CLASS" ? studentSourceClassId : undefined,
+      studentResolution === "TRANSFER_CLASS" ||
+      studentResolution === "CORRECT_CLASS_ENROLLMENT"
+        ? studentSourceClassId
+        : undefined,
     destinationSectionId:
       studentResolution === "TRANSFER_SECTION"
         ? studentDestinationSectionId
@@ -321,7 +335,12 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
   });
 
   const purgeInput = (): PreviewPurgeLifecycleInput => ({
-    targetType: targetType === "CLASS" ? "CLASS" : "SECTION",
+    targetType:
+      targetType === "CLASS"
+        ? "CLASS"
+        : targetType === "SECTION"
+          ? "SECTION"
+          : "USER",
     targetId,
   });
 
@@ -344,6 +363,8 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
         return Boolean(studentDestinationSectionId);
       if (studentResolution === "TRANSFER_CLASS")
         return Boolean(studentSourceClassId && studentDestinationClassId);
+      if (studentResolution === "CORRECT_CLASS_ENROLLMENT")
+        return Boolean(studentSourceClassId);
       return true;
     }
     if (targetType === "CLASS")
@@ -429,7 +450,12 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
               });
       setPassword("");
       setResult(response.data);
+      if (targetType === "USER") {
+        queryClient.removeQueries({ queryKey: ["admin-user", targetId] });
+      }
       await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["admin-users"] }),
+        queryClient.invalidateQueries({ queryKey: ["admin-user-monitoring"] }),
         queryClient.invalidateQueries({ queryKey: ["admin-classes"] }),
         queryClient.invalidateQueries({ queryKey: ["admin-classes-all"] }),
         queryClient.invalidateQueries({ queryKey: ["admin-sections"] }),
@@ -440,9 +466,17 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
       ]);
     } catch (nextError) {
       setPassword("");
-      const status = (nextError as { response?: { status?: number } }).response
-        ?.status;
-      if (status === 409) {
+      const appError = toAppError(nextError);
+      if (appError.code === "MAINTENANCE_SESSION_REQUIRED") {
+        setPrepared(null);
+        setConfirmations([]);
+        setIdempotencyKey(Crypto.randomUUID());
+        await maintenance.refresh();
+        setError(
+          "Maintenance Access expired or changed. Reauthenticate, then return and review the impact again. Your selected outcome, reason, and notes were kept.",
+        );
+        navigation.navigate("AdminSettingsMaintenance");
+      } else if (appError.status === 409) {
         setIdempotencyKey(Crypto.randomUUID());
         setConfirmations([]);
         try {
@@ -455,7 +489,7 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
           setError(toAppError(refreshError).message);
         }
       } else {
-        setError(toAppError(nextError).message);
+        setError(appError.message);
       }
     } finally {
       setBusy(false);
@@ -463,15 +497,43 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
   };
 
   const manifest = prepared?.manifest;
+  const maintenanceActive = maintenance.status?.active === true;
+  const passwordRequired = !isActive;
   const readyToExecute = manifest
     ? !network.isOffline &&
+      maintenanceActive &&
       canExecuteManifest({
         manifest,
         confirmations,
         notes,
         currentPassword: password,
+        passwordRequired,
       })
     : false;
+
+  const useNextAction = (action: AdminMaintenanceNextAction) => {
+    if (action.kind === "NAVIGATE_REPAIR" && action.href) {
+      navigation.navigate(
+        action.href.includes("year-transition")
+          ? "AdminSettingsYearTransition"
+          : "AdminSettingsAuditRecovery",
+      );
+      return;
+    }
+    if (action.kind !== "REPREVIEW" || !action.intent) return;
+    if (targetType === "STUDENT") {
+      setStudentResolution(action.intent as StudentLifecycleResolution);
+    } else if (targetType === "CLASS") {
+      setClassResolution(action.intent as ClassLifecycleResolution);
+    }
+    setPrepared(null);
+    setConfirmations([]);
+    setError(
+      action.requiredFields?.length
+        ? `Complete ${action.requiredFields.map(readable).join(", ")}, then review again.`
+        : "Outcome changed. Review the updated impact.",
+    );
+  };
   const loadingInputs =
     current.isLoading ||
     roster.isLoading ||
@@ -537,9 +599,18 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
           ) : null}
           <View style={{ padding: 16 }}>
             <AdminButton
-              label="Return to records"
+              label={
+                targetType === "USER" ? "Return to users" : "Return to records"
+              }
               variant="solid"
-              onPress={navigation.goBack}
+              onPress={
+                targetType === "USER"
+                  ? () =>
+                      navigation.navigate("MainTabs", {
+                        screen: "AdminUsers",
+                      })
+                  : navigation.goBack
+              }
             />
           </View>
         </AdminSection>
@@ -561,7 +632,9 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
             ? "Class record"
             : targetType === "SECTION"
               ? "Section record"
-              : "Learner membership"
+              : targetType === "USER"
+                ? "Archived account"
+                : "Learner membership"
         }
       >
         <AdminDataRow
@@ -707,7 +780,11 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
                       active={studentResolution === option.value}
                       onPress={() => {
                         setStudentResolution(option.value);
-                        setStudentSourceClassId("");
+                        setStudentSourceClassId(
+                          option.value === "CORRECT_CLASS_ENROLLMENT"
+                            ? initialClassId
+                            : "",
+                        );
                         setStudentDestinationSectionId("");
                         setStudentDestinationClassId("");
                       }}
@@ -741,7 +818,8 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
                     ) : null}
                   </View>
                 ) : null}
-                {studentResolution === "TRANSFER_CLASS" ? (
+                {studentResolution === "TRANSFER_CLASS" ||
+                studentResolution === "CORRECT_CLASS_ENROLLMENT" ? (
                   <View style={{ gap: 10 }}>
                     <Text
                       style={{
@@ -767,7 +845,8 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
                         />
                       ))}
                     </View>
-                    {studentSourceClassId ? (
+                    {studentResolution === "TRANSFER_CLASS" &&
+                    studentSourceClassId ? (
                       <Text
                         style={{
                           color: theme.subtext,
@@ -778,19 +857,28 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
                         COMPATIBLE DESTINATION CLASS
                       </Text>
                     ) : null}
-                    <View
-                      style={{ flexDirection: "row", flexWrap: "wrap", gap: 7 }}
-                    >
-                      {studentDestinationClasses.map((entry) => (
-                        <AdminChip
-                          key={entry.id}
-                          label={`${entry.subjectCode} · ${entry.subjectName}`}
-                          active={studentDestinationClassId === entry.id}
-                          onPress={() => setStudentDestinationClassId(entry.id)}
-                        />
-                      ))}
-                    </View>
-                    {studentSourceClassId &&
+                    {studentResolution === "TRANSFER_CLASS" ? (
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          flexWrap: "wrap",
+                          gap: 7,
+                        }}
+                      >
+                        {studentDestinationClasses.map((entry) => (
+                          <AdminChip
+                            key={entry.id}
+                            label={`${entry.subjectCode} · ${entry.subjectName}`}
+                            active={studentDestinationClassId === entry.id}
+                            onPress={() =>
+                              setStudentDestinationClassId(entry.id)
+                            }
+                          />
+                        ))}
+                      </View>
+                    ) : null}
+                    {studentResolution === "TRANSFER_CLASS" &&
+                    studentSourceClassId &&
                     !classes.isLoading &&
                     !studentDestinationClasses.length ? (
                       <AdminEmpty
@@ -936,6 +1024,31 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
               ))}
             </AdminSection>
           ) : null}
+          <AdminSection
+            title={readable(manifest.decision.state)}
+            subtitle={manifest.decision.message}
+          >
+            {manifest.decision.nextActions.map((action) => (
+              <AdminDataRow
+                key={action.id}
+                title={action.label}
+                subtitle={
+                  action.requiredFields?.length
+                    ? `Requires ${action.requiredFields.map(readable).join(", ")}`
+                    : readable(action.kind)
+                }
+                status="Next action"
+                statusTone="primary"
+                onPress={() => useNextAction(action)}
+              />
+            ))}
+            {!manifest.decision.nextActions.length ? (
+              <AdminDataRow
+                title={manifest.decision.message}
+                subtitle={manifest.decision.code}
+              />
+            ) : null}
+          </AdminSection>
           {manifest.warnings.length ? (
             <AdminSection title="Warnings">
               {manifest.warnings.map((entry) => (
@@ -999,6 +1112,23 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
               subtitle="Every item is required and is submitted as backend evidence"
             >
               <View style={{ padding: 16, gap: 12 }}>
+                {!maintenanceActive ? (
+                  <>
+                    <AdminNotice
+                      title="Maintenance Access required"
+                      description="Open a 15-minute session, then return and review the impact again before applying this change."
+                      tone="amber"
+                      icon="shield-key-outline"
+                    />
+                    <AdminButton
+                      label="Open Maintenance Access"
+                      icon="shield-key-outline"
+                      onPress={() =>
+                        navigation.navigate("AdminSettingsMaintenance")
+                      }
+                    />
+                  </>
+                ) : null}
                 <Text
                   style={{
                     color: theme.subtext,
@@ -1057,14 +1187,23 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
                   multiline
                   maxLength={2000}
                 />
-                <AdminField
-                  label="Current password"
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry
-                  autoComplete="current-password"
-                  maxLength={128}
-                />
+                {passwordRequired ? (
+                  <AdminField
+                    label="Current password"
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry
+                    autoComplete="current-password"
+                    maxLength={128}
+                  />
+                ) : maintenanceActive ? (
+                  <AdminNotice
+                    title="Already reauthenticated"
+                    description="Your active Maintenance Access window covers this routine action."
+                    tone="green"
+                    icon="shield-check-outline"
+                  />
+                ) : null}
                 <View style={{ flexDirection: "row", gap: 8 }}>
                   <View style={{ flex: 1 }}>
                     <AdminButton

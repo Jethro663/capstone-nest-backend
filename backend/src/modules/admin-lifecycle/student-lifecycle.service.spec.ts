@@ -162,6 +162,48 @@ describe('student lifecycle planning', () => {
     ]);
   });
 
+  it('corrects one class membership without dropping the section enrollment', () => {
+    const result = planStudentLifecycle(
+      snapshot({
+        participants: [
+          {
+            id: '00000000-0000-4000-8000-000000000031',
+            studentId: ids.student,
+            classId: ids.class,
+            gradingPeriod: 'Q3',
+            recordStatus: 'draft',
+            eligibility: 'eligible',
+          },
+        ],
+        evidence: {
+          draftParticipants: 1,
+          finalizedParticipants: 0,
+          scores: 0,
+          attempts: 0,
+        },
+      }),
+      {
+        studentId: ids.student,
+        sectionId: ids.section,
+        classId: ids.class,
+        resolution: 'CORRECT_CLASS_ENROLLMENT',
+        effectivePeriod: 'Q3',
+      },
+    );
+
+    expect(result.blockers).toEqual([]);
+    expect(result.effects).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ entityId: ids.classEnrollment }),
+        expect.objectContaining({ entityType: 'class_record_participant' }),
+        expect.objectContaining({ entityType: 'enrollment_lifecycle_event' }),
+      ]),
+    );
+    expect(result.participantChanges).toEqual([
+      expect.objectContaining({ eligibility: 'not_enrolled' }),
+    ]);
+  });
+
   it('withdraws only current and future editable participants', () => {
     const result = planStudentLifecycle(snapshot(), {
       studentId: ids.student,
@@ -256,9 +298,57 @@ describe('student lifecycle planning', () => {
         },
       );
 
-      expect(result.blockers).toEqual([expect.objectContaining({ code })]);
+      expect(result.blockers).toContainEqual(expect.objectContaining({ code }));
     },
   );
+
+  it('turns destination capacity into an acknowledged warning during Maintenance Access', () => {
+    const result = planStudentLifecycle(
+      snapshot({
+        destinationSection: {
+          id: ids.destinationSection,
+          name: 'Destination',
+          gradeLevel: '7',
+          schoolYear: '2026-2027',
+          capacity: 20,
+          isActive: true,
+          adviserId: null,
+          updatedAt: new Date('2026-09-11T00:00:00Z'),
+        },
+        destinationClasses: [
+          {
+            id: ids.destinationClass,
+            sectionId: ids.destinationSection,
+            subjectCode: 'MATH-7',
+            subjectName: 'Mathematics 7',
+            schoolYear: '2026-2027',
+            isActive: true,
+            teacherId: null,
+            updatedAt: new Date('2026-09-11T00:00:00Z'),
+          },
+        ],
+        destinationActiveStudentCount: 20,
+      }),
+      {
+        studentId: ids.student,
+        sectionId: ids.section,
+        resolution: 'TRANSFER_SECTION',
+        destinationSectionId: ids.destinationSection,
+        effectivePeriod: 'Q3',
+      },
+      { allowSectionCapacityOverride: true },
+    );
+
+    expect(result.blockers).not.toContainEqual(
+      expect.objectContaining({ code: 'DESTINATION_AT_CAPACITY' }),
+    );
+    expect(result.warnings).toContainEqual(
+      expect.objectContaining({ code: 'SECTION_CAPACITY' }),
+    );
+    expect(result.requiredConfirmations).toContain(
+      'ACKNOWLEDGE_SECTION_CAPACITY',
+    );
+  });
 
   it('blocks section transfer when a subject destination is missing', () => {
     const result = planStudentLifecycle(
@@ -342,7 +432,10 @@ describe('student lifecycle mutations', () => {
   it('updates memberships and records append-only withdrawal events', async () => {
     const where = jest.fn().mockResolvedValue(undefined);
     const set = jest.fn().mockReturnValue({ where });
-    const values = jest.fn().mockResolvedValue(undefined);
+    const returning = jest
+      .fn()
+      .mockResolvedValue([{ id: '00000000-0000-4000-8000-000000000052' }]);
+    const values = jest.fn().mockReturnValue({ returning });
     const db = {
       update: jest.fn().mockReturnValue({ set }),
       insert: jest.fn().mockReturnValue({ values }),
@@ -385,6 +478,12 @@ describe('student lifecycle mutations', () => {
         }),
       ]),
     );
-    expect(result.changed).toHaveLength(2);
+    expect(result.changed).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ entityType: 'enrollment' }),
+        expect.objectContaining({ entityType: 'class_record_participant' }),
+        expect.objectContaining({ entityType: 'enrollment_lifecycle_event' }),
+      ]),
+    );
   });
 });

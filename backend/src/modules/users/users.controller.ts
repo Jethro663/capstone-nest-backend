@@ -7,6 +7,7 @@ import {
   Patch,
   Put,
   Delete,
+  GoneException,
   UseGuards,
   Query,
   Res,
@@ -237,9 +238,10 @@ export class UsersController {
    */
   @Delete(':id/purge')
   @Roles(RoleName.Admin)
-  async purgeUser(@Param('id') id: string, @CurrentUser() admin: any) {
-    const result = await this.usersService.purgeUser(id, admin.sub || admin.id);
-    return { success: true, ...result };
+  purgeUser() {
+    throw new GoneException(
+      'Direct account purge is retired. Use the reviewed Admin Maintenance purge preview and execute routes.',
+    );
   }
 
   @Post('bulk/lifecycle')

@@ -18,7 +18,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getApiErrorMessage } from "@/lib/api-error";
+import { getApiErrorEvidence, getApiErrorMessage } from "@/lib/api-error";
+import { useOptionalAdminMaintenance } from "@/providers/AdminMaintenanceProvider";
 import type {
   AdminLifecycleExecutionEvidence,
   AdminLifecycleExecutionResult,
@@ -85,6 +86,7 @@ export function AdminLifecycleDialog({
   onCompleted,
   permanent = false,
 }: AdminLifecycleDialogProps) {
+  const maintenance = useOptionalAdminMaintenance();
   const defaultIntent = initialIntent ?? intents[0]?.value ?? "";
   const [intent, setIntent] = useState(defaultIntent);
   const [prepared, setPrepared] = useState<AdminLifecyclePreview | null>(null);
@@ -122,11 +124,11 @@ export function AdminLifecycleDialog({
     [confirmations, required],
   );
 
-  const loadPreview = async () => {
+  const loadPreview = async (selectedIntent = intent) => {
     setLoading(true);
     setError(null);
     try {
-      const next = await preview(intent);
+      const next = await preview(selectedIntent);
       setPrepared(next);
       setConfirmations([]);
       return next;
@@ -148,7 +150,7 @@ export function AdminLifecycleDialog({
       const completed = await execute(intent, {
         manifestHash: prepared.manifest.manifestHash,
         manifestExpiresAt: prepared.manifest.expiresAt,
-        currentPassword: password,
+        ...(passwordRequired ? { currentPassword: password } : {}),
         reasonCode,
         notes: notes.trim(),
         confirmations,
@@ -157,18 +159,29 @@ export function AdminLifecycleDialog({
       setResult(completed);
       await onCompleted?.(completed);
     } catch (nextError) {
-      const status = (nextError as { response?: { status?: number } })?.response
-        ?.status;
-      if (status === 409) {
+      const evidence = getApiErrorEvidence(
+        nextError,
+        "Lifecycle operation failed",
+      );
+      if (evidence.code === "MAINTENANCE_SESSION_REQUIRED") {
+        setPrepared(null);
+        setConfirmations([]);
+        setPassword("");
         setIdempotencyKey(newIdempotencyKey());
-        const refreshed = await loadPreview();
+        await maintenance?.refresh();
+        setError(
+          "Maintenance Access expired or changed. Reauthenticate, then review the impact again. Your selected outcome, reason, and notes were kept.",
+        );
+      } else if (evidence.statusCode === 409) {
+        setIdempotencyKey(newIdempotencyKey());
+        const refreshed = await loadPreview(intent);
         if (refreshed) {
           setError(
             "The data changed or the review expired. Your selected outcome was kept; review the refreshed effects before confirming again.",
           );
         }
       } else {
-        setError(getApiErrorMessage(nextError, "Lifecycle operation failed"));
+        setError(evidence.message);
       }
     } finally {
       setLoading(false);
@@ -176,13 +189,33 @@ export function AdminLifecycleDialog({
   };
 
   const manifest = prepared?.manifest;
+  const decision = manifest?.decision ?? {
+    state: manifest?.safeToExecute
+      ? ("READY" as const)
+      : ("IMMUTABLE" as const),
+    code: manifest?.safeToExecute ? "READY" : "BLOCKED",
+    message: manifest?.safeToExecute
+      ? "This maintenance action is ready to execute."
+      : "The backend did not provide an executable path.",
+    nextActions: [],
+  };
   const blocked = Boolean(manifest && !manifest.safeToExecute);
+  const maintenanceActive = maintenance?.status?.active === true;
+  const passwordRequired = permanent;
   const readyToExecute =
     Boolean(manifest) &&
+    maintenanceActive &&
     !blocked &&
     allConfirmed &&
     notes.trim().length >= 5 &&
-    password.length > 0;
+    (!passwordRequired || password.length > 0);
+
+  const handleNextAction = async (nextIntent: string) => {
+    setIntent(nextIntent);
+    setPrepared(null);
+    setConfirmations([]);
+    await loadPreview(nextIntent);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -280,6 +313,56 @@ export function AdminLifecycleDialog({
                   </section>
                 ) : null}
 
+                {manifest.warnings.length > 0 ? (
+                  <section className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                    <h3 className="font-bold text-amber-900">
+                      Warnings to acknowledge
+                    </h3>
+                    <ul className="mt-2 space-y-2 text-sm text-amber-900">
+                      {manifest.warnings.map((entry) => (
+                        <li key={`${entry.code}-${entry.message}`}>
+                          {entry.message}
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                ) : null}
+
+                <section
+                  className={`rounded-xl border p-4 ${
+                    decision.state === "IMMUTABLE"
+                      ? "border-red-200 bg-red-50"
+                      : "border-blue-200 bg-blue-50"
+                  }`}
+                >
+                  <p className="text-xs font-bold uppercase tracking-[0.12em]">
+                    {decision.state.replaceAll("_", " ")}
+                  </p>
+                  <p className="mt-1 text-sm">{decision.message}</p>
+                  {decision.nextActions.length > 0 ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {decision.nextActions.map((action) =>
+                        action.kind === "NAVIGATE_REPAIR" && action.href ? (
+                          <Button key={action.id} variant="outline" asChild>
+                            <a href={action.href}>{action.label}</a>
+                          </Button>
+                        ) : action.kind === "REPREVIEW" && action.intent ? (
+                          <Button
+                            key={action.id}
+                            variant="outline"
+                            disabled={loading}
+                            onClick={() =>
+                              void handleNextAction(action.intent!)
+                            }
+                          >
+                            {action.label}
+                          </Button>
+                        ) : null,
+                      )}
+                    </div>
+                  ) : null}
+                </section>
+
                 <div className="grid gap-4 md:grid-cols-2">
                   <section>
                     <h3 className="text-sm font-bold text-[var(--admin-text-strong)]">
@@ -309,6 +392,23 @@ export function AdminLifecycleDialog({
 
                 {!blocked ? (
                   <section className="space-y-4 border-t border-[var(--admin-outline)] pt-4">
+                    {!maintenanceActive ? (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+                        <p className="font-bold">
+                          Maintenance Access is required to apply this reviewed
+                          change.
+                        </p>
+                        <p className="mt-1">
+                          Open a 15-minute session, then return and review the
+                          impact again.
+                        </p>
+                        <Button className="mt-3" variant="outline" asChild>
+                          <a href="/dashboard/admin/system-settings/maintenance-access/">
+                            Open Maintenance Access
+                          </a>
+                        </Button>
+                      </div>
+                    ) : null}
                     <div className="space-y-2">
                       <p className="text-sm font-bold text-[var(--admin-text-strong)]">
                         Confirm reviewed effects
@@ -368,19 +468,26 @@ export function AdminLifecycleDialog({
                         placeholder="Record the request, evidence checked, and effective date."
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="lifecycle-password">
-                        Current password
-                      </Label>
-                      <Input
-                        id="lifecycle-password"
-                        type="password"
-                        autoComplete="current-password"
-                        value={password}
-                        onChange={(event) => setPassword(event.target.value)}
-                        className="admin-input"
-                      />
-                    </div>
+                    {passwordRequired ? (
+                      <div className="space-y-2">
+                        <Label htmlFor="lifecycle-password">
+                          Current password
+                        </Label>
+                        <Input
+                          id="lifecycle-password"
+                          type="password"
+                          autoComplete="current-password"
+                          value={password}
+                          onChange={(event) => setPassword(event.target.value)}
+                          className="admin-input"
+                        />
+                      </div>
+                    ) : maintenanceActive ? (
+                      <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+                        Reauthentication is already covered by your active
+                        Maintenance Access window.
+                      </p>
+                    ) : null}
                   </section>
                 ) : null}
               </>

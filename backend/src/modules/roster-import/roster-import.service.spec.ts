@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { RosterImportService } from './roster-import.service';
 import { DatabaseService } from '../../database/database.service';
-import { AdminDemoModeService } from '../admin-demo-mode/admin-demo-mode.service';
+import { AdminMaintenanceService } from '../admin-maintenance/admin-maintenance.service';
 
 // --- mock parsers ---
 jest.mock('./parsers/xlsx.parser', () => ({
@@ -95,7 +95,7 @@ const inactiveDemoContext = {
   allows: jest.fn().mockReturnValue(false),
   audit: jest.fn().mockReturnValue(undefined),
 };
-const mockAdminDemoModeService = { resolveForActor: jest.fn() };
+const mockAdminMaintenanceService = { resolveForActor: jest.fn() };
 let committedEffects: Array<() => unknown>;
 
 beforeEach(() => {
@@ -103,7 +103,7 @@ beforeEach(() => {
   dbStub = createDbStub();
   committedEffects = [];
   mockAuditService.log.mockResolvedValue(undefined);
-  mockAdminDemoModeService.resolveForActor.mockResolvedValue(
+  mockAdminMaintenanceService.resolveForActor.mockResolvedValue(
     inactiveDemoContext,
   );
   const databaseService = {
@@ -121,7 +121,7 @@ beforeEach(() => {
     } as never,
     mockAuditService as never,
     onboardingEvents as never,
-    mockAdminDemoModeService as AdminDemoModeService,
+    mockAdminMaintenanceService as AdminMaintenanceService,
   );
 });
 
@@ -157,7 +157,7 @@ describe('parseAndPreview', () => {
   });
 
   it('lets an active Demo administrator reach parsing for an inactive section', async () => {
-    mockAdminDemoModeService.resolveForActor.mockResolvedValue({
+    mockAdminMaintenanceService.resolveForActor.mockResolvedValue({
       active: true,
       version: 2,
       expiresAt: new Date('2026-09-12T04:30:00.000Z'),
@@ -262,17 +262,17 @@ describe('commitRoster', () => {
   });
 
   it('commits an empty historical roster only for an active Demo administrator and audits the bypass', async () => {
-    const demoMode = {
-      demoModeVersion: 3,
-      demoModeExpiresAt: '2026-09-12T04:30:00.000Z',
+    const maintenanceAccess = {
+      maintenanceAccessVersion: 3,
+      maintenanceAccessExpiresAt: '2026-09-12T04:30:00.000Z',
       bypassedRules: ['section_membership_window'],
     };
-    mockAdminDemoModeService.resolveForActor.mockResolvedValue({
+    mockAdminMaintenanceService.resolveForActor.mockResolvedValue({
       active: true,
       version: 3,
       expiresAt: new Date('2026-09-12T04:30:00.000Z'),
       allows: jest.fn((rule) => rule === 'section_membership_window'),
-      audit: jest.fn().mockReturnValue(demoMode),
+      audit: jest.fn().mockReturnValue(maintenanceAccess),
     });
     dbStub.query.sections.findFirst.mockResolvedValue({
       id: SECTION_ID,
@@ -289,7 +289,7 @@ describe('commitRoster', () => {
     ).resolves.toMatchObject({ summary: { total: 0 } });
     expect(mockAuditService.log).toHaveBeenCalledWith(
       expect.objectContaining({
-        metadata: expect.objectContaining({ demoMode }),
+        metadata: expect.objectContaining({ maintenanceAccess }),
       }),
     );
   });
@@ -353,17 +353,17 @@ describe('commitRoster', () => {
   });
 
   it('allows capacity overbooking for an active Demo administrator while retaining role and grade checks', async () => {
-    const demoMode = {
-      demoModeVersion: 4,
-      demoModeExpiresAt: '2026-09-12T04:30:00.000Z',
+    const maintenanceAccess = {
+      maintenanceAccessVersion: 4,
+      maintenanceAccessExpiresAt: '2026-09-12T04:30:00.000Z',
       bypassedRules: ['section_capacity'],
     };
-    mockAdminDemoModeService.resolveForActor.mockResolvedValue({
+    mockAdminMaintenanceService.resolveForActor.mockResolvedValue({
       active: true,
       version: 4,
       expiresAt: new Date('2026-09-12T04:30:00.000Z'),
       allows: jest.fn((rule) => rule === 'section_capacity'),
-      audit: jest.fn().mockReturnValue(demoMode),
+      audit: jest.fn().mockReturnValue(maintenanceAccess),
     });
     dbStub.query.sections.findFirst.mockResolvedValue({
       id: SECTION_ID,
@@ -406,13 +406,13 @@ describe('commitRoster', () => {
     ).resolves.toBeDefined();
     expect(mockAuditService.log).toHaveBeenCalledWith(
       expect.objectContaining({
-        metadata: expect.objectContaining({ demoMode }),
+        metadata: expect.objectContaining({ maintenanceAccess }),
       }),
     );
   });
 
-  it('still rejects a grade-mismatched learner while Demo mode is active', async () => {
-    mockAdminDemoModeService.resolveForActor.mockResolvedValue({
+  it('still rejects a grade-mismatched learner while Maintenance Access is active', async () => {
+    mockAdminMaintenanceService.resolveForActor.mockResolvedValue({
       active: true,
       version: 4,
       expiresAt: new Date('2026-09-12T04:30:00.000Z'),

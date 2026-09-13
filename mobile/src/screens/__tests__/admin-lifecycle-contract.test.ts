@@ -52,7 +52,9 @@ describe("administrator governed lifecycle screen contract", () => {
     expect(sectionDetail).toContain('targetType: "STUDENT"');
     expect(lifecycle).toContain("adminLifecycleApi.previewStudent");
     expect(lifecycle).toContain("adminLifecycleApi.executeStudent");
-    expect(types).toContain('targetType: "CLASS" | "SECTION" | "STUDENT"');
+    expect(types).toContain(
+      'targetType: "CLASS" | "SECTION" | "STUDENT" | "USER"',
+    );
     expect(navigator).toContain('name="AdminSectionDetail"');
   });
 });

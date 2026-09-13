@@ -1,33 +1,56 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Archive, BookOpen, ChevronDown, Eye, Pencil, RotateCcw, Search, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  Archive,
+  BookOpen,
+  ChevronDown,
+  Eye,
+  Pencil,
+  RotateCcw,
+  Search,
+  Trash2,
+} from "lucide-react";
 import {
   type BulkClassLifecycleAction,
   classService,
-} from '@/services/class-service';
-import { academicStateService } from '@/services/academic-state-service';
-import { adminLifecycleService } from '@/services/admin-lifecycle-service';
-import { AdminEmptyState, AdminPageShell, AdminSectionCard } from '@/components/admin/AdminPageShell';
-import { AdminLifecycleDialog } from '@/components/admin/AdminLifecycleDialog';
+} from "@/services/class-service";
+import { academicStateService } from "@/services/academic-state-service";
+import { adminLifecycleService } from "@/services/admin-lifecycle-service";
+import {
+  AdminEmptyState,
+  AdminPageShell,
+  AdminSectionCard,
+} from "@/components/admin/AdminPageShell";
+import { AdminLifecycleDialog } from "@/components/admin/AdminLifecycleDialog";
 import {
   ConfirmationDialog,
   type ConfirmationDialogConfig,
-} from '@/components/shared/ConfirmationDialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { toast } from 'sonner';
-import type { ClassItem } from '@/types/class';
-import type { AcademicPeriodKey, ClassLifecycleResolution } from '@/types/admin-lifecycle';
-import { useAdminDemoMode } from '@/providers/AdminDemoModeProvider';
-import { hasAdminDemoModeRule } from '@/types/admin-demo-mode';
-import { getApiErrorMessage } from '@/lib/api-error';
+} from "@/components/shared/ConfirmationDialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { toast } from "sonner";
+import type { ClassItem } from "@/types/class";
+import type {
+  AcademicPeriodKey,
+  ClassLifecycleResolution,
+} from "@/types/admin-lifecycle";
+import { useAdminMaintenance } from "@/providers/AdminMaintenanceProvider";
+import { hasAdminMaintenanceRule } from "@/types/admin-maintenance";
+import { getApiErrorMessage } from "@/lib/api-error";
 
-type StatusTab = 'active' | 'archived';
+type StatusTab = "active" | "archived";
 
 interface BulkActionOption {
   action: BulkClassLifecycleAction;
@@ -35,72 +58,76 @@ interface BulkActionOption {
   confirmLabel: string;
   title: string;
   description: string;
-  tone: 'danger';
+  tone: "danger";
 }
 
 function formatSchedules(
   schedules?: { days: string[]; startTime: string; endTime: string }[],
 ) {
-  if (!schedules?.length) return 'N/A';
+  if (!schedules?.length) return "N/A";
   return schedules
     .map(
       (schedule) =>
-        `${schedule.days.join('/')} ${schedule.startTime}-${schedule.endTime}`,
+        `${schedule.days.join("/")} ${schedule.startTime}-${schedule.endTime}`,
     )
-    .join(', ');
+    .join(", ");
 }
 
 function getBulkActions(tab: StatusTab): BulkActionOption[] {
-  if (tab === 'archived') {
+  if (tab === "archived") {
     return [
       {
-        action: 'purge',
-        label: 'Purge selected',
-        confirmLabel: 'Purge classes',
-        title: 'Permanently delete selected classes?',
+        action: "purge",
+        label: "Purge selected",
+        confirmLabel: "Purge classes",
+        title: "Permanently delete selected classes?",
         description:
-          'Review each selected archived class before permanent deletion.',
-        tone: 'danger',
+          "Review each selected archived class before permanent deletion.",
+        tone: "danger",
       },
     ];
   }
 
   return [
     {
-      action: 'archive',
-      label: 'Archive selected',
-      confirmLabel: 'Archive classes',
-      title: 'Archive selected classes?',
-      description: 'Review each class, choose the learner outcome, and preserve teacher ownership and academic history.',
-      tone: 'danger',
+      action: "archive",
+      label: "Archive selected",
+      confirmLabel: "Archive classes",
+      title: "Archive selected classes?",
+      description:
+        "Review each class, choose the learner outcome, and preserve teacher ownership and academic history.",
+      tone: "danger",
     },
   ];
 }
 
 export default function ClassManagementPage() {
   const router = useRouter();
-  const { status: demoModeStatus, refresh: refreshDemoMode } = useAdminDemoMode();
-  const canRestoreArchivedClass = hasAdminDemoModeRule(
-    demoModeStatus,
-    'restore_archived_class',
+  const { status: maintenanceStatus, refresh: refreshMaintenance } =
+    useAdminMaintenance();
+  const canRestoreArchivedClass = hasAdminMaintenanceRule(
+    maintenanceStatus,
+    "restore_archived_class",
   );
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [initialLoading, setInitialLoading] = useState(true);
   const [tableLoading, setTableLoading] = useState(false);
-  const [tab, setTab] = useState<StatusTab>('active');
-  const [gradeFilter, setGradeFilter] = useState('all');
-  const [schoolYearFilter, setSchoolYearFilter] = useState('all');
-  const [search, setSearch] = useState('');
+  const [tab, setTab] = useState<StatusTab>("active");
+  const [gradeFilter, setGradeFilter] = useState("all");
+  const [schoolYearFilter, setSchoolYearFilter] = useState("all");
+  const [search, setSearch] = useState("");
   const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
-  const [lifecycleTarget, setLifecycleTarget] = useState<ClassItem | null>(null);
-  const [replacementClassId, setReplacementClassId] = useState('');
-  const [activePeriod, setActivePeriod] = useState<AcademicPeriodKey>('Q1');
+  const [lifecycleTarget, setLifecycleTarget] = useState<ClassItem | null>(
+    null,
+  );
+  const [replacementClassId, setReplacementClassId] = useState("");
+  const [activePeriod, setActivePeriod] = useState<AcademicPeriodKey>("Q1");
   const [confirmation, setConfirmation] =
     useState<ConfirmationDialogConfig | null>(null);
 
-  const fetchData = useCallback(async (mode: 'initial' | 'table') => {
+  const fetchData = useCallback(async (mode: "initial" | "table") => {
     try {
-      if (mode === 'initial') {
+      if (mode === "initial") {
         setInitialLoading(true);
       } else {
         setTableLoading(true);
@@ -113,9 +140,9 @@ export default function ClassManagementPage() {
       setClasses(classesRes.data?.data || []);
       setActivePeriod(academicStateRes.data.quarter as AcademicPeriodKey);
     } catch {
-      toast.error('Failed to load classes');
+      toast.error("Failed to load classes");
     } finally {
-      if (mode === 'initial') {
+      if (mode === "initial") {
         setInitialLoading(false);
       } else {
         setTableLoading(false);
@@ -124,7 +151,7 @@ export default function ClassManagementPage() {
   }, []);
 
   useEffect(() => {
-    void fetchData('initial');
+    void fetchData("initial");
   }, [fetchData]);
 
   const activeCount = useMemo(
@@ -150,12 +177,18 @@ export default function ClassManagementPage() {
   const filtered = useMemo(
     () =>
       classes.filter((classItem) => {
-        if (tab === 'active' && !classItem.isActive) return false;
-        if (tab === 'archived' && classItem.isActive) return false;
-        if (gradeFilter !== 'all' && classItem.subjectGradeLevel !== gradeFilter) {
+        if (tab === "active" && !classItem.isActive) return false;
+        if (tab === "archived" && classItem.isActive) return false;
+        if (
+          gradeFilter !== "all" &&
+          classItem.subjectGradeLevel !== gradeFilter
+        ) {
           return false;
         }
-        if (schoolYearFilter !== 'all' && classItem.schoolYear !== schoolYearFilter) {
+        if (
+          schoolYearFilter !== "all" &&
+          classItem.schoolYear !== schoolYearFilter
+        ) {
           return false;
         }
         if (!search) return true;
@@ -180,7 +213,9 @@ export default function ClassManagementPage() {
 
   useEffect(() => {
     const visibleSet = new Set(selectableVisibleIds);
-    setSelectedClassIds((current) => current.filter((id) => visibleSet.has(id)));
+    setSelectedClassIds((current) =>
+      current.filter((id) => visibleSet.has(id)),
+    );
   }, [selectableVisibleIds]);
 
   const allVisibleSelected =
@@ -189,12 +224,13 @@ export default function ClassManagementPage() {
 
   const bulkActions = useMemo(() => getBulkActions(tab), [tab]);
   const selectedClasses = useMemo(
-    () => filtered.filter((classItem) => selectedClassIds.includes(classItem.id)),
+    () =>
+      filtered.filter((classItem) => selectedClassIds.includes(classItem.id)),
     [filtered, selectedClassIds],
   );
 
   const refreshTable = useCallback(async () => {
-    await fetchData('table');
+    await fetchData("table");
   }, [fetchData]);
 
   const toggleClassSelection = (classId: string) => {
@@ -210,25 +246,25 @@ export default function ClassManagementPage() {
   };
 
   const openSingleActionConfirmation = (classItem: ClassItem) => {
-    setReplacementClassId('');
+    setReplacementClassId("");
     setLifecycleTarget(classItem);
   };
 
   const openRestoreConfirmation = (classItem: ClassItem) => {
     setConfirmation({
-      title: 'Restore archived class?',
+      title: "Restore archived class?",
       description:
-        'Demo mode permits this reversible lifecycle exception. Permanent evidence safeguards remain active.',
-      confirmLabel: 'Restore class',
-      tone: 'default',
+        "Maintenance Access permits this reversible lifecycle exception. Permanent evidence safeguards remain active.",
+      confirmLabel: "Restore class",
+      tone: "default",
       onConfirm: async () => {
         try {
           await classService.toggleStatus(classItem.id);
-          toast.success('Class restored');
+          toast.success("Class restored");
           await refreshTable();
         } catch (error) {
-          await refreshDemoMode();
-          toast.error(getApiErrorMessage(error, 'Failed to restore class'));
+          await refreshMaintenance();
+          toast.error(getApiErrorMessage(error, "Failed to restore class"));
         }
       },
     });
@@ -257,33 +293,33 @@ export default function ClassManagementPage() {
     <AdminPageShell
       title="Classes"
       description="Manage all classes across grades"
-      actions={(
+      actions={
         <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
             className="admin-button-outline rounded-[1rem] px-4 font-bold"
-            onClick={() => router.push('/dashboard/admin/class-templates')}
+            onClick={() => router.push("/dashboard/admin/class-templates")}
           >
             Template Classes
           </Button>
           <Button
             className="admin-button-solid rounded-[1rem] px-4 font-bold"
-            onClick={() => router.push('/dashboard/admin/classes/new')}
+            onClick={() => router.push("/dashboard/admin/classes/new")}
           >
             <BookOpen className="h-4 w-4" />
             Create Class
           </Button>
         </div>
-      )}
+      }
     >
       <AdminSectionCard title="Class Directory" contentClassName="space-y-5">
         <Tabs
           value={tab}
           onValueChange={(value) => {
             setTab(value as StatusTab);
-            setSearch('');
-            setGradeFilter('all');
-            setSchoolYearFilter('all');
+            setSearch("");
+            setGradeFilter("all");
+            setSchoolYearFilter("all");
             setSelectedClassIds([]);
           }}
           className="space-y-5"
@@ -293,7 +329,7 @@ export default function ClassManagementPage() {
               Active <span className="admin-segment-count">{activeCount}</span>
             </TabsTrigger>
             <TabsTrigger value="archived" className="admin-tab">
-              Archived{' '}
+              Archived{" "}
               <span className="admin-segment-count">{archivedCount}</span>
             </TabsTrigger>
           </TabsList>
@@ -339,11 +375,13 @@ export default function ClassManagementPage() {
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8ea0bc]" />
               </div>
-              {gradeFilter !== 'all' ? (
+              {gradeFilter !== "all" ? (
                 <span className="admin-filter-badge">Grade {gradeFilter}</span>
               ) : null}
-              {schoolYearFilter !== 'all' ? (
-                <span className="admin-filter-badge">SY {schoolYearFilter}</span>
+              {schoolYearFilter !== "all" ? (
+                <span className="admin-filter-badge">
+                  SY {schoolYearFilter}
+                </span>
               ) : null}
             </div>
           </div>
@@ -352,7 +390,9 @@ export default function ClassManagementPage() {
         {filtered.length > 0 ? (
           <div className="admin-bulk-bar">
             <div className="admin-controls">
-              <span className="admin-pill">{selectedClassIds.length} selected</span>
+              <span className="admin-pill">
+                {selectedClassIds.length} selected
+              </span>
               <Button
                 type="button"
                 variant="outline"
@@ -361,7 +401,9 @@ export default function ClassManagementPage() {
                 onClick={handleSelectAllVisible}
                 disabled={selectableVisibleIds.length === 0}
               >
-                {allVisibleSelected ? 'Clear visible selection' : 'Select all visible'}
+                {allVisibleSelected
+                  ? "Clear visible selection"
+                  : "Select all visible"}
               </Button>
             </div>
             <div className="admin-controls">
@@ -369,12 +411,12 @@ export default function ClassManagementPage() {
                 <Button
                   key={option.action}
                   type="button"
-                  variant={option.tone === 'danger' ? 'destructive' : 'outline'}
+                  variant={option.tone === "danger" ? "destructive" : "outline"}
                   size="sm"
                   className={
-                    option.tone === 'danger'
-                      ? 'rounded-[1rem] px-4 font-bold'
-                      : 'admin-button-outline rounded-[1rem] px-4 font-bold'
+                    option.tone === "danger"
+                      ? "rounded-[1rem] px-4 font-bold"
+                      : "admin-button-outline rounded-[1rem] px-4 font-bold"
                   }
                   onClick={() => openBulkConfirmation(option)}
                   disabled={selectedClassIds.length === 0}
@@ -392,7 +434,9 @@ export default function ClassManagementPage() {
             description="Try another state or a different search query."
           />
         ) : (
-          <div className={`admin-table-shell${tableLoading ? ' admin-table-shell--loading' : ''}`}>
+          <div
+            className={`admin-table-shell${tableLoading ? " admin-table-shell--loading" : ""}`}
+          >
             {tableLoading ? (
               <div className="admin-table-loading">Refreshing classes...</div>
             ) : null}
@@ -416,7 +460,7 @@ export default function ClassManagementPage() {
                   const isSelected = selectedClassIds.includes(classItem.id);
                   const classPath = `/dashboard/admin/classes/${classItem.id}`;
                   const archiveOption = bulkActions.find(
-                    (option) => option.action === 'archive',
+                    (option) => option.action === "archive",
                   );
 
                   return (
@@ -444,7 +488,7 @@ export default function ClassManagementPage() {
                         className="admin-table-row-link text-[#7083a4]"
                         onClick={() => router.push(classPath)}
                       >
-                        {classItem.section?.name || 'N/A'}
+                        {classItem.section?.name || "N/A"}
                       </TableCell>
                       <TableCell
                         className="admin-table-row-link"
@@ -466,7 +510,7 @@ export default function ClassManagementPage() {
                       >
                         {classItem.teacher
                           ? `${classItem.teacher.firstName} ${classItem.teacher.lastName}`
-                          : 'Unassigned'}
+                          : "Unassigned"}
                       </TableCell>
                       <TableCell
                         className="admin-table-row-link text-[#9aaed0]"
@@ -478,7 +522,7 @@ export default function ClassManagementPage() {
                         className="admin-table-row-link text-[#7083a4]"
                         onClick={() => router.push(classPath)}
                       >
-                        {classItem.room || 'N/A'}
+                        {classItem.room || "N/A"}
                       </TableCell>
                       <TableCell
                         className="admin-table-row-link"
@@ -487,11 +531,11 @@ export default function ClassManagementPage() {
                         <span
                           className={
                             classItem.isActive
-                              ? 'admin-status-pill admin-status-pill--active'
-                              : 'admin-status-pill admin-status-pill--archived'
+                              ? "admin-status-pill admin-status-pill--active"
+                              : "admin-status-pill admin-status-pill--archived"
                           }
                         >
-                          {classItem.isActive ? 'Active' : 'Archived'}
+                          {classItem.isActive ? "Active" : "Archived"}
                         </span>
                       </TableCell>
                       <TableCell onClick={(event) => event.stopPropagation()}>
@@ -508,7 +552,9 @@ export default function ClassManagementPage() {
                             type="button"
                             className="admin-icon-button"
                             onClick={() =>
-                              router.push(`/dashboard/admin/classes/${classItem.id}/edit`)
+                              router.push(
+                                `/dashboard/admin/classes/${classItem.id}/edit`,
+                              )
                             }
                             title="Edit class"
                           >
@@ -518,7 +564,9 @@ export default function ClassManagementPage() {
                             <button
                               type="button"
                               className="admin-icon-button"
-                              onClick={() => openSingleActionConfirmation(classItem)}
+                              onClick={() =>
+                                openSingleActionConfirmation(classItem)
+                              }
                               title="Archive class"
                             >
                               <Archive className="h-4 w-4" />
@@ -530,7 +578,9 @@ export default function ClassManagementPage() {
                                 <button
                                   type="button"
                                   className="admin-icon-button"
-                                  onClick={() => openRestoreConfirmation(classItem)}
+                                  onClick={() =>
+                                    openRestoreConfirmation(classItem)
+                                  }
                                   title="Restore class"
                                 >
                                   <RotateCcw className="h-4 w-4" />
@@ -540,7 +590,7 @@ export default function ClassManagementPage() {
                                 type="button"
                                 className="admin-icon-button"
                                 onClick={() => {
-                                  setReplacementClassId('');
+                                  setReplacementClassId("");
                                   setLifecycleTarget(classItem);
                                 }}
                                 title="Purge class"
@@ -566,13 +616,13 @@ export default function ClassManagementPage() {
           onOpenChange={(open) => !open && setLifecycleTarget(null)}
           title={
             lifecycleTarget.isActive
-              ? 'Archive class with a learner outcome'
-              : 'Permanently delete archived class'
+              ? "Archive class with a learner outcome"
+              : "Permanently delete archived class"
           }
           description={
             lifecycleTarget.isActive
-              ? 'Only this class is evaluated. Section-only and sibling-class memberships are left unchanged.'
-              : 'Deletion is allowed only when the archived class has no retained academic or lifecycle evidence.'
+              ? "Only this class is evaluated. Section-only and sibling-class memberships are left unchanged."
+              : "Deletion is allowed only when the archived class has no retained academic or lifecycle evidence."
           }
           targetLabel={`${lifecycleTarget.subjectName} (${lifecycleTarget.subjectCode})`}
           permanent={!lifecycleTarget.isActive}
@@ -580,36 +630,41 @@ export default function ClassManagementPage() {
             lifecycleTarget.isActive
               ? [
                   {
-                    value: 'ARCHIVE_EMPTY',
-                    label: 'Archive empty class',
-                    description: 'Use when this class has no active learner memberships.',
+                    value: "ARCHIVE_EMPTY",
+                    label: "Archive empty class",
+                    description:
+                      "Use when this class has no active learner memberships.",
                   },
                   {
-                    value: 'COMPLETE',
-                    label: 'Complete memberships',
-                    description: 'Mark active class memberships completed and preserve all evidence.',
+                    value: "COMPLETE",
+                    label: "Complete memberships",
+                    description:
+                      "Mark active class memberships completed and preserve all evidence.",
                   },
                   {
-                    value: 'DROP',
-                    label: 'Drop memberships',
-                    description: 'Close active class memberships as withdrawals.',
+                    value: "DROP",
+                    label: "Drop memberships",
+                    description:
+                      "Close active class memberships as withdrawals.",
                   },
                   {
-                    value: 'TRANSFER',
-                    label: 'Transfer to replacement class',
-                    description: 'Create compatible replacement memberships before archiving.',
+                    value: "TRANSFER",
+                    label: "Transfer to replacement class",
+                    description:
+                      "Create compatible replacement memberships before archiving.",
                   },
                 ]
               : [
                   {
-                    value: 'PURGE',
-                    label: 'Permanently delete empty record',
-                    description: 'There is no override when retained evidence exists.',
+                    value: "PURGE",
+                    label: "Permanently delete empty record",
+                    description:
+                      "There is no override when retained evidence exists.",
                   },
                 ]
           }
           renderIntentFields={(intent) =>
-            intent === 'TRANSFER' ? (
+            intent === "TRANSFER" ? (
               <select
                 aria-label="Replacement class"
                 value={replacementClassId}
@@ -629,26 +684,30 @@ export default function ClassManagementPage() {
                   )
                   .map((entry) => (
                     <option key={entry.id} value={entry.id}>
-                      {entry.subjectName} · {entry.section?.name ?? 'No section'}
+                      {entry.subjectName} ·{" "}
+                      {entry.section?.name ?? "No section"}
                     </option>
                   ))}
               </select>
             ) : null
           }
-          canPreview={(intent) => intent !== 'TRANSFER' || Boolean(replacementClassId)}
+          canPreview={(intent) =>
+            intent !== "TRANSFER" || Boolean(replacementClassId)
+          }
           preview={async (intent) =>
             lifecycleTarget.isActive
               ? (
                   await adminLifecycleService.previewClass({
                     classId: lifecycleTarget.id,
                     resolution: intent as ClassLifecycleResolution,
-                    replacementClassId: intent === 'TRANSFER' ? replacementClassId : undefined,
+                    replacementClassId:
+                      intent === "TRANSFER" ? replacementClassId : undefined,
                     effectivePeriod: activePeriod,
                   })
                 ).data
               : (
                   await adminLifecycleService.previewPurge({
-                    targetType: 'CLASS',
+                    targetType: "CLASS",
                     targetId: lifecycleTarget.id,
                   })
                 ).data
@@ -659,14 +718,15 @@ export default function ClassManagementPage() {
                   await adminLifecycleService.executeClass({
                     classId: lifecycleTarget.id,
                     resolution: intent as ClassLifecycleResolution,
-                    replacementClassId: intent === 'TRANSFER' ? replacementClassId : undefined,
+                    replacementClassId:
+                      intent === "TRANSFER" ? replacementClassId : undefined,
                     effectivePeriod: activePeriod,
                     ...evidence,
                   })
                 ).data
               : (
                   await adminLifecycleService.executePurge({
-                    targetType: 'CLASS',
+                    targetType: "CLASS",
                     targetId: lifecycleTarget.id,
                     ...evidence,
                   })
@@ -674,7 +734,9 @@ export default function ClassManagementPage() {
           }
           onCompleted={async () => {
             toast.success(
-              lifecycleTarget.isActive ? 'Class archived' : 'Class permanently deleted',
+              lifecycleTarget.isActive
+                ? "Class archived"
+                : "Class permanently deleted",
             );
             setSelectedClassIds((current) =>
               current.filter((id) => id !== lifecycleTarget.id),

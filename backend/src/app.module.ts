@@ -47,9 +47,10 @@ import jwtConfig from './config/jwt.config';
 import redisConfig from './config/redis.config';
 import ollamaConfig from './config/ollama.config';
 import adminLifecycleConfig from './config/admin-lifecycle.config';
-import adminDemoModeConfig from './config/admin-demo-mode.config';
+import adminMaintenanceConfig from './config/admin-maintenance.config';
 import { AdminLifecycleModule } from './modules/admin-lifecycle/admin-lifecycle.module';
 import { AdminDemoModeModule } from './modules/admin-demo-mode/admin-demo-mode.module';
+import { AdminMaintenanceModule } from './modules/admin-maintenance/admin-maintenance.module';
 import { SystemResetModule } from './modules/system-reset/system-reset.module';
 import {
   SystemResetGuard,
@@ -66,7 +67,7 @@ import {
         redisConfig,
         ollamaConfig,
         adminLifecycleConfig,
-        adminDemoModeConfig,
+        adminMaintenanceConfig,
       ],
     }),
     BullModule.forRootAsync({
@@ -127,6 +128,7 @@ import {
     AppVersionModule,
     AdminLifecycleModule,
     AdminDemoModeModule,
+    AdminMaintenanceModule,
     SystemResetModule,
   ],
   providers: [

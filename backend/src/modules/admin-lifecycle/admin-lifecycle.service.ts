@@ -53,7 +53,11 @@ import {
   type LifecycleExecutionContext,
   type StudentLifecyclePrepared,
 } from './student-lifecycle.service';
-import { AdminDemoModeService } from '../admin-demo-mode/admin-demo-mode.service';
+import {
+  AdminMaintenanceService,
+  type AdminMaintenanceContext,
+} from '../admin-maintenance/admin-maintenance.service';
+import type { AdminMaintenanceRuleCode } from '../admin-maintenance/admin-maintenance.policy';
 
 type ExecutionDto =
   | ExecuteStudentLifecycleDto
@@ -72,11 +76,17 @@ interface ExecutionDomain<P> {
   targetType: string;
   targetId: string;
   preview: Record<string, unknown>;
-  prepare: () => Promise<P & { manifest: AdminLifecycleManifest }>;
+  prepare: (
+    maintenance: AdminMaintenanceContext,
+  ) => Promise<P & { manifest: AdminLifecycleManifest }>;
   apply: (
     prepared: P,
     context: LifecycleExecutionContext,
   ) => Promise<ApplyResult>;
+}
+
+interface LifecycleExecutionOptions {
+  requireMaintenance?: boolean;
 }
 
 @Injectable()
@@ -90,7 +100,7 @@ export class AdminLifecycleService {
     private readonly purgeLifecycleService: PurgeLifecycleService,
     private readonly auditService: AuditService,
     private readonly notificationsService: NotificationsService,
-    private readonly adminDemoModeService: AdminDemoModeService,
+    private readonly adminMaintenanceService: AdminMaintenanceService,
   ) {}
 
   private get db() {
@@ -137,10 +147,17 @@ export class AdminLifecycleService {
     } satisfies PreviewPurgeLifecycleDto;
   }
 
-  async previewStudent(dto: PreviewStudentLifecycleDto) {
+  async previewStudent(dto: PreviewStudentLifecycleDto, actorId?: string) {
     const preview = this.studentPreview(dto);
+    const maintenance = await this.adminMaintenanceService.resolveForActor(
+      actorId,
+      actorId ? ['admin'] : undefined,
+    );
     return this.db.transaction(
-      (tx) => this.studentLifecycleService.prepare(preview, tx as never),
+      (tx) =>
+        this.studentLifecycleService.prepare(preview, tx as never, {
+          allowSectionCapacityOverride: maintenance.allows('section_capacity'),
+        }),
       { isolationLevel: 'repeatable read', accessMode: 'read only' },
     );
   }
@@ -153,10 +170,17 @@ export class AdminLifecycleService {
     );
   }
 
-  async previewSection(dto: PreviewSectionLifecycleDto) {
+  async previewSection(dto: PreviewSectionLifecycleDto, actorId?: string) {
     const preview = this.sectionPreview(dto);
+    const maintenance = await this.adminMaintenanceService.resolveForActor(
+      actorId,
+      actorId ? ['admin'] : undefined,
+    );
     return this.db.transaction(
-      (tx) => this.sectionLifecycleService.prepare(preview, tx as never),
+      (tx) =>
+        this.sectionLifecycleService.prepare(preview, tx as never, {
+          allowSectionCapacityOverride: maintenance.allows('section_capacity'),
+        }),
       { isolationLevel: 'repeatable read', accessMode: 'read only' },
     );
   }
@@ -169,61 +193,111 @@ export class AdminLifecycleService {
     );
   }
 
-  async executeStudent(dto: ExecuteStudentLifecycleDto, actorId: string) {
+  async executeStudent(
+    dto: ExecuteStudentLifecycleDto,
+    actorId: string,
+    options: LifecycleExecutionOptions = {},
+  ) {
     const preview = this.studentPreview(dto);
-    return this.execute<StudentLifecyclePrepared>(dto, actorId, {
-      action: 'STUDENT_RESOLUTION',
-      targetType: 'student',
-      targetId: dto.studentId,
-      preview,
-      prepare: () => this.studentLifecycleService.prepare(preview),
-      apply: (prepared, context) =>
-        this.studentLifecycleService.apply(preview, prepared, context),
-    });
+    return this.execute<StudentLifecyclePrepared>(
+      dto,
+      actorId,
+      {
+        action: 'STUDENT_RESOLUTION',
+        targetType: 'student',
+        targetId: dto.studentId,
+        preview,
+        prepare: (maintenance) =>
+          this.studentLifecycleService.prepare(preview, undefined, {
+            allowSectionCapacityOverride:
+              maintenance.allows('section_capacity'),
+          }),
+        apply: (prepared, context) =>
+          this.studentLifecycleService.apply(preview, prepared, context),
+      },
+      options,
+    );
   }
 
-  async executeClass(dto: ExecuteClassLifecycleDto, actorId: string) {
+  async executeClass(
+    dto: ExecuteClassLifecycleDto,
+    actorId: string,
+    options: LifecycleExecutionOptions = {},
+  ) {
     const preview = this.classPreview(dto);
-    return this.execute<ClassLifecyclePrepared>(dto, actorId, {
-      action: 'ARCHIVE_CLASS',
-      targetType: 'class',
-      targetId: dto.classId,
-      preview,
-      prepare: () => this.classLifecycleService.prepare(preview),
-      apply: (prepared, context) =>
-        this.classLifecycleService.apply(preview, prepared, context),
-    });
+    return this.execute<ClassLifecyclePrepared>(
+      dto,
+      actorId,
+      {
+        action: 'ARCHIVE_CLASS',
+        targetType: 'class',
+        targetId: dto.classId,
+        preview,
+        prepare: () => this.classLifecycleService.prepare(preview),
+        apply: (prepared, context) =>
+          this.classLifecycleService.apply(preview, prepared, context),
+      },
+      options,
+    );
   }
 
-  async executeSection(dto: ExecuteSectionLifecycleDto, actorId: string) {
+  async executeSection(
+    dto: ExecuteSectionLifecycleDto,
+    actorId: string,
+    options: LifecycleExecutionOptions = {},
+  ) {
     const preview = this.sectionPreview(dto);
-    return this.execute<SectionLifecyclePrepared>(dto, actorId, {
-      action: 'ARCHIVE_SECTION',
-      targetType: 'section',
-      targetId: dto.sectionId,
-      preview,
-      prepare: () => this.sectionLifecycleService.prepare(preview),
-      apply: (prepared, context) =>
-        this.sectionLifecycleService.apply(preview, prepared, context),
-    });
+    return this.execute<SectionLifecyclePrepared>(
+      dto,
+      actorId,
+      {
+        action: 'ARCHIVE_SECTION',
+        targetType: 'section',
+        targetId: dto.sectionId,
+        preview,
+        prepare: (maintenance) =>
+          this.sectionLifecycleService.prepare(preview, undefined, {
+            allowSectionCapacityOverride:
+              maintenance.allows('section_capacity'),
+          }),
+        apply: (prepared, context) =>
+          this.sectionLifecycleService.apply(preview, prepared, context),
+      },
+      options,
+    );
   }
 
-  async executePurge(dto: ExecutePurgeLifecycleDto, actorId: string) {
+  async executePurge(
+    dto: ExecutePurgeLifecycleDto,
+    actorId: string,
+    options: LifecycleExecutionOptions = {},
+  ) {
     const preview = this.purgePreview(dto);
-    return this.execute<PurgeLifecyclePrepared>(dto, actorId, {
-      action: dto.targetType === 'CLASS' ? 'PURGE_CLASS' : 'PURGE_SECTION',
-      targetType: dto.targetType.toLowerCase(),
-      targetId: dto.targetId,
-      preview,
-      prepare: () => this.purgeLifecycleService.prepare(preview),
-      apply: (prepared, context) =>
-        this.purgeLifecycleService.apply(preview, prepared, context),
-    });
+    return this.execute<PurgeLifecyclePrepared>(
+      dto,
+      actorId,
+      {
+        action:
+          dto.targetType === 'CLASS'
+            ? 'PURGE_CLASS'
+            : dto.targetType === 'SECTION'
+              ? 'PURGE_SECTION'
+              : 'PURGE_USER',
+        targetType: dto.targetType.toLowerCase(),
+        targetId: dto.targetId,
+        preview,
+        prepare: () => this.purgeLifecycleService.prepare(preview),
+        apply: (prepared, context) =>
+          this.purgeLifecycleService.apply(preview, prepared, context),
+      },
+      options,
+    );
   }
 
   private async verifyActor(
     actorId: string,
-    currentPassword: string,
+    currentPassword: string | undefined,
+    requirePassword: boolean,
   ): Promise<LifecycleActorSnapshot> {
     const actor = await this.db.query.users.findFirst({
       where: eq(users.id, actorId),
@@ -235,7 +309,12 @@ export class AdminLifecycleService {
         password: true,
       },
     });
-    if (!actor || !(await bcrypt.compare(currentPassword, actor.password))) {
+    if (
+      !actor ||
+      (requirePassword &&
+        (!currentPassword ||
+          !(await bcrypt.compare(currentPassword, actor.password))))
+    ) {
       throw new ForbiddenException('Current password is incorrect.');
     }
     return {
@@ -369,21 +448,38 @@ export class AdminLifecycleService {
     dto: ExecutionDto,
     actorId: string,
     domain: ExecutionDomain<P>,
+    options: LifecycleExecutionOptions,
   ): Promise<AdminLifecycleExecutionResult> {
     const lifecycleEnabled = this.configService.get<boolean>(
       'adminLifecycle.enabled',
     );
-    const demo = await this.adminDemoModeService.resolveForActor(actorId, [
-      'admin',
-    ]);
-    const demoAvailability =
-      !lifecycleEnabled && demo.allows('governed_execution_availability');
-    if (!lifecycleEnabled && !demoAvailability) {
+    const maintenance = await this.adminMaintenanceService.resolveForActor(
+      actorId,
+      ['admin'],
+    );
+    const maintenanceAvailability =
+      !lifecycleEnabled &&
+      maintenance.allows('governed_execution_availability');
+    if (options.requireMaintenance && !maintenance.active) {
+      throw new ForbiddenException({
+        code: 'MAINTENANCE_SESSION_REQUIRED',
+        message:
+          'Maintenance Access is required. Reauthenticate and review the current impact again.',
+      });
+    }
+    if (!lifecycleEnabled && !maintenanceAvailability) {
       throw new ServiceUnavailableException(
         'Governed lifecycle execution is not enabled. Preview remains available.',
       );
     }
-    const actorSnapshot = await this.verifyActor(actorId, dto.currentPassword);
+    const actorSnapshot = await this.verifyActor(
+      actorId,
+      dto.currentPassword,
+      domain.action === 'PURGE_CLASS' ||
+        domain.action === 'PURGE_SECTION' ||
+        domain.action === 'PURGE_USER' ||
+        !maintenance.active,
+    );
     const claimed = await this.claimOperation(
       dto,
       actorId,
@@ -400,8 +496,22 @@ export class AdminLifecycleService {
     const operationId = claimed.operation.id;
     try {
       return await this.databaseService.academicTransaction(async () => {
-        const prepared = await domain.prepare();
+        const executionMaintenance = options.requireMaintenance
+          ? await this.adminMaintenanceService.requireActiveSession(
+              actorId,
+              ['admin'],
+              maintenance.sessionId!,
+            )
+          : maintenance;
+        const prepared = await domain.prepare(executionMaintenance);
         this.assertExecutionEvidence(dto, prepared.manifest);
+        const commitMaintenance = options.requireMaintenance
+          ? await this.adminMaintenanceService.requireActiveSession(
+              actorId,
+              ['admin'],
+              maintenance.sessionId!,
+            )
+          : executionMaintenance;
         const context: LifecycleExecutionContext = {
           operationId,
           actorId,
@@ -438,9 +548,18 @@ export class AdminLifecycleService {
             manifestHash: dto.manifestHash,
             changed: applied.changed,
             preserved: applied.preserved,
-            ...(demoAvailability
+            ...(commitMaintenance.active
               ? {
-                  demoMode: demo.audit(['governed_execution_availability']),
+                  maintenanceAccess: commitMaintenance.audit([
+                    ...(options.requireMaintenance || maintenanceAvailability
+                      ? (['governed_execution_availability'] as const)
+                      : []),
+                    ...(prepared.manifest.warnings.some(
+                      (warning) => warning.code === 'SECTION_CAPACITY',
+                    )
+                      ? (['section_capacity'] as const)
+                      : []),
+                  ] satisfies AdminMaintenanceRuleCode[]),
                 }
               : {}),
           },

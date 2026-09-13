@@ -22,6 +22,19 @@ const FORBIDDEN_CLIENT_BYPASSES = [
     label: "demo request-body authority",
     pattern: /\bdemoMode\s*:\s*true\b/i,
   },
+  {
+    label: "maintenance force request-body authority",
+    pattern:
+      /\b(?:bypassSafeguards|ignoreSafeguards|maintenanceForce)\s*:\s*true\b/i,
+  },
+  {
+    label: "ignored-rules request-body authority",
+    pattern: /\b(?:ignoredRules|bypassRules)\s*:/i,
+  },
+  {
+    label: "maintenance bypass header",
+    pattern: /["']x-(?:admin-)?maintenance-(?:force|bypass)["']\s*:/i,
+  },
 ];
 
 function findForbiddenClientBypasses(source) {

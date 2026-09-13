@@ -97,8 +97,8 @@ describe('admin lifecycle DTOs', () => {
 
     await expect(
       errors(PreviewPurgeLifecycleDto, {
-        targetType: 'CLASS',
-        targetId: ids.class,
+        targetType: 'USER',
+        targetId: ids.student,
       }),
     ).resolves.toEqual([]);
   });
@@ -173,5 +173,30 @@ describe('admin lifecycle DTOs', () => {
         studentResolutions: [],
       }),
     ).resolves.toEqual([]);
+  });
+
+  it('allows routine execution to omit a repeated password but keeps purge reauthentication mandatory', async () => {
+    const routine = {
+      studentId: ids.student,
+      sectionId: ids.section,
+      resolution: 'WITHDRAW',
+      effectivePeriod: 'Q3',
+      ...execution,
+    };
+    delete (routine as { currentPassword?: string }).currentPassword;
+    await expect(errors(ExecuteStudentLifecycleDto, routine)).resolves.toEqual(
+      [],
+    );
+
+    const purge = {
+      targetType: 'SECTION',
+      targetId: ids.section,
+      ...execution,
+    };
+    delete (purge as { currentPassword?: string }).currentPassword;
+    const purgeErrors = await errors(ExecutePurgeLifecycleDto, purge);
+    expect(purgeErrors.map((entry) => entry.property)).toContain(
+      'currentPassword',
+    );
   });
 });

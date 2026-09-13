@@ -11,6 +11,7 @@ import {
   FlaskConical,
   LayoutDashboard,
   ShieldAlert,
+  Wrench,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { AdminPageShell } from "@/components/admin/AdminPageShell";
@@ -89,10 +90,10 @@ const settingsSections: Array<{
     group: "Advanced",
     items: [
       {
-        label: "Demo mode",
-        description: "Controlled presentation window",
-        href: "/dashboard/admin/system-settings/demo-mode",
-        icon: FlaskConical,
+        label: "Maintenance Access",
+        description: "Short, audited academic cleanup window",
+        href: "/dashboard/admin/system-settings/maintenance-access",
+        icon: Wrench,
       },
       {
         label: "Audit & recovery",

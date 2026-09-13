@@ -1,42 +1,51 @@
-'use client';
+"use client";
 
-import { useEffect, useMemo, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { Archive, Copy, KeyRound, RotateCcw, Trash2 } from 'lucide-react';
-import { toast } from 'sonner';
-import { userService } from '@/services/user-service';
+import { useEffect, useMemo, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { Archive, Copy, KeyRound, RotateCcw, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { userService } from "@/services/user-service";
 import {
   AdminPageShell,
   AdminSectionCard,
-} from '@/components/admin/AdminPageShell';
-import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Skeleton } from '@/components/ui/skeleton';
-import { getApiErrorMessage } from '@/lib/api-error';
+} from "@/components/admin/AdminPageShell";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
+import { getApiErrorMessage } from "@/lib/api-error";
 import {
   sanitizeAddressInput,
   sanitizeEmailInput,
   sanitizeLrnInput,
   sanitizePersonNameInput,
   sanitizePhoneLocalInput,
-} from '@/lib/input-policy';
-import { formatDate, getRoleName } from '@/utils/helpers';
-import type { UpdateUserDto, User } from '@/types/user';
+} from "@/lib/input-policy";
+import { formatDate, getRoleName } from "@/utils/helpers";
+import type { UpdateUserDto, User } from "@/types/user";
 import {
   ConfirmationDialog,
   type ConfirmationDialogConfig,
-} from '@/components/shared/ConfirmationDialog';
-import { useAdminDemoMode } from '@/providers/AdminDemoModeProvider';
-import { hasAdminDemoModeRule } from '@/types/admin-demo-mode';
+} from "@/components/shared/ConfirmationDialog";
+import { AdminLifecycleDialog } from "@/components/admin/AdminLifecycleDialog";
+import { useAdminMaintenance } from "@/providers/AdminMaintenanceProvider";
+import { adminLifecycleService } from "@/services/admin-lifecycle-service";
+import { hasAdminMaintenanceRule } from "@/types/admin-maintenance";
 
 type UserFormState = {
   firstName: string;
   middleName: string;
   lastName: string;
   email: string;
-  role: 'student' | 'teacher' | 'admin';
+  role: "student" | "teacher" | "admin";
   lrn: string;
   gradeLevel: string;
   dateOfBirth: string;
@@ -49,64 +58,67 @@ type UserFormState = {
 };
 
 const EMPTY_FORM: UserFormState = {
-  firstName: '',
-  middleName: '',
-  lastName: '',
-  email: '',
-  role: 'student',
-  lrn: '',
-  gradeLevel: '',
-  dateOfBirth: '',
-  gender: '',
-  phone: '',
-  address: '',
-  familyName: '',
-  familyRelationship: '',
-  familyContact: '',
+  firstName: "",
+  middleName: "",
+  lastName: "",
+  email: "",
+  role: "student",
+  lrn: "",
+  gradeLevel: "",
+  dateOfBirth: "",
+  gender: "",
+  phone: "",
+  address: "",
+  familyName: "",
+  familyRelationship: "",
+  familyContact: "",
 };
 
 const PERSON_NAME_REGEX = /^[A-Za-z][A-Za-z' -]*$/;
 const PH_MOBILE_REGEX = /^09\d{9}$/;
 const PERSON_NAME_ERROR =
-  'Names may only contain letters, spaces, hyphens, and apostrophes.';
+  "Names may only contain letters, spaces, hyphens, and apostrophes.";
 const STUDENT_REQUIRED_ERROR =
-  'Date of birth, gender, student contact number, guardian name, relationship, and guardian contact are required for student accounts.';
+  "Date of birth, gender, student contact number, guardian name, relationship, and guardian contact are required for student accounts.";
 
 function toFormState(user: User): UserFormState {
-  const role = getRoleName(user.roles?.[0]) || 'student';
+  const role = getRoleName(user.roles?.[0]) || "student";
   return {
-    firstName: user.firstName ?? '',
-    middleName: user.middleName ?? '',
-    lastName: user.lastName ?? '',
-    email: user.email ?? '',
-    role: role === 'teacher' || role === 'admin' ? role : 'student',
-    lrn: String(user.lrn ?? ''),
-    gradeLevel: String(user.gradeLevel ?? ''),
-    dateOfBirth: String(user.dateOfBirth ?? user.dob ?? '').slice(0, 10),
-    gender: String(user.gender ?? ''),
-    phone: sanitizePhoneLocalInput(String(user.phone ?? ''), 11),
-    address: sanitizeAddressInput(String(user.address ?? ''), 180),
-    familyName: sanitizePersonNameInput(String(user.familyName ?? ''), 80),
-    familyRelationship: String(user.familyRelationship ?? ''),
-    familyContact: sanitizePhoneLocalInput(String(user.familyContact ?? ''), 11),
+    firstName: user.firstName ?? "",
+    middleName: user.middleName ?? "",
+    lastName: user.lastName ?? "",
+    email: user.email ?? "",
+    role: role === "teacher" || role === "admin" ? role : "student",
+    lrn: String(user.lrn ?? ""),
+    gradeLevel: String(user.gradeLevel ?? ""),
+    dateOfBirth: String(user.dateOfBirth ?? user.dob ?? "").slice(0, 10),
+    gender: String(user.gender ?? ""),
+    phone: sanitizePhoneLocalInput(String(user.phone ?? ""), 11),
+    address: sanitizeAddressInput(String(user.address ?? ""), 180),
+    familyName: sanitizePersonNameInput(String(user.familyName ?? ""), 80),
+    familyRelationship: String(user.familyRelationship ?? ""),
+    familyContact: sanitizePhoneLocalInput(
+      String(user.familyContact ?? ""),
+      11,
+    ),
   };
 }
 
 function sanitizeFieldValue(field: keyof UserFormState, value: string) {
   switch (field) {
-    case 'firstName':
-    case 'middleName':
-    case 'lastName':
-    case 'familyName':
-      return sanitizePersonNameInput(value, field === 'familyName' ? 80 : 30);
-    case 'email':
+    case "firstName":
+    case "middleName":
+    case "lastName":
+    case "familyName":
+      return sanitizePersonNameInput(value, field === "familyName" ? 80 : 30);
+    case "email":
       return sanitizeEmailInput(value, 100);
-    case 'lrn':
+    case "lrn":
       return sanitizeLrnInput(value, 12);
-    case 'phone':
-    case 'familyContact':
+    case "phone":
+    case "familyContact":
       return sanitizePhoneLocalInput(value, 11);
-    case 'address':
+    case "address":
       return sanitizeAddressInput(value, 180);
     default:
       return value;
@@ -117,10 +129,11 @@ export default function AdminUserDetailPage() {
   const params = useParams();
   const router = useRouter();
   const userId = params.id as string;
-  const { status: demoModeStatus, refresh: refreshDemoMode } = useAdminDemoMode();
-  const canRelaxUserLifecycle = hasAdminDemoModeRule(
-    demoModeStatus,
-    'user_lifecycle_sequence',
+  const { status: maintenanceStatus, refresh: refreshMaintenance } =
+    useAdminMaintenance();
+  const canRelaxUserLifecycle = hasAdminMaintenanceRule(
+    maintenanceStatus,
+    "user_lifecycle_sequence",
   );
 
   const [user, setUser] = useState<User | null>(null);
@@ -130,19 +143,18 @@ export default function AdminUserDetailPage() {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [showResetResult, setShowResetResult] = useState(false);
-  const [generatedPassword, setGeneratedPassword] = useState('');
-  const [resetEmailWarning, setResetEmailWarning] = useState('');
+  const [generatedPassword, setGeneratedPassword] = useState("");
+  const [resetEmailWarning, setResetEmailWarning] = useState("");
   const [confirmation, setConfirmation] =
     useState<ConfirmationDialogConfig | null>(null);
   const [showPurgeConfirm, setShowPurgeConfirm] = useState(false);
-  const [purgeConfirmName, setPurgeConfirmName] = useState('');
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
 
   const role = useMemo(() => form.role, [form.role]);
-  const isStudent = role === 'student';
-  const isDeleted = user?.status === 'DELETED';
+  const isStudent = role === "student";
+  const isDeleted = user?.status === "DELETED";
   const isDeletedReadOnly = isDeleted && !canRelaxUserLifecycle;
-  const fullName = `${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim();
+  const fullName = `${user?.firstName ?? ""} ${user?.lastName ?? ""}`.trim();
 
   const loadUser = async () => {
     try {
@@ -151,16 +163,16 @@ export default function AdminUserDetailPage() {
       const loadedUser = response.data.user;
 
       if (!loadedUser) {
-        toast.error('User not found');
-        router.push('/dashboard/admin/users');
+        toast.error("User not found");
+        router.push("/dashboard/admin/users");
         return;
       }
 
       setUser(loadedUser);
       setForm(toFormState(loadedUser));
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to load user details'));
-      router.push('/dashboard/admin/users');
+      toast.error(getApiErrorMessage(error, "Failed to load user details"));
+      router.push("/dashboard/admin/users");
     } finally {
       setLoading(false);
     }
@@ -184,19 +196,20 @@ export default function AdminUserDetailPage() {
       const response = await userService.resetPassword(userId);
       setGeneratedPassword(response.generatedPassword);
       setResetEmailWarning(
-        response.emailDeliveryStatus === 'failed'
-          ? response.emailDeliveryError || 'Password reset succeeded, but the email could not be delivered.'
-          : '',
+        response.emailDeliveryStatus === "failed"
+          ? response.emailDeliveryError ||
+              "Password reset succeeded, but the email could not be delivered."
+          : "",
       );
       setShowResetConfirm(false);
       setShowResetResult(true);
-      if (response.emailDeliveryStatus === 'failed') {
-        toast.error('Password reset, but email delivery failed.');
+      if (response.emailDeliveryStatus === "failed") {
+        toast.error("Password reset, but email delivery failed.");
       } else {
-        toast.success('Password reset successfully');
+        toast.success("Password reset successfully");
       }
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to reset password'));
+      toast.error(getApiErrorMessage(error, "Failed to reset password"));
     } finally {
       setResetting(false);
     }
@@ -206,33 +219,38 @@ export default function AdminUserDetailPage() {
     if (!generatedPassword) return;
     try {
       await navigator.clipboard.writeText(generatedPassword);
-      toast.success('Password copied to clipboard');
+      toast.success("Password copied to clipboard");
     } catch {
-      toast.error('Failed to copy password');
+      toast.error("Failed to copy password");
     }
   };
 
   const handleSave = async () => {
     if (isDeletedReadOnly) {
-      toast.error('Deleted accounts can only be edited while Demo mode is active.');
+      toast.error(
+        "Deleted accounts can only be edited while Maintenance Access is active.",
+      );
       return;
     }
     if (!form.firstName.trim() || !form.lastName.trim() || !form.email.trim()) {
-      toast.error('First name, last name, and email are required');
+      toast.error("First name, last name, and email are required");
       return;
     }
-    if (!PERSON_NAME_REGEX.test(form.firstName.trim()) || !PERSON_NAME_REGEX.test(form.lastName.trim())) {
+    if (
+      !PERSON_NAME_REGEX.test(form.firstName.trim()) ||
+      !PERSON_NAME_REGEX.test(form.lastName.trim())
+    ) {
       toast.error(PERSON_NAME_ERROR);
       return;
     }
 
     if (isStudent) {
       if (!/^[0-9]{12}$/.test(form.lrn.trim())) {
-        toast.error('Student LRN must be exactly 12 digits');
+        toast.error("Student LRN must be exactly 12 digits");
         return;
       }
       if (!form.gradeLevel) {
-        toast.error('Grade level is required for student accounts');
+        toast.error("Grade level is required for student accounts");
         return;
       }
       if (
@@ -247,11 +265,11 @@ export default function AdminUserDetailPage() {
         return;
       }
       if (!PH_MOBILE_REGEX.test(form.phone.trim())) {
-        toast.error('Student contact number must be a valid PH mobile number.');
+        toast.error("Student contact number must be a valid PH mobile number.");
         return;
       }
       if (!PH_MOBILE_REGEX.test(form.familyContact.trim())) {
-        toast.error('Guardian contact must be a valid PH mobile number.');
+        toast.error("Guardian contact must be a valid PH mobile number.");
         return;
       }
     }
@@ -266,10 +284,18 @@ export default function AdminUserDetailPage() {
       gradeLevel: isStudent ? form.gradeLevel || undefined : undefined,
       dateOfBirth: isStudent ? form.dateOfBirth || undefined : undefined,
       gender: isStudent ? form.gender || undefined : undefined,
-      phone: isStudent ? sanitizePhoneLocalInput(form.phone, 11) || undefined : undefined,
-      address: isStudent ? sanitizeAddressInput(form.address, 180) || undefined : undefined,
-      familyName: isStudent ? sanitizePersonNameInput(form.familyName, 80) || undefined : undefined,
-      familyRelationship: isStudent ? (form.familyRelationship || undefined) : undefined,
+      phone: isStudent
+        ? sanitizePhoneLocalInput(form.phone, 11) || undefined
+        : undefined,
+      address: isStudent
+        ? sanitizeAddressInput(form.address, 180) || undefined
+        : undefined,
+      familyName: isStudent
+        ? sanitizePersonNameInput(form.familyName, 80) || undefined
+        : undefined,
+      familyRelationship: isStudent
+        ? form.familyRelationship || undefined
+        : undefined,
       familyContact: isStudent
         ? sanitizePhoneLocalInput(form.familyContact, 11) || undefined
         : undefined,
@@ -281,35 +307,33 @@ export default function AdminUserDetailPage() {
       const updatedUser = response.data.user;
       setUser(updatedUser);
       setForm(toFormState(updatedUser));
-      toast.success('User details updated');
+      toast.success("User details updated");
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to update user details'));
+      toast.error(getApiErrorMessage(error, "Failed to update user details"));
     } finally {
       setSaving(false);
     }
   };
 
-  const runLifecycleAction = async (
-    action: 'archive' | 'reactivate',
-  ) => {
+  const runLifecycleAction = async (action: "archive" | "reactivate") => {
     try {
       setLifecycleBusy(true);
-      if (action === 'archive') {
+      if (action === "archive") {
         await userService.softDelete(userId);
-        toast.success('User archived');
+        toast.success("User archived");
       } else {
         await userService.reactivate(userId);
-        toast.success('User reactivated');
+        toast.success("User reactivated");
       }
       await loadUser();
     } catch (error) {
-      await refreshDemoMode();
+      await refreshMaintenance();
       toast.error(
         getApiErrorMessage(
           error,
-          action === 'archive'
-            ? 'Failed to archive user'
-            : 'Failed to reactivate user',
+          action === "archive"
+            ? "Failed to archive user"
+            : "Failed to reactivate user",
         ),
       );
     } finally {
@@ -317,40 +341,19 @@ export default function AdminUserDetailPage() {
     }
   };
 
-  const openLifecycleConfirmation = (action: 'archive' | 'reactivate') => {
+  const openLifecycleConfirmation = (action: "archive" | "reactivate") => {
     setConfirmation({
-      title: action === 'archive' ? 'Archive user directly?' : 'Reactivate user directly?',
+      title:
+        action === "archive"
+          ? "Archive user directly?"
+          : "Reactivate user directly?",
       description:
-        'Demo mode permits this lifecycle sequence exception. Identity, audit, and evidence safeguards remain active.',
-      confirmLabel: action === 'archive' ? 'Archive user' : 'Reactivate user',
-      tone: action === 'archive' ? 'danger' : 'default',
+        "Maintenance Access permits this lifecycle sequence exception. Identity, audit, and evidence safeguards remain active.",
+      confirmLabel: action === "archive" ? "Archive user" : "Reactivate user",
+      tone: action === "archive" ? "danger" : "default",
       details: <p className="font-semibold">{fullName}</p>,
       onConfirm: async () => runLifecycleAction(action),
     });
-  };
-
-  const handlePurge = async () => {
-    if (!user || user.status !== 'DELETED') {
-      toast.error('Only deleted accounts can be permanently purged.');
-      return;
-    }
-    if (purgeConfirmName !== fullName) {
-      toast.error('Name does not match');
-      return;
-    }
-
-    try {
-      setLifecycleBusy(true);
-      await userService.purge(userId);
-      toast.success('User permanently deleted');
-      setShowPurgeConfirm(false);
-      setPurgeConfirmName('');
-      router.push('/dashboard/admin/users');
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to purge user'));
-    } finally {
-      setLifecycleBusy(false);
-    }
   };
 
   if (loading) {
@@ -372,20 +375,29 @@ export default function AdminUserDetailPage() {
       title={`${form.firstName} ${form.lastName}`.trim()}
       description="Review and update account details in the same compact form layout used for new users."
       variant="compact-form"
-      actions={(
+      actions={
         <>
-          <Button variant="outline" className="admin-button-outline h-9 rounded-lg px-4 text-sm font-semibold" onClick={() => router.back()}>
+          <Button
+            variant="outline"
+            className="admin-button-outline h-9 rounded-lg px-4 text-sm font-semibold"
+            onClick={() => router.back()}
+          >
             Back
           </Button>
-          <Button variant="outline" className="admin-button-outline h-9 rounded-lg px-4 text-sm font-semibold" onClick={() => setShowResetConfirm(true)} disabled={resetting || isDeletedReadOnly}>
+          <Button
+            variant="outline"
+            className="admin-button-outline h-9 rounded-lg px-4 text-sm font-semibold"
+            onClick={() => setShowResetConfirm(true)}
+            disabled={resetting || isDeletedReadOnly}
+          >
             <KeyRound className="h-4 w-4" />
-            {resetting ? 'Resetting...' : 'Reset Password'}
+            {resetting ? "Resetting..." : "Reset Password"}
           </Button>
           {canRelaxUserLifecycle && !isDeleted ? (
             <Button
               variant="outline"
               className="h-9 rounded-lg border-rose-200 px-4 text-sm font-semibold text-rose-700 hover:bg-rose-50"
-              onClick={() => openLifecycleConfirmation('archive')}
+              onClick={() => openLifecycleConfirmation("archive")}
               disabled={lifecycleBusy}
             >
               <Archive className="h-4 w-4" />
@@ -396,7 +408,7 @@ export default function AdminUserDetailPage() {
             <Button
               variant="outline"
               className="admin-button-outline h-9 rounded-lg px-4 text-sm font-semibold"
-              onClick={() => openLifecycleConfirmation('reactivate')}
+              onClick={() => openLifecycleConfirmation("reactivate")}
               disabled={lifecycleBusy}
             >
               <RotateCcw className="h-4 w-4" />
@@ -411,144 +423,249 @@ export default function AdminUserDetailPage() {
               disabled={lifecycleBusy}
             >
               <Trash2 className="h-4 w-4" />
-              Purge user
+              Review permanent deletion
             </Button>
           ) : null}
         </>
-      )}
-      meta={(
+      }
+      meta={
         <>
           <MetaItem label="Status" value={user.status} />
           <MetaItem label="Role" value={role} />
-          <MetaItem label="Created" value={user.createdAt ? formatDate(user.createdAt) : 'Unknown'} />
-          <MetaItem label="Last login" value={user.lastLoginAt ? formatDate(String(user.lastLoginAt)) : 'Never'} />
+          <MetaItem
+            label="Created"
+            value={user.createdAt ? formatDate(user.createdAt) : "Unknown"}
+          />
+          <MetaItem
+            label="Last login"
+            value={
+              user.lastLoginAt ? formatDate(String(user.lastLoginAt)) : "Never"
+            }
+          />
         </>
-      )}
+      }
     >
       <fieldset disabled={isDeletedReadOnly} className="contents">
-      <AdminSectionCard
-        title="Account Details"
-        description="Core identity, email, and role assignment."
-        density="compact"
-        contentClassName="space-y-4"
-      >
-        <p className="text-xs text-[var(--admin-text-muted)]">
-          User ID:{' '}
-          <span className="font-semibold text-[var(--admin-text-strong)] break-all">
-            {user.id}
-          </span>
-        </p>
-
-        <div className="admin-form-grid admin-form-grid--three">
-          <Field label="First Name">
-            <Input value={form.firstName} onChange={(event) => setField('firstName', event.target.value)} className="admin-input rounded-lg" />
-          </Field>
-          <Field label="Middle Name">
-            <Input value={form.middleName} onChange={(event) => setField('middleName', event.target.value)} className="admin-input rounded-lg" />
-          </Field>
-          <Field label="Last Name">
-            <Input value={form.lastName} onChange={(event) => setField('lastName', event.target.value)} className="admin-input rounded-lg" />
-          </Field>
-        </div>
-
-        <div className="admin-form-grid admin-form-grid--two">
-          <Field label="Email Address">
-            <Input type="email" value={form.email} onChange={(event) => setField('email', event.target.value)} className="admin-input rounded-lg" />
-          </Field>
-          <Field label="Role">
-            <select value={form.role} onChange={(event) => setField('role', event.target.value as 'student' | 'teacher' | 'admin')} className="admin-select w-full rounded-lg text-sm font-semibold">
-              <option value="student">Student</option>
-              <option value="teacher">Teacher</option>
-              <option value="admin">Admin</option>
-            </select>
-          </Field>
-        </div>
-      </AdminSectionCard>
-
-      {isStudent ? (
         <AdminSectionCard
-          title="Student Profile"
-          description="Student details stay available in the same compact layout."
+          title="Account Details"
+          description="Core identity, email, and role assignment."
           density="compact"
           contentClassName="space-y-4"
         >
+          <p className="text-xs text-[var(--admin-text-muted)]">
+            User ID:{" "}
+            <span className="font-semibold text-[var(--admin-text-strong)] break-all">
+              {user.id}
+            </span>
+          </p>
+
           <div className="admin-form-grid admin-form-grid--three">
-            <Field label="LRN">
-              <Input value={form.lrn} onChange={(event) => setField('lrn', event.target.value)} placeholder="12-digit LRN" inputMode="numeric" maxLength={12} className="admin-input rounded-lg" />
+            <Field label="First Name">
+              <Input
+                value={form.firstName}
+                onChange={(event) => setField("firstName", event.target.value)}
+                className="admin-input rounded-lg"
+              />
             </Field>
-            <Field label="Grade Level">
-              <select value={form.gradeLevel} onChange={(event) => setField('gradeLevel', event.target.value)} className="admin-select w-full rounded-lg text-sm font-semibold">
-                <option value="">Select grade</option>
-                <option value="7">Grade 7</option>
-                <option value="8">Grade 8</option>
-                <option value="9">Grade 9</option>
-                <option value="10">Grade 10</option>
-              </select>
+            <Field label="Middle Name">
+              <Input
+                value={form.middleName}
+                onChange={(event) => setField("middleName", event.target.value)}
+                className="admin-input rounded-lg"
+              />
             </Field>
-            <Field label="Date of Birth">
-              <Input type="date" value={form.dateOfBirth} onChange={(event) => setField('dateOfBirth', event.target.value)} className="admin-input rounded-lg" />
+            <Field label="Last Name">
+              <Input
+                value={form.lastName}
+                onChange={(event) => setField("lastName", event.target.value)}
+                className="admin-input rounded-lg"
+              />
             </Field>
           </div>
 
           <div className="admin-form-grid admin-form-grid--two">
-            <Field label="Gender">
-              <select value={form.gender} onChange={(event) => setField('gender', event.target.value)} className="admin-select w-full rounded-lg text-sm font-semibold">
-                <option value="">Select gender</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
+            <Field label="Email Address">
+              <Input
+                type="email"
+                value={form.email}
+                onChange={(event) => setField("email", event.target.value)}
+                className="admin-input rounded-lg"
+              />
+            </Field>
+            <Field label="Role">
+              <select
+                value={form.role}
+                onChange={(event) =>
+                  setField(
+                    "role",
+                    event.target.value as "student" | "teacher" | "admin",
+                  )
+                }
+                className="admin-select w-full rounded-lg text-sm font-semibold"
+              >
+                <option value="student">Student</option>
+                <option value="teacher">Teacher</option>
+                <option value="admin">Admin</option>
               </select>
-            </Field>
-            <Field label="Phone">
-              <Input value={form.phone} onChange={(event) => setField('phone', event.target.value)} inputMode="tel" maxLength={13} className="admin-input rounded-lg" />
-            </Field>
-          </div>
-
-          <Field label="Address">
-            <Input value={form.address} onChange={(event) => setField('address', event.target.value)} className="admin-input rounded-lg" />
-          </Field>
-
-          <div className="admin-form-grid admin-form-grid--three">
-            <Field label="Guardian Name">
-              <Input value={form.familyName} onChange={(event) => setField('familyName', event.target.value)} className="admin-input rounded-lg" />
-            </Field>
-            <Field label="Relationship">
-              <select value={form.familyRelationship} onChange={(event) => setField('familyRelationship', event.target.value)} className="admin-select w-full rounded-lg text-sm font-semibold">
-                <option value="">Select relationship</option>
-                <option value="Father">Father</option>
-                <option value="Mother">Mother</option>
-                <option value="Guardian">Guardian</option>
-                <option value="Sibling">Sibling</option>
-                <option value="Other">Other</option>
-              </select>
-            </Field>
-            <Field label="Guardian Contact">
-              <Input value={form.familyContact} onChange={(event) => setField('familyContact', event.target.value)} inputMode="tel" maxLength={13} className="admin-input rounded-lg" />
             </Field>
           </div>
         </AdminSectionCard>
-      ) : null}
 
-      <div className="admin-form-actions">
-        <Button className="admin-button-solid h-9 rounded-lg px-4 text-sm font-semibold" onClick={handleSave} disabled={saving}>
-          {saving ? 'Saving...' : 'Save Changes'}
-        </Button>
-      </div>
+        {isStudent ? (
+          <AdminSectionCard
+            title="Student Profile"
+            description="Student details stay available in the same compact layout."
+            density="compact"
+            contentClassName="space-y-4"
+          >
+            <div className="admin-form-grid admin-form-grid--three">
+              <Field label="LRN">
+                <Input
+                  value={form.lrn}
+                  onChange={(event) => setField("lrn", event.target.value)}
+                  placeholder="12-digit LRN"
+                  inputMode="numeric"
+                  maxLength={12}
+                  className="admin-input rounded-lg"
+                />
+              </Field>
+              <Field label="Grade Level">
+                <select
+                  value={form.gradeLevel}
+                  onChange={(event) =>
+                    setField("gradeLevel", event.target.value)
+                  }
+                  className="admin-select w-full rounded-lg text-sm font-semibold"
+                >
+                  <option value="">Select grade</option>
+                  <option value="7">Grade 7</option>
+                  <option value="8">Grade 8</option>
+                  <option value="9">Grade 9</option>
+                  <option value="10">Grade 10</option>
+                </select>
+              </Field>
+              <Field label="Date of Birth">
+                <Input
+                  type="date"
+                  value={form.dateOfBirth}
+                  onChange={(event) =>
+                    setField("dateOfBirth", event.target.value)
+                  }
+                  className="admin-input rounded-lg"
+                />
+              </Field>
+            </div>
+
+            <div className="admin-form-grid admin-form-grid--two">
+              <Field label="Gender">
+                <select
+                  value={form.gender}
+                  onChange={(event) => setField("gender", event.target.value)}
+                  className="admin-select w-full rounded-lg text-sm font-semibold"
+                >
+                  <option value="">Select gender</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                </select>
+              </Field>
+              <Field label="Phone">
+                <Input
+                  value={form.phone}
+                  onChange={(event) => setField("phone", event.target.value)}
+                  inputMode="tel"
+                  maxLength={13}
+                  className="admin-input rounded-lg"
+                />
+              </Field>
+            </div>
+
+            <Field label="Address">
+              <Input
+                value={form.address}
+                onChange={(event) => setField("address", event.target.value)}
+                className="admin-input rounded-lg"
+              />
+            </Field>
+
+            <div className="admin-form-grid admin-form-grid--three">
+              <Field label="Guardian Name">
+                <Input
+                  value={form.familyName}
+                  onChange={(event) =>
+                    setField("familyName", event.target.value)
+                  }
+                  className="admin-input rounded-lg"
+                />
+              </Field>
+              <Field label="Relationship">
+                <select
+                  value={form.familyRelationship}
+                  onChange={(event) =>
+                    setField("familyRelationship", event.target.value)
+                  }
+                  className="admin-select w-full rounded-lg text-sm font-semibold"
+                >
+                  <option value="">Select relationship</option>
+                  <option value="Father">Father</option>
+                  <option value="Mother">Mother</option>
+                  <option value="Guardian">Guardian</option>
+                  <option value="Sibling">Sibling</option>
+                  <option value="Other">Other</option>
+                </select>
+              </Field>
+              <Field label="Guardian Contact">
+                <Input
+                  value={form.familyContact}
+                  onChange={(event) =>
+                    setField("familyContact", event.target.value)
+                  }
+                  inputMode="tel"
+                  maxLength={13}
+                  className="admin-input rounded-lg"
+                />
+              </Field>
+            </div>
+          </AdminSectionCard>
+        ) : null}
+
+        <div className="admin-form-actions">
+          <Button
+            className="admin-button-solid h-9 rounded-lg px-4 text-sm font-semibold"
+            onClick={handleSave}
+            disabled={saving}
+          >
+            {saving ? "Saving..." : "Save Changes"}
+          </Button>
+        </div>
       </fieldset>
 
       <Dialog open={showResetConfirm} onOpenChange={setShowResetConfirm}>
-        <DialogContent variant="admin" className="rounded-[1.1rem] border border-[var(--admin-outline)] bg-white shadow-xl">
+        <DialogContent
+          variant="admin"
+          className="rounded-[1.1rem] border border-[var(--admin-outline)] bg-white shadow-xl"
+        >
           <DialogHeader>
             <DialogTitle>Reset User Password</DialogTitle>
             <DialogDescription>
-              Generate a new temporary password for {form.firstName} {form.lastName}. The password will be emailed to the user.
+              Generate a new temporary password for {form.firstName}{" "}
+              {form.lastName}. The password will be emailed to the user.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" className="admin-button-outline h-9 rounded-lg px-4 text-sm font-semibold" onClick={() => setShowResetConfirm(false)} disabled={resetting}>
+            <Button
+              variant="outline"
+              className="admin-button-outline h-9 rounded-lg px-4 text-sm font-semibold"
+              onClick={() => setShowResetConfirm(false)}
+              disabled={resetting}
+            >
               Cancel
             </Button>
-            <Button className="admin-button-solid h-9 rounded-lg px-4 text-sm font-semibold" onClick={handleResetPassword} disabled={resetting}>
-              {resetting ? 'Resetting...' : 'Confirm Reset'}
+            <Button
+              className="admin-button-solid h-9 rounded-lg px-4 text-sm font-semibold"
+              onClick={handleResetPassword}
+              disabled={resetting}
+            >
+              {resetting ? "Resetting..." : "Confirm Reset"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -559,12 +676,15 @@ export default function AdminUserDetailPage() {
         onOpenChange={(open) => {
           setShowResetResult(open);
           if (!open) {
-            setGeneratedPassword('');
-            setResetEmailWarning('');
+            setGeneratedPassword("");
+            setResetEmailWarning("");
           }
         }}
       >
-        <DialogContent variant="admin" className="rounded-[1.1rem] border border-[var(--admin-outline)] bg-white shadow-xl">
+        <DialogContent
+          variant="admin"
+          className="rounded-[1.1rem] border border-[var(--admin-outline)] bg-white shadow-xl"
+        >
           <DialogHeader>
             <DialogTitle>New Temporary Password</DialogTitle>
             <DialogDescription>
@@ -580,11 +700,18 @@ export default function AdminUserDetailPage() {
             </div>
           ) : null}
           <DialogFooter>
-            <Button variant="outline" className="admin-button-outline h-9 rounded-lg px-4 text-sm font-semibold" onClick={handleCopyPassword}>
+            <Button
+              variant="outline"
+              className="admin-button-outline h-9 rounded-lg px-4 text-sm font-semibold"
+              onClick={handleCopyPassword}
+            >
               <Copy className="mr-2 h-4 w-4" />
               Copy Password
             </Button>
-            <Button className="admin-button-solid h-9 rounded-lg px-4 text-sm font-semibold" onClick={() => setShowResetResult(false)}>
+            <Button
+              className="admin-button-solid h-9 rounded-lg px-4 text-sm font-semibold"
+              onClick={() => setShowResetResult(false)}
+            >
               Done
             </Button>
           </DialogFooter>
@@ -596,43 +723,43 @@ export default function AdminUserDetailPage() {
         onClose={() => setConfirmation(null)}
       />
 
-      <Dialog
+      <AdminLifecycleDialog
         open={showPurgeConfirm}
-        onOpenChange={(open) => {
-          setShowPurgeConfirm(open);
-          if (!open) setPurgeConfirmName('');
+        onOpenChange={setShowPurgeConfirm}
+        title="Permanently delete account"
+        description="Review every linked record before deletion. Retained academic evidence remains immutable, and Maintenance Access plus your current password are required."
+        targetLabel={fullName}
+        intents={[
+          {
+            value: "PURGE_USER",
+            label: "Permanently delete empty archived account",
+            description:
+              "Delete this archived account only when the preview confirms that no retained academic evidence would be lost.",
+          },
+        ]}
+        preview={async () =>
+          (
+            await adminLifecycleService.previewPurge({
+              targetType: "USER",
+              targetId: userId,
+            })
+          ).data
+        }
+        execute={async (_intent, evidence) =>
+          (
+            await adminLifecycleService.executePurge({
+              targetType: "USER",
+              targetId: userId,
+              ...evidence,
+            })
+          ).data
+        }
+        onCompleted={() => {
+          toast.success("User permanently deleted");
+          router.push("/dashboard/admin/users");
         }}
-      >
-        <DialogContent variant="admin" className="rounded-[1.1rem] border border-[var(--admin-outline)] bg-white shadow-xl">
-          <DialogHeader>
-            <DialogTitle>Permanently purge user?</DialogTitle>
-            <DialogDescription>
-              This remains evidence-aware and cannot be reversed. Type the full name exactly to continue.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2">
-            <Label htmlFor="purge-confirm-name">Type {fullName}</Label>
-            <Input
-              id="purge-confirm-name"
-              value={purgeConfirmName}
-              onChange={(event) => setPurgeConfirmName(event.target.value)}
-              autoComplete="off"
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowPurgeConfirm(false)} disabled={lifecycleBusy}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handlePurge}
-              disabled={lifecycleBusy || purgeConfirmName !== fullName}
-            >
-              {lifecycleBusy ? 'Purging...' : 'Purge user'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        permanent
+      />
     </AdminPageShell>
   );
 }
@@ -654,13 +781,7 @@ function Field({
   );
 }
 
-function MetaItem({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+function MetaItem({ label, value }: { label: string; value: string }) {
   return (
     <div className="admin-compact-meta__item">
       <span className="admin-compact-meta__label">{label}</span>

@@ -127,11 +127,19 @@ async function mockReset(page: Page) {
             : "idle",
         retrying: false,
       };
-    else if (path.includes("demo-mode"))
+    else if (path.includes("/admin/maintenance/session"))
       data = {
         active: false,
-        available: false,
+        available: true,
+        state: "inactive",
+        sessionId: null,
         serverTime: new Date().toISOString(),
+        startedAt: null,
+        expiresAt: null,
+        reason: null,
+        scopeCodes: [],
+        rules: [],
+        protectedRules: [],
       };
     else if (path.includes("notifications"))
       data = { notifications: [], items: [], unreadCount: 0, total: 0 };
@@ -235,15 +243,9 @@ test("review and accepted progress survive invalidated auth on desktop and narro
   expect(
     await page.evaluate(() => ({
       reset: localStorage.getItem("nexora.systemReset.operationId"),
-      assessment: localStorage.getItem(
-        "assignment-creation:v1:teacher:class",
-      ),
-      legacyAssessment: localStorage.getItem(
-        "assessment-create-pending:class",
-      ),
-      template: localStorage.getItem(
-        "class-template-editor:template:draft",
-      ),
+      assessment: localStorage.getItem("assignment-creation:v1:teacher:class"),
+      legacyAssessment: localStorage.getItem("assessment-create-pending:class"),
+      template: localStorage.getItem("class-template-editor:template:draft"),
       ai: localStorage.getItem("teacher-ai-draft-jobs:class"),
       extraction: localStorage.getItem("teacher-extraction-jobs:class"),
       notifications: localStorage.getItem(

@@ -194,15 +194,17 @@ export function AdminUsersScreen({ navigation }: Props) {
       <View
         style={{ padding: 12, flexDirection: "row", flexWrap: "wrap", gap: 8 }}
       >
-        <AdminButton
-          label={
-            allVisibleSelected
-              ? "Clear visible selection"
-              : "Select all visible"
-          }
-          onPress={selectAllVisible}
-          disabled={!users.length || busy}
-        />
+        {status !== "DELETED" ? (
+          <AdminButton
+            label={
+              allVisibleSelected
+                ? "Clear visible selection"
+                : "Select all visible"
+            }
+            onPress={selectAllVisible}
+            disabled={!users.length || busy}
+          />
+        ) : null}
         <AdminButton
           label="Export visible"
           icon="download"
@@ -210,7 +212,7 @@ export function AdminUsersScreen({ navigation }: Props) {
           onPress={() => void exportVisible()}
           disabled={!users.length || busy}
         />
-        {selectedIds.length ? (
+        {selectedIds.length && status !== "DELETED" ? (
           <AdminButton
             label="Clear selection"
             onPress={() => setSelectedIds([])}
@@ -244,20 +246,6 @@ export function AdminUsersScreen({ navigation }: Props) {
               disabled={busy || network.isOffline}
             />
           </>
-        ) : null}
-        {selectedIds.length && status === "DELETED" ? (
-          <AdminButton
-            label="Purge selected"
-            tone="red"
-            onPress={() =>
-              confirmBulk(
-                "purge",
-                "Purge",
-                "This permanently removes the selected deleted accounts.",
-              )
-            }
-            disabled={busy || network.isOffline}
-          />
         ) : null}
         {selectedIds.length &&
         status !== "SUSPENDED" &&
@@ -312,16 +300,18 @@ export function AdminUsersScreen({ navigation }: Props) {
                 rootNavigation.navigate("AdminUserDetail", { userId: user.id })
               }
             />
-            <View style={{ paddingHorizontal: 12, paddingBottom: 8 }}>
-              <AdminButton
-                label={
-                  selected ? `Deselect ${user.email}` : `Select ${user.email}`
-                }
-                icon={selected ? "checkbox-marked" : "checkbox-blank-outline"}
-                variant="text"
-                onPress={() => toggleSelection(user.id)}
-              />
-            </View>
+            {status !== "DELETED" ? (
+              <View style={{ paddingHorizontal: 12, paddingBottom: 8 }}>
+                <AdminButton
+                  label={
+                    selected ? `Deselect ${user.email}` : `Select ${user.email}`
+                  }
+                  icon={selected ? "checkbox-marked" : "checkbox-blank-outline"}
+                  variant="text"
+                  onPress={() => toggleSelection(user.id)}
+                />
+              </View>
+            ) : null}
           </View>
         );
       }}

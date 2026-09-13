@@ -29,10 +29,10 @@ import { parseXlsx } from './parsers/xlsx.parser';
 import { parseCsv } from './parsers/csv.parser';
 import { PasswordGenerator } from '../users/utils/password-generator';
 import {
-  AdminDemoModeService,
-  type AdminDemoModeContext,
-} from '../admin-demo-mode/admin-demo-mode.service';
-import type { AdminDemoModeRelaxedRuleCode } from '../admin-demo-mode/admin-demo-mode.policy';
+  AdminMaintenanceService,
+  type AdminMaintenanceContext,
+} from '../admin-maintenance/admin-maintenance.service';
+import type { AdminMaintenanceRuleCode } from '../admin-maintenance/admin-maintenance.policy';
 import {
   findSectionHeaderRow,
   findColumnHeaderRow,
@@ -71,7 +71,7 @@ export class RosterImportService {
     private readonly policyService: AcademicPolicyService,
     private readonly auditService: AuditService,
     private readonly eventEmitter: EventEmitter2,
-    private readonly adminDemoModeService: AdminDemoModeService,
+    private readonly adminMaintenanceService: AdminMaintenanceService,
   ) {}
 
   private get db() {
@@ -110,12 +110,12 @@ export class RosterImportService {
       throw new NotFoundException(`Section with ID "${sectionId}" not found`);
     }
 
-    const demo = await this.adminDemoModeService.resolveForActor(
+    const maintenance = await this.adminMaintenanceService.resolveForActor(
       requestingUser.id,
       requestingUser.roles,
     );
     if (!section.isActive) {
-      if (!demo.allows('section_membership_window')) {
+      if (!maintenance.allows('section_membership_window')) {
         await this.cleanupFile(file.path);
         throw new BadRequestException(
           `Section "${section.name}" is inactive and cannot receive new enrollments`,
@@ -406,7 +406,7 @@ export class RosterImportService {
     dto: RosterImportCommitDto,
     requestingUser: RosterRequestingUser,
   ): Promise<RosterImportCommitResponseDto> {
-    const demo = await this.adminDemoModeService.resolveForActor(
+    const maintenance = await this.adminMaintenanceService.resolveForActor(
       requestingUser.id,
       requestingUser.roles,
     );
@@ -432,7 +432,7 @@ export class RosterImportService {
       dto,
       requestingUser,
       preparedCredentials,
-      demo,
+      maintenance,
     );
   }
 
@@ -442,9 +442,9 @@ export class RosterImportService {
     dto: RosterImportCommitDto,
     requestingUser: RosterRequestingUser,
     preparedCredentials: PreparedAccountCredential[],
-    demo: AdminDemoModeContext,
+    maintenance: AdminMaintenanceContext,
   ): Promise<RosterImportCommitResponseDto> {
-    const bypassedRules: AdminDemoModeRelaxedRuleCode[] = [];
+    const bypassedRules: AdminMaintenanceRuleCode[] = [];
     // 1. Verify section
     const section = await this.db.query.sections.findFirst({
       where: eq(sections.id, sectionId),
@@ -453,7 +453,7 @@ export class RosterImportService {
     if (!section)
       throw new NotFoundException(`Section with ID "${sectionId}" not found`);
     if (!section.isActive) {
-      if (!demo.allows('section_membership_window')) {
+      if (!maintenance.allows('section_membership_window')) {
         throw new BadRequestException(`Section "${section.name}" is inactive`);
       }
       bypassedRules.push('section_membership_window');
@@ -478,7 +478,7 @@ export class RosterImportService {
 
     const state = await this.policyService.currentState();
     if (section.schoolYear !== state.schoolYear) {
-      if (!demo.allows('section_membership_window')) {
+      if (!maintenance.allows('section_membership_window')) {
         throw new BadRequestException(
           'Roster imports can enroll students only in the active school year',
         );
@@ -536,7 +536,7 @@ export class RosterImportService {
 
         if (newIds.length > 0) {
           if (currentCount + newIds.length > section.capacity) {
-            if (!demo.allows('section_capacity')) {
+            if (!maintenance.allows('section_capacity')) {
               throw new BadRequestException(
                 `Adding ${newIds.length} student(s) would exceed the section capacity of ${section.capacity} ` +
                   `(currently ${currentCount} enrolled)`,
@@ -639,7 +639,7 @@ export class RosterImportService {
 
         const currentCount = Number(cap?.count ?? 0);
         if (currentCount + dto.pendingRows.length > section.capacity) {
-          if (!demo.allows('section_capacity')) {
+          if (!maintenance.allows('section_capacity')) {
             throw new BadRequestException(
               `Adding ${dto.pendingRows.length} new student(s) would exceed the section capacity of ${section.capacity} ` +
                 `(currently ${currentCount} enrolled)`,
@@ -825,7 +825,7 @@ export class RosterImportService {
       }
     });
 
-    const demoMode = demo.audit(bypassedRules);
+    const maintenanceAccess = maintenance.audit(bypassedRules);
     await this.auditService.log({
       actorId: requestingUser.id,
       action: 'academic.roster.imported',
@@ -836,7 +836,7 @@ export class RosterImportService {
         enrolledStudentIds: enrolledUserIds,
         createdStudentIds: pendingRosterIds,
         alreadyEnrolledSkipped,
-        ...(demoMode ? { demoMode } : {}),
+        ...(maintenanceAccess ? { maintenanceAccess } : {}),
       },
     });
     for (const account of createdAccounts) {

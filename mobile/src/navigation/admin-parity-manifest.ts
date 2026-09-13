@@ -545,9 +545,15 @@ export const adminWebRouteParity: readonly AdminWebRouteParityEntry[] = [
   },
   {
     webPath: "/dashboard/admin/system-settings/demo-mode",
-    mobileRoute: "AdminSettingsDemoMode",
-    mobileTask: "Open controlled Demo mode settings",
-    evidence: "AdminDemoModeSettingsScreen.tsx",
+    mobileRoute: "AdminSettingsMaintenance",
+    mobileTask: "Follow the retired Demo Mode redirect to Maintenance Access",
+    evidence: "AdminMaintenanceSettingsScreen.tsx",
+  },
+  {
+    webPath: "/dashboard/admin/system-settings/maintenance-access",
+    mobileRoute: "AdminSettingsMaintenance",
+    mobileTask: "Open actor-bound Maintenance Access",
+    evidence: "AdminMaintenanceSettingsScreen.tsx",
   },
   {
     webPath: "/dashboard/admin/system-settings/reset-school-data",

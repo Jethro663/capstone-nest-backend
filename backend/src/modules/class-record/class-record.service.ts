@@ -319,8 +319,8 @@ export class ClassRecordService {
         classId: dto.classId,
         gradingPeriod: dto.gradingPeriod,
         categoryCount: DEFAULT_CATEGORIES.length,
-        ...(academicContext?.demoMode
-          ? { demoMode: academicContext.demoMode }
+        ...(academicContext?.maintenanceAccess
+          ? { maintenanceAccess: academicContext.maintenanceAccess }
           : {}),
       },
     });
@@ -409,8 +409,8 @@ export class ClassRecordService {
         period,
         studentIds,
         affectedRecordIds: affected.map((record) => record.id),
-        ...(academicContext?.demoMode
-          ? { demoMode: academicContext.demoMode }
+        ...(academicContext?.maintenanceAccess
+          ? { maintenanceAccess: academicContext.maintenanceAccess }
           : {}),
       },
     });
@@ -905,8 +905,8 @@ export class ClassRecordService {
         classRecordId: item.classRecord.id,
         classId: item.classRecord.classId,
         maxScore: dto.maxScore,
-        ...(academicContext?.demoMode
-          ? { demoMode: academicContext.demoMode }
+        ...(academicContext?.maintenanceAccess
+          ? { maintenanceAccess: academicContext.maintenanceAccess }
           : {}),
       },
     });
@@ -1054,8 +1054,8 @@ export class ClassRecordService {
         classRecordId: item.classRecord.id,
         classId: item.classRecord.classId,
         scores: values,
-        ...(academicContext?.demoMode
-          ? { demoMode: academicContext.demoMode }
+        ...(academicContext?.maintenanceAccess
+          ? { maintenanceAccess: academicContext.maintenanceAccess }
           : {}),
       },
     });
@@ -1166,8 +1166,8 @@ export class ClassRecordService {
         reason: reason.trim(),
         previous,
         synced: result.synced,
-        ...(academicContext?.demoMode
-          ? { demoMode: academicContext.demoMode }
+        ...(academicContext?.maintenanceAccess
+          ? { maintenanceAccess: academicContext.maintenanceAccess }
           : {}),
       },
     });
@@ -1405,8 +1405,8 @@ export class ClassRecordService {
         reason,
         revision: record.revision,
         previousStatus: record.status,
-        ...(academicContext?.demoMode
-          ? { demoMode: academicContext.demoMode }
+        ...(academicContext?.maintenanceAccess
+          ? { maintenanceAccess: academicContext.maintenanceAccess }
           : {}),
       },
     });

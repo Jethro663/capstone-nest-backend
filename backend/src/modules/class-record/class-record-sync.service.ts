@@ -86,8 +86,8 @@ export class ClassRecordSyncService {
           classRecordId: item.classRecord.id,
           assessmentId: item.assessmentId,
           studentIds,
-          ...(academicContext?.demoMode
-            ? { demoMode: academicContext.demoMode }
+          ...(academicContext?.maintenanceAccess
+            ? { maintenanceAccess: academicContext.maintenanceAccess }
             : {}),
         },
       });

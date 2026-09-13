@@ -1,31 +1,31 @@
-import { render, waitFor } from '@testing-library/react';
-import EditSectionPage from './page';
+import { render, waitFor } from "@testing-library/react";
+import EditSectionPage from "./page";
 
 const push = jest.fn();
-const refreshDemoMode = jest.fn();
+const refreshMaintenance = jest.fn();
 const sectionFormMock = jest.fn<React.ReactNode, [Record<string, unknown>]>(
   () => <div data-testid="section-form" />,
 );
 
-jest.mock('next/navigation', () => ({
-  useParams: () => ({ id: 'section-1' }),
+jest.mock("next/navigation", () => ({
+  useParams: () => ({ id: "section-1" }),
   useRouter: () => ({ push }),
 }));
-jest.mock('@/providers/AdminDemoModeProvider', () => ({
-  useAdminDemoMode: () => ({ refresh: refreshDemoMode }),
+jest.mock("@/providers/AdminMaintenanceProvider", () => ({
+  useAdminMaintenance: () => ({ refresh: refreshMaintenance }),
 }));
-jest.mock('@/components/admin/SectionForm', () => {
-  const React = jest.requireActual('react');
+jest.mock("@/components/admin/SectionForm", () => {
+  const React = jest.requireActual("react");
   return {
     __esModule: true,
     default: (props: Record<string, unknown>) =>
       React.createElement(sectionFormMock, props),
   };
 });
-jest.mock('@/components/admin/AdminLifecycleDialog', () => ({
+jest.mock("@/components/admin/AdminLifecycleDialog", () => ({
   AdminLifecycleDialog: () => null,
 }));
-jest.mock('@/services/section-service', () => ({
+jest.mock("@/services/section-service", () => ({
   sectionService: {
     getById: jest.fn(),
     getRoster: jest.fn(),
@@ -33,21 +33,21 @@ jest.mock('@/services/section-service', () => ({
     update: jest.fn(),
   },
 }));
-jest.mock('@/services/user-service', () => ({
+jest.mock("@/services/user-service", () => ({
   userService: { getAll: jest.fn() },
 }));
-jest.mock('@/services/academic-state-service', () => ({
+jest.mock("@/services/academic-state-service", () => ({
   academicStateService: { getCurrent: jest.fn() },
 }));
-jest.mock('@/services/admin-lifecycle-service', () => ({
+jest.mock("@/services/admin-lifecycle-service", () => ({
   adminLifecycleService: {},
 }));
-jest.mock('sonner', () => ({
+jest.mock("sonner", () => ({
   toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() },
 }));
 
-describe('EditSectionPage', () => {
-  const { sectionService } = jest.requireMock('@/services/section-service') as {
+describe("EditSectionPage", () => {
+  const { sectionService } = jest.requireMock("@/services/section-service") as {
     sectionService: {
       getById: jest.Mock;
       getRoster: jest.Mock;
@@ -55,25 +55,25 @@ describe('EditSectionPage', () => {
       update: jest.Mock;
     };
   };
-  const { userService } = jest.requireMock('@/services/user-service') as {
+  const { userService } = jest.requireMock("@/services/user-service") as {
     userService: { getAll: jest.Mock };
   };
   const { academicStateService } = jest.requireMock(
-    '@/services/academic-state-service',
+    "@/services/academic-state-service",
   ) as { academicStateService: { getCurrent: jest.Mock } };
 
   beforeEach(() => {
     jest.clearAllMocks();
-    refreshDemoMode.mockResolvedValue(undefined);
+    refreshMaintenance.mockResolvedValue(undefined);
     sectionService.getById.mockResolvedValue({
       data: {
-        id: 'section-1',
-        name: 'Kamia',
-        gradeLevel: '7',
-        schoolYear: '2026-2027',
+        id: "section-1",
+        name: "Kamia",
+        gradeLevel: "7",
+        schoolYear: "2026-2027",
         capacity: 40,
-        roomNumber: '201',
-        adviserId: 'teacher-1',
+        roomNumber: "201",
+        adviserId: "teacher-1",
         isActive: true,
       },
     });
@@ -81,20 +81,20 @@ describe('EditSectionPage', () => {
     sectionService.getAll.mockResolvedValue({ data: [] });
     userService.getAll.mockResolvedValue({ users: [] });
     academicStateService.getCurrent.mockResolvedValue({
-      data: { quarter: 'Q1' },
+      data: { quarter: "Q1" },
     });
   });
 
-  it('retains the existing historical school year in the form choices', async () => {
+  it("retains the existing historical school year in the form choices", async () => {
     sectionService.getById.mockResolvedValueOnce({
       data: {
-        id: 'section-1',
-        name: 'Kamia',
-        gradeLevel: '7',
-        schoolYear: '2024-2025',
+        id: "section-1",
+        name: "Kamia",
+        gradeLevel: "7",
+        schoolYear: "2024-2025",
         capacity: 40,
-        roomNumber: '201',
-        adviserId: '',
+        roomNumber: "201",
+        adviserId: "",
         isActive: false,
       },
     });
@@ -103,12 +103,12 @@ describe('EditSectionPage', () => {
     const props = sectionFormMock.mock.calls.at(-1)?.[0] as {
       schoolYears: string[];
     };
-    expect(props.schoolYears).toContain('2024-2025');
+    expect(props.schoolYears).toContain("2024-2025");
   });
 
-  it('refreshes Demo mode without retrying when an update is rejected', async () => {
+  it("refreshes Maintenance Access without retrying when an update is rejected", async () => {
     sectionService.update.mockRejectedValueOnce({
-      response: { data: { message: 'Adviser is already assigned.' } },
+      response: { data: { message: "Adviser is already assigned." } },
     });
     render(<EditSectionPage />);
     await waitFor(() => expect(sectionFormMock).toHaveBeenCalled());
@@ -117,15 +117,15 @@ describe('EditSectionPage', () => {
     };
 
     void props.onSubmit({
-      name: 'Kamia',
-      gradeLevel: '7',
-      schoolYear: '2026-2027',
+      name: "Kamia",
+      gradeLevel: "7",
+      schoolYear: "2026-2027",
       capacity: 40,
-      roomNumber: '201',
-      adviserId: 'teacher-1',
+      roomNumber: "201",
+      adviserId: "teacher-1",
     });
 
-    await waitFor(() => expect(refreshDemoMode).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(refreshMaintenance).toHaveBeenCalledTimes(1));
     expect(sectionService.update).toHaveBeenCalledTimes(1);
   });
 });

@@ -123,6 +123,10 @@ export interface StudentLifecyclePlan {
   affectedUserIds: string[];
 }
 
+export interface StudentLifecyclePlanningOptions {
+  allowSectionCapacityOverride?: boolean;
+}
+
 const PERIOD_INDEX: Record<AdminLifecyclePeriod, number> = {
   Q1: 0,
   Q2: 1,
@@ -161,6 +165,7 @@ function currentAndFutureDraftParticipants(
 export function planStudentLifecycle(
   snapshot: StudentLifecycleSnapshot,
   dto: PreviewStudentLifecycleDto,
+  options: StudentLifecyclePlanningOptions = {},
 ): StudentLifecyclePlan {
   const blockers: AdminLifecycleBlocker[] = [];
   const warnings: AdminLifecycleWarning[] = [];
@@ -182,7 +187,26 @@ export function planStudentLifecycle(
     );
   }
 
-  if (snapshot.sourceEnrollments.length === 0) {
+  const classScoped =
+    dto.resolution === 'TRANSFER_CLASS' ||
+    dto.resolution === 'CORRECT_CLASS_ENROLLMENT';
+  if (classScoped && !dto.classId) {
+    blockers.push(
+      blocker(
+        'SOURCE_CLASS_REQUIRED',
+        'Select the source class for this class-only lifecycle action.',
+      ),
+    );
+  }
+  const sourceClassIds = new Set(
+    classScoped && dto.classId
+      ? [dto.classId]
+      : snapshot.sourceClasses.map((entry) => entry.id),
+  );
+  const affectedEnrollments = snapshot.sourceEnrollments.filter((entry) =>
+    classScoped ? entry.classId === dto.classId : true,
+  );
+  if (affectedEnrollments.length === 0) {
     blockers.push(
       blocker(
         'SOURCE_ENROLLMENT_NOT_FOUND',
@@ -191,16 +215,10 @@ export function planStudentLifecycle(
     );
   }
 
-  const sourceClassIds = new Set(
-    dto.resolution === 'TRANSFER_CLASS' && dto.classId
-      ? [dto.classId]
-      : snapshot.sourceClasses.map((entry) => entry.id),
-  );
-  const affectedEnrollments = snapshot.sourceEnrollments.filter((entry) =>
-    dto.resolution === 'TRANSFER_CLASS' ? entry.classId === dto.classId : true,
-  );
-
-  if (dto.resolution === 'CORRECT_ENROLLMENT') {
+  if (
+    dto.resolution === 'CORRECT_ENROLLMENT' ||
+    dto.resolution === 'CORRECT_CLASS_ENROLLMENT'
+  ) {
     const evidenceCount =
       snapshot.evidence.finalizedParticipants +
       snapshot.evidence.scores +
@@ -211,7 +229,10 @@ export function planStudentLifecycle(
         message:
           'This enrollment has retained academic evidence and cannot be treated as an error.',
         resolvable: false,
-        resolutionOptions: ['WITHDRAW', 'TRANSFER_SECTION', 'ACADEMIC_REPAIR'],
+        resolutionOptions:
+          dto.resolution === 'CORRECT_CLASS_ENROLLMENT'
+            ? ['WITHDRAW', 'ACADEMIC_REPAIR']
+            : ['WITHDRAW', 'TRANSFER_SECTION', 'ACADEMIC_REPAIR'],
       });
     }
   }
@@ -226,6 +247,7 @@ export function planStudentLifecycle(
         ),
       );
     } else {
+      let destinationCompatible = true;
       if (!destination.isActive) {
         blockers.push(
           blocker(
@@ -233,6 +255,7 @@ export function planStudentLifecycle(
             'The destination section is archived.',
           ),
         );
+        destinationCompatible = false;
       } else if (destination.schoolYear !== snapshot.sourceSection.schoolYear) {
         blockers.push(
           blocker(
@@ -240,6 +263,7 @@ export function planStudentLifecycle(
             'The destination section must belong to the same school year.',
           ),
         );
+        destinationCompatible = false;
       } else if (destination.gradeLevel !== snapshot.sourceSection.gradeLevel) {
         blockers.push(
           blocker(
@@ -247,23 +271,38 @@ export function planStudentLifecycle(
             'The destination section must use the same grade level.',
           ),
         );
-      } else if (
+        destinationCompatible = false;
+      }
+
+      if (
+        destinationCompatible &&
         snapshot.destinationActiveStudentCount >= destination.capacity!
       ) {
-        blockers.push(
-          blocker(
-            'DESTINATION_AT_CAPACITY',
-            'The destination section has reached capacity.',
-          ),
-        );
-      } else if (snapshot.destinationExistingEnrollment) {
+        if (options.allowSectionCapacityOverride) {
+          warnings.push({
+            code: 'SECTION_CAPACITY',
+            message:
+              'The destination section is at capacity. Maintenance Access permits this reviewed over-capacity transfer.',
+          });
+        } else {
+          blockers.push({
+            code: 'DESTINATION_AT_CAPACITY',
+            message:
+              'The destination section has reached capacity. Open Maintenance Access to review an over-capacity transfer.',
+            resolvable: true,
+            resolutionOptions: ['OPEN_MAINTENANCE_ACCESS'],
+          });
+        }
+      }
+
+      if (destinationCompatible && snapshot.destinationExistingEnrollment) {
         blockers.push(
           blocker(
             'DESTINATION_ALREADY_ENROLLED',
             'The learner already has an active destination membership.',
           ),
         );
-      } else {
+      } else if (destinationCompatible) {
         for (const sourceClass of snapshot.sourceClasses) {
           const matches = snapshot.destinationClasses.filter(
             (entry) =>
@@ -361,7 +400,8 @@ export function planStudentLifecycle(
       entityType: 'enrollment',
       entityId: enrollment.id,
       summary:
-        dto.resolution === 'CORRECT_ENROLLMENT'
+        dto.resolution === 'CORRECT_ENROLLMENT' ||
+        dto.resolution === 'CORRECT_CLASS_ENROLLMENT'
           ? 'Mark erroneous enrollment as dropped'
           : dto.resolution === 'WITHDRAW'
             ? 'Close enrollment as withdrawn'
@@ -370,7 +410,8 @@ export function planStudentLifecycle(
   }
 
   const eligibility =
-    dto.resolution === 'CORRECT_ENROLLMENT'
+    dto.resolution === 'CORRECT_ENROLLMENT' ||
+    dto.resolution === 'CORRECT_CLASS_ENROLLMENT'
       ? 'not_enrolled'
       : dto.resolution === 'WITHDRAW'
         ? 'withdrawn'
@@ -379,8 +420,52 @@ export function planStudentLifecycle(
     snapshot,
     dto.effectivePeriod,
     eligibility,
-    dto.resolution === 'TRANSFER_CLASS' ? sourceClassIds : undefined,
+    classScoped ? sourceClassIds : undefined,
   );
+
+  if (dto.resolution === 'TRANSFER_SECTION' && snapshot.destinationSection) {
+    effects.push({
+      kind: 'insert',
+      entityType: 'enrollment',
+      entityId: snapshot.destinationSection.id,
+      summary: `Create destination section membership for ${snapshot.student.firstName} ${snapshot.student.lastName}`,
+      details: { studentId: dto.studentId, classId: null },
+    });
+    for (const destinationClassId of Object.values(destinationClassMap)) {
+      effects.push({
+        kind: 'insert',
+        entityType: 'enrollment',
+        entityId: destinationClassId,
+        summary: 'Create mapped destination class membership',
+        details: { studentId: dto.studentId },
+      });
+    }
+  }
+  if (dto.resolution === 'TRANSFER_CLASS' && dto.destinationClassId) {
+    effects.push({
+      kind: 'insert',
+      entityType: 'enrollment',
+      entityId: dto.destinationClassId,
+      summary: 'Create destination class membership',
+      details: { studentId: dto.studentId },
+    });
+  }
+  participantChanges.forEach((change) => {
+    effects.push({
+      kind: 'update',
+      entityType: 'class_record_participant',
+      entityId: change.participantId,
+      summary: `Set draft participant eligibility to ${change.eligibility}`,
+    });
+  });
+  affectedEnrollments.forEach((enrollment) => {
+    effects.push({
+      kind: 'insert',
+      entityType: 'enrollment_lifecycle_event',
+      entityId: enrollment.id,
+      summary: 'Append the reviewed enrollment lifecycle event',
+    });
+  });
 
   if (snapshot.evidence.attempts || snapshot.evidence.scores) {
     warnings.push({
@@ -401,7 +486,13 @@ export function planStudentLifecycle(
     warnings,
     effects,
     preserved: [...new Set(preserved)],
-    requiredConfirmations: ['PRESERVE_ACADEMIC_HISTORY', dto.resolution],
+    requiredConfirmations: [
+      'PRESERVE_ACADEMIC_HISTORY',
+      dto.resolution,
+      ...(warnings.some((warning) => warning.code === 'SECTION_CAPACITY')
+        ? ['ACKNOWLEDGE_SECTION_CAPACITY']
+        : []),
+    ],
     participantChanges,
     destinationClassMap,
     affectedUserIds: [...new Set(affectedUserIds)],
@@ -435,6 +526,7 @@ export class StudentLifecycleService {
   async prepare(
     dto: PreviewStudentLifecycleDto,
     db: LifecycleDb = this.db,
+    options: StudentLifecyclePlanningOptions = {},
   ): Promise<StudentLifecyclePrepared> {
     const state = await db.query.academicSystemStates.findFirst({
       orderBy: [desc(academicSystemStates.updatedAt)],
@@ -484,13 +576,19 @@ export class StudentLifecycleService {
         createdAt: true,
       },
     });
-    const sourceClassIds = [
-      ...new Set(
-        sourceEnrollments
-          .map((entry) => entry.classId)
-          .filter((value): value is string => Boolean(value)),
-      ),
-    ];
+    const classScoped =
+      dto.resolution === 'TRANSFER_CLASS' ||
+      dto.resolution === 'CORRECT_CLASS_ENROLLMENT';
+    const sourceClassIds =
+      classScoped && dto.classId
+        ? [dto.classId]
+        : [
+            ...new Set(
+              sourceEnrollments
+                .map((entry) => entry.classId)
+                .filter((value): value is string => Boolean(value)),
+            ),
+          ];
     const sourceClasses = sourceClassIds.length
       ? await db.query.classes.findMany({
           where: inArray(classes.id, sourceClassIds),
@@ -693,7 +791,7 @@ export class StudentLifecycleService {
       destinationExistingEnrollment,
       destinationClassExistingEnrollment,
     };
-    const plan = planStudentLifecycle(snapshot, dto);
+    const plan = planStudentLifecycle(snapshot, dto, options);
     const manifest = buildAdminLifecycleManifest({
       action: 'STUDENT_RESOLUTION',
       targetType: 'student',
@@ -738,43 +836,51 @@ export class StudentLifecycleService {
     prepared: StudentLifecyclePrepared,
     context: LifecycleExecutionContext,
   ) {
-    const affectedIds = new Set(
-      prepared.plan.effects
-        .filter((effect) => effect.entityType === 'enrollment')
-        .map((effect) => effect.entityId),
-    );
     const affectedEnrollments = prepared.snapshot.sourceEnrollments.filter(
-      (entry) => affectedIds.has(entry.id),
+      (entry) =>
+        dto.resolution !== 'TRANSFER_CLASS' &&
+        dto.resolution !== 'CORRECT_CLASS_ENROLLMENT'
+          ? true
+          : entry.classId === dto.classId,
     );
 
+    let insertedEnrollments: Array<{ id: string }> = [];
     if (dto.resolution === 'TRANSFER_SECTION') {
       const destination = prepared.snapshot.destinationSection!;
-      await this.db.insert(enrollments).values([
-        {
-          studentId: dto.studentId,
-          sectionId: destination.id,
-          classId: null,
-          status: 'enrolled',
-        },
-        ...Object.values(prepared.plan.destinationClassMap).map((classId) => ({
-          studentId: dto.studentId,
-          sectionId: destination.id,
-          classId,
-          status: 'enrolled' as const,
-        })),
-      ]);
+      insertedEnrollments = await this.db
+        .insert(enrollments)
+        .values([
+          {
+            studentId: dto.studentId,
+            sectionId: destination.id,
+            classId: null,
+            status: 'enrolled',
+          },
+          ...Object.values(prepared.plan.destinationClassMap).map(
+            (classId) => ({
+              studentId: dto.studentId,
+              sectionId: destination.id,
+              classId,
+              status: 'enrolled' as const,
+            }),
+          ),
+        ])
+        .returning({ id: enrollments.id });
     }
 
     if (dto.resolution === 'TRANSFER_CLASS') {
       const destinationClass = prepared.snapshot.destinationClasses.find(
         (entry) => entry.id === dto.destinationClassId,
       )!;
-      await this.db.insert(enrollments).values({
-        studentId: dto.studentId,
-        sectionId: destinationClass.sectionId,
-        classId: destinationClass.id,
-        status: 'enrolled',
-      });
+      insertedEnrollments = await this.db
+        .insert(enrollments)
+        .values({
+          studentId: dto.studentId,
+          sectionId: destinationClass.sectionId,
+          classId: destinationClass.id,
+          status: 'enrolled',
+        })
+        .returning({ id: enrollments.id });
     }
 
     if (affectedEnrollments.length) {
@@ -811,49 +917,70 @@ export class StudentLifecycleService {
     }
 
     const outcome: EnrollmentLifecycleOutcome =
-      dto.resolution === 'CORRECT_ENROLLMENT'
+      dto.resolution === 'CORRECT_ENROLLMENT' ||
+      dto.resolution === 'CORRECT_CLASS_ENROLLMENT'
         ? 'corrected'
         : dto.resolution === 'WITHDRAW'
           ? 'withdrawn'
           : dto.resolution === 'TRANSFER_SECTION'
             ? 'transferred_section'
             : 'transferred_class';
-    if (affectedEnrollments.length) {
-      await this.db.insert(enrollmentLifecycleEvents).values(
-        affectedEnrollments.map((entry) => ({
-          operationId: context.operationId,
-          enrollmentId: entry.id,
-          studentId: dto.studentId,
-          studentSnapshot: {
-            userId: prepared.snapshot.student.id,
-            email: prepared.snapshot.student.email,
-            firstName: prepared.snapshot.student.firstName,
-            lastName: prepared.snapshot.student.lastName,
-          },
-          classId: entry.classId,
-          sectionId: entry.sectionId,
-          destinationClassId: entry.classId
-            ? (prepared.plan.destinationClassMap[entry.classId] ?? null)
-            : null,
-          destinationSectionId: dto.destinationSectionId ?? null,
-          fromStatus: entry.status,
-          toStatus: 'dropped',
-          outcome,
-          effectivePeriod: dto.effectivePeriod,
-          reasonCode: context.reasonCode,
-          notes: context.notes,
-          actorId: context.actorId,
-          actorSnapshot: context.actorSnapshot,
-        })),
-      );
-    }
+    const lifecycleEvents = affectedEnrollments.length
+      ? await this.db
+          .insert(enrollmentLifecycleEvents)
+          .values(
+            affectedEnrollments.map((entry) => ({
+              operationId: context.operationId,
+              enrollmentId: entry.id,
+              studentId: dto.studentId,
+              studentSnapshot: {
+                userId: prepared.snapshot.student.id,
+                email: prepared.snapshot.student.email,
+                firstName: prepared.snapshot.student.firstName,
+                lastName: prepared.snapshot.student.lastName,
+              },
+              classId: entry.classId,
+              sectionId: entry.sectionId,
+              destinationClassId: entry.classId
+                ? (prepared.plan.destinationClassMap[entry.classId] ?? null)
+                : null,
+              destinationSectionId: dto.destinationSectionId ?? null,
+              fromStatus: entry.status,
+              toStatus: 'dropped',
+              outcome,
+              effectivePeriod: dto.effectivePeriod,
+              reasonCode: context.reasonCode,
+              notes: context.notes,
+              actorId: context.actorId,
+              actorSnapshot: context.actorSnapshot,
+            })),
+          )
+          .returning({ id: enrollmentLifecycleEvents.id })
+      : [];
 
     return {
-      changed: affectedEnrollments.map((entry) => ({
-        entityType: 'enrollment',
-        entityId: entry.id,
-        outcome,
-      })),
+      changed: [
+        ...affectedEnrollments.map((entry) => ({
+          entityType: 'enrollment',
+          entityId: entry.id,
+          outcome,
+        })),
+        ...insertedEnrollments.map((entry) => ({
+          entityType: 'enrollment',
+          entityId: entry.id,
+          outcome: 'created',
+        })),
+        ...prepared.plan.participantChanges.map((entry) => ({
+          entityType: 'class_record_participant',
+          entityId: entry.participantId,
+          outcome: entry.eligibility,
+        })),
+        ...lifecycleEvents.map((entry) => ({
+          entityType: 'enrollment_lifecycle_event',
+          entityId: entry.id,
+          outcome: 'appended',
+        })),
+      ],
       preserved: prepared.plan.preserved,
       affectedUserIds: prepared.plan.affectedUserIds,
     };

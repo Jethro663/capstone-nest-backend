@@ -126,14 +126,6 @@ export const adminApi = {
       .data;
   },
 
-  async purgeUser(id: string) {
-    return (
-      await apiClient.delete<{ success: boolean; message?: string }>(
-        `/users/${id}/purge`,
-      )
-    ).data;
-  },
-
   async bulkUserLifecycle(payload: BulkUserLifecycleDto) {
     return (
       await apiClient.post<BulkUserLifecycleResponse>(

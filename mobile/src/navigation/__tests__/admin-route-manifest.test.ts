@@ -64,15 +64,15 @@ describe("administrator navigation manifest", () => {
     );
   });
 
-  it("registers Demo mode as a System Settings stack task, never a drawer destination", () => {
+  it("registers Maintenance Access as a System Settings stack task, never a drawer destination", () => {
     expect(adminSource).toContain(
-      '<RootStack.Screen name="AdminSettingsDemoMode" component={AdminDemoModeSettingsScreen}',
+      '<RootStack.Screen name="AdminSettingsMaintenance" component={AdminMaintenanceSettingsScreen}',
     );
     const adminDrawerSource = source.slice(
       source.indexOf("function AdminDrawerNavigator"),
       source.indexOf("function AdminNavigator"),
     );
-    expect(adminDrawerSource).not.toContain('name="AdminSettingsDemoMode"');
+    expect(adminDrawerSource).not.toContain('name="AdminSettingsMaintenance"');
   });
 
   it.each(["AdminAcademicScreen.tsx"])(

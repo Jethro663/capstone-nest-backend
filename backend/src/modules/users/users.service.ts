@@ -27,8 +27,8 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DatabaseService } from '../../database/database.service';
 import { MailService } from '../mail/mail.service';
 import { AuditService } from '../audit/audit.service';
-import { AdminDemoModeService } from '../admin-demo-mode/admin-demo-mode.service';
-import type { AdminDemoModeRelaxedRuleCode } from '../admin-demo-mode/admin-demo-mode.policy';
+import { AdminMaintenanceService } from '../admin-maintenance/admin-maintenance.service';
+import type { AdminMaintenanceRuleCode } from '../admin-maintenance/admin-maintenance.policy';
 import {
   users,
   roles,
@@ -38,7 +38,6 @@ import {
   lessonCompletions,
   assessmentAttempts,
   classes,
-  classRecords,
   archivedUsers,
   refreshTokens,
   auditLogs,
@@ -69,7 +68,7 @@ export class UsersService {
     private eventEmitter: EventEmitter2,
     private mailService: MailService,
     private readonly auditService: AuditService,
-    private readonly adminDemoModeService: AdminDemoModeService,
+    private readonly adminMaintenanceService: AdminMaintenanceService,
   ) {
     const configuredRounds = Number(
       this.configService.get<string>('AUTH_PASSWORD_HASH_ROUNDS') ?? '10',
@@ -830,23 +829,23 @@ export class UsersService {
     if (!existingUser) {
       throw new NotFoundException('User not found');
     }
-    let demoModeAuditMetadata:
+    let maintenanceAuditMetadata:
       | {
-          demoModeVersion: number;
-          demoModeExpiresAt: string;
-          bypassedRules: AdminDemoModeRelaxedRuleCode[];
+          maintenanceSessionId: string;
+          maintenanceExpiresAt: string;
+          maintenanceRuleCodes: AdminMaintenanceRuleCode[];
         }
       | undefined;
     if (existingUser.status === 'DELETED') {
-      const demo = actorId
-        ? await this.adminDemoModeService.resolveForActor(actorId)
+      const maintenance = actorId
+        ? await this.adminMaintenanceService.resolveForActor(actorId)
         : null;
-      if (!demo?.allows('user_lifecycle_sequence')) {
+      if (!maintenance?.allows('user_lifecycle_sequence')) {
         throw new BadRequestException(
-          'Deleted accounts can only be edited in Demo mode',
+          'Deleted accounts can only be edited during Maintenance Access',
         );
       }
-      demoModeAuditMetadata = demo.audit(['user_lifecycle_sequence']);
+      maintenanceAuditMetadata = maintenance.audit(['user_lifecycle_sequence']);
     }
     if ((updateUserDto as Record<string, unknown>).status !== undefined) {
       throw new BadRequestException(
@@ -1052,8 +1051,8 @@ export class UsersService {
               metadata: {
                 previousStatus: existingUser.status,
                 changedFields: Array.from(new Set(changedFields)),
-                ...(demoModeAuditMetadata
-                  ? { demoMode: demoModeAuditMetadata }
+                ...(maintenanceAuditMetadata
+                  ? { maintenanceAccess: maintenanceAuditMetadata }
                   : {}),
               },
             });
@@ -1290,15 +1289,16 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    const demo = await this.adminDemoModeService.resolveForActor(adminId);
-    const bypassedRules: AdminDemoModeRelaxedRuleCode[] = [];
+    const maintenance =
+      await this.adminMaintenanceService.resolveForActor(adminId);
+    const maintenanceRules: AdminMaintenanceRuleCode[] = [];
     if (existingUser.status !== 'SUSPENDED') {
-      if (!demo.allows('user_lifecycle_sequence')) {
+      if (!maintenance.allows('user_lifecycle_sequence')) {
         throw new BadRequestException(
           'Only suspended users can be reactivated',
         );
       }
-      bypassedRules.push('user_lifecycle_sequence');
+      maintenanceRules.push('user_lifecycle_sequence');
     }
 
     await this.db
@@ -1306,7 +1306,7 @@ export class UsersService {
       .set({ status: 'ACTIVE', updatedAt: new Date() })
       .where(eq(users.id, id));
 
-    const demoMode = demo.audit(bypassedRules);
+    const maintenanceAccess = maintenance.audit(maintenanceRules);
     await this.auditService.log({
       actorId: adminId,
       action: 'user.reactivated',
@@ -1314,7 +1314,7 @@ export class UsersService {
       targetId: id,
       metadata: {
         previousStatus: existingUser.status,
-        ...(demoMode ? { demoMode } : {}),
+        ...(maintenanceAccess ? { maintenanceAccess } : {}),
       },
     });
 
@@ -1335,15 +1335,16 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    const demo = await this.adminDemoModeService.resolveForActor(adminId);
-    const bypassedRules: AdminDemoModeRelaxedRuleCode[] = [];
+    const maintenance =
+      await this.adminMaintenanceService.resolveForActor(adminId);
+    const maintenanceRules: AdminMaintenanceRuleCode[] = [];
     if (existingUser.status !== 'SUSPENDED') {
-      if (!demo.allows('user_lifecycle_sequence')) {
+      if (!maintenance.allows('user_lifecycle_sequence')) {
         throw new BadRequestException(
           'User must be suspended before deletion. Please suspend the user first.',
         );
       }
-      bypassedRules.push('user_lifecycle_sequence');
+      maintenanceRules.push('user_lifecycle_sequence');
     }
 
     // Collect all related data for archival
@@ -1368,7 +1369,7 @@ export class UsersService {
         .where(eq(users.id, id));
     });
 
-    const demoMode = demo.audit(bypassedRules);
+    const maintenanceAccess = maintenance.audit(maintenanceRules);
     await this.auditService.log({
       actorId: adminId,
       action: 'user.archived',
@@ -1377,7 +1378,7 @@ export class UsersService {
       metadata: {
         previousStatus: existingUser.status,
         roles: userRoleNames,
-        ...(demoMode ? { demoMode } : {}),
+        ...(maintenanceAccess ? { maintenanceAccess } : {}),
       },
     });
 
@@ -1410,65 +1411,16 @@ export class UsersService {
     return payload;
   }
 
-  /**
-   * Permanently purge a user from the database.
-   * Only works on DELETED users. CASCADE will remove all related records.
-   */
+  /** Compatibility seam: direct purge is retired in favor of reviewed Maintenance Access. */
   @AcademicMutation()
-  async purgeUser(id: string, adminId: string) {
-    if (id === adminId) {
-      throw new ForbiddenException('You cannot purge your own account');
-    }
-
-    const existingUser = await this.findById(id);
-    if (!existingUser) {
-      throw new NotFoundException('User not found');
-    }
-
-    if (existingUser.status !== 'DELETED') {
-      throw new BadRequestException(
-        'User must have DELETED status before permanent removal. Follow the lifecycle: Suspend → Delete → Purge.',
-      );
-    }
-
-    await this.db.transaction(async (tx) => {
-      // Mark the archived record as purged (if exists)
-      const archiveRecords = await tx.query.archivedUsers.findMany({
-        where: eq(archivedUsers.originalUserId, id),
-      });
-      if (archiveRecords.length > 0) {
-        await tx
-          .update(archivedUsers)
-          .set({ purgedAt: new Date() })
-          .where(eq(archivedUsers.originalUserId, id));
-      }
-
-      // Unassign the teacher from surviving classes and records before purge.
-      await tx
-        .update(classes)
-        .set({ teacherId: null, updatedAt: new Date() })
-        .where(eq(classes.teacherId, id));
-
-      await tx
-        .update(classRecords)
-        .set({ teacherId: null, updatedAt: new Date() })
-        .where(eq(classRecords.teacherId, id));
-
-      // Hard delete — CASCADE handles remaining related tables.
-      await tx.delete(users).where(eq(users.id, id));
-    });
-
-    await this.auditService.log({
-      actorId: adminId,
-      action: 'user.purged',
-      targetType: 'user',
-      targetId: id,
-      metadata: {
-        previousStatus: existingUser.status,
-      },
-    });
-
-    return { message: 'User permanently purged from the system', userId: id };
+  purgeUser(id: string, adminId: string): Promise<never> {
+    void id;
+    void adminId;
+    return Promise.reject(
+      new BadRequestException(
+        'Direct account purge is retired. Use the reviewed Admin Maintenance purge preview and execute routes.',
+      ),
+    );
   }
 
   async bulkLifecycleAction(
@@ -1628,9 +1580,6 @@ export class UsersService {
       case 'archive':
         await this.softDeleteUser(userId, adminId);
         return;
-      case 'purge':
-        await this.purgeUser(userId, adminId);
-        return;
     }
   }
 
@@ -1659,8 +1608,6 @@ export class UsersService {
         return 'reactivated';
       case 'archive':
         return 'archived';
-      case 'purge':
-        return 'purged';
     }
   }
 }

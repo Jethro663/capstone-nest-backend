@@ -13,14 +13,14 @@ describe("web-mirrored administrator System Settings", () => {
     expect(overview).toContain("AdminSettingsYearTransition");
     expect(overview).toContain("AdminSettingsLearnerCompletion");
     expect(overview).toContain("AdminSettingsAuditRecovery");
-    expect(overview).toContain("AdminSettingsDemoMode");
+    expect(overview).toContain("AdminSettingsMaintenance");
     for (const file of [
       "AdminAcademicYearSettingsScreen.tsx",
       "AdminAssessmentsGradingSettingsScreen.tsx",
       "AdminYearTransitionSettingsScreen.tsx",
       "AdminLearnerCompletionSettingsScreen.tsx",
       "AdminAuditRecoverySettingsScreen.tsx",
-      "AdminDemoModeSettingsScreen.tsx",
+      "AdminMaintenanceSettingsScreen.tsx",
     ])
       expect(read(file)).toMatch(/AdminAcademicScreen|AdminScreen/);
   });
@@ -41,7 +41,7 @@ describe("web-mirrored administrator System Settings", () => {
       ],
       ["AdminSettingsAuditRecovery", "AdminAuditRecoverySettingsScreen"],
       ["AdminStudentReadiness", "AdminStudentReadinessScreen"],
-      ["AdminSettingsDemoMode", "AdminDemoModeSettingsScreen"],
+      ["AdminSettingsMaintenance", "AdminMaintenanceSettingsScreen"],
     ]) {
       expect(navigator).toMatch(
         new RegExp(`name="${route}"\\s+component=\\{${component}\\}`),
@@ -49,14 +49,12 @@ describe("web-mirrored administrator System Settings", () => {
     }
   });
 
-  it("keeps native Demo mode activation governed and offline-safe", () => {
-    const source = read("AdminDemoModeSettingsScreen.tsx");
+  it("keeps native Maintenance Access opening governed and offline-safe", () => {
+    const source = read("AdminMaintenanceSettingsScreen.tsx");
     expect(source).toContain("currentPassword");
-    expect(source).toContain("ENABLE DEMO MODE");
-    expect(source).toContain("DISABLE DEMO MODE");
-    expect(source).toContain("SHARED_DATA_CAN_CHANGE");
-    expect(source).toContain("ACTIONS_REMAIN_AUDITED");
-    expect(source).toContain("HARD_SAFEGUARDS_REMAIN");
+    expect(source).toContain("OPEN MAINTENANCE ACCESS");
+    expect(source).toContain("LIVE_ACADEMIC_STRUCTURE_CAN_CHANGE");
+    expect(source).toContain("FINALIZED_AND_AUDIT_EVIDENCE_STAYS_PROTECTED");
     expect(source).toContain("secureTextEntry");
     expect(source).toContain("isOffline");
     expect(source).toContain("Alert.alert");

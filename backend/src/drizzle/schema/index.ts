@@ -18,4 +18,5 @@ export * from './academic-grading.schema';
 export * from './assessment-editor.schema';
 export * from './admin-lifecycle.schema';
 export * from './admin-demo-mode.schema';
+export * from './admin-maintenance.schema';
 export * from './system-reset.schema';

@@ -10,7 +10,7 @@ test("backend, web, and mobile satisfy the shared administrator transport manife
   const root = path.resolve(__dirname, "..");
   const result = validateAdminContracts(root);
   assert.deepEqual(result.errors, []);
-  assert.ok(result.contractCount >= 21);
+  assert.ok(result.contractCount >= 19);
   assert.equal(result.layersChecked, result.contractCount * 3);
 });
 
@@ -32,5 +32,17 @@ test("rejects client-authoritative Demo mode bypass transports", () => {
       `status.active && status.relaxedRules.some((rule) => rule.code === code)`,
     ),
     [],
+  );
+  assert.deepEqual(findForbiddenClientBypasses(`{ bypassSafeguards: true }`), [
+    "maintenance force request-body authority",
+  ]);
+  assert.deepEqual(findForbiddenClientBypasses(`{ bypassRules: [] }`), [
+    "ignored-rules request-body authority",
+  ]);
+  assert.deepEqual(
+    findForbiddenClientBypasses(
+      `headers: { 'X-Admin-Maintenance-Force': '1' }`,
+    ),
+    ["maintenance bypass header"],
   );
 });

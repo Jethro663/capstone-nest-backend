@@ -21,6 +21,7 @@ import {
   type LifecycleExecutionContext,
   type LifecycleSection,
   type StudentLifecyclePrepared,
+  type StudentLifecyclePlanningOptions,
 } from './student-lifecycle.service';
 
 type LifecycleDb = DatabaseService['db'];
@@ -62,6 +63,8 @@ export interface SectionLifecyclePrepared {
   manifest: AdminLifecycleManifest;
 }
 
+export type SectionLifecyclePlanningOptions = StudentLifecyclePlanningOptions;
+
 function sectionBlocker(code: string, message: string): AdminLifecycleBlocker {
   return { code, message, resolvable: false };
 }
@@ -69,6 +72,7 @@ function sectionBlocker(code: string, message: string): AdminLifecycleBlocker {
 export function planSectionLifecycle(
   snapshot: SectionLifecycleSnapshot,
   dto: PreviewSectionLifecycleDto,
+  options: SectionLifecyclePlanningOptions = {},
 ): SectionLifecyclePlan {
   const blockers: AdminLifecycleBlocker[] = [];
   const warnings: AdminLifecycleWarning[] = [];
@@ -160,12 +164,20 @@ export function planSectionLifecycle(
       destination &&
       destination.currentStudents + transferCount > destination.capacity
     ) {
-      blockers.push(
-        sectionBlocker(
-          'DESTINATION_GROUP_EXCEEDS_CAPACITY',
-          `${transferCount} planned transfers would exceed the destination section capacity.`,
-        ),
-      );
+      if (options.allowSectionCapacityOverride) {
+        warnings.push({
+          code: 'SECTION_CAPACITY',
+          message: `${transferCount} planned transfers exceed destination capacity. Maintenance Access permits this reviewed over-capacity move.`,
+        });
+        confirmations.add('ACKNOWLEDGE_SECTION_CAPACITY');
+      } else {
+        blockers.push({
+          code: 'DESTINATION_GROUP_EXCEEDS_CAPACITY',
+          message: `${transferCount} planned transfers would exceed destination capacity. Open Maintenance Access to review the move.`,
+          resolvable: true,
+          resolutionOptions: ['OPEN_MAINTENANCE_ACCESS'],
+        });
+      }
     }
   }
 
@@ -255,6 +267,7 @@ export class SectionLifecycleService {
   async prepare(
     dto: PreviewSectionLifecycleDto,
     db: LifecycleDb = this.db,
+    options: SectionLifecyclePlanningOptions = {},
   ): Promise<SectionLifecyclePrepared> {
     const state = await db.query.academicSystemStates.findFirst({
       orderBy: [desc(academicSystemStates.updatedAt)],
@@ -319,6 +332,7 @@ export class SectionLifecycleService {
           effectivePeriod: dto.effectivePeriod,
         },
         db,
+        options,
       );
       learnerPrepared[resolution.studentId] = prepared;
       learnerPlans[resolution.studentId] = prepared.plan;
@@ -349,7 +363,7 @@ export class SectionLifecycleService {
         linkedClasses: linkedClasses.length,
       },
     };
-    const plan = planSectionLifecycle(snapshot, dto);
+    const plan = planSectionLifecycle(snapshot, dto, options);
     const manifest = buildAdminLifecycleManifest({
       action: 'ARCHIVE_SECTION',
       targetType: 'section',

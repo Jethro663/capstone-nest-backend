@@ -26,6 +26,29 @@ export interface AdminLifecycleDependencyVersion {
   version: string | number | null;
 }
 
+export type AdminMaintenanceDecisionState =
+  | 'READY'
+  | 'AUTO_RESOLVABLE'
+  | 'NEEDS_CHOICE'
+  | 'OVERRIDABLE_WARNING'
+  | 'IMMUTABLE';
+
+export interface AdminMaintenanceNextAction {
+  id: string;
+  label: string;
+  kind: 'REPREVIEW' | 'NAVIGATE_REPAIR' | 'CANCEL';
+  intent?: string;
+  requiredFields?: string[];
+  href?: string;
+}
+
+export interface AdminMaintenanceDecisionSummary {
+  state: AdminMaintenanceDecisionState;
+  code: string;
+  message: string;
+  nextActions: AdminMaintenanceNextAction[];
+}
+
 export interface AdminLifecycleManifestInput {
   action: AdminLifecycleAction;
   targetType: string;
@@ -50,6 +73,7 @@ export interface AdminLifecycleManifest extends AdminLifecycleManifestInput {
   generatedAt: string;
   expiresAt: string;
   safeToExecute: boolean;
+  decision: AdminMaintenanceDecisionSummary;
   manifestHash: string;
 }
 

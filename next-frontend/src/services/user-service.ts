@@ -65,11 +65,7 @@ export interface ResetUserPasswordResponse {
   emailDeliveryError?: string;
 }
 
-export type BulkUserLifecycleAction =
-  | "suspend"
-  | "reactivate"
-  | "archive"
-  | "purge";
+export type BulkUserLifecycleAction = "suspend" | "reactivate" | "archive";
 
 export interface BulkUserLifecycleDto {
   action: BulkUserLifecycleAction;
@@ -165,12 +161,6 @@ export const userService = {
     const { data } = await api.get(`/users/${id}/export`, {
       responseType: "blob",
     });
-    return data;
-  },
-
-  /** DELETE /users/:id/purge - Admin only */
-  async purge(id: string): Promise<{ success: boolean; message?: string }> {
-    const { data } = await api.delete(`/users/${id}/purge`);
     return data;
   },
 

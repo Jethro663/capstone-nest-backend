@@ -1,16 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { AppState } from "react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { adminDemoModeApi } from "../api/services/admin-demo-mode";
+import { adminMaintenanceApi } from "../api/services/admin-maintenance";
 import { useAdminNetworkStatus } from "./useAdminNetworkStatus";
-import type {
-  ActivateAdminDemoMode,
-  AdminDemoModeStatus,
-  DeactivateAdminDemoMode,
-} from "../types/admin-demo-mode";
-import { hasAdminDemoModeRule } from "../types/admin-demo-mode";
+import {
+  hasAdminMaintenanceRule,
+  type AdminMaintenanceStatus,
+  type OpenAdminMaintenanceSession,
+} from "../types/admin-maintenance";
 
-export const ADMIN_DEMO_MODE_QUERY_KEY = ["admin-demo-mode"] as const;
+export const ADMIN_MAINTENANCE_QUERY_KEY = ["admin-maintenance"] as const;
 
 const ADMIN_QUERY_PREFIXES = [
   ["admin-users"],
@@ -28,21 +27,22 @@ const ADMIN_QUERY_PREFIXES = [
 ] as const;
 
 function effectiveStatus(
-  status: AdminDemoModeStatus | undefined,
+  status: AdminMaintenanceStatus | undefined,
   now: number,
-): AdminDemoModeStatus | undefined {
+) {
   if (!status?.active || !status.expiresAt) return status;
-  if (Date.parse(status.expiresAt) > now) return status;
-  return { ...status, active: false, state: "expired" };
+  return Date.parse(status.expiresAt) > now
+    ? status
+    : { ...status, active: false, state: "expired" as const };
 }
 
-export function useAdminDemoMode() {
+export function useAdminMaintenance() {
   const queryClient = useQueryClient();
   const network = useAdminNetworkStatus();
   const [now, setNow] = useState(Date.now());
   const query = useQuery({
-    queryKey: ADMIN_DEMO_MODE_QUERY_KEY,
-    queryFn: adminDemoModeApi.getStatus,
+    queryKey: ADMIN_MAINTENANCE_QUERY_KEY,
+    queryFn: adminMaintenanceApi.getStatus,
     staleTime: 30_000,
     retry: 1,
   });
@@ -58,10 +58,10 @@ export function useAdminDemoMode() {
     };
   }, [network.isOffline, query.refetch]);
 
-  const acceptStatus = async (status: AdminDemoModeStatus) => {
-    queryClient.setQueryData(ADMIN_DEMO_MODE_QUERY_KEY, status);
+  const acceptStatus = async (status: AdminMaintenanceStatus) => {
+    queryClient.setQueryData(ADMIN_MAINTENANCE_QUERY_KEY, status);
     await queryClient.invalidateQueries({
-      queryKey: ADMIN_DEMO_MODE_QUERY_KEY,
+      queryKey: ADMIN_MAINTENANCE_QUERY_KEY,
     });
     await Promise.all(
       ADMIN_QUERY_PREFIXES.map((queryKey) =>
@@ -70,12 +70,12 @@ export function useAdminDemoMode() {
     );
   };
 
-  const activation = useMutation({
-    mutationFn: adminDemoModeApi.activate,
+  const opening = useMutation({
+    mutationFn: adminMaintenanceApi.open,
     onSuccess: acceptStatus,
   });
-  const deactivation = useMutation({
-    mutationFn: adminDemoModeApi.deactivate,
+  const closing = useMutation({
+    mutationFn: adminMaintenanceApi.close,
     onSuccess: acceptStatus,
   });
 
@@ -89,7 +89,7 @@ export function useAdminDemoMode() {
 
   const assertOnline = () => {
     if (network.isOffline) {
-      throw new Error("Reconnect before changing Demo mode.");
+      throw new Error("Reconnect before changing Maintenance Access.");
     }
   };
 
@@ -100,17 +100,17 @@ export function useAdminDemoMode() {
     error: query.error,
     isOffline: network.isOffline,
     isCachedOffline: network.isOffline && Boolean(query.data),
-    isMutating: activation.isPending || deactivation.isPending,
+    isMutating: opening.isPending || closing.isPending,
     refresh: query.refetch,
-    hasExactRule: (code: Parameters<typeof hasAdminDemoModeRule>[1]) =>
-      hasAdminDemoModeRule(status, code),
-    activate: async (payload: ActivateAdminDemoMode) => {
+    hasExactRule: (code: Parameters<typeof hasAdminMaintenanceRule>[1]) =>
+      hasAdminMaintenanceRule(status, code),
+    open: async (payload: OpenAdminMaintenanceSession) => {
       assertOnline();
-      return activation.mutateAsync(payload);
+      return opening.mutateAsync(payload);
     },
-    deactivate: async (payload: DeactivateAdminDemoMode) => {
+    close: async () => {
       assertOnline();
-      return deactivation.mutateAsync(payload);
+      return closing.mutateAsync();
     },
   };
 }

@@ -16,7 +16,7 @@ jest.mock("../client", () => ({
 describe("administrator school-setup service parity", () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it("exposes user monitoring, export, bulk lifecycle, and purge contracts", async () => {
+  it("exposes user monitoring, export, and non-destructive bulk lifecycle contracts", async () => {
     (apiClient.get as jest.Mock).mockResolvedValue({
       data: { success: true, data: { data: [] } },
     });
@@ -32,7 +32,6 @@ describe("administrator school-setup service parity", () => {
       action: "suspend",
       userIds: ["user-1"],
     });
-    await adminApi.purgeUser("user-1");
     expect(apiClient.get).toHaveBeenNthCalledWith(
       1,
       "/users/reports/monitoring",
@@ -43,7 +42,6 @@ describe("administrator school-setup service parity", () => {
       action: "suspend",
       userIds: ["user-1"],
     });
-    expect(apiClient.delete).toHaveBeenCalledWith("/users/user-1/purge");
   });
 
   it("exposes class bulk and visibility actions", async () => {

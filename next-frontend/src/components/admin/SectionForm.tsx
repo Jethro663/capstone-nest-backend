@@ -1,35 +1,37 @@
-'use client';
+"use client";
 
-import { useEffect, useMemo, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { sanitizeSectionNameInput } from '@/lib/input-policy';
-import { ROOM_OPTIONS, ROOM_OPTIONS_HELP_TEXT } from '@/lib/room-options';
-import type { User } from '@/types/user';
-import { useAdminDemoMode } from '@/providers/AdminDemoModeProvider';
-import { hasAdminDemoModeRule } from '@/types/admin-demo-mode';
+import { useEffect, useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { sanitizeSectionNameInput } from "@/lib/input-policy";
+import { ROOM_OPTIONS, ROOM_OPTIONS_HELP_TEXT } from "@/lib/room-options";
+import type { User } from "@/types/user";
+import { useAdminMaintenance } from "@/providers/AdminMaintenanceProvider";
+import { hasAdminMaintenanceRule } from "@/types/admin-maintenance";
 
 const SELECT_CLS =
-  'admin-select flex h-10 w-full rounded-xl px-3.5 py-2 text-sm shadow-sm disabled:cursor-not-allowed disabled:opacity-50';
+  "admin-select flex h-10 w-full rounded-xl px-3.5 py-2 text-sm shadow-sm disabled:cursor-not-allowed disabled:opacity-50";
 
 export type SectionFormValues = {
   name: string;
-  gradeLevel: '7' | '8' | '9' | '10';
+  gradeLevel: "7" | "8" | "9" | "10";
   schoolYear: string;
   capacity: number;
   roomNumber: string;
   adviserId: string;
 };
 
-export function createEmptySectionForm(defaultSchoolYear: string): SectionFormValues {
+export function createEmptySectionForm(
+  defaultSchoolYear: string,
+): SectionFormValues {
   return {
-    name: '',
-    gradeLevel: '7',
+    name: "",
+    gradeLevel: "7",
     schoolYear: defaultSchoolYear,
     capacity: 40,
-    roomNumber: '',
-    adviserId: '',
+    roomNumber: "",
+    adviserId: "",
   };
 }
 
@@ -58,15 +60,17 @@ export default function SectionForm({
   onCancel,
   submitLabel,
 }: SectionFormProps) {
-  const { status: demoModeStatus } = useAdminDemoMode();
-  const canRelaxRoomAndAdviser = hasAdminDemoModeRule(
-    demoModeStatus,
-    'room_adviser_exclusivity',
+  const { status: maintenanceStatus } = useAdminMaintenance();
+  const canRelaxRoomAndAdviser = hasAdminMaintenanceRule(
+    maintenanceStatus,
+    "room_adviser_exclusivity",
   );
   const [form, setForm] = useState<SectionFormValues>(initialValues);
   const roomOptions = useMemo(() => {
     if (!form.roomNumber) return [...ROOM_OPTIONS];
-    if (ROOM_OPTIONS.includes(form.roomNumber as (typeof ROOM_OPTIONS)[number])) {
+    if (
+      ROOM_OPTIONS.includes(form.roomNumber as (typeof ROOM_OPTIONS)[number])
+    ) {
       return [...ROOM_OPTIONS];
     }
 
@@ -96,12 +100,15 @@ export default function SectionForm({
           Section Setup
         </p>
         <p className="flex-1 text-sm leading-5 text-[var(--admin-text-muted)]">
-          Start with the section identity, then set capacity and adviser. Everything stays visible without the oversized framing.
+          Start with the section identity, then set capacity and adviser.
+          Everything stays visible without the oversized framing.
         </p>
       </div>
 
       <div className="space-y-2">
-        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Section Name</Label>
+        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Section Name
+        </Label>
         <Input
           value={form.name}
           onChange={(event) =>
@@ -118,18 +125,21 @@ export default function SectionForm({
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Grade Level</Label>
+          <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Grade Level
+          </Label>
           <select
             value={form.gradeLevel}
             onChange={(event) =>
               setForm((current) => ({
                 ...current,
-                gradeLevel: event.target.value as SectionFormValues['gradeLevel'],
+                gradeLevel: event.target
+                  .value as SectionFormValues["gradeLevel"],
               }))
             }
             className={SELECT_CLS}
           >
-            {['7', '8', '9', '10'].map((grade) => (
+            {["7", "8", "9", "10"].map((grade) => (
               <option key={grade} value={grade}>
                 Grade {grade}
               </option>
@@ -138,14 +148,25 @@ export default function SectionForm({
         </div>
 
         <div className="space-y-2">
-          <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">School Year</Label>
+          <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            School Year
+          </Label>
           <select
             value={form.schoolYear}
-            onChange={(event) => setForm((current) => ({ ...current, schoolYear: event.target.value }))}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                schoolYear: event.target.value,
+              }))
+            }
             className={SELECT_CLS}
             disabled={lockSchoolYear}
           >
-            <option value="">{lockSchoolYear ? 'Locked by transition state' : 'Select school year'}</option>
+            <option value="">
+              {lockSchoolYear
+                ? "Locked by transition state"
+                : "Select school year"}
+            </option>
             {schoolYears.map((year) => (
               <option key={year} value={year}>
                 {year}
@@ -157,7 +178,9 @@ export default function SectionForm({
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Capacity</Label>
+          <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Capacity
+          </Label>
           <Input
             type="number"
             value={form.capacity}
@@ -173,7 +196,9 @@ export default function SectionForm({
         </div>
 
         <div className="space-y-2">
-          <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Room</Label>
+          <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Room
+          </Label>
           <select
             value={form.roomNumber}
             onChange={(event) =>
@@ -197,9 +222,9 @@ export default function SectionForm({
                   Room {room}
                   {disabledReason
                     ? canRelaxRoomAndAdviser
-                      ? ' - conflict allowed in Demo mode'
+                      ? " - conflict allowed in Maintenance Access"
                       : ` - ${disabledReason}`
-                    : ''}
+                    : ""}
                 </option>
               );
             })}
@@ -213,10 +238,17 @@ export default function SectionForm({
       </div>
 
       <div className="space-y-2">
-        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Adviser (Optional)</Label>
+        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Adviser (Optional)
+        </Label>
         <select
           value={form.adviserId}
-          onChange={(event) => setForm((current) => ({ ...current, adviserId: event.target.value }))}
+          onChange={(event) =>
+            setForm((current) => ({
+              ...current,
+              adviserId: event.target.value,
+            }))
+          }
           className={SELECT_CLS}
           aria-label="Adviser"
         >
@@ -234,9 +266,9 @@ export default function SectionForm({
               {teacher.firstName} {teacher.lastName}
               {adviserDisabledReasonById[teacher.id]
                 ? canRelaxRoomAndAdviser
-                  ? ' - conflict allowed in Demo mode'
+                  ? " - conflict allowed in Maintenance Access"
                   : ` - ${adviserDisabledReasonById[teacher.id]}`
-                : ''}
+                : ""}
             </option>
           ))}
         </select>
@@ -244,13 +276,19 @@ export default function SectionForm({
 
       <div className="flex flex-col gap-3 border-t border-[var(--admin-outline)] pt-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
-          <p className="text-sm font-black text-[var(--admin-text-strong)]">Save Section</p>
+          <p className="text-sm font-black text-[var(--admin-text-strong)]">
+            Save Section
+          </p>
           <p className="text-xs leading-5 text-[var(--admin-text-muted)]">
             Confirm the name, year, room, capacity, and adviser before saving.
           </p>
         </div>
         <div className="flex items-center justify-end gap-2">
-          <Button variant="outline" className="admin-button-outline rounded-xl font-black" onClick={onCancel}>
+          <Button
+            variant="outline"
+            className="admin-button-outline rounded-xl font-black"
+            onClick={onCancel}
+          >
             Cancel
           </Button>
           <Button
@@ -264,7 +302,7 @@ export default function SectionForm({
               !form.roomNumber
             }
           >
-            {saving ? 'Saving...' : submitLabel}
+            {saving ? "Saving..." : submitLabel}
           </Button>
         </div>
       </div>

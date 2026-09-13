@@ -9,7 +9,7 @@ import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import { adminApi } from "../api/services/admin";
 import { sectionsApi } from "../api/services/sections";
 import { toAppError } from "../api/http";
-import { useAdminDemoMode } from "../hooks/useAdminDemoMode";
+import { useAdminMaintenance } from "../hooks/useAdminMaintenance";
 import { useAdminNetworkStatus } from "../hooks/useAdminNetworkStatus";
 import { AdminPaginatedList } from "../components/admin/AdminPaginatedList";
 import {
@@ -35,7 +35,7 @@ type Status = "all" | "active" | "archived";
 export function AdminSectionsScreen({ navigation }: Props) {
   const queryClient = useQueryClient();
   const network = useAdminNetworkStatus();
-  const demoMode = useAdminDemoMode();
+  const maintenance = useAdminMaintenance();
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [status, setStatus] = useState<Status>("all");
@@ -88,10 +88,10 @@ export function AdminSectionsScreen({ navigation }: Props) {
     [query.data?.pages],
   );
   const total = query.data?.pages[0]?.total ?? rows.length;
-  const canRelaxRoomAndAdviser = demoMode.hasExactRule(
+  const canRelaxRoomAndAdviser = maintenance.hasExactRule(
     "room_adviser_exclusivity",
   );
-  const canRelaxCapacity = demoMode.hasExactRule("section_capacity");
+  const canRelaxCapacity = maintenance.hasExactRule("section_capacity");
   const activeConflictCandidates = (conflictSections.data?.data ?? []).filter(
     (section) => section.isActive && section.id !== editing?.id,
   );
@@ -196,7 +196,7 @@ export function AdminSectionsScreen({ navigation }: Props) {
     }
     if (roomOrAdviserConflict && !canRelaxRoomAndAdviser) {
       setFormError(
-        "Room or adviser conflict. Choose an available assignment or activate the exact Demo mode capability.",
+        "Room or adviser conflict. Choose an available assignment or activate the exact Maintenance Access capability.",
       );
       return;
     }
@@ -222,7 +222,7 @@ export function AdminSectionsScreen({ navigation }: Props) {
       resetForm();
       await queryClient.invalidateQueries({ queryKey: ["admin-sections"] });
     } catch (error) {
-      await demoMode.refresh();
+      await maintenance.refresh();
       setFormError(toAppError(error).message);
     } finally {
       setBusy(false);
@@ -243,7 +243,7 @@ export function AdminSectionsScreen({ navigation }: Props) {
         : sectionsApi.hide(section.id));
       await queryClient.invalidateQueries({ queryKey: ["admin-sections"] });
     } catch (error) {
-      await demoMode.refresh();
+      await maintenance.refresh();
       Alert.alert("Visibility update rejected", toAppError(error).message);
     } finally {
       setBusy(false);
@@ -345,7 +345,7 @@ export function AdminSectionsScreen({ navigation }: Props) {
               title="Room or adviser conflict"
               description={
                 canRelaxRoomAndAdviser
-                  ? `Demo mode permits this audited exception involving Grade ${roomOrAdviserConflict.gradeLevel} · ${roomOrAdviserConflict.name}.`
+                  ? `Maintenance Access permits this audited exception involving Grade ${roomOrAdviserConflict.gradeLevel} · ${roomOrAdviserConflict.name}.`
                   : `Grade ${roomOrAdviserConflict.gradeLevel} · ${roomOrAdviserConflict.name} already uses this assignment.`
               }
               tone={canRelaxRoomAndAdviser ? "amber" : "red"}
@@ -357,7 +357,7 @@ export function AdminSectionsScreen({ navigation }: Props) {
               title="Capacity is below current enrollment"
               description={
                 canRelaxCapacity
-                  ? `Demo mode permits the audited capacity exception; ${currentHeadcount} enrolled students remain preserved.`
+                  ? `Maintenance Access permits the audited capacity exception; ${currentHeadcount} enrolled students remain preserved.`
                   : `Enter at least ${currentHeadcount}, matching the current enrolled headcount.`
               }
               tone={canRelaxCapacity ? "amber" : "red"}

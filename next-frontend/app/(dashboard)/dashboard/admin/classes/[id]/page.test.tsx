@@ -1,36 +1,42 @@
-import { render, screen } from '@testing-library/react';
-import AdminClassDetailPage from './page';
-import { announcementService } from '@/services/announcement-service';
-import { assessmentService } from '@/services/assessment-service';
-import { classRecordService } from '@/services/class-record-service';
-import { classService } from '@/services/class-service';
-import { discussionBoardService } from '@/services/discussion-board-service';
-import { extractionService } from '@/services/extraction-service';
-import { moduleService } from '@/services/module-service';
+import { fireEvent, render, screen } from "@testing-library/react";
+import AdminClassDetailPage from "./page";
+import { announcementService } from "@/services/announcement-service";
+import { assessmentService } from "@/services/assessment-service";
+import { classRecordService } from "@/services/class-record-service";
+import { classService } from "@/services/class-service";
+import { discussionBoardService } from "@/services/discussion-board-service";
+import { extractionService } from "@/services/extraction-service";
+import { moduleService } from "@/services/module-service";
+import { academicStateService } from "@/services/academic-state-service";
 
 let currentView: string | null = null;
 let demoModeActive = false;
 
-jest.mock('next/navigation', () => ({
-  useParams: () => ({ id: 'class-1' }),
+jest.mock("next/navigation", () => ({
+  useParams: () => ({ id: "class-1" }),
   useSearchParams: () => ({
-    get: (key: string) => (key === 'view' ? currentView : null),
+    get: (key: string) => (key === "view" ? currentView : null),
   }),
 }));
 
-jest.mock('@/providers/AdminDemoModeProvider', () => ({
-  useAdminDemoMode: () => ({
+jest.mock("@/providers/AdminMaintenanceProvider", () => ({
+  useAdminMaintenance: () => ({
     status: demoModeActive
       ? {
           active: true,
-          relaxedRules: [{ code: 'restore_archived_class' }],
+          rules: [{ code: "restore_archived_class" }],
         }
-      : { active: false, relaxedRules: [] },
+      : { active: false, rules: [] },
     refresh: jest.fn(),
   }),
+  useOptionalAdminMaintenance: () => undefined,
 }));
 
-jest.mock('@/services/class-service', () => ({
+jest.mock("@/services/academic-state-service", () => ({
+  academicStateService: { getCurrent: jest.fn() },
+}));
+
+jest.mock("@/services/class-service", () => ({
   classService: {
     getById: jest.fn(),
     getEnrollments: jest.fn(),
@@ -42,7 +48,7 @@ jest.mock('@/services/class-service', () => ({
   },
 }));
 
-jest.mock('@/services/module-service', () => ({
+jest.mock("@/services/module-service", () => ({
   moduleService: {
     getByClass: jest.fn(),
     releaseCoreModule: jest.fn(),
@@ -52,7 +58,7 @@ jest.mock('@/services/module-service', () => ({
   },
 }));
 
-jest.mock('@/services/assessment-service', () => ({
+jest.mock("@/services/assessment-service", () => ({
   assessmentService: {
     getByClass: jest.fn(),
     releaseCore: jest.fn(),
@@ -61,14 +67,14 @@ jest.mock('@/services/assessment-service', () => ({
   },
 }));
 
-jest.mock('@/services/extraction-service', () => ({
+jest.mock("@/services/extraction-service", () => ({
   extractionService: {
     listByClass: jest.fn(),
     delete: jest.fn(),
   },
 }));
 
-jest.mock('@/services/announcement-service', () => ({
+jest.mock("@/services/announcement-service", () => ({
   announcementService: {
     getByClass: jest.fn(),
     create: jest.fn(),
@@ -77,13 +83,13 @@ jest.mock('@/services/announcement-service', () => ({
   },
 }));
 
-jest.mock('@/services/class-record-service', () => ({
+jest.mock("@/services/class-record-service", () => ({
   classRecordService: {
     getByClass: jest.fn(),
   },
 }));
 
-jest.mock('@/services/discussion-board-service', () => ({
+jest.mock("@/services/discussion-board-service", () => ({
   discussionBoardService: {
     listThreads: jest.fn(),
     getThread: jest.fn(),
@@ -113,8 +119,11 @@ const mockedClassRecordService = classRecordService as jest.Mocked<
 const mockedDiscussionBoardService = discussionBoardService as jest.Mocked<
   typeof discussionBoardService
 >;
+const mockedAcademicStateService = academicStateService as jest.Mocked<
+  typeof academicStateService
+>;
 
-describe('AdminClassDetailPage', () => {
+describe("AdminClassDetailPage", () => {
   beforeEach(() => {
     currentView = null;
     demoModeActive = false;
@@ -122,18 +131,18 @@ describe('AdminClassDetailPage', () => {
 
     mockedClassService.getById.mockResolvedValue({
       success: true,
-      message: 'Fixture response',
+      message: "Fixture response",
       data: {
-        id: 'class-1',
-        subjectName: 'Mathematics 9',
-        subjectCode: 'MATH-9',
-        subjectGradeLevel: '9',
-        sectionId: 'section-1',
-        section: { id: 'section-1', name: 'Section A', gradeLevel: '9' },
-        teacherId: 'teacher-1',
-        teacher: { id: 'teacher-1', firstName: 'Ana', lastName: 'Reyes' },
-        schoolYear: '2026-2027',
-        room: '402',
+        id: "class-1",
+        subjectName: "Mathematics 9",
+        subjectCode: "MATH-9",
+        subjectGradeLevel: "9",
+        sectionId: "section-1",
+        section: { id: "section-1", name: "Section A", gradeLevel: "9" },
+        teacherId: "teacher-1",
+        teacher: { id: "teacher-1", firstName: "Ana", lastName: "Reyes" },
+        schoolYear: "2026-2027",
+        room: "402",
         isActive: true,
         isHidden: false,
         schedules: [],
@@ -143,14 +152,14 @@ describe('AdminClassDetailPage', () => {
     mockedClassService.getEnrollments.mockResolvedValue({
       data: [
         {
-          id: 'enrollment-1',
-          studentId: 'student-1',
-          classId: 'class-1',
+          id: "enrollment-1",
+          studentId: "student-1",
+          classId: "class-1",
           student: {
-            id: 'student-1',
-            firstName: 'Jose',
-            lastName: 'Santos',
-            email: 'jose@example.com',
+            id: "student-1",
+            firstName: "Jose",
+            lastName: "Santos",
+            email: "jose@example.com",
           },
         },
       ],
@@ -159,14 +168,14 @@ describe('AdminClassDetailPage', () => {
 
     mockedModuleService.getByClass.mockResolvedValue({
       success: true,
-      message: 'Fixture response',
+      message: "Fixture response",
       count: 1,
       data: [
         {
-          id: 'module-1',
-          classId: 'class-1',
-          title: 'Numbers and Operations',
-          description: 'Module summary',
+          id: "module-1",
+          classId: "class-1",
+          title: "Numbers and Operations",
+          description: "Module summary",
           order: 1,
           isVisible: true,
           isLocked: false,
@@ -178,7 +187,7 @@ describe('AdminClassDetailPage', () => {
 
     mockedAssessmentService.getByClass.mockResolvedValue({
       success: true,
-      message: 'Fixture response',
+      message: "Fixture response",
       count: 1,
       total: 1,
       page: 1,
@@ -186,10 +195,10 @@ describe('AdminClassDetailPage', () => {
       totalPages: 1,
       data: [
         {
-          id: 'assessment-1',
-          classId: 'class-1',
-          title: 'Weekly Quiz',
-          type: 'quiz',
+          id: "assessment-1",
+          classId: "class-1",
+          title: "Weekly Quiz",
+          type: "quiz",
           isPublished: false,
           questions: [],
         },
@@ -198,13 +207,13 @@ describe('AdminClassDetailPage', () => {
 
     mockedExtractionService.listByClass.mockResolvedValue({
       success: true,
-      message: 'Fixture response',
+      message: "Fixture response",
       data: [],
     } as Awaited<ReturnType<typeof extractionService.listByClass>>);
 
     mockedAnnouncementService.getByClass.mockResolvedValue({
       success: true,
-      message: 'Fixture response',
+      message: "Fixture response",
       data: [],
     } as Awaited<ReturnType<typeof announcementService.getByClass>>);
 
@@ -214,7 +223,7 @@ describe('AdminClassDetailPage', () => {
 
     mockedDiscussionBoardService.listThreads.mockResolvedValue({
       success: true,
-      message: 'Fixture response',
+      message: "Fixture response",
       data: {
         items: [],
         total: 0,
@@ -222,57 +231,69 @@ describe('AdminClassDetailPage', () => {
         limit: 50,
       },
     } as Awaited<ReturnType<typeof discussionBoardService.listThreads>>);
+    mockedAcademicStateService.getCurrent.mockResolvedValue({
+      success: true,
+      message: "Fixture response",
+      data: {
+        schoolYear: "2026-2027",
+        quarter: "Q3",
+        version: 1,
+        periods: [],
+      },
+    } as unknown as Awaited<
+      ReturnType<typeof academicStateService.getCurrent>
+    >);
   });
 
-  it('falls back to modules when the query param is invalid', async () => {
-    currentView = 'not-real';
+  it("falls back to modules when the query param is invalid", async () => {
+    currentView = "not-real";
 
     render(<AdminClassDetailPage />);
 
-    expect(await screen.findByText('Mathematics 9')).toBeInTheDocument();
+    expect(await screen.findByText("Mathematics 9")).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { name: 'Modules' }),
+      screen.getByRole("heading", { name: "Modules" }),
     ).toBeInTheDocument();
-    expect(screen.getByText('Numbers and Operations')).toBeInTheDocument();
+    expect(screen.getByText("Numbers and Operations")).toBeInTheDocument();
     expect(
-      screen.getByRole('link', { name: /Back to Classes/i }),
+      screen.getByRole("link", { name: /Back to Classes/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('link', { name: /Add Class Students/i }),
-    ).toHaveAttribute('href', '/dashboard/admin/classes/class-1/students/add');
+      screen.getByRole("link", { name: /Add Class Students/i }),
+    ).toHaveAttribute("href", "/dashboard/admin/classes/class-1/students/add");
   });
 
-  it('renders the calendar workspace when view=calendar', async () => {
-    currentView = 'calendar';
+  it("renders the calendar workspace when view=calendar", async () => {
+    currentView = "calendar";
 
     render(<AdminClassDetailPage />);
 
-    expect(await screen.findByText('Mathematics 9')).toBeInTheDocument();
+    expect(await screen.findByText("Mathematics 9")).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { name: 'Calendar' }),
+      screen.getByRole("heading", { name: "Calendar" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText('No scheduled class events yet.'),
+      screen.getByText("No scheduled class events yet."),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('link', { name: /Full Calendar/i }),
+      screen.getByRole("link", { name: /Full Calendar/i }),
     ).toBeInTheDocument();
   });
 
-  it('keeps an archived class terminal when Demo mode is not active', async () => {
+  it("keeps an archived class terminal when Maintenance Access is not active", async () => {
     mockedClassService.getById.mockResolvedValueOnce({
       success: true,
-      message: 'Fixture response',
+      message: "Fixture response",
       data: {
-        id: 'class-1',
-        subjectName: 'Mathematics 9',
-        subjectCode: 'MATH-9',
-        subjectGradeLevel: '9',
-        sectionId: 'section-1',
-        section: { id: 'section-1', name: 'Section A', gradeLevel: '9' },
-        teacherId: 'teacher-1',
-        schoolYear: '2026-2027',
-        room: '402',
+        id: "class-1",
+        subjectName: "Mathematics 9",
+        subjectCode: "MATH-9",
+        subjectGradeLevel: "9",
+        sectionId: "section-1",
+        section: { id: "section-1", name: "Section A", gradeLevel: "9" },
+        teacherId: "teacher-1",
+        schoolYear: "2026-2027",
+        room: "402",
         isActive: false,
         isHidden: false,
         schedules: [],
@@ -281,30 +302,30 @@ describe('AdminClassDetailPage', () => {
 
     render(<AdminClassDetailPage />);
 
-    expect(await screen.findByText('Mathematics 9')).toBeInTheDocument();
+    expect(await screen.findByText("Mathematics 9")).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: /Restore class/i }),
+      screen.queryByRole("button", { name: /Restore class/i }),
     ).not.toBeInTheDocument();
     expect(
       screen.getByText(/Archived classes can only be purged/i),
     ).toBeInTheDocument();
   });
 
-  it('exposes archived-class restoration only with the exact Demo mode capability', async () => {
+  it("exposes archived-class restoration only with the exact Maintenance Access capability", async () => {
     demoModeActive = true;
     mockedClassService.getById.mockResolvedValueOnce({
       success: true,
-      message: 'Fixture response',
+      message: "Fixture response",
       data: {
-        id: 'class-1',
-        subjectName: 'Mathematics 9',
-        subjectCode: 'MATH-9',
-        subjectGradeLevel: '9',
-        sectionId: 'section-1',
-        section: { id: 'section-1', name: 'Section A', gradeLevel: '9' },
-        teacherId: 'teacher-1',
-        schoolYear: '2026-2027',
-        room: '402',
+        id: "class-1",
+        subjectName: "Mathematics 9",
+        subjectCode: "MATH-9",
+        subjectGradeLevel: "9",
+        sectionId: "section-1",
+        section: { id: "section-1", name: "Section A", gradeLevel: "9" },
+        teacherId: "teacher-1",
+        schoolYear: "2026-2027",
+        room: "402",
         isActive: false,
         isHidden: false,
         schedules: [],
@@ -314,7 +335,19 @@ describe('AdminClassDetailPage', () => {
     render(<AdminClassDetailPage />);
 
     expect(
-      await screen.findByRole('button', { name: /Restore class/i }),
+      await screen.findByRole("button", { name: /Restore class/i }),
     ).toBeInTheDocument();
+  });
+
+  it("routes class roster removal through reviewed lifecycle instead of direct unenrollment", async () => {
+    currentView = "students";
+    render(<AdminClassDetailPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
+
+    expect(
+      await screen.findByRole("heading", { name: "Resolve class membership" }),
+    ).toBeInTheDocument();
+    expect(mockedClassService.unenrollStudent).not.toHaveBeenCalled();
   });
 });

@@ -180,8 +180,8 @@ export class ClassRecordRosterService {
         reason: dto.reason,
         before: current.participants,
         after: dto.participants,
-        ...(academicContext?.demoMode
-          ? { demoMode: academicContext.demoMode }
+        ...(academicContext?.maintenanceAccess
+          ? { maintenanceAccess: academicContext.maintenanceAccess }
           : {}),
       },
     });

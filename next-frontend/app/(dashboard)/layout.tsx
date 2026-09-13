@@ -9,8 +9,8 @@ import { StudentTutorLauncher } from "@/components/student/StudentTutorLauncher"
 import { UnfinishedAttemptNotifier } from "@/components/student/UnfinishedAttemptNotifier";
 import { AppOrbitLoader } from "@/components/shared/AppOrbitLoader";
 import { NotificationProvider } from "@/providers/NotificationProvider";
-import { AdminDemoModeProvider } from "@/providers/AdminDemoModeProvider";
-import { AdminDemoModeBanner } from "@/components/admin/AdminDemoModeBanner";
+import { AdminMaintenanceProvider } from "@/providers/AdminMaintenanceProvider";
+import { AdminMaintenanceBanner } from "@/components/admin/AdminMaintenanceBanner";
 import { resolveLoaderVariant } from "@/utils/loader-variant";
 import { toast } from "sonner";
 import {
@@ -216,14 +216,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             showStudentDesktopMenu={studentSidebarCollapsed}
           />
           {isAdminShell ? (
-            <AdminDemoModeProvider>
+            <AdminMaintenanceProvider>
               <main
                 className={`min-h-0 flex-1 overflow-y-auto p-4 md:p-6 admin-main p-5 lg:p-8`}
               >
-                <AdminDemoModeBanner />
+                <AdminMaintenanceBanner />
                 {children}
               </main>
-            </AdminDemoModeProvider>
+            </AdminMaintenanceProvider>
           ) : (
             <main
               className={`min-h-0 flex-1 overflow-y-auto p-4 md:p-6 ${isTeacherShell ? "teacher-page" : ""} ${isAdminShell ? "admin-main p-5 lg:p-8" : ""}`}

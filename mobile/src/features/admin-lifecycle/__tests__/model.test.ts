@@ -17,6 +17,12 @@ const manifest: AdminLifecycleManifest = {
   generatedAt: "2026-09-11T13:00:00.000Z",
   expiresAt: "2026-09-11T14:00:00.000Z",
   safeToExecute: true,
+  decision: {
+    state: "READY",
+    code: "READY",
+    message: "Ready to execute",
+    nextActions: [],
+  },
   manifestHash: "a".repeat(64),
 };
 
@@ -65,6 +71,18 @@ describe("administrator lifecycle review model", () => {
         confirmations: manifest.requiredConfirmations,
         notes: "Reviewed",
         currentPassword: "pw",
+      }),
+    ).toBe(true);
+  });
+
+  it("does not require a repeated password during active Maintenance Access", () => {
+    expect(
+      canExecuteManifest({
+        manifest,
+        confirmations: manifest.requiredConfirmations,
+        notes: "Reviewed",
+        currentPassword: "",
+        passwordRequired: false,
       }),
     ).toBe(true);
   });

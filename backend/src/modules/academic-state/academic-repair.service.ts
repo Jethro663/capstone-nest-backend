@@ -395,8 +395,8 @@ export class AcademicRepairService {
         previous: categories,
         examinations: dto.examinations,
         scoreValuesUnchanged: true,
-        ...(academicContext.demoMode
-          ? { demoMode: academicContext.demoMode }
+        ...(academicContext.maintenanceAccess
+          ? { maintenanceAccess: academicContext.maintenanceAccess }
           : {}),
       },
     });
@@ -518,8 +518,8 @@ export class AcademicRepairService {
         quarter: dto.quarter,
         hadAttempts: Boolean(attempt),
         placementIds: placement.map((p) => p.id),
-        ...(academicContext.demoMode
-          ? { demoMode: academicContext.demoMode }
+        ...(academicContext.maintenanceAccess
+          ? { maintenanceAccess: academicContext.maintenanceAccess }
           : {}),
       },
     });

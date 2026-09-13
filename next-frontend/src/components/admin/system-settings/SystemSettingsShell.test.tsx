@@ -45,9 +45,11 @@ describe("SystemSettingsShell", () => {
     expect(
       screen.getByRole("link", { name: "Audit & recovery" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Demo mode" })).toHaveAttribute(
+    expect(
+      screen.getByRole("link", { name: "Maintenance Access" }),
+    ).toHaveAttribute(
       "href",
-      "/dashboard/admin/system-settings/demo-mode",
+      "/dashboard/admin/system-settings/maintenance-access",
     );
     expect(screen.getByText("Academic year content")).toBeInTheDocument();
     expect(container.querySelector("main")).toBeNull();

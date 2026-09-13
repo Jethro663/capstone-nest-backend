@@ -1,23 +1,26 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { ArrowLeft, School } from 'lucide-react';
-import { Skeleton } from '@/components/ui/skeleton';
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, School } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import SectionForm, {
   createEmptySectionForm,
   type SectionFormValues,
-} from '@/components/admin/SectionForm';
-import { AdminPageShell, AdminSectionCard } from '@/components/admin/AdminPageShell';
-import { Button } from '@/components/ui/button';
-import { sectionService } from '@/services/section-service';
-import { academicStateService } from '@/services/academic-state-service';
-import { userService } from '@/services/user-service';
-import type { Section } from '@/types/section';
-import type { User } from '@/types/user';
-import { toast } from 'sonner';
-import { getApiErrorMessage } from '@/lib/api-error';
-import { useAdminDemoMode } from '@/providers/AdminDemoModeProvider';
+} from "@/components/admin/SectionForm";
+import {
+  AdminPageShell,
+  AdminSectionCard,
+} from "@/components/admin/AdminPageShell";
+import { Button } from "@/components/ui/button";
+import { sectionService } from "@/services/section-service";
+import { academicStateService } from "@/services/academic-state-service";
+import { userService } from "@/services/user-service";
+import type { Section } from "@/types/section";
+import type { User } from "@/types/user";
+import { toast } from "sonner";
+import { getApiErrorMessage } from "@/lib/api-error";
+import { useAdminMaintenance } from "@/providers/AdminMaintenanceProvider";
 
 function getFallbackSchoolYear() {
   const now = new Date();
@@ -28,7 +31,7 @@ function getFallbackSchoolYear() {
 
 export default function CreateSectionPage() {
   const router = useRouter();
-  const { refresh: refreshDemoMode } = useAdminDemoMode();
+  const { refresh: refreshMaintenance } = useAdminMaintenance();
   const [activeSchoolYear, setActiveSchoolYear] = useState<string | null>(null);
   const [teachers, setTeachers] = useState<User[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
@@ -40,7 +43,7 @@ export default function CreateSectionPage() {
     [activeSchoolYear],
   );
   const initialValues = useMemo(
-    () => createEmptySectionForm(schoolYears[0] || ''),
+    () => createEmptySectionForm(schoolYears[0] || ""),
     [schoolYears],
   );
 
@@ -48,7 +51,7 @@ export default function CreateSectionPage() {
     try {
       setLoading(true);
       const [teachersRes, sectionsRes] = await Promise.all([
-        userService.getAll({ role: 'teacher', limit: 200 }),
+        userService.getAll({ role: "teacher", limit: 200 }),
         sectionService.getAll({ limit: 100 }),
       ]);
       setTeachers(teachersRes.users || []);
@@ -60,7 +63,9 @@ export default function CreateSectionPage() {
         setActiveSchoolYear(null);
       }
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to load section form data'));
+      toast.error(
+        getApiErrorMessage(error, "Failed to load section form data"),
+      );
     } finally {
       setLoading(false);
     }
@@ -76,7 +81,8 @@ export default function CreateSectionPage() {
     for (const section of sections) {
       if (!section.adviserId || !section.isActive) continue;
       if (byTeacher[section.adviserId]) continue;
-      byTeacher[section.adviserId] = `Already assigned to Grade ${section.gradeLevel} - ${section.name}`;
+      byTeacher[section.adviserId] =
+        `Already assigned to Grade ${section.gradeLevel} - ${section.name}`;
     }
 
     return byTeacher;
@@ -88,7 +94,8 @@ export default function CreateSectionPage() {
       const room = section.roomNumber?.trim();
       if (!room || !section.isActive) continue;
       if (byRoom[room]) continue;
-      byRoom[room] = `Assigned to Grade ${section.gradeLevel} - ${section.name}`;
+      byRoom[room] =
+        `Assigned to Grade ${section.gradeLevel} - ${section.name}`;
     }
 
     return byRoom;
@@ -105,11 +112,11 @@ export default function CreateSectionPage() {
         roomNumber: values.roomNumber || undefined,
         adviserId: values.adviserId || undefined,
       });
-      toast.success('Section created');
-      router.push('/dashboard/admin/sections');
+      toast.success("Section created");
+      router.push("/dashboard/admin/sections");
     } catch (error) {
-      await refreshDemoMode();
-      toast.error(getApiErrorMessage(error, 'Failed to create section'));
+      await refreshMaintenance();
+      toast.error(getApiErrorMessage(error, "Failed to create section"));
     } finally {
       setSaving(false);
     }
@@ -131,17 +138,17 @@ export default function CreateSectionPage() {
       description="Set up a section from a simpler admin form where the key details are visible right away."
       icon={School}
       variant="compact-form"
-      actions={(
+      actions={
         <Button
           variant="outline"
           className="admin-button-outline rounded-xl font-black"
-          onClick={() => router.push('/dashboard/admin/sections')}
+          onClick={() => router.push("/dashboard/admin/sections")}
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Sections
         </Button>
-      )}
-      meta={(
+      }
+      meta={
         <>
           <div className="admin-compact-meta__item">
             <span className="admin-compact-meta__label">Advisers</span>
@@ -149,14 +156,14 @@ export default function CreateSectionPage() {
           </div>
           <div className="admin-compact-meta__item">
             <span className="admin-compact-meta__label">School Year</span>
-            {schoolYears[0] || '-'}
+            {schoolYears[0] || "-"}
           </div>
           <div className="admin-compact-meta__item">
             <span className="admin-compact-meta__label">Capacity</span>
             {initialValues.capacity} seats
           </div>
         </>
-      )}
+      }
     >
       <AdminSectionCard
         title="Section Details"
@@ -173,7 +180,7 @@ export default function CreateSectionPage() {
           saving={saving}
           submitLabel="Create Section"
           onSubmit={handleSubmit}
-          onCancel={() => router.push('/dashboard/admin/sections')}
+          onCancel={() => router.push("/dashboard/admin/sections")}
         />
       </AdminSectionCard>
     </AdminPageShell>

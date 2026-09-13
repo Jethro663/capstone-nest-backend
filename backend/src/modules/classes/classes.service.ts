@@ -86,10 +86,10 @@ import { AuditService } from '../audit/audit.service';
 import { ClassRecordService } from '../class-record/class-record.service';
 import { AcademicStateService } from '../academic-state/academic-state.service';
 import {
-  AdminDemoModeService,
-  type AdminDemoModeContext,
-} from '../admin-demo-mode/admin-demo-mode.service';
-import type { AdminDemoModeRelaxedRuleCode } from '../admin-demo-mode/admin-demo-mode.policy';
+  AdminMaintenanceService,
+  type AdminMaintenanceContext,
+} from '../admin-maintenance/admin-maintenance.service';
+import type { AdminMaintenanceRuleCode } from '../admin-maintenance/admin-maintenance.policy';
 import {
   boundPercentage,
   buildAcademicScoreContract,
@@ -132,7 +132,7 @@ export class ClassesService {
     private readonly auditService: AuditService,
     private readonly classRecordService: ClassRecordService,
     private readonly academicStateService: AcademicStateService,
-    private readonly adminDemoModeService: AdminDemoModeService,
+    private readonly adminMaintenanceService: AdminMaintenanceService,
   ) {}
 
   private get db() {
@@ -547,11 +547,11 @@ export class ClassesService {
       schedules: createClassDto.schedules,
       requireSchedules: true,
     });
-    const demo = await this.adminDemoModeService.resolveForActor(
+    const maintenance = await this.adminMaintenanceService.resolveForActor(
       actorId,
       actorRoles,
     );
-    const bypassedRules: AdminDemoModeRelaxedRuleCode[] = [];
+    const bypassedRules: AdminMaintenanceRuleCode[] = [];
     const activeAcademicState =
       await this.academicStateService.getCurrentState();
     const effectiveSchoolYear =
@@ -698,7 +698,7 @@ export class ClassesService {
             slots: createClassDto.schedules,
           },
           tx,
-          demo,
+          maintenance,
           bypassedRules,
         );
 
@@ -752,7 +752,7 @@ export class ClassesService {
       classRecordActorRoles,
     );
 
-    const demoMode = demo.audit(bypassedRules);
+    const maintenanceAccess = maintenance.audit(bypassedRules);
     await this.auditService.log({
       actorId: actorId ?? createClassDto.teacherId ?? 'system',
       action: 'class.created',
@@ -766,7 +766,7 @@ export class ClassesService {
         hasSchedules: Boolean(createClassDto.schedules?.length),
         templateId: createClassDto.templateId ?? null,
         activeQuarter: activeAcademicState.quarter,
-        ...(demoMode ? { demoMode } : {}),
+        ...(maintenanceAccess ? { maintenanceAccess } : {}),
       },
     });
 
@@ -1306,11 +1306,11 @@ export class ClassesService {
   ) {
     // Verify class exists
     const existing = await this.findById(id);
-    const demo = await this.adminDemoModeService.resolveForActor(
+    const maintenance = await this.adminMaintenanceService.resolveForActor(
       actorId,
       actorRoles,
     );
-    const bypassedRules: AdminDemoModeRelaxedRuleCode[] = [];
+    const bypassedRules: AdminMaintenanceRuleCode[] = [];
     if (
       updateClassDto.isActive !== undefined &&
       updateClassDto.isActive !== existing.isActive
@@ -1470,7 +1470,7 @@ export class ClassesService {
             excludeClassId: id,
           },
           this.db,
-          demo,
+          maintenance,
           bypassedRules,
         );
       }
@@ -1505,7 +1505,7 @@ export class ClassesService {
         ? 'teacher'
         : 'system';
 
-    const demoMode = demo.audit(bypassedRules);
+    const maintenanceAccess = maintenance.audit(bypassedRules);
     await this.auditService.log({
       actorId: actorId ?? existing.teacherId ?? 'system',
       action: 'class.updated',
@@ -1516,7 +1516,7 @@ export class ClassesService {
         changedFields,
         sectionId: updateClassDto.sectionId ?? existing.sectionId,
         teacherId: updateClassDto.teacherId ?? existing.teacherId,
-        ...(demoMode ? { demoMode } : {}),
+        ...(maintenanceAccess ? { maintenanceAccess } : {}),
       },
     });
 
@@ -2256,14 +2256,14 @@ export class ClassesService {
   @AcademicMutation()
   async toggleActive(id: string, actorId?: string, actorRoles: string[] = []) {
     const classRecord = await this.findById(id);
-    const demo = await this.adminDemoModeService.resolveForActor(
+    const maintenance = await this.adminMaintenanceService.resolveForActor(
       actorId,
       actorRoles,
     );
-    const bypassedRules: AdminDemoModeRelaxedRuleCode[] = [];
+    const bypassedRules: AdminMaintenanceRuleCode[] = [];
 
     if (!classRecord.isActive) {
-      if (!demo.allows('restore_archived_class')) {
+      if (!maintenance.allows('restore_archived_class')) {
         throw new ConflictException(
           'Archived classes cannot be restored. Purge the archived class instead.',
         );
@@ -2273,7 +2273,7 @@ export class ClassesService {
         .update(classes)
         .set({ isActive: true, updatedAt: new Date() })
         .where(eq(classes.id, id));
-      const demoMode = demo.audit(bypassedRules);
+      const maintenanceAccess = maintenance.audit(bypassedRules);
       await this.auditService.log({
         actorId: actorId ?? classRecord.teacherId ?? 'system',
         action: 'class.status.toggled',
@@ -2285,7 +2285,7 @@ export class ClassesService {
           isActive: true,
           preservedTeacherId: classRecord.teacherId,
           completedEnrollmentStatus: 'preserved',
-          ...(demoMode ? { demoMode } : {}),
+          ...(maintenanceAccess ? { maintenanceAccess } : {}),
         },
       });
       return this.findById(id);
@@ -2299,7 +2299,7 @@ export class ClassesService {
       columns: { id: true },
     });
     if (activeMembership) {
-      if (!demo.allows('archive_active_memberships')) {
+      if (!maintenance.allows('archive_active_memberships')) {
         throw new ConflictException(
           'A class in an enrolled section must use academic transition or explicit student withdrawal before archival',
         );
@@ -2332,7 +2332,7 @@ export class ClassesService {
         ? 'teacher'
         : 'system';
 
-    const demoMode = demo.audit(bypassedRules);
+    const maintenanceAccess = maintenance.audit(bypassedRules);
     await this.auditService.log({
       actorId: actorId ?? classRecord.teacherId ?? 'system',
       action: 'class.status.toggled',
@@ -2344,7 +2344,7 @@ export class ClassesService {
         isActive: false,
         preservedTeacherId: classRecord.teacherId,
         completedEnrollmentStatus: 'completed',
-        ...(demoMode ? { demoMode } : {}),
+        ...(maintenanceAccess ? { maintenanceAccess } : {}),
       },
     });
 
@@ -3082,14 +3082,14 @@ export class ClassesService {
       throw new ForbiddenException(
         'You can only manage enrollment for your own classes',
       );
-    const demo = await this.adminDemoModeService.resolveForActor(
+    const maintenance = await this.adminMaintenanceService.resolveForActor(
       actorId,
       actorRoles,
     );
-    const bypassedRules: AdminDemoModeRelaxedRuleCode[] = [];
+    const bypassedRules: AdminMaintenanceRuleCode[] = [];
     const state = await this.academicStateService.getCurrentState();
     if (!classRecord.isActive || classRecord.schoolYear !== state.schoolYear) {
-      if (!demo.allows('class_membership_window')) {
+      if (!maintenance.allows('class_membership_window')) {
         throw new ConflictException(
           'Class enrollment is allowed only in the active school year',
         );
@@ -3188,7 +3188,7 @@ export class ClassesService {
         `Enrollment "${enrollmentId}" not found after creation`,
       );
     }
-    const demoMode = demo.audit(bypassedRules);
+    const maintenanceAccess = maintenance.audit(bypassedRules);
     await this.auditService.log({
       actorId,
       action: 'class.enrollment.added',
@@ -3197,7 +3197,7 @@ export class ClassesService {
       metadata: {
         classId,
         studentId,
-        ...(demoMode ? { demoMode } : {}),
+        ...(maintenanceAccess ? { maintenanceAccess } : {}),
       },
     });
 
@@ -3302,8 +3302,8 @@ export class ClassesService {
       excludeClassId?: string;
     },
     database: any = this.db,
-    demo?: AdminDemoModeContext,
-    bypassedRules?: AdminDemoModeRelaxedRuleCode[],
+    maintenance?: AdminMaintenanceContext,
+    bypassedRules?: AdminMaintenanceRuleCode[],
   ): Promise<void> {
     const { sectionId, teacherId, room, slots, excludeClassId } = params;
     const conflicts: any[] = [];
@@ -3383,7 +3383,7 @@ export class ClassesService {
     }
 
     if (conflicts.length > 0) {
-      if (demo?.allows('schedule_collision')) {
+      if (maintenance?.allows('schedule_collision')) {
         if (!bypassedRules?.includes('schedule_collision')) {
           bypassedRules?.push('schedule_collision');
         }

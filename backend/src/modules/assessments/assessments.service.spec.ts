@@ -372,14 +372,14 @@ describe('AssessmentsService', () => {
     });
 
     it('passes authenticated admin context and records Demo academic-window metadata', async () => {
-      const demoMode = {
-        demoModeVersion: 8,
-        demoModeExpiresAt: '2026-09-12T05:00:00.000Z',
+      const maintenanceAccess = {
+        maintenanceAccessVersion: 8,
+        maintenanceAccessExpiresAt: '2026-09-12T05:00:00.000Z',
         bypassedRules: ['admin_academic_window'],
       };
       academicPolicyService.assertAssessmentAction.mockResolvedValueOnce({
         period: { key: 'Q1' },
-        demoMode,
+        maintenanceAccess,
       });
       const created = { ...MOCK_ASSESSMENT, totalPoints: 0 };
       db.query.classes.findFirst.mockResolvedValue({
@@ -403,17 +403,17 @@ describe('AssessmentsService', () => {
       expect(mockAuditService.log).toHaveBeenCalledWith(
         expect.objectContaining({
           action: 'assessment.created',
-          metadata: expect.objectContaining({ demoMode }),
+          metadata: expect.objectContaining({ maintenanceAccess }),
         }),
       );
     });
 
-    it('keeps finalized workbook evidence protected during Demo mode', async () => {
+    it('keeps finalized workbook evidence protected during Maintenance Access', async () => {
       academicPolicyService.assertAssessmentAction.mockResolvedValueOnce({
         period: { key: 'Q1' },
-        demoMode: {
-          demoModeVersion: 8,
-          demoModeExpiresAt: '2026-09-12T05:00:00.000Z',
+        maintenanceAccess: {
+          maintenanceAccessVersion: 8,
+          maintenanceAccessExpiresAt: '2026-09-12T05:00:00.000Z',
           bypassedRules: ['admin_academic_window'],
         },
       });
@@ -3182,12 +3182,12 @@ describe('AssessmentsService', () => {
       ).rejects.toThrow(ForbiddenException);
     });
 
-    it('keeps assessment attempts protected during Demo mode', async () => {
+    it('keeps assessment attempts protected during Maintenance Access', async () => {
       academicPolicyService.assertAssessmentAction.mockResolvedValueOnce({
         period: { key: 'Q1' },
-        demoMode: {
-          demoModeVersion: 8,
-          demoModeExpiresAt: '2026-09-12T05:00:00.000Z',
+        maintenanceAccess: {
+          maintenanceAccessVersion: 8,
+          maintenanceAccessExpiresAt: '2026-09-12T05:00:00.000Z',
           bypassedRules: ['admin_academic_window'],
         },
       });

@@ -78,24 +78,25 @@ describe("administrator mobile workspace design contract", () => {
     }
   });
 
-  it("matches the web user purge guard with deleted-state and typed-name confirmation", () => {
+  it("routes deleted-account purge through the reviewed Maintenance gateway", () => {
     const source = readScreen("AdminUserDetailScreen");
-    expect(source).toContain("adminApi.purgeUser");
-    expect(source).toContain("purgeConfirmName");
+    expect(source).not.toContain("adminApi.purgeUser");
+    expect(source).toContain('targetType: "USER"');
+    expect(source).toContain('navigate("AdminLifecycleReview"');
     expect(source).toContain("fullName");
     expect(source).toContain('record.status === "DELETED"');
   });
 
-  it("uses the exact user-lifecycle capability without weakening permanent purge", () => {
+  it("uses the exact user-lifecycle capability without bypassing reviewed permanent deletion", () => {
     const source = readScreen("AdminUserDetailScreen");
-    expect(source).toContain("useAdminDemoMode");
+    expect(source).toContain("useAdminMaintenance");
     expect(source).toContain("hasExactRule");
     expect(source).toContain('"user_lifecycle_sequence"');
     expect(source).toContain("canEditDeletedUser");
     expect(source).toContain("canDirectArchive");
     expect(source).toContain("canReactivateDeletedUser");
-    expect(source).toContain("demoMode.refresh()");
-    expect(source).toContain("purgeConfirmName !== exactName");
+    expect(source).toContain("maintenance.refresh()");
+    expect(source).toContain('label="Review permanent deletion"');
   });
 
   it("keeps the web bulk-user lifecycle and visible export tasks available", () => {

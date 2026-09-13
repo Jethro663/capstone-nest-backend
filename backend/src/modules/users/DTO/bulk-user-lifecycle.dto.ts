@@ -10,7 +10,6 @@ export const BULK_USER_LIFECYCLE_ACTIONS = [
   'suspend',
   'reactivate',
   'archive',
-  'purge',
 ] as const;
 
 export type BulkUserLifecycleAction =

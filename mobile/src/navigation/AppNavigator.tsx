@@ -28,7 +28,7 @@ import { AdminYearTransitionSettingsScreen } from "../screens/AdminYearTransitio
 import { AdminLearnerCompletionSettingsScreen } from "../screens/AdminLearnerCompletionSettingsScreen";
 import { AdminAuditRecoverySettingsScreen } from "../screens/AdminAuditRecoverySettingsScreen";
 import { AdminStudentReadinessScreen } from "../screens/AdminStudentReadinessScreen";
-import { AdminDemoModeSettingsScreen } from "../screens/AdminDemoModeSettingsScreen";
+import { AdminMaintenanceSettingsScreen } from "../screens/AdminMaintenanceSettingsScreen";
 import { AdminSystemResetScreen } from "../screens/AdminSystemResetScreen";
 import { AdminSectionDetailScreen } from "../screens/AdminSectionDetailScreen";
 import { AdminTemplatesScreen } from "../screens/AdminTemplatesScreen";
@@ -1018,8 +1018,8 @@ function AdminNavigator() {
         component={AdminAuditRecoverySettingsScreen}
       />
       <RootStack.Screen
-        name="AdminSettingsDemoMode"
-        component={AdminDemoModeSettingsScreen}
+        name="AdminSettingsMaintenance"
+        component={AdminMaintenanceSettingsScreen}
       />
       <RootStack.Screen
         name="AdminSettingsResetSchoolData"

@@ -2295,8 +2295,8 @@ export class AssessmentsService {
         classId: assessment.classId,
         type: assessment.type,
         isPublished: assessment.isPublished,
-        ...(academicContext.demoMode
-          ? { demoMode: academicContext.demoMode }
+        ...(academicContext.maintenanceAccess
+          ? { maintenanceAccess: academicContext.maintenanceAccess }
           : {}),
       },
     });
@@ -2690,8 +2690,8 @@ export class AssessmentsService {
         classId: assessment.classId,
         type: assessment.type,
         isPublished: assessment.isPublished,
-        ...(academicContext.demoMode
-          ? { demoMode: academicContext.demoMode }
+        ...(academicContext.maintenanceAccess
+          ? { maintenanceAccess: academicContext.maintenanceAccess }
           : {}),
       },
     });
@@ -2786,8 +2786,8 @@ export class AssessmentsService {
       metadata: {
         classId: updated.classId,
         isPublished: updated.isPublished,
-        ...(academicContext.demoMode
-          ? { demoMode: academicContext.demoMode }
+        ...(academicContext.maintenanceAccess
+          ? { maintenanceAccess: academicContext.maintenanceAccess }
           : {}),
       },
     });
@@ -2855,8 +2855,8 @@ export class AssessmentsService {
       metadata: {
         classId: assessment.classId,
         title: assessment.title,
-        ...(academicContext.demoMode
-          ? { demoMode: academicContext.demoMode }
+        ...(academicContext.maintenanceAccess
+          ? { maintenanceAccess: academicContext.maintenanceAccess }
           : {}),
       },
     });
@@ -2970,8 +2970,8 @@ export class AssessmentsService {
         classId: assessment.classId,
         type: createdQuestion.type,
         points: createdQuestion.points,
-        ...(academicContext.demoMode
-          ? { demoMode: academicContext.demoMode }
+        ...(academicContext.maintenanceAccess
+          ? { maintenanceAccess: academicContext.maintenanceAccess }
           : {}),
       },
     });
@@ -3141,8 +3141,8 @@ export class AssessmentsService {
         classId: assessment.classId,
         points: updatedQuestion.points,
         optionsReplaced: updateQuestionDto.options !== undefined,
-        ...(academicContext.demoMode
-          ? { demoMode: academicContext.demoMode }
+        ...(academicContext.maintenanceAccess
+          ? { maintenanceAccess: academicContext.maintenanceAccess }
           : {}),
       },
     });
@@ -3223,8 +3223,8 @@ export class AssessmentsService {
         assessmentId: question.assessmentId,
         classId: assessment.classId,
         imageUrl,
-        ...(academicContext.demoMode
-          ? { demoMode: academicContext.demoMode }
+        ...(academicContext.maintenanceAccess
+          ? { maintenanceAccess: academicContext.maintenanceAccess }
           : {}),
       },
     });
@@ -3293,8 +3293,8 @@ export class AssessmentsService {
         classId: assessment.classId,
         type: question.type,
         order: question.order,
-        ...(academicContext.demoMode
-          ? { demoMode: academicContext.demoMode }
+        ...(academicContext.maintenanceAccess
+          ? { maintenanceAccess: academicContext.maintenanceAccess }
           : {}),
       },
     });
@@ -3962,8 +3962,8 @@ export class AssessmentsService {
         fileId: record.id,
         mimeType: record.mimeType,
         sizeBytes: record.sizeBytes,
-        ...(academicContext.demoMode
-          ? { demoMode: academicContext.demoMode }
+        ...(academicContext.maintenanceAccess
+          ? { maintenanceAccess: academicContext.maintenanceAccess }
           : {}),
       },
     });
@@ -4097,8 +4097,8 @@ export class AssessmentsService {
         fileId: record.id,
         rubricParseStatus,
         criteriaCount: updatedAssessment.rubricCriteria?.length ?? 0,
-        ...(academicContext.demoMode
-          ? { demoMode: academicContext.demoMode }
+        ...(academicContext.maintenanceAccess
+          ? { maintenanceAccess: academicContext.maintenanceAccess }
           : {}),
       },
     });
@@ -4171,8 +4171,8 @@ export class AssessmentsService {
         classId: assessment.classId,
         criteriaCount: normalizedCriteria.length,
         totalPoints: updatedAssessment.totalPoints,
-        ...(academicContext.demoMode
-          ? { demoMode: academicContext.demoMode }
+        ...(academicContext.maintenanceAccess
+          ? { maintenanceAccess: academicContext.maintenanceAccess }
           : {}),
       },
     });
@@ -5837,8 +5837,8 @@ export class AssessmentsService {
         manualResponseScores: dto.manualResponseScores ?? [],
         previousScoreBreakdown: this.scoreContract(attempt).scoreBreakdown,
         scoreBreakdown: this.scoreContract(updated).scoreBreakdown,
-        ...(academicContext.demoMode
-          ? { demoMode: academicContext.demoMode }
+        ...(academicContext.maintenanceAccess
+          ? { maintenanceAccess: academicContext.maintenanceAccess }
           : {}),
       },
     });
@@ -5935,8 +5935,8 @@ export class AssessmentsService {
         attemptNumber: attempt.attemptNumber,
         score: attempt.score,
         passed: attempt.passed,
-        ...(academicContext.demoMode
-          ? { demoMode: academicContext.demoMode }
+        ...(academicContext.maintenanceAccess
+          ? { maintenanceAccess: academicContext.maintenanceAccess }
           : {}),
       },
     });
@@ -5982,7 +5982,7 @@ export class AssessmentsService {
     }
 
     const checked = new Set<string>();
-    let demoMode: unknown;
+    let maintenanceAccess: unknown;
     for (const attempt of selectedAttempts) {
       if (!attempt.isSubmitted || attempt.isReturned) continue;
       if (!checked.has(attempt.assessmentId)) {
@@ -5992,7 +5992,7 @@ export class AssessmentsService {
           false,
           currentUser,
         );
-        demoMode ??= academicContext.demoMode;
+        maintenanceAccess ??= academicContext.maintenanceAccess;
         checked.add(attempt.assessmentId);
       }
       if (
@@ -6042,7 +6042,7 @@ export class AssessmentsService {
             score: result.score ?? sourceAttempt?.score,
             passed: result.passed ?? sourceAttempt?.passed,
             bulk: true,
-            ...(demoMode ? { demoMode } : {}),
+            ...(maintenanceAccess ? { maintenanceAccess } : {}),
           },
         };
       });
@@ -6060,7 +6060,7 @@ export class AssessmentsService {
           assessmentIds: [
             ...new Set(selectedAttempts.map((attempt) => attempt.assessmentId)),
           ],
-          ...(demoMode ? { demoMode } : {}),
+          ...(maintenanceAccess ? { maintenanceAccess } : {}),
         },
       });
     }
@@ -6263,8 +6263,8 @@ export class AssessmentsService {
           score: result.score,
           passed: result.passed,
           bulk: true,
-          ...(academicContext.demoMode
-            ? { demoMode: academicContext.demoMode }
+          ...(academicContext.maintenanceAccess
+            ? { maintenanceAccess: academicContext.maintenanceAccess }
             : {}),
         },
       });
@@ -6278,8 +6278,8 @@ export class AssessmentsService {
       metadata: {
         classId: assessment.classId,
         returned: results.length,
-        ...(academicContext.demoMode
-          ? { demoMode: academicContext.demoMode }
+        ...(academicContext.maintenanceAccess
+          ? { maintenanceAccess: academicContext.maintenanceAccess }
           : {}),
       },
     });

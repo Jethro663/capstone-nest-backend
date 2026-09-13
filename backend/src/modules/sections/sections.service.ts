@@ -28,8 +28,8 @@ import type { TransitionBlocker } from '../academic-state/academic-transition-re
 import { DatabaseService } from '../../database/database.service';
 import { AuditService } from '../audit/audit.service';
 import { ClassRecordService } from '../class-record/class-record.service';
-import { AdminDemoModeService } from '../admin-demo-mode/admin-demo-mode.service';
-import type { AdminDemoModeRelaxedRuleCode } from '../admin-demo-mode/admin-demo-mode.policy';
+import { AdminMaintenanceService } from '../admin-maintenance/admin-maintenance.service';
+import type { AdminMaintenanceRuleCode } from '../admin-maintenance/admin-maintenance.policy';
 import {
   sections,
   classes,
@@ -90,7 +90,7 @@ export class SectionsService {
     private readonly classRecordService: ClassRecordService,
     private readonly readinessService: AcademicTransitionReadinessService,
     private readonly policyService: AcademicPolicyService,
-    private readonly adminDemoModeService: AdminDemoModeService,
+    private readonly adminMaintenanceService: AdminMaintenanceService,
   ) {}
 
   private get db() {
@@ -704,14 +704,14 @@ export class SectionsService {
     requestingUser?: RequestingUser,
   ) {
     const section = await this.findById(sectionId, requestingUser);
-    const demo = await this.adminDemoModeService.resolveForActor(
+    const maintenance = await this.adminMaintenanceService.resolveForActor(
       requestingUser?.userId,
       requestingUser?.roles,
     );
-    const bypassedRules: AdminDemoModeRelaxedRuleCode[] = [];
+    const bypassedRules: AdminMaintenanceRuleCode[] = [];
     const state = await this.policyService.currentState();
     if (!section.isActive || section.schoolYear !== state.schoolYear) {
-      if (!demo.allows('section_membership_window')) {
+      if (!maintenance.allows('section_membership_window')) {
         throw new ConflictException(
           'Student membership can be changed only in the active school year',
         );
@@ -735,7 +735,7 @@ export class SectionsService {
 
       const currentCount = Number(rosterResult?.count ?? 0);
       if (currentCount + dto.studentIds.length > section.capacity) {
-        if (!demo.allows('section_capacity')) {
+        if (!maintenance.allows('section_capacity')) {
           throw new BadRequestException(
             `Adding ${dto.studentIds.length} student(s) would exceed the section's capacity of ${section.capacity} (currently ${currentCount} enrolled)`,
           );
@@ -852,14 +852,14 @@ export class SectionsService {
       };
     });
 
-    const demoMode = demo.audit(bypassedRules);
-    if (demoMode && requestingUser?.userId) {
+    const maintenanceAccess = maintenance.audit(bypassedRules);
+    if (maintenanceAccess && requestingUser?.userId) {
       await this.auditService.log({
         actorId: requestingUser.userId,
         action: 'section.roster.added',
         targetType: 'section',
         targetId: sectionId,
-        metadata: { studentIds: dto.studentIds, demoMode },
+        metadata: { studentIds: dto.studentIds, maintenanceAccess },
       });
     }
     return result;
@@ -874,14 +874,14 @@ export class SectionsService {
     requestingUser?: RequestingUser,
   ) {
     const section = await this.findById(sectionId, requestingUser);
-    const demo = await this.adminDemoModeService.resolveForActor(
+    const maintenance = await this.adminMaintenanceService.resolveForActor(
       requestingUser?.userId,
       requestingUser?.roles,
     );
-    const bypassedRules: AdminDemoModeRelaxedRuleCode[] = [];
+    const bypassedRules: AdminMaintenanceRuleCode[] = [];
     const state = await this.policyService.currentState();
     if (!section.isActive || section.schoolYear !== state.schoolYear) {
-      if (!demo.allows('section_membership_window')) {
+      if (!maintenance.allows('section_membership_window')) {
         throw new ConflictException(
           'Student membership can be changed only in the active school year',
         );
@@ -941,14 +941,14 @@ export class SectionsService {
 
       return { removed: true };
     });
-    const demoMode = demo.audit(bypassedRules);
-    if (demoMode && requestingUser?.userId) {
+    const maintenanceAccess = maintenance.audit(bypassedRules);
+    if (maintenanceAccess && requestingUser?.userId) {
       await this.auditService.log({
         actorId: requestingUser.userId,
         action: 'section.roster.removed',
         targetType: 'section',
         targetId: sectionId,
-        metadata: { studentId, demoMode },
+        metadata: { studentId, maintenanceAccess },
       });
     }
     return result;
@@ -966,11 +966,11 @@ export class SectionsService {
       createSectionDto.roomNumber,
     );
     this.assertAllowedRoomNumber(normalizedRoomNumber);
-    const demo = await this.adminDemoModeService.resolveForActor(
+    const maintenance = await this.adminMaintenanceService.resolveForActor(
       actorId,
       actorRoles,
     );
-    const bypassedRules: AdminDemoModeRelaxedRuleCode[] = [];
+    const bypassedRules: AdminMaintenanceRuleCode[] = [];
 
     const existingSection = await this.db.query.sections.findFirst({
       where: and(
@@ -1002,7 +1002,7 @@ export class SectionsService {
       const adviserConflict = await this.ensureAdviserAvailable(
         createSectionDto.adviserId,
         undefined,
-        demo.allows('room_adviser_exclusivity'),
+        maintenance.allows('room_adviser_exclusivity'),
       );
       if (adviserConflict) bypassedRules.push('room_adviser_exclusivity');
     }
@@ -1010,7 +1010,7 @@ export class SectionsService {
     const roomConflict = await this.ensureRoomIsAvailable(
       normalizedRoomNumber,
       undefined,
-      demo.allows('room_adviser_exclusivity'),
+      maintenance.allows('room_adviser_exclusivity'),
     );
     if (roomConflict && !bypassedRules.includes('room_adviser_exclusivity')) {
       bypassedRules.push('room_adviser_exclusivity');
@@ -1030,7 +1030,7 @@ export class SectionsService {
         })
         .returning();
 
-      const demoMode = demo.audit(bypassedRules);
+      const maintenanceAccess = maintenance.audit(bypassedRules);
       await this.auditService.log({
         actorId: actorId ?? createSectionDto.adviserId ?? 'system',
         action: 'section.created',
@@ -1042,7 +1042,7 @@ export class SectionsService {
           schoolYear: createSectionDto.schoolYear,
           adviserId: createSectionDto.adviserId ?? null,
           capacity: createSectionDto.capacity,
-          ...(demoMode ? { demoMode } : {}),
+          ...(maintenanceAccess ? { maintenanceAccess } : {}),
         },
       });
 
@@ -1078,11 +1078,11 @@ export class SectionsService {
     }
 
     const existingSection = await this.findById(id);
-    const demo = await this.adminDemoModeService.resolveForActor(
+    const maintenance = await this.adminMaintenanceService.resolveForActor(
       actorId,
       actorRoles,
     );
-    const bypassedRules: AdminDemoModeRelaxedRuleCode[] = [];
+    const bypassedRules: AdminMaintenanceRuleCode[] = [];
     if (
       updateSectionDto.isActive !== undefined &&
       updateSectionDto.isActive !== existingSection.isActive
@@ -1149,7 +1149,7 @@ export class SectionsService {
         );
       const currentHeadcount = Number(headcountResult?.count ?? 0);
       if (updateSectionDto.capacity < currentHeadcount) {
-        if (!demo.allows('section_capacity')) {
+        if (!maintenance.allows('section_capacity')) {
           throw new BadRequestException(
             `Cannot reduce capacity to ${updateSectionDto.capacity}: ${currentHeadcount} student(s) are currently enrolled`,
           );
@@ -1178,7 +1178,7 @@ export class SectionsService {
       const adviserConflict = await this.ensureAdviserAvailable(
         updateSectionDto.adviserId,
         id,
-        demo.allows('room_adviser_exclusivity'),
+        maintenance.allows('room_adviser_exclusivity'),
       );
       if (adviserConflict) bypassedRules.push('room_adviser_exclusivity');
     }
@@ -1187,7 +1187,7 @@ export class SectionsService {
       const roomConflict = await this.ensureRoomIsAvailable(
         normalizedRoomNumber,
         id,
-        demo.allows('room_adviser_exclusivity'),
+        maintenance.allows('room_adviser_exclusivity'),
       );
       if (roomConflict && !bypassedRules.includes('room_adviser_exclusivity')) {
         bypassedRules.push('room_adviser_exclusivity');
@@ -1226,7 +1226,7 @@ export class SectionsService {
       const changedFields = Object.keys(updateData).filter(
         (key) => key !== 'updatedAt',
       );
-      const demoMode = demo.audit(bypassedRules);
+      const maintenanceAccess = maintenance.audit(bypassedRules);
       await this.auditService.log({
         actorId: actorId ?? existingSection.adviserId ?? 'system',
         action: 'section.updated',
@@ -1238,7 +1238,7 @@ export class SectionsService {
           adviserId: updateSectionDto.adviserId ?? existingSection.adviserId,
           gradeLevel: updateSectionDto.gradeLevel ?? existingSection.gradeLevel,
           schoolYear: updateSectionDto.schoolYear ?? existingSection.schoolYear,
-          ...(demoMode ? { demoMode } : {}),
+          ...(maintenanceAccess ? { maintenanceAccess } : {}),
         },
       });
 
@@ -1378,11 +1378,11 @@ export class SectionsService {
     actorRoles: string[] = [],
   ) {
     const section = await this.findById(id);
-    const demo = await this.adminDemoModeService.resolveForActor(
+    const maintenance = await this.adminMaintenanceService.resolveForActor(
       actorId,
       actorRoles,
     );
-    const bypassedRules: AdminDemoModeRelaxedRuleCode[] = [];
+    const bypassedRules: AdminMaintenanceRuleCode[] = [];
     const activeMembership = await this.db.query.enrollments.findFirst({
       where: and(
         eq(enrollments.sectionId, id),
@@ -1391,7 +1391,7 @@ export class SectionsService {
       columns: { id: true },
     });
     if (activeMembership) {
-      if (!demo.allows('archive_active_memberships')) {
+      if (!maintenance.allows('archive_active_memberships')) {
         throw new ConflictException(
           'A section with active students must use academic transition or explicit student withdrawal before archival',
         );
@@ -1427,7 +1427,7 @@ export class SectionsService {
         .where(eq(sections.id, id));
     });
 
-    const demoMode = demo.audit(bypassedRules);
+    const maintenanceAccess = maintenance.audit(bypassedRules);
     await this.auditService.log({
       actorId: actorId ?? section.adviserId ?? 'system',
       action: 'section.archived',
@@ -1439,7 +1439,7 @@ export class SectionsService {
         preservedAdviserId: section.adviserId,
         completedEnrollmentStatus: 'completed',
         linkedClassTeacherStatus: 'preserved_for_history',
-        ...(demoMode ? { demoMode } : {}),
+        ...(maintenanceAccess ? { maintenanceAccess } : {}),
       },
     });
   }

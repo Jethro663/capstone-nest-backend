@@ -70,6 +70,7 @@ const groups: Array<{ action: ResetAction; group: string; tables: string[] }> =
         'otp_verifications',
         'refresh_tokens',
         'admin_demo_mode_states',
+        'admin_maintenance_sessions',
       ],
     },
     {
@@ -202,7 +203,7 @@ export const RESET_CATALOG: Readonly<Record<string, ResetTableRule>> =
       ),
     ),
   );
-export const RESET_CATALOG_VERSION = 1;
+export const RESET_CATALOG_VERSION = 2;
 export const RESET_QUEUE_NAMES = [
   'announcements',
   'notifications',

@@ -1,15 +1,15 @@
-'use client';
+"use client";
 
-import { useCallback, useMemo, useState } from 'react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { useCallback, useMemo, useState } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from '@/components/ui/tooltip';
-import { SCHEDULE_DAYS, type ScheduleDay } from '@/utils/constants';
+} from "@/components/ui/tooltip";
+import { SCHEDULE_DAYS, type ScheduleDay } from "@/utils/constants";
 
 export interface ScheduleSlot {
   days: ScheduleDay[];
@@ -33,21 +33,21 @@ interface ScheduleCalendarCreatorProps {
 }
 
 const DAY_LABELS: Record<ScheduleDay, string> = {
-  M: 'Mon',
-  T: 'Tue',
-  W: 'Wed',
-  Th: 'Thu',
-  F: 'Fri',
-  Sa: 'Sat',
-  Su: 'Sun',
+  M: "Mon",
+  T: "Tue",
+  W: "Wed",
+  Th: "Thu",
+  F: "Fri",
+  Sa: "Sat",
+  Su: "Sun",
 };
 
 const DURATION_PRESETS = [
-  { label: '10 min', minutes: 10 },
-  { label: '25 min', minutes: 25 },
-  { label: '30 min', minutes: 30 },
-  { label: '1 hour', minutes: 60 },
-  { label: '90 min', minutes: 90 },
+  { label: "10 min", minutes: 10 },
+  { label: "25 min", minutes: 25 },
+  { label: "30 min", minutes: 30 },
+  { label: "1 hour", minutes: 60 },
+  { label: "90 min", minutes: 90 },
 ];
 
 const GRID_START_MINUTES = 6 * 60;
@@ -58,40 +58,40 @@ const PIXELS_PER_MINUTE = 1.2;
 
 const SLOT_COLORS = [
   {
-    bg: 'bg-blue-500/15',
-    border: 'border-blue-500/35',
-    text: 'text-blue-700',
-    dot: 'bg-blue-500',
+    bg: "bg-blue-500/15",
+    border: "border-blue-500/35",
+    text: "text-blue-700",
+    dot: "bg-blue-500",
   },
   {
-    bg: 'bg-emerald-500/15',
-    border: 'border-emerald-500/35',
-    text: 'text-emerald-700',
-    dot: 'bg-emerald-500',
+    bg: "bg-emerald-500/15",
+    border: "border-emerald-500/35",
+    text: "text-emerald-700",
+    dot: "bg-emerald-500",
   },
   {
-    bg: 'bg-violet-500/15',
-    border: 'border-violet-500/35',
-    text: 'text-violet-700',
-    dot: 'bg-violet-500',
+    bg: "bg-violet-500/15",
+    border: "border-violet-500/35",
+    text: "text-violet-700",
+    dot: "bg-violet-500",
   },
   {
-    bg: 'bg-amber-500/18',
-    border: 'border-amber-500/35',
-    text: 'text-amber-700',
-    dot: 'bg-amber-500',
+    bg: "bg-amber-500/18",
+    border: "border-amber-500/35",
+    text: "text-amber-700",
+    dot: "bg-amber-500",
   },
   {
-    bg: 'bg-rose-500/15',
-    border: 'border-rose-500/35',
-    text: 'text-rose-700',
-    dot: 'bg-rose-500',
+    bg: "bg-rose-500/15",
+    border: "border-rose-500/35",
+    text: "text-rose-700",
+    dot: "bg-rose-500",
   },
   {
-    bg: 'bg-cyan-500/15',
-    border: 'border-cyan-500/35',
-    text: 'text-cyan-700',
-    dot: 'bg-cyan-500',
+    bg: "bg-cyan-500/15",
+    border: "border-cyan-500/35",
+    text: "text-cyan-700",
+    dot: "bg-cyan-500",
   },
 ];
 
@@ -102,9 +102,9 @@ type TimeMark = {
 };
 
 const TIME_MARKS: TimeMark[] = Array.from(
-  { length: (GRID_TOTAL_MINUTES / GRID_INTERVAL_MINUTES) + 1 },
+  { length: GRID_TOTAL_MINUTES / GRID_INTERVAL_MINUTES + 1 },
   (_, index) => {
-    const minute = GRID_START_MINUTES + (index * GRID_INTERVAL_MINUTES);
+    const minute = GRID_START_MINUTES + index * GRID_INTERVAL_MINUTES;
     return {
       minute,
       label: formatTime12h(minutesToTime(minute)),
@@ -120,41 +120,57 @@ const TIME_OPTIONS = generateTimeOptions();
 
 function generateTimeOptions(): string[] {
   const options: string[] = [];
-  for (let minutes = GRID_START_MINUTES; minutes <= GRID_END_MINUTES; minutes += 5) {
+  for (
+    let minutes = GRID_START_MINUTES;
+    minutes <= GRID_END_MINUTES;
+    minutes += 5
+  ) {
     options.push(minutesToTime(minutes));
   }
   return options;
 }
 
 function timeToMinutes(hhmm: string): number {
-  const [hours, minutes] = hhmm.split(':').map(Number);
-  return (hours * 60) + minutes;
+  const [hours, minutes] = hhmm.split(":").map(Number);
+  return hours * 60 + minutes;
 }
 
 function minutesToTime(totalMinutes: number): string {
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
-  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 }
 
 function formatTime12h(hhmm: string): string {
-  const [hours, minutes] = hhmm.split(':').map(Number);
-  const period = hours >= 12 ? 'PM' : 'AM';
+  const [hours, minutes] = hhmm.split(":").map(Number);
+  const period = hours >= 12 ? "PM" : "AM";
   const hour12 = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
-  return `${hour12}:${String(minutes).padStart(2, '0')} ${period}`;
+  return `${hour12}:${String(minutes).padStart(2, "0")} ${period}`;
 }
 
-function rangesOverlap(startA: number, endA: number, startB: number, endB: number): boolean {
+function rangesOverlap(
+  startA: number,
+  endA: number,
+  startB: number,
+  endB: number,
+): boolean {
   return startA < endB && endA > startB;
 }
 
 function getDefaultEndTime(startTime: string): string {
-  return minutesToTime(Math.min(timeToMinutes(startTime) + 60, GRID_END_MINUTES));
+  return minutesToTime(
+    Math.min(timeToMinutes(startTime) + 60, GRID_END_MINUTES),
+  );
 }
 
 function getSlotStyle(slot: ScheduleSlot): React.CSSProperties {
-  const top = Math.max(0, timeToMinutes(slot.startTime) - GRID_START_MINUTES) * PIXELS_PER_MINUTE;
-  const duration = Math.max(10, timeToMinutes(slot.endTime) - timeToMinutes(slot.startTime));
+  const top =
+    Math.max(0, timeToMinutes(slot.startTime) - GRID_START_MINUTES) *
+    PIXELS_PER_MINUTE;
+  const duration = Math.max(
+    10,
+    timeToMinutes(slot.endTime) - timeToMinutes(slot.startTime),
+  );
   return {
     top: `${top}px`,
     height: `${duration * PIXELS_PER_MINUTE}px`,
@@ -180,12 +196,17 @@ export function ScheduleCalendarCreator({
   disabled = false,
   allowExistingConflicts = false,
 }: ScheduleCalendarCreatorProps) {
-  const [activeCell, setActiveCell] = useState<{ day: ScheduleDay; time: string } | null>(null);
-  const [customStart, setCustomStart] = useState('');
-  const [customEnd, setCustomEnd] = useState('');
+  const [activeCell, setActiveCell] = useState<{
+    day: ScheduleDay;
+    time: string;
+  } | null>(null);
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
 
   const existingDayMap = useMemo(() => {
-    const map = createDayRecord<{ idx: number; slot: ExistingScheduleSlot }[]>(() => []);
+    const map = createDayRecord<{ idx: number; slot: ExistingScheduleSlot }[]>(
+      () => [],
+    );
     existingSlots.forEach((slot, idx) => {
       slot.days.forEach((day) => {
         map[day].push({ idx, slot });
@@ -195,7 +216,9 @@ export function ScheduleCalendarCreator({
   }, [existingSlots]);
 
   const userDayMap = useMemo(() => {
-    const map = createDayRecord<{ slotIndex: number; slot: ScheduleSlot }[]>(() => []);
+    const map = createDayRecord<{ slotIndex: number; slot: ScheduleSlot }[]>(
+      () => [],
+    );
     value.forEach((slot, slotIndex) => {
       slot.days.forEach((day) => {
         map[day].push({ slotIndex, slot });
@@ -205,7 +228,9 @@ export function ScheduleCalendarCreator({
   }, [value]);
 
   const cellStateMap = useMemo(() => {
-    const map = createDayRecord<Record<string, 'existing' | 'user' | null>>(() => ({}));
+    const map = createDayRecord<Record<string, "existing" | "user" | null>>(
+      () => ({}),
+    );
 
     SCHEDULE_DAYS.forEach((day) => {
       SLOT_MARKS.forEach(({ minute }) => {
@@ -224,7 +249,7 @@ export function ScheduleCalendarCreator({
             cellMinutes < timeToMinutes(slot.endTime) &&
             map[day][time] === null
           ) {
-            map[day][time] = 'existing';
+            map[day][time] = "existing";
           }
         });
       });
@@ -235,8 +260,11 @@ export function ScheduleCalendarCreator({
         SLOT_MARKS.forEach(({ minute }) => {
           const time = minutesToTime(minute);
           const cellMinutes = timeToMinutes(time);
-          if (cellMinutes >= timeToMinutes(slot.startTime) && cellMinutes < timeToMinutes(slot.endTime)) {
-            map[day][time] = 'user';
+          if (
+            cellMinutes >= timeToMinutes(slot.startTime) &&
+            cellMinutes < timeToMinutes(slot.endTime)
+          ) {
+            map[day][time] = "user";
           }
         });
       });
@@ -278,8 +306,8 @@ export function ScheduleCalendarCreator({
 
   const resetComposer = useCallback(() => {
     setActiveCell(null);
-    setCustomStart('');
-    setCustomEnd('');
+    setCustomStart("");
+    setCustomEnd("");
   }, []);
 
   const addSlot = useCallback(
@@ -314,8 +342,8 @@ export function ScheduleCalendarCreator({
       const cellState = cellStateMap[day][time];
       if (
         disabled ||
-        cellState === 'user' ||
-        (cellState === 'existing' && !allowExistingConflicts)
+        cellState === "user" ||
+        (cellState === "existing" && !allowExistingConflicts)
       ) {
         return;
       }
@@ -339,7 +367,10 @@ export function ScheduleCalendarCreator({
       }
 
       const endTime = minutesToTime(
-        Math.min(timeToMinutes(activeCell.time) + durationMinutes, GRID_END_MINUTES),
+        Math.min(
+          timeToMinutes(activeCell.time) + durationMinutes,
+          GRID_END_MINUTES,
+        ),
       );
       addSlot(activeCell.day, activeCell.time, endTime);
     },
@@ -389,10 +420,12 @@ export function ScheduleCalendarCreator({
     const startMinutes = timeToMinutes(customStart);
     const endMinutes = timeToMinutes(customEnd);
     const invalidRange = endMinutes <= startMinutes;
-    const outOfBounds = startMinutes < GRID_START_MINUTES || endMinutes > GRID_END_MINUTES;
-    const overlaps = !invalidRange && !outOfBounds
-      ? hasAnyOverlap(activeCell.day, startMinutes, endMinutes)
-      : false;
+    const outOfBounds =
+      startMinutes < GRID_START_MINUTES || endMinutes > GRID_END_MINUTES;
+    const overlaps =
+      !invalidRange && !outOfBounds
+        ? hasAnyOverlap(activeCell.day, startMinutes, endMinutes)
+        : false;
 
     return {
       canAdd: !invalidRange && !outOfBounds && !overlaps,
@@ -424,15 +457,17 @@ export function ScheduleCalendarCreator({
               className="absolute inset-x-0 border-t"
               style={{
                 top: `${top}px`,
-                borderColor: mark.isHour ? 'rgba(15,23,42,0.16)' : 'rgba(15,23,42,0.08)',
+                borderColor: mark.isHour
+                  ? "rgba(15,23,42,0.16)"
+                  : "rgba(15,23,42,0.08)",
               }}
             />
             <button
               type="button"
               className={`absolute inset-x-0 text-left transition-colors ${
-                state === null && !disabled ? 'hover:bg-red-50/70' : ''
+                state === null && !disabled ? "hover:bg-red-50/70" : ""
               } ${
-                isSelected ? 'bg-red-50 ring-1 ring-inset ring-[#ff4b4b]' : ''
+                isSelected ? "bg-red-50 ring-1 ring-inset ring-[#ff4b4b]" : ""
               }`}
               style={{
                 top: `${top}px`,
@@ -441,8 +476,8 @@ export function ScheduleCalendarCreator({
               onClick={() => handleCellSelect(day, time)}
               disabled={
                 disabled ||
-                state === 'user' ||
-                (state === 'existing' && !allowExistingConflicts)
+                state === "user" ||
+                (state === "existing" && !allowExistingConflicts)
               }
               aria-label={`Select ${DAY_LABELS[day]} at ${formatTime12h(time)}`}
             >
@@ -459,11 +494,18 @@ export function ScheduleCalendarCreator({
           className="absolute z-30 w-[248px] rounded-xl border border-slate-200 bg-white p-3 shadow-xl"
           style={{
             top: `${Math.min(
-              (timeToMinutes(activeCell.time) - GRID_START_MINUTES) * PIXELS_PER_MINUTE,
+              (timeToMinutes(activeCell.time) - GRID_START_MINUTES) *
+                PIXELS_PER_MINUTE,
               TIMELINE_HEIGHT - 228,
             )}px`,
-            left: SCHEDULE_DAYS.indexOf(day) >= SCHEDULE_DAYS.length - 2 ? 'auto' : 'calc(100% + 8px)',
-            right: SCHEDULE_DAYS.indexOf(day) >= SCHEDULE_DAYS.length - 2 ? 'calc(100% + 8px)' : 'auto',
+            left:
+              SCHEDULE_DAYS.indexOf(day) >= SCHEDULE_DAYS.length - 2
+                ? "auto"
+                : "calc(100% + 8px)",
+            right:
+              SCHEDULE_DAYS.indexOf(day) >= SCHEDULE_DAYS.length - 2
+                ? "calc(100% + 8px)"
+                : "auto",
           }}
         >
           <div className="space-y-1">
@@ -478,7 +520,10 @@ export function ScheduleCalendarCreator({
           <div className="mt-3 grid grid-cols-2 gap-1.5">
             {DURATION_PRESETS.map((preset) => {
               const endTime = minutesToTime(
-                Math.min(timeToMinutes(activeCell.time) + preset.minutes, GRID_END_MINUTES),
+                Math.min(
+                  timeToMinutes(activeCell.time) + preset.minutes,
+                  GRID_END_MINUTES,
+                ),
               );
               const presetDisabled = hasAnyOverlap(
                 activeCell.day,
@@ -530,7 +575,11 @@ export function ScheduleCalendarCreator({
                   onChange={(event) => setCustomEnd(event.target.value)}
                   className="admin-select h-9 rounded-lg px-3 text-xs"
                 >
-                  {TIME_OPTIONS.filter((time) => timeToMinutes(time) > timeToMinutes(customStart || activeCell.time)).map((time) => (
+                  {TIME_OPTIONS.filter(
+                    (time) =>
+                      timeToMinutes(time) >
+                      timeToMinutes(customStart || activeCell.time),
+                  ).map((time) => (
                     <option key={`end-${time}`} value={time}>
                       {formatTime12h(time)}
                     </option>
@@ -561,13 +610,19 @@ export function ScheduleCalendarCreator({
             </div>
 
             {selectedRangeState.invalidRange ? (
-              <p className="text-[11px] text-amber-600">End time must be after start time.</p>
+              <p className="text-[11px] text-amber-600">
+                End time must be after start time.
+              </p>
             ) : null}
             {selectedRangeState.outOfBounds ? (
-              <p className="text-[11px] text-amber-600">Use a time between 6:00 AM and 9:00 PM.</p>
+              <p className="text-[11px] text-amber-600">
+                Use a time between 6:00 AM and 9:00 PM.
+              </p>
             ) : null}
             {selectedRangeState.overlaps ? (
-              <p className="text-[11px] text-rose-600">This overlaps an existing section schedule.</p>
+              <p className="text-[11px] text-rose-600">
+                This overlaps an existing section schedule.
+              </p>
             ) : null}
           </div>
         </div>
@@ -577,7 +632,7 @@ export function ScheduleCalendarCreator({
         <Tooltip key={`existing-${day}-${idx}`}>
           <TooltipTrigger asChild>
             <div
-              className={`absolute inset-x-1 z-[5] rounded-lg border border-slate-300/90 bg-slate-100/90 px-1.5 py-1 text-center shadow-sm ${allowExistingConflicts ? 'pointer-events-none' : ''}`}
+              className={`absolute inset-x-1 z-[5] rounded-lg border border-slate-300/90 bg-slate-100/90 px-1.5 py-1 text-center shadow-sm ${allowExistingConflicts ? "pointer-events-none" : ""}`}
               style={getSlotStyle(slot)}
             >
               <p className="truncate text-[10px] font-bold uppercase tracking-[0.08em] text-slate-600">
@@ -596,7 +651,9 @@ export function ScheduleCalendarCreator({
               {formatTime12h(slot.startTime)} - {formatTime12h(slot.endTime)}
             </p>
             {slot.teacherName ? (
-              <p className="text-[11px] text-slate-500">Teacher: {slot.teacherName}</p>
+              <p className="text-[11px] text-slate-500">
+                Teacher: {slot.teacherName}
+              </p>
             ) : null}
             {slot.room ? (
               <p className="text-[11px] text-slate-500">Room: {slot.room}</p>
@@ -633,11 +690,13 @@ export function ScheduleCalendarCreator({
       <div className="space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
-            <h3 className="text-sm font-black text-[var(--admin-text-strong)]">Class Schedule</h3>
+            <h3 className="text-sm font-black text-[var(--admin-text-strong)]">
+              Class Schedule
+            </h3>
             <p className="text-xs leading-5 text-[var(--admin-text-muted)]">
               {disabled
-                ? 'Fill in subject, code, grade level, school year, section, and room to enable scheduling.'
-                : 'Click any open cell to open the add popup, then choose a quick duration or custom range.'}
+                ? "Fill in subject, code, grade level, school year, section, and room to enable scheduling."
+                : "Click any open cell to open the add popup, then choose a quick duration or custom range."}
             </p>
           </div>
           {!disabled && value.length > 0 ? (
@@ -653,11 +712,15 @@ export function ScheduleCalendarCreator({
           ) : null}
         </div>
 
-        <div className={`relative overflow-hidden rounded-xl border border-[var(--admin-outline)] bg-white ${disabled ? 'opacity-45' : ''}`}>
+        <div
+          className={`relative overflow-hidden rounded-xl border border-[var(--admin-outline)] bg-white ${disabled ? "opacity-45" : ""}`}
+        >
           {disabled ? (
             <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/75 backdrop-blur-[1px]">
               <div className="px-6 text-center">
-                <p className="text-sm font-black text-[var(--admin-text-strong)]">Schedule Locked</p>
+                <p className="text-sm font-black text-[var(--admin-text-strong)]">
+                  Schedule Locked
+                </p>
                 <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
                   Complete the class details above first.
                 </p>
@@ -689,12 +752,12 @@ export function ScheduleCalendarCreator({
                     className="absolute inset-x-0 pr-2 text-right"
                     style={{
                       top: `${(mark.minute - GRID_START_MINUTES) * PIXELS_PER_MINUTE}px`,
-                      transform: 'translateY(-50%)',
+                      transform: "translateY(-50%)",
                     }}
                   >
                     {mark.isHour ? (
                       <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-500">
-                        {mark.label.replace(':00 ', ' ')}
+                        {mark.label.replace(":00 ", " ")}
                       </span>
                     ) : null}
                   </div>
@@ -712,8 +775,8 @@ export function ScheduleCalendarCreator({
           <div className="flex items-center gap-2 text-xs text-[var(--admin-text-muted)]">
             <span className="inline-block h-3 w-4 rounded border border-slate-300 bg-slate-100" />
             {allowExistingConflicts
-              ? 'Existing schedules are shown in gray; overlaps are allowed while Demo mode is active.'
-              : 'Existing room schedules are shown in gray.'}
+              ? "Existing schedules are shown in gray; overlaps are allowed while Maintenance Access is active."
+              : "Existing room schedules are shown in gray."}
           </div>
         ) : null}
 
@@ -726,10 +789,18 @@ export function ScheduleCalendarCreator({
                   key={`${slot.startTime}-${slot.endTime}-${index}`}
                   variant="secondary"
                   className={`cursor-pointer rounded-full border px-3 py-1 text-xs font-semibold transition-opacity hover:opacity-80 ${color.bg} ${color.border} ${color.text}`}
-                  onClick={() => onChange(value.filter((_, slotIndex) => slotIndex !== index))}
+                  onClick={() =>
+                    onChange(
+                      value.filter((_, slotIndex) => slotIndex !== index),
+                    )
+                  }
                 >
-                  <span className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full ${color.dot}`} />
-                  {slot.days.map((day) => DAY_LABELS[day]).join('/')} {formatTime12h(slot.startTime)} - {formatTime12h(slot.endTime)}
+                  <span
+                    className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full ${color.dot}`}
+                  />
+                  {slot.days.map((day) => DAY_LABELS[day]).join("/")}{" "}
+                  {formatTime12h(slot.startTime)} -{" "}
+                  {formatTime12h(slot.endTime)}
                   <span className="ml-2 opacity-60">x</span>
                 </Badge>
               );

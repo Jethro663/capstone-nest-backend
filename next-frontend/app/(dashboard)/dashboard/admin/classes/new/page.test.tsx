@@ -1,32 +1,32 @@
-import { render, waitFor, act } from '@testing-library/react';
-import CreateClassPage from './page';
+import { render, waitFor, act } from "@testing-library/react";
+import CreateClassPage from "./page";
 
 const push = jest.fn();
-const refreshDemoMode = jest.fn();
+const refreshMaintenance = jest.fn();
 
 const searchParams = new URLSearchParams({
-  templateId: 'template-123',
-  subjectName: 'Mathematics',
-  subjectCode: 'MATH-7',
-  subjectGradeLevel: '7',
+  templateId: "template-123",
+  subjectName: "Mathematics",
+  subjectCode: "MATH-7",
+  subjectGradeLevel: "7",
 });
 
 const classFormMock = jest.fn<React.ReactNode, [Record<string, unknown>]>(
   () => <div data-testid="class-form" />,
 );
 
-jest.mock('next/navigation', () => ({
+jest.mock("next/navigation", () => ({
   useRouter: () => ({ push }),
   useSearchParams: () => searchParams,
 }));
 
-jest.mock('@/providers/AdminDemoModeProvider', () => ({
-  useAdminDemoMode: () => ({ refresh: refreshDemoMode }),
+jest.mock("@/providers/AdminMaintenanceProvider", () => ({
+  useAdminMaintenance: () => ({ refresh: refreshMaintenance }),
 }));
 
-jest.mock('@/components/admin/ClassForm', () => {
-  const React = jest.requireActual('react');
-  const actual = jest.requireActual('@/components/admin/ClassForm');
+jest.mock("@/components/admin/ClassForm", () => {
+  const React = jest.requireActual("react");
+  const actual = jest.requireActual("@/components/admin/ClassForm");
   return {
     __esModule: true,
     ...actual,
@@ -34,60 +34,60 @@ jest.mock('@/components/admin/ClassForm', () => {
   };
 });
 
-jest.mock('@/services/section-service', () => ({
+jest.mock("@/services/section-service", () => ({
   sectionService: {
     getAll: jest.fn(),
   },
 }));
 
-jest.mock('@/services/user-service', () => ({
+jest.mock("@/services/user-service", () => ({
   userService: {
     getAll: jest.fn(),
   },
 }));
 
-jest.mock('@/services/academic-state-service', () => ({
+jest.mock("@/services/academic-state-service", () => ({
   academicStateService: {
     getCurrent: jest.fn(),
   },
 }));
 
-jest.mock('@/services/class-template-service', () => ({
+jest.mock("@/services/class-template-service", () => ({
   classTemplateService: {
     getAll: jest.fn(),
     getById: jest.fn(),
   },
 }));
 
-jest.mock('@/services/class-service', () => ({
+jest.mock("@/services/class-service", () => ({
   classService: {
     create: jest.fn(),
   },
 }));
 
-jest.mock('sonner', () => ({
+jest.mock("sonner", () => ({
   toast: {
     error: jest.fn(),
     success: jest.fn(),
   },
 }));
 
-describe('CreateClassPage', () => {
-  const { sectionService } = jest.requireMock('@/services/section-service') as {
+describe("CreateClassPage", () => {
+  const { sectionService } = jest.requireMock("@/services/section-service") as {
     sectionService: { getAll: jest.Mock };
   };
-  const { userService } = jest.requireMock('@/services/user-service') as {
+  const { userService } = jest.requireMock("@/services/user-service") as {
     userService: { getAll: jest.Mock };
   };
   const { academicStateService } = jest.requireMock(
-    '@/services/academic-state-service',
+    "@/services/academic-state-service",
   ) as { academicStateService: { getCurrent: jest.Mock } };
   const { classTemplateService } = jest.requireMock(
-    '@/services/class-template-service',
+    "@/services/class-template-service",
   ) as {
     classTemplateService: { getAll: jest.Mock; getById: jest.Mock };
   };
-  const { classService } = jest.requireMock('@/services/class-service') as {
+  const { classService } = jest.requireMock("@/services/class-service") as {
     classService: { create: jest.Mock };
   };
 
@@ -96,41 +96,41 @@ describe('CreateClassPage', () => {
     sectionService.getAll.mockResolvedValue({ data: [] });
     userService.getAll.mockResolvedValue({ users: [] });
     academicStateService.getCurrent.mockResolvedValue({
-      data: { schoolYear: '2026-2027' },
+      data: { schoolYear: "2026-2027" },
     });
     classTemplateService.getAll.mockResolvedValue({
       data: [
         {
-          id: 'template-123',
-          name: 'Quarter 1 Mathematics',
-          subjectCode: 'MATH-7',
-          subjectGradeLevel: '7',
-          status: 'published',
-          createdBy: 'admin-1',
+          id: "template-123",
+          name: "Quarter 1 Mathematics",
+          subjectCode: "MATH-7",
+          subjectGradeLevel: "7",
+          status: "published",
+          createdBy: "admin-1",
         },
       ],
     });
     classTemplateService.getById.mockResolvedValue({
       data: {
-        id: 'template-123',
-        status: 'published',
-        name: 'Quarter 1 Mathematics',
-        subjectCode: 'MATH-7',
-        subjectGradeLevel: '7',
+        id: "template-123",
+        status: "published",
+        name: "Quarter 1 Mathematics",
+        subjectCode: "MATH-7",
+        subjectGradeLevel: "7",
       },
     });
     classService.create.mockResolvedValue({
-      data: { id: 'class-1' },
+      data: { id: "class-1" },
     });
   });
 
-  it('preloads the class form from the imported template seed in the query string', async () => {
+  it("preloads the class form from the imported template seed in the query string", async () => {
     render(<CreateClassPage />);
 
     await waitFor(() => expect(classFormMock).toHaveBeenCalled());
     await waitFor(() =>
       expect(classTemplateService.getAll).toHaveBeenCalledWith({
-        subjectGradeLevel: '7',
+        subjectGradeLevel: "7",
       }),
     );
 
@@ -148,16 +148,16 @@ describe('CreateClassPage', () => {
 
       expect(lastCall.initialValues).toEqual(
         expect.objectContaining({
-          subjectName: 'Mathematics',
-          subjectCode: 'MATH-7',
-          subjectGradeLevel: '7',
+          subjectName: "Mathematics",
+          subjectCode: "MATH-7",
+          subjectGradeLevel: "7",
         }),
       );
-      expect(lastCall.selectedTemplateId).toBe('template-123');
+      expect(lastCall.selectedTemplateId).toBe("template-123");
     });
   });
 
-  it('sends gradingProfile in classService.create payload', async () => {
+  it("sends gradingProfile in classService.create payload", async () => {
     render(<CreateClassPage />);
 
     await waitFor(() => expect(classFormMock).toHaveBeenCalled());
@@ -181,14 +181,14 @@ describe('CreateClassPage', () => {
         performanceTask: 35,
         quarterlyAssessment: 30,
       },
-      subjectName: 'Mathematics',
-      subjectCode: 'MATH-7',
-      subjectGradeLevel: '7',
-      sectionId: 'section-1',
-      teacherId: 'teacher-1',
-      schoolYear: '2026-2027',
-      room: 'Room 201',
-      schedules: [{ days: ['M'], startTime: '08:00', endTime: '09:00' }],
+      subjectName: "Mathematics",
+      subjectCode: "MATH-7",
+      subjectGradeLevel: "7",
+      sectionId: "section-1",
+      teacherId: "teacher-1",
+      schoolYear: "2026-2027",
+      room: "Room 201",
+      schedules: [{ days: ["M"], startTime: "08:00", endTime: "09:00" }],
     } as const;
 
     await act(async () => {
@@ -204,13 +204,13 @@ describe('CreateClassPage', () => {
     );
   });
 
-  it('keeps grading profile stable when selecting a template', async () => {
+  it("keeps grading profile stable when selecting a template", async () => {
     render(<CreateClassPage />);
 
     await waitFor(() => expect(classFormMock).toHaveBeenCalled());
     await waitFor(() =>
       expect(classTemplateService.getAll).toHaveBeenCalledWith({
-        subjectGradeLevel: '7',
+        subjectGradeLevel: "7",
       }),
     );
 
@@ -220,7 +220,7 @@ describe('CreateClassPage', () => {
     };
     const initialProfile = firstProps.initialValues.gradingProfile;
     await act(async () => {
-      firstProps.onTemplateChange('template-123');
+      firstProps.onTemplateChange("template-123");
     });
 
     await waitFor(() => {
@@ -233,9 +233,9 @@ describe('CreateClassPage', () => {
     });
   });
 
-  it('refreshes Demo mode without retrying when the backend rejects a stale capability', async () => {
+  it("refreshes Maintenance Access without retrying when the backend rejects a stale capability", async () => {
     classService.create.mockRejectedValueOnce({
-      response: { data: { message: 'Schedule conflicts detected.' } },
+      response: { data: { message: "Schedule conflicts detected." } },
     });
     render(<CreateClassPage />);
 
@@ -246,14 +246,14 @@ describe('CreateClassPage', () => {
 
     await act(async () => {
       await latestProps.onSubmit({
-        subjectName: 'Mathematics',
-        subjectCode: 'MATH-7',
-        subjectGradeLevel: '7',
-        sectionId: 'section-1',
-        teacherId: 'teacher-1',
-        schoolYear: '2026-2027',
-        room: '201',
-        schedules: [{ days: ['M'], startTime: '08:00', endTime: '09:00' }],
+        subjectName: "Mathematics",
+        subjectCode: "MATH-7",
+        subjectGradeLevel: "7",
+        sectionId: "section-1",
+        teacherId: "teacher-1",
+        schoolYear: "2026-2027",
+        room: "201",
+        schedules: [{ days: ["M"], startTime: "08:00", endTime: "09:00" }],
         gradingProfile: {
           writtenWork: 30,
           performanceTask: 50,
@@ -262,7 +262,7 @@ describe('CreateClassPage', () => {
       });
     });
 
-    expect(refreshDemoMode).toHaveBeenCalledTimes(1);
+    expect(refreshMaintenance).toHaveBeenCalledTimes(1);
     expect(classService.create).toHaveBeenCalledTimes(1);
     expect(push).not.toHaveBeenCalled();
   });

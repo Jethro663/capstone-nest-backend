@@ -16,6 +16,7 @@ import {
 export const ADMIN_LIFECYCLE_PERIODS = ['Q1', 'Q2', 'Q3', 'Q4'] as const;
 export const STUDENT_LIFECYCLE_RESOLUTIONS = [
   'CORRECT_ENROLLMENT',
+  'CORRECT_CLASS_ENROLLMENT',
   'WITHDRAW',
   'TRANSFER_SECTION',
   'TRANSFER_CLASS',
@@ -43,7 +44,7 @@ export const ADMIN_LIFECYCLE_REASON_CODES = [
   'TEST_OR_EMPTY_RECORD',
   'OTHER',
 ] as const;
-export const PURGE_TARGET_TYPES = ['CLASS', 'SECTION'] as const;
+export const PURGE_TARGET_TYPES = ['CLASS', 'SECTION', 'USER'] as const;
 
 export type AdminLifecyclePeriod = (typeof ADMIN_LIFECYCLE_PERIODS)[number];
 export type StudentLifecycleResolution =
@@ -111,7 +112,11 @@ export class AdminLifecycleExecutionEvidenceDto {
 export class ExecuteStudentLifecycleDto extends PreviewStudentLifecycleDto {
   @Matches(/^[a-f0-9]{64}$/) manifestHash: string;
   @IsISO8601() manifestExpiresAt: string;
-  @IsString() @MinLength(1) @MaxLength(128) currentPassword: string;
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(128)
+  currentPassword?: string;
   @IsIn(ADMIN_LIFECYCLE_REASON_CODES) reasonCode: AdminLifecycleReasonCode;
   @IsString() @MinLength(5) @MaxLength(2000) notes: string;
   @IsArray() @ArrayNotEmpty() @IsString({ each: true }) confirmations: string[];
@@ -121,7 +126,11 @@ export class ExecuteStudentLifecycleDto extends PreviewStudentLifecycleDto {
 export class ExecuteClassLifecycleDto extends PreviewClassLifecycleDto {
   @Matches(/^[a-f0-9]{64}$/) manifestHash: string;
   @IsISO8601() manifestExpiresAt: string;
-  @IsString() @MinLength(1) @MaxLength(128) currentPassword: string;
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(128)
+  currentPassword?: string;
   @IsIn(ADMIN_LIFECYCLE_REASON_CODES) reasonCode: AdminLifecycleReasonCode;
   @IsString() @MinLength(5) @MaxLength(2000) notes: string;
   @IsArray() @ArrayNotEmpty() @IsString({ each: true }) confirmations: string[];
@@ -131,7 +140,11 @@ export class ExecuteClassLifecycleDto extends PreviewClassLifecycleDto {
 export class ExecuteSectionLifecycleDto extends PreviewSectionLifecycleDto {
   @Matches(/^[a-f0-9]{64}$/) manifestHash: string;
   @IsISO8601() manifestExpiresAt: string;
-  @IsString() @MinLength(1) @MaxLength(128) currentPassword: string;
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(128)
+  currentPassword?: string;
   @IsIn(ADMIN_LIFECYCLE_REASON_CODES) reasonCode: AdminLifecycleReasonCode;
   @IsString() @MinLength(5) @MaxLength(2000) notes: string;
   @IsArray() @ArrayNotEmpty() @IsString({ each: true }) confirmations: string[];

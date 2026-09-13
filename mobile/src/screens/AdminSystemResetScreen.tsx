@@ -332,7 +332,7 @@ export function AdminSystemResetScreen({ navigation }: Props) {
     };
     Alert.alert(
       "Permanently reset school data?",
-      "This clears school/test content, other accounts, files, indexes and jobs. The reviewed administrator and retained audit history remain. This action cannot be undone.",
+      "This clears all live academic data, including finalized grades, plus every other account, file, index and job. The reviewed administrator and retained audit history remain. This action cannot be undone.",
       [
         { text: "Cancel", style: "cancel", onPress: cancel },
         {
@@ -547,7 +547,7 @@ export function AdminSystemResetScreen({ navigation }: Props) {
             />
             <AdminNotice
               title="Cleared"
-              description={`Other accounts (${Math.max((preview.counts.users ?? 0) - 1, 0)}), school/test content, classes, assessments, grades, chats, sessions, files, vectors/indexes and jobs will be removed. Your administrator’s own school content and sessions are included.`}
+              description={`Every other account (${Math.max((preview.counts.users ?? 0) - 1, 0)}) and all live academic data—including classes, assessments, finalized grades, chats, sessions, files, vectors/indexes and jobs—will be removed. Your administrator’s own school content and sessions are included.`}
               tone="red"
             />
             <AdminNotice

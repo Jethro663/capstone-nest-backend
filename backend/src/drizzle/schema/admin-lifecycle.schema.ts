@@ -24,7 +24,8 @@ export type AdminLifecycleAction =
   | 'ARCHIVE_CLASS'
   | 'ARCHIVE_SECTION'
   | 'PURGE_CLASS'
-  | 'PURGE_SECTION';
+  | 'PURGE_SECTION'
+  | 'PURGE_USER';
 
 export type AdminLifecycleOperationStatus =
   | 'executing'
@@ -85,7 +86,7 @@ export const adminLifecycleOperations = pgTable(
   (table) => [
     check(
       'admin_lifecycle_operation_action_valid',
-      sql`${table.action} IN ('STUDENT_RESOLUTION','ARCHIVE_CLASS','ARCHIVE_SECTION','PURGE_CLASS','PURGE_SECTION')`,
+      sql`${table.action} IN ('STUDENT_RESOLUTION','ARCHIVE_CLASS','ARCHIVE_SECTION','PURGE_CLASS','PURGE_SECTION','PURGE_USER')`,
     ),
     check(
       'admin_lifecycle_operation_status_valid',
