@@ -33,6 +33,12 @@ export type AdminMaintenanceDecisionState =
   | 'OVERRIDABLE_WARNING'
   | 'IMMUTABLE';
 
+export type AdminMaintenanceDecisionDisposition =
+  | 'EXECUTABLE'
+  | 'CHOICE_REQUIRED'
+  | 'REPAIR_REQUIRED'
+  | 'RETAIN_REQUIRED';
+
 export interface AdminMaintenanceNextAction {
   id: string;
   label: string;
@@ -44,6 +50,7 @@ export interface AdminMaintenanceNextAction {
 
 export interface AdminMaintenanceDecisionSummary {
   state: AdminMaintenanceDecisionState;
+  disposition: AdminMaintenanceDecisionDisposition;
   code: string;
   message: string;
   nextActions: AdminMaintenanceNextAction[];

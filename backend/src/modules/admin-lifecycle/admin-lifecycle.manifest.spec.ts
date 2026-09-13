@@ -81,6 +81,7 @@ describe('admin lifecycle manifest', () => {
     expect(manifest.decision).toEqual(
       expect.objectContaining({
         state: 'AUTO_RESOLVABLE',
+        disposition: 'EXECUTABLE',
         code: 'DEPENDENCIES_AUTO_RESOLVED',
         nextActions: [],
       }),
@@ -105,6 +106,7 @@ describe('admin lifecycle manifest', () => {
     });
 
     expect(manifest.decision.state).toBe('NEEDS_CHOICE');
+    expect(manifest.decision.disposition).toBe('CHOICE_REQUIRED');
     expect(manifest.decision.nextActions).toEqual([
       expect.objectContaining({
         id: 'WITHDRAW',
@@ -165,8 +167,33 @@ describe('admin lifecycle manifest', () => {
       expect.objectContaining({ resolvable: false }),
     );
     expect(manifest.decision.state).toBe('IMMUTABLE');
+    expect(manifest.decision.disposition).toBe('REPAIR_REQUIRED');
     expect(manifest.decision.nextActions).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ id: 'CONTINUE' })]),
+    );
+  });
+
+  it('classifies retained evidence as a terminal keep-record outcome', () => {
+    const manifest = buildAdminLifecycleManifest({
+      ...base,
+      blockers: [
+        {
+          code: 'RETAINED_EVIDENCE',
+          message: 'Official history must be retained.',
+          resolvable: false,
+          resolutionOptions: ['KEEP_RECORD'],
+        },
+      ],
+    });
+
+    expect(manifest.decision).toEqual(
+      expect.objectContaining({
+        state: 'IMMUTABLE',
+        disposition: 'RETAIN_REQUIRED',
+        nextActions: [
+          expect.objectContaining({ id: 'KEEP_RECORD', kind: 'CANCEL' }),
+        ],
+      }),
     );
   });
 

@@ -126,6 +126,7 @@ export class AdminLifecycleService {
   private classPreview(dto: PreviewClassLifecycleDto) {
     return {
       classId: dto.classId,
+      lifecycleMode: dto.lifecycleMode ?? 'CURRENT_CLOSURE',
       resolution: dto.resolution,
       replacementClassId: dto.replacementClassId,
       effectivePeriod: dto.effectivePeriod,
@@ -135,8 +136,11 @@ export class AdminLifecycleService {
   private sectionPreview(dto: PreviewSectionLifecycleDto) {
     return {
       sectionId: dto.sectionId,
+      lifecycleMode: dto.lifecycleMode ?? 'CURRENT_CLOSURE',
       effectivePeriod: dto.effectivePeriod,
-      studentResolutions: dto.studentResolutions.map((entry) => ({ ...entry })),
+      studentResolutions: (dto.studentResolutions ?? []).map((entry) => ({
+        ...entry,
+      })),
     } satisfies PreviewSectionLifecycleDto;
   }
 
@@ -450,6 +454,7 @@ export class AdminLifecycleService {
     domain: ExecutionDomain<P>,
     options: LifecycleExecutionOptions,
   ): Promise<AdminLifecycleExecutionResult> {
+    const lifecycleMode = domain.preview['lifecycleMode'];
     const lifecycleEnabled = this.configService.get<boolean>(
       'adminLifecycle.enabled',
     );
@@ -532,6 +537,7 @@ export class AdminLifecycleService {
             action: domain.action,
             targetType: domain.targetType,
             targetId: domain.targetId,
+            ...(typeof lifecycleMode === 'string' ? { lifecycleMode } : {}),
           },
         }));
         await this.notificationsService.createBulkDeduped(notificationInputs);
@@ -548,6 +554,7 @@ export class AdminLifecycleService {
             manifestHash: dto.manifestHash,
             changed: applied.changed,
             preserved: applied.preserved,
+            ...(typeof lifecycleMode === 'string' ? { lifecycleMode } : {}),
             ...(commitMaintenance.active
               ? {
                   maintenanceAccess: commitMaintenance.audit([

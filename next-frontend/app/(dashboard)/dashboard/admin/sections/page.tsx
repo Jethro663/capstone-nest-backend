@@ -3,11 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Archive, ChevronDown, Layers3, Pencil, Search, Trash2, UserPlus, Users } from 'lucide-react';
-import {
-  type BulkSectionLifecycleAction,
-  sectionService,
-  type RosterStudent,
-} from '@/services/section-service';
+import { type BulkSectionLifecycleAction, sectionService, type RosterStudent } from '@/services/section-service';
 import { academicStateService } from '@/services/academic-state-service';
 import { adminLifecycleService } from '@/services/admin-lifecycle-service';
 import { AdminEmptyState, AdminPageShell, AdminSectionCard } from '@/components/admin/AdminPageShell';
@@ -21,8 +17,7 @@ import { toast } from 'sonner';
 import type { Section } from '@/types/section';
 import type { AcademicPeriodKey, PreviewSectionLifecycleInput } from '@/types/admin-lifecycle';
 
-type SectionStudentResolution =
-  PreviewSectionLifecycleInput['studentResolutions'][number]['resolution'];
+type SectionStudentResolution = NonNullable<PreviewSectionLifecycleInput['studentResolutions']>[number]['resolution'];
 
 type StatusTab = 'active' | 'archived';
 
@@ -74,6 +69,8 @@ export default function SectionManagementPage() {
   const [lifecycleTarget, setLifecycleTarget] = useState<Section | null>(null);
   const [lifecycleRoster, setLifecycleRoster] = useState<RosterStudent[]>([]);
   const [activePeriod, setActivePeriod] = useState<AcademicPeriodKey>('Q1');
+  const [currentSchoolYear, setCurrentSchoolYear] = useState('');
+  const [lifecyclePeriod, setLifecyclePeriod] = useState<AcademicPeriodKey | ''>('');
   const [learnerOutcomes, setLearnerOutcomes] = useState<
     Record<string, { resolution?: SectionStudentResolution; destinationSectionId?: string }>
   >({});
@@ -92,6 +89,7 @@ export default function SectionManagementPage() {
       ]);
       setSections(sectionsRes.data || []);
       setActivePeriod(academicStateRes.data.quarter as AcademicPeriodKey);
+      setCurrentSchoolYear(academicStateRes.data.schoolYear);
     } catch {
       toast.error('Failed to load sections');
     } finally {
@@ -107,14 +105,8 @@ export default function SectionManagementPage() {
     void fetchData('initial');
   }, [fetchData]);
 
-  const activeCount = useMemo(
-    () => sections.filter((section) => section.isActive).length,
-    [sections],
-  );
-  const archivedCount = useMemo(
-    () => sections.filter((section) => !section.isActive).length,
-    [sections],
-  );
+  const activeCount = useMemo(() => sections.filter((section) => section.isActive).length, [sections]);
+  const archivedCount = useMemo(() => sections.filter((section) => !section.isActive).length, [sections]);
   const schoolYearOptions = useMemo(
     () =>
       Array.from(
@@ -152,21 +144,15 @@ export default function SectionManagementPage() {
     [gradeFilter, schoolYearFilter, search, sections, tab],
   );
 
-  const selectableVisibleIds = useMemo(
-    () => filtered.map((section) => section.id),
-    [filtered],
-  );
+  const selectableVisibleIds = useMemo(() => filtered.map((section) => section.id), [filtered]);
 
   useEffect(() => {
     const visibleSet = new Set(selectableVisibleIds);
-    setSelectedSectionIds((current) =>
-      current.filter((id) => visibleSet.has(id)),
-    );
+    setSelectedSectionIds((current) => current.filter((id) => visibleSet.has(id)));
   }, [selectableVisibleIds]);
 
   const allVisibleSelected =
-    selectableVisibleIds.length > 0 &&
-    selectableVisibleIds.every((id) => selectedSectionIds.includes(id));
+    selectableVisibleIds.length > 0 && selectableVisibleIds.every((id) => selectedSectionIds.includes(id));
 
   const bulkActions = useMemo(() => getBulkActions(tab), [tab]);
   const selectedSections = useMemo(
@@ -180,9 +166,7 @@ export default function SectionManagementPage() {
 
   const toggleSectionSelection = (sectionId: string) => {
     setSelectedSectionIds((current) =>
-      current.includes(sectionId)
-        ? current.filter((id) => id !== sectionId)
-        : [...current, sectionId],
+      current.includes(sectionId) ? current.filter((id) => id !== sectionId) : [...current, sectionId],
     );
   };
 
@@ -193,6 +177,7 @@ export default function SectionManagementPage() {
   const openSingleActionConfirmation = async (section: Section) => {
     setLifecycleRoster([]);
     setLearnerOutcomes({});
+    setLifecyclePeriod('');
     if (section.isActive) {
       try {
         const rosterResponse = await sectionService.getRoster(section.id);
@@ -229,13 +214,17 @@ export default function SectionManagementPage() {
     );
   }
 
+  const historicalLifecycleTarget = Boolean(
+    lifecycleTarget?.isActive && currentSchoolYear && lifecycleTarget.schoolYear !== currentSchoolYear,
+  );
+
   return (
     <AdminPageShell
       badge="Admin Sections"
       title="Sections"
       description="Manage school sections and rosters"
       icon={Layers3}
-      actions={(
+      actions={
         <Button
           className="admin-button-solid rounded-[1rem] px-4 font-bold"
           onClick={() => router.push('/dashboard/admin/sections/new')}
@@ -243,7 +232,7 @@ export default function SectionManagementPage() {
           <UserPlus className="h-4 w-4" />
           Create Section
         </Button>
-      )}
+      }
     >
       <AdminSectionCard title="Section Directory" contentClassName="space-y-5">
         <Tabs
@@ -262,8 +251,7 @@ export default function SectionManagementPage() {
               Active <span className="admin-segment-count">{activeCount}</span>
             </TabsTrigger>
             <TabsTrigger value="archived" className="admin-tab">
-              Archived{' '}
-              <span className="admin-segment-count">{archivedCount}</span>
+              Archived <span className="admin-segment-count">{archivedCount}</span>
             </TabsTrigger>
           </TabsList>
 
@@ -308,12 +296,8 @@ export default function SectionManagementPage() {
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8ea0bc]" />
               </div>
-              {gradeFilter !== 'all' ? (
-                <span className="admin-filter-badge">Grade {gradeFilter}</span>
-              ) : null}
-              {schoolYearFilter !== 'all' ? (
-                <span className="admin-filter-badge">SY {schoolYearFilter}</span>
-              ) : null}
+              {gradeFilter !== 'all' ? <span className="admin-filter-badge">Grade {gradeFilter}</span> : null}
+              {schoolYearFilter !== 'all' ? <span className="admin-filter-badge">SY {schoolYearFilter}</span> : null}
             </div>
           </div>
         </Tabs>
@@ -356,15 +340,10 @@ export default function SectionManagementPage() {
         ) : null}
 
         {filtered.length === 0 ? (
-          <AdminEmptyState
-            title="No sections found"
-            description="Try another state or a different search query."
-          />
+          <AdminEmptyState title="No sections found" description="Try another state or a different search query." />
         ) : (
           <div className={`admin-table-shell${tableLoading ? ' admin-table-shell--loading' : ''}`}>
-            {tableLoading ? (
-              <div className="admin-table-loading">Refreshing sections...</div>
-            ) : null}
+            {tableLoading ? <div className="admin-table-loading">Refreshing sections...</div> : null}
             <Table>
               <TableHeader className="admin-table-head">
                 <TableRow>
@@ -382,15 +361,10 @@ export default function SectionManagementPage() {
                 {filtered.map((section) => {
                   const isSelected = selectedSectionIds.includes(section.id);
                   const rosterPath = `/dashboard/admin/sections/${section.id}/roster`;
-                  const archiveOption = bulkActions.find(
-                    (option) => option.action === 'archive',
-                  );
+                  const archiveOption = bulkActions.find((option) => option.action === 'archive');
 
                   return (
-                    <TableRow
-                      key={section.id}
-                      className="border-t border-[var(--admin-outline)] hover:bg-[#fbfcfe]"
-                    >
+                    <TableRow key={section.id} className="border-t border-[var(--admin-outline)] hover:bg-[#fbfcfe]">
                       <TableCell onClick={(event) => event.stopPropagation()}>
                         <input
                           type="checkbox"
@@ -423,23 +397,15 @@ export default function SectionManagementPage() {
                         className="admin-table-row-link text-[#7083a4]"
                         onClick={() => router.push(rosterPath)}
                       >
-                        {section.adviser
-                          ? `${section.adviser.firstName} ${section.adviser.lastName}`
-                          : 'Unassigned'}
+                        {section.adviser ? `${section.adviser.firstName} ${section.adviser.lastName}` : 'Unassigned'}
                       </TableCell>
-                      <TableCell
-                        className="admin-table-row-link"
-                        onClick={() => router.push(rosterPath)}
-                      >
+                      <TableCell className="admin-table-row-link" onClick={() => router.push(rosterPath)}>
                         <span className="inline-flex items-center gap-2 text-[#7083a4]">
                           <Users className="h-4 w-4" />
                           {section.studentCount ?? 0}
                         </span>
                       </TableCell>
-                      <TableCell
-                        className="admin-table-row-link"
-                        onClick={() => router.push(rosterPath)}
-                      >
+                      <TableCell className="admin-table-row-link" onClick={() => router.push(rosterPath)}>
                         <span
                           className={
                             section.isActive
@@ -463,9 +429,7 @@ export default function SectionManagementPage() {
                           <button
                             type="button"
                             className="admin-icon-button"
-                            onClick={() =>
-                              router.push(`/dashboard/admin/sections/${section.id}/edit`)
-                            }
+                            onClick={() => router.push(`/dashboard/admin/sections/${section.id}/edit`)}
                             title="Edit section"
                           >
                             <Pencil className="h-4 w-4" />
@@ -509,12 +473,16 @@ export default function SectionManagementPage() {
           onOpenChange={(open) => !open && setLifecycleTarget(null)}
           title={
             lifecycleTarget.isActive
-              ? 'Resolve learners and close section'
+              ? historicalLifecycleTarget
+                ? 'Retire historical section safely'
+                : 'Resolve learners and close section'
               : 'Permanently delete archived section'
           }
           description={
             lifecycleTarget.isActive
-              ? 'Choose an explicit outcome for every active learner. Linked classes close only when the whole plan is valid.'
+              ? historicalLifecycleTarget
+                ? `This section belongs to ${lifecycleTarget.schoolYear}. Record how each active enrollment ended, then preserve all academic history.`
+                : 'Choose an explicit outcome for every active learner. Linked classes close only when the whole plan is valid.'
               : 'Deletion is allowed only when no class, enrollment, lifecycle, or academic evidence remains.'
           }
           targetLabel={lifecycleTarget.name}
@@ -539,6 +507,26 @@ export default function SectionManagementPage() {
           renderIntentFields={() =>
             lifecycleTarget.isActive ? (
               <div className="mt-4 space-y-3">
+                {historicalLifecycleTarget && lifecycleRoster.length > 0 ? (
+                  <label className="block space-y-2 text-sm font-semibold text-[var(--admin-text-strong)]">
+                    Historical period when enrollments ended
+                    <select
+                      aria-label="Historical lifecycle period"
+                      value={lifecyclePeriod}
+                      onChange={(event) =>
+                        setLifecyclePeriod(event.target.value as AcademicPeriodKey | '')
+                      }
+                      className="admin-select w-full font-normal"
+                    >
+                      <option value="">Choose historical period</option>
+                      {(['Q1', 'Q2', 'Q3', 'Q4'] as const).map((period) => (
+                        <option key={period} value={period}>
+                          {period}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
                 {lifecycleRoster.length === 0 ? (
                   <p className="rounded-xl border border-[var(--admin-outline)] bg-[#fbfcfe] p-3 text-sm text-[var(--admin-text-muted)]">
                     No active learners are assigned to this section.
@@ -547,7 +535,10 @@ export default function SectionManagementPage() {
                   lifecycleRoster.map((student) => {
                     const outcome = learnerOutcomes[student.id] ?? {};
                     return (
-                      <div key={student.id} className="rounded-xl border border-[var(--admin-outline)] bg-[#fbfcfe] p-3">
+                      <div
+                        key={student.id}
+                        className="rounded-xl border border-[var(--admin-outline)] bg-[#fbfcfe] p-3"
+                      >
                         <p className="font-semibold text-[var(--admin-text-strong)]">
                           {student.firstName} {student.lastName}
                         </p>
@@ -572,7 +563,11 @@ export default function SectionManagementPage() {
                           <option value="">Choose learner outcome</option>
                           <option value="WITHDRAW">Withdraw from school</option>
                           <option value="TRANSFER_SECTION">Transfer section</option>
-                          <option value="COMPLETE">Complete through annual transition</option>
+                          <option value="COMPLETE">
+                            {historicalLifecycleTarget
+                              ? 'Mark historical enrollment completed'
+                              : 'Complete through annual transition'}
+                          </option>
                         </select>
                         {outcome.resolution === 'TRANSFER_SECTION' ? (
                           <select
@@ -614,20 +609,52 @@ export default function SectionManagementPage() {
           }
           canPreview={() =>
             !lifecycleTarget.isActive ||
-            lifecycleRoster.every((student) => {
-              const outcome = learnerOutcomes[student.id];
-              return Boolean(
-                outcome?.resolution &&
-                  (outcome.resolution !== 'TRANSFER_SECTION' || outcome.destinationSectionId),
-              );
-            })
+            ((!historicalLifecycleTarget ||
+              lifecycleRoster.length === 0 ||
+              Boolean(lifecyclePeriod)) &&
+              lifecycleRoster.every((student) => {
+                const outcome = learnerOutcomes[student.id];
+                return Boolean(
+                  outcome?.resolution &&
+                    (outcome.resolution !== 'TRANSFER_SECTION' || outcome.destinationSectionId),
+                );
+              }))
           }
+          previewInputKey={JSON.stringify({
+            lifecycleMode: historicalLifecycleTarget ? 'HISTORICAL_RETIREMENT' : 'CURRENT_CLOSURE',
+            lifecyclePeriod,
+            learnerOutcomes,
+            rosterStudentIds: lifecycleRoster.map((student) => student.id),
+          })}
+          onNextAction={async () => {
+            try {
+              const rosterResponse = await sectionService.getRoster(lifecycleTarget.id);
+              const refreshedRoster = Array.from(
+                new Map((rosterResponse.data || []).map((student) => [student.id, student])).values(),
+              );
+              setLifecycleRoster(refreshedRoster);
+              setLearnerOutcomes((current) =>
+                Object.fromEntries(
+                  refreshedRoster.flatMap((student) =>
+                    current[student.id] ? [[student.id, current[student.id]]] : [],
+                  ),
+                ),
+              );
+            } catch (error) {
+              setLifecycleRoster([]);
+              setLearnerOutcomes({});
+              toast.error('Failed to refresh the section roster');
+              throw error;
+            }
+            return true;
+          }}
           preview={async () =>
             lifecycleTarget.isActive
               ? (
                   await adminLifecycleService.previewSection({
                     sectionId: lifecycleTarget.id,
-                    effectivePeriod: activePeriod,
+                    lifecycleMode: historicalLifecycleTarget ? 'HISTORICAL_RETIREMENT' : 'CURRENT_CLOSURE',
+                    effectivePeriod: historicalLifecycleTarget ? lifecyclePeriod || undefined : activePeriod,
                     studentResolutions: lifecycleRoster.map((student) => ({
                       studentId: student.id,
                       resolution: learnerOutcomes[student.id].resolution as SectionStudentResolution,
@@ -647,7 +674,8 @@ export default function SectionManagementPage() {
               ? (
                   await adminLifecycleService.executeSection({
                     sectionId: lifecycleTarget.id,
-                    effectivePeriod: activePeriod,
+                    lifecycleMode: historicalLifecycleTarget ? 'HISTORICAL_RETIREMENT' : 'CURRENT_CLOSURE',
+                    effectivePeriod: historicalLifecycleTarget ? lifecyclePeriod || undefined : activePeriod,
                     studentResolutions: lifecycleRoster.map((student) => ({
                       studentId: student.id,
                       resolution: learnerOutcomes[student.id].resolution as SectionStudentResolution,
@@ -665,12 +693,8 @@ export default function SectionManagementPage() {
                 ).data
           }
           onCompleted={async () => {
-            toast.success(
-              lifecycleTarget.isActive ? 'Section archived' : 'Section permanently deleted',
-            );
-            setSelectedSectionIds((current) =>
-              current.filter((id) => id !== lifecycleTarget.id),
-            );
+            toast.success(lifecycleTarget.isActive ? 'Section archived' : 'Section permanently deleted');
+            setSelectedSectionIds((current) => current.filter((id) => id !== lifecycleTarget.id));
             await refreshTable();
           }}
         />

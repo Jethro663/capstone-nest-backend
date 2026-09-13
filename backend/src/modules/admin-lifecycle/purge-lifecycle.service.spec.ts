@@ -1,77 +1,60 @@
-import { planPurgeLifecycle } from './purge-lifecycle.service';
+import {
+  planPurgeLifecycle,
+  type PurgeLifecycleSnapshot,
+} from './purge-lifecycle.service';
+
+const targetId = '00000000-0000-4000-8000-000000000301';
+
+function snapshot(
+  overrides: Partial<PurgeLifecycleSnapshot> = {},
+): PurgeLifecycleSnapshot {
+  return {
+    targetType: 'USER',
+    targetId,
+    targetName: 'student account',
+    isActive: false,
+    evidence: {},
+    version: 'archived:1',
+    ...overrides,
+  };
+}
 
 describe('purge lifecycle planning', () => {
-  it.each([
-    'enrollmentHistory',
-    'lifecycleEvents',
-    'classRecords',
-    'finalizedParticipants',
-    'scores',
-    'attempts',
-    'assessments',
-    'lessons',
-    'linkedClasses',
-  ])('blocks permanent deletion when %s exists', (category) => {
-    const result = planPurgeLifecycle({
-      targetType: 'CLASS',
-      targetId: '00000000-0000-4000-8000-000000000301',
-      targetName: 'Mathematics 7',
-      isActive: false,
-      version: '2026-09-11T00:00:00.000Z',
-      evidence: { [category]: 1 },
-    });
+  it('presents retained evidence as a keep-record outcome without deletion ceremony', () => {
+    const result = planPurgeLifecycle(
+      snapshot({ evidence: { enrollmentHistory: 2, scores: 4 } }),
+    );
 
-    expect(result.blockers).toContainEqual(
-      expect.objectContaining({ code: 'RETAINED_EVIDENCE' }),
+    expect(result.blockers).toEqual([
+      expect.objectContaining({
+        code: 'RETAINED_EVIDENCE',
+        resolutionOptions: ['KEEP_RECORD'],
+      }),
+    ]);
+    expect(result.warnings).toEqual([]);
+    expect(result.effects).toEqual([]);
+    expect(result.requiredConfirmations).toEqual([]);
+    expect(result.preserved).toEqual(
+      expect.arrayContaining([
+        'Enrollment history: 2 record(s)',
+        'Scores: 4 record(s)',
+      ]),
     );
   });
 
-  it('allows a truly empty archived target', () => {
-    const result = planPurgeLifecycle({
-      targetType: 'SECTION',
-      targetId: '00000000-0000-4000-8000-000000000302',
-      targetName: 'Empty Section',
-      isActive: false,
-      version: '2026-09-11T00:00:00.000Z',
-      evidence: {},
-    });
+  it('keeps the irreversible ceremony for an evidence-free archived target', () => {
+    const result = planPurgeLifecycle(snapshot());
 
     expect(result.blockers).toEqual([]);
-    expect(result.effects).toEqual([
-      expect.objectContaining({ entityType: 'section', kind: 'purge' }),
+    expect(result.warnings).toEqual([
+      expect.objectContaining({ code: 'PERMANENT_ACTION' }),
     ]);
-  });
-
-  it('blocks purge of an active target without an override', () => {
-    const result = planPurgeLifecycle({
-      targetType: 'CLASS',
-      targetId: '00000000-0000-4000-8000-000000000303',
-      targetName: 'Active Class',
-      isActive: true,
-      version: '2026-09-11T00:00:00.000Z',
-      evidence: {},
-    });
-
-    expect(result.blockers).toContainEqual(
-      expect.objectContaining({ code: 'TARGET_NOT_ARCHIVED' }),
-    );
-  });
-
-  it('blocks archived-account deletion when finalized grades or attempts exist', () => {
-    const result = planPurgeLifecycle({
-      targetType: 'USER',
-      targetId: '00000000-0000-4000-8000-000000000304',
-      targetName: 'Archived Learner',
-      isActive: false,
-      version: '2026-09-11T00:00:00.000Z',
-      evidence: { finalizedParticipants: 1, attempts: 1 },
-    });
-
-    expect(result.blockers).toContainEqual(
-      expect.objectContaining({ code: 'RETAINED_EVIDENCE' }),
-    );
-    expect(result.effects).toContainEqual(
-      expect.objectContaining({ entityType: 'user', kind: 'purge' }),
-    );
+    expect(result.effects).toEqual([
+      expect.objectContaining({ kind: 'purge', entityId: targetId }),
+    ]);
+    expect(result.requiredConfirmations).toEqual([
+      'PERMANENT_DELETE',
+      'NO_RETAINED_ACADEMIC_EVIDENCE',
+    ]);
   });
 });

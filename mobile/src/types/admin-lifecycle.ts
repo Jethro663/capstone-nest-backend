@@ -1,4 +1,5 @@
 export type AcademicPeriodKey = "Q1" | "Q2" | "Q3" | "Q4";
+export type AdminLifecycleMode = "CURRENT_CLOSURE" | "HISTORICAL_RETIREMENT";
 
 export interface AdminLifecycleBlocker {
   code: string;
@@ -33,6 +34,11 @@ export interface AdminMaintenanceNextAction {
 
 export interface AdminMaintenanceDecisionSummary {
   state: AdminMaintenanceDecisionState;
+  disposition?:
+    | "EXECUTABLE"
+    | "CHOICE_REQUIRED"
+    | "REPAIR_REQUIRED"
+    | "RETAIN_REQUIRED";
   code: string;
   message: string;
   nextActions: AdminMaintenanceNextAction[];
@@ -116,9 +122,14 @@ export type StudentLifecycleResolution =
   | "TRANSFER_SECTION"
   | "TRANSFER_CLASS";
 export type ClassLifecycleResolution =
-  "ARCHIVE_EMPTY" | "COMPLETE" | "DROP" | "TRANSFER";
+  | "ARCHIVE_EMPTY"
+  | "COMPLETE"
+  | "DROP"
+  | "TRANSFER";
 export type SectionStudentResolution =
-  "WITHDRAW" | "TRANSFER_SECTION" | "COMPLETE";
+  | "WITHDRAW"
+  | "TRANSFER_SECTION"
+  | "COMPLETE";
 
 export interface PreviewStudentLifecycleInput {
   studentId: string;
@@ -132,15 +143,17 @@ export interface PreviewStudentLifecycleInput {
 
 export interface PreviewClassLifecycleInput {
   classId: string;
-  resolution: ClassLifecycleResolution;
+  lifecycleMode?: AdminLifecycleMode;
+  resolution?: ClassLifecycleResolution;
   replacementClassId?: string;
-  effectivePeriod: AcademicPeriodKey;
+  effectivePeriod?: AcademicPeriodKey;
 }
 
 export interface PreviewSectionLifecycleInput {
   sectionId: string;
-  effectivePeriod: AcademicPeriodKey;
-  studentResolutions: Array<{
+  lifecycleMode?: AdminLifecycleMode;
+  effectivePeriod?: AcademicPeriodKey;
+  studentResolutions?: Array<{
     studentId: string;
     resolution: SectionStudentResolution;
     destinationSectionId?: string;

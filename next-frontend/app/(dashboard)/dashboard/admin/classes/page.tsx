@@ -122,6 +122,10 @@ export default function ClassManagementPage() {
   );
   const [replacementClassId, setReplacementClassId] = useState("");
   const [activePeriod, setActivePeriod] = useState<AcademicPeriodKey>("Q1");
+  const [currentSchoolYear, setCurrentSchoolYear] = useState("");
+  const [lifecyclePeriod, setLifecyclePeriod] = useState<
+    AcademicPeriodKey | ""
+  >("");
   const [confirmation, setConfirmation] =
     useState<ConfirmationDialogConfig | null>(null);
 
@@ -139,6 +143,7 @@ export default function ClassManagementPage() {
       ]);
       setClasses(classesRes.data?.data || []);
       setActivePeriod(academicStateRes.data.quarter as AcademicPeriodKey);
+      setCurrentSchoolYear(academicStateRes.data.schoolYear);
     } catch {
       toast.error("Failed to load classes");
     } finally {
@@ -247,6 +252,7 @@ export default function ClassManagementPage() {
 
   const openSingleActionConfirmation = (classItem: ClassItem) => {
     setReplacementClassId("");
+    setLifecyclePeriod("");
     setLifecycleTarget(classItem);
   };
 
@@ -288,6 +294,12 @@ export default function ClassManagementPage() {
       </div>
     );
   }
+
+  const historicalLifecycleTarget = Boolean(
+    lifecycleTarget?.isActive &&
+    currentSchoolYear &&
+    lifecycleTarget.schoolYear !== currentSchoolYear,
+  );
 
   return (
     <AdminPageShell
@@ -616,12 +628,16 @@ export default function ClassManagementPage() {
           onOpenChange={(open) => !open && setLifecycleTarget(null)}
           title={
             lifecycleTarget.isActive
-              ? "Archive class with a learner outcome"
+              ? historicalLifecycleTarget
+                ? "Retire historical class safely"
+                : "Archive class with a learner outcome"
               : "Permanently delete archived class"
           }
           description={
             lifecycleTarget.isActive
-              ? "Only this class is evaluated. Section-only and sibling-class memberships are left unchanged."
+              ? historicalLifecycleTarget
+                ? `This class belongs to ${lifecycleTarget.schoolYear}. Choose how any active memberships ended, then preserve its academic history.`
+                : "Only this class is evaluated. Section-only and sibling-class memberships are left unchanged."
               : "Deletion is allowed only when the archived class has no retained academic or lifecycle evidence."
           }
           targetLabel={`${lifecycleTarget.subjectName} (${lifecycleTarget.subjectCode})`}
@@ -663,46 +679,85 @@ export default function ClassManagementPage() {
                   },
                 ]
           }
-          renderIntentFields={(intent) =>
-            intent === "TRANSFER" ? (
-              <select
-                aria-label="Replacement class"
-                value={replacementClassId}
-                onChange={(event) => setReplacementClassId(event.target.value)}
-                className="admin-select mt-3 w-full"
-              >
-                <option value="">Choose replacement class</option>
-                {classes
-                  .filter(
-                    (entry) =>
-                      entry.id !== lifecycleTarget.id &&
-                      entry.isActive &&
-                      entry.sectionId === lifecycleTarget.sectionId &&
-                      entry.schoolYear === lifecycleTarget.schoolYear &&
-                      entry.subjectCode.trim().toUpperCase() ===
-                        lifecycleTarget.subjectCode.trim().toUpperCase(),
-                  )
-                  .map((entry) => (
-                    <option key={entry.id} value={entry.id}>
-                      {entry.subjectName} ·{" "}
-                      {entry.section?.name ?? "No section"}
-                    </option>
-                  ))}
-              </select>
-            ) : null
-          }
+          renderIntentFields={(intent) => (
+            <div className="mt-3 space-y-3">
+              {historicalLifecycleTarget ? (
+                <label className="block space-y-2 text-sm font-semibold text-[var(--admin-text-strong)]">
+                  Historical period when memberships ended
+                  <select
+                    aria-label="Historical lifecycle period"
+                    value={lifecyclePeriod}
+                    onChange={(event) =>
+                      setLifecyclePeriod(
+                        event.target.value as AcademicPeriodKey | "",
+                      )
+                    }
+                    className="admin-select w-full font-normal"
+                  >
+                    <option value="">Choose historical period</option>
+                    {(["Q1", "Q2", "Q3", "Q4"] as const).map((period) => (
+                      <option key={period} value={period}>
+                        {period}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+              {intent === "TRANSFER" ? (
+                <select
+                  aria-label="Replacement class"
+                  value={replacementClassId}
+                  onChange={(event) =>
+                    setReplacementClassId(event.target.value)
+                  }
+                  className="admin-select w-full"
+                >
+                  <option value="">Choose replacement class</option>
+                  {classes
+                    .filter(
+                      (entry) =>
+                        entry.id !== lifecycleTarget.id &&
+                        entry.isActive &&
+                        entry.sectionId === lifecycleTarget.sectionId &&
+                        entry.schoolYear === lifecycleTarget.schoolYear &&
+                        entry.subjectCode.trim().toUpperCase() ===
+                          lifecycleTarget.subjectCode.trim().toUpperCase(),
+                    )
+                    .map((entry) => (
+                      <option key={entry.id} value={entry.id}>
+                        {entry.subjectName} ·{" "}
+                        {entry.section?.name ?? "No section"}
+                      </option>
+                    ))}
+                </select>
+              ) : null}
+            </div>
+          )}
           canPreview={(intent) =>
-            intent !== "TRANSFER" || Boolean(replacementClassId)
+            (!historicalLifecycleTarget || Boolean(lifecyclePeriod)) &&
+            (intent !== "TRANSFER" || Boolean(replacementClassId))
           }
+          previewInputKey={JSON.stringify({
+            lifecycleMode: historicalLifecycleTarget
+              ? "HISTORICAL_RETIREMENT"
+              : "CURRENT_CLOSURE",
+            lifecyclePeriod,
+            replacementClassId,
+          })}
           preview={async (intent) =>
             lifecycleTarget.isActive
               ? (
                   await adminLifecycleService.previewClass({
                     classId: lifecycleTarget.id,
+                    lifecycleMode: historicalLifecycleTarget
+                      ? "HISTORICAL_RETIREMENT"
+                      : "CURRENT_CLOSURE",
                     resolution: intent as ClassLifecycleResolution,
                     replacementClassId:
                       intent === "TRANSFER" ? replacementClassId : undefined,
-                    effectivePeriod: activePeriod,
+                    effectivePeriod: historicalLifecycleTarget
+                      ? lifecyclePeriod || undefined
+                      : activePeriod,
                   })
                 ).data
               : (
@@ -717,10 +772,15 @@ export default function ClassManagementPage() {
               ? (
                   await adminLifecycleService.executeClass({
                     classId: lifecycleTarget.id,
+                    lifecycleMode: historicalLifecycleTarget
+                      ? "HISTORICAL_RETIREMENT"
+                      : "CURRENT_CLOSURE",
                     resolution: intent as ClassLifecycleResolution,
                     replacementClassId:
                       intent === "TRANSFER" ? replacementClassId : undefined,
-                    effectivePeriod: activePeriod,
+                    effectivePeriod: historicalLifecycleTarget
+                      ? lifecyclePeriod || undefined
+                      : activePeriod,
                     ...evidence,
                   })
                 ).data

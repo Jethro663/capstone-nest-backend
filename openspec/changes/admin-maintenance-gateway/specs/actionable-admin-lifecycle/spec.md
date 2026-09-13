@@ -87,6 +87,18 @@ The system SHALL preview all target-specific active memberships and require dete
 - **WHEN** an Admin archives a section with active learners
 - **THEN** every learner receives a validated outcome and all section/class/membership changes commit atomically
 
+#### Scenario: Historical class is retired
+- **WHEN** an Admin archives an active class outside the authoritative school year using historical-retirement mode
+- **THEN** an empty class is retired structurally, or every active class membership requires an explicit completion, withdrawal/drop, or compatible transfer outcome and historical effective period before the reviewed changes and archival commit atomically
+
+#### Scenario: Historical section is retired
+- **WHEN** an Admin archives an active section outside the authoritative school year using historical-retirement mode
+- **THEN** an empty section and its linked classes retire structurally, or every active learner requires an explicit supported outcome and historical effective period before membership reconciliation and structural archival commit atomically
+
+#### Scenario: Historical outcome is incomplete
+- **WHEN** a historical class or section still has an active membership without a valid outcome or required effective period
+- **THEN** preview returns `NEEDS_CHOICE`, names the missing input, includes no executable archive confirmation, and never infers completion, withdrawal, drop, or transfer
+
 #### Scenario: Unrelated memberships exist
 - **WHEN** sibling-class or section-only memberships are unrelated to the target class
 - **THEN** they neither block nor get changed by target-class archival
@@ -104,7 +116,11 @@ The system SHALL apply Maintenance Access to non-self account lifecycle sequenci
 
 #### Scenario: Purge target has retained evidence
 - **WHEN** linked official or lifecycle evidence must be retained
-- **THEN** preview returns `IMMUTABLE` and execution cannot delete the target
+- **THEN** preview returns `IMMUTABLE` with retention disposition, execution cannot delete the target, and the response contains no destructive confirmation or executable purge effect
+
+#### Scenario: Retained target remains useful
+- **WHEN** permanent deletion is unavailable because evidence must be retained
+- **THEN** preview lists the retained evidence, explains that keeping the archived record is the completed safe outcome, and offers only real non-destructive actions such as cancel/close or an applicable governed archive flow
 
 ### Requirement: Web and mobile execute decisions instead of showing dead ends
 The web and mobile admin clients SHALL render the shared decision, effects, preserved evidence, warnings, confirmations, and next actions from the backend. Expected domain decisions SHALL NOT degrade into a generic failed-action toast when structured data is available.
@@ -116,6 +132,14 @@ The web and mobile admin clients SHALL render the shared decision, effects, pres
 #### Scenario: Resolvable blocker is returned
 - **WHEN** preview returns supported next actions
 - **THEN** the client renders controls that re-preview, navigate to repair, or cancel using those exact actions
+
+#### Scenario: Retention is the safe outcome
+- **WHEN** preview returns retention disposition
+- **THEN** the client uses plain retention language, hides password, acknowledgement, change-outcome, and execute controls, and never renders an enabled or disabled destructive-action button
+
+#### Scenario: Historical outcomes are collected in place
+- **WHEN** an active historical class or section has unresolved memberships
+- **THEN** the client keeps the administrator in the governed lifecycle review, collects the explicit outcome and historical period, invalidates the old manifest, and re-previews before execution
 
 #### Scenario: Mobile is offline
 - **WHEN** mobile has no verified connection

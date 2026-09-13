@@ -14,6 +14,7 @@ import {
   buildExecutionEvidence,
   canExecuteManifest,
 } from "../features/admin-lifecycle/model";
+import { repairRouteForHref } from "../features/admin-lifecycle/repair-navigation";
 import type { RootStackParamList } from "../navigation/types";
 import type {
   AcademicPeriodKey,
@@ -144,7 +145,7 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
   const network = useAdminNetworkStatus();
   const maintenance = useAdminMaintenance();
   const [effectivePeriod, setEffectivePeriod] =
-    useState<AcademicPeriodKey>("Q1");
+    useState<AcademicPeriodKey | null>(null);
   const [classResolution, setClassResolution] =
     useState<ClassLifecycleResolution>("ARCHIVE_EMPTY");
   const [replacementClassId, setReplacementClassId] = useState("");
@@ -225,10 +226,29 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
         (targetType === "STUDENT" && studentResolution === "TRANSFER_SECTION")),
   });
 
+  const targetSchoolYear =
+    targetType === "CLASS"
+      ? targetClass.data?.schoolYear
+      : targetType === "SECTION"
+        ? targetSection.data?.schoolYear
+        : undefined;
+  const historicalLifecycleTarget = Boolean(
+    isActive &&
+    (targetType === "CLASS" || targetType === "SECTION") &&
+    current.data?.data.schoolYear &&
+    targetSchoolYear &&
+    targetSchoolYear !== current.data.data.schoolYear,
+  );
+
   useEffect(() => {
     const quarter = current.data?.data.quarter;
-    if (quarter) setEffectivePeriod(quarter);
-  }, [current.data?.data.quarter]);
+    if (!quarter) return;
+    if (historicalLifecycleTarget) {
+      setEffectivePeriod(null);
+      return;
+    }
+    setEffectivePeriod(quarter);
+  }, [current.data?.data.quarter, historicalLifecycleTarget]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
@@ -296,7 +316,10 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
 
   const sectionInput = (): PreviewSectionLifecycleInput => ({
     sectionId: targetId,
-    effectivePeriod,
+    lifecycleMode: historicalLifecycleTarget
+      ? "HISTORICAL_RETIREMENT"
+      : "CURRENT_CLOSURE",
+    effectivePeriod: effectivePeriod ?? undefined,
     studentResolutions: (roster.data ?? []).map((student) => ({
       studentId: student.studentId ?? student.id,
       resolution: learnerOutcomes[student.studentId ?? student.id]
@@ -308,10 +331,13 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
 
   const classInput = (): PreviewClassLifecycleInput => ({
     classId: targetId,
+    lifecycleMode: historicalLifecycleTarget
+      ? "HISTORICAL_RETIREMENT"
+      : "CURRENT_CLOSURE",
     resolution: classResolution,
     replacementClassId:
       classResolution === "TRANSFER" ? replacementClassId : undefined,
-    effectivePeriod,
+    effectivePeriod: effectivePeriod ?? undefined,
   });
 
   const studentInput = (): PreviewStudentLifecycleInput => ({
@@ -331,7 +357,7 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
       studentResolution === "TRANSFER_CLASS"
         ? studentDestinationClassId
         : undefined,
-    effectivePeriod,
+    effectivePeriod: effectivePeriod!,
   });
 
   const purgeInput = (): PreviewPurgeLifecycleInput => ({
@@ -357,6 +383,7 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
   const canPreview = useMemo(() => {
     if (!isActive) return true;
     if (!current.data?.data.quarter) return false;
+    if (!effectivePeriod) return false;
     if (targetType === "STUDENT") {
       if (!sectionId) return false;
       if (studentResolution === "TRANSFER_SECTION")
@@ -380,6 +407,7 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
   }, [
     classResolution,
     current.data?.data.quarter,
+    effectivePeriod,
     isActive,
     learnerOutcomes,
     replacementClassId,
@@ -497,6 +525,15 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
   };
 
   const manifest = prepared?.manifest;
+  const disposition = manifest
+    ? (manifest.decision.disposition ??
+      (manifest.decision.state === "IMMUTABLE"
+        ? "REPAIR_REQUIRED"
+        : manifest.decision.state === "NEEDS_CHOICE"
+          ? "CHOICE_REQUIRED"
+          : "EXECUTABLE"))
+    : undefined;
+  const retainRequired = disposition === "RETAIN_REQUIRED";
   const maintenanceActive = maintenance.status?.active === true;
   const passwordRequired = !isActive;
   const readyToExecute = manifest
@@ -511,23 +548,51 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
       })
     : false;
 
-  const useNextAction = (action: AdminMaintenanceNextAction) => {
+  const useNextAction = async (action: AdminMaintenanceNextAction) => {
+    if (action.kind === "CANCEL") {
+      navigation.goBack();
+      return;
+    }
     if (action.kind === "NAVIGATE_REPAIR" && action.href) {
-      navigation.navigate(
-        action.href.includes("year-transition")
-          ? "AdminSettingsYearTransition"
-          : "AdminSettingsAuditRecovery",
-      );
+      const routeName = repairRouteForHref(action.href);
+      if (!routeName) {
+        setError("This repair destination is not available in this app version.");
+        return;
+      }
+      navigation.navigate(routeName);
       return;
     }
     if (action.kind !== "REPREVIEW" || !action.intent) return;
+    setPrepared(null);
+    setConfirmations([]);
+    setPassword("");
+    setIdempotencyKey(Crypto.randomUUID());
+    if (targetType === "SECTION") {
+      try {
+        const refreshed = await roster.refetch();
+        if (refreshed.error) throw refreshed.error;
+        const studentIds = new Set(
+          (refreshed.data ?? []).map((student) => student.studentId ?? student.id),
+        );
+        setLearnerOutcomes((currentOutcomes) =>
+          Object.fromEntries(
+            Object.entries(currentOutcomes).filter(([studentId]) =>
+              studentIds.has(studentId),
+            ),
+          ),
+        );
+        setError("Roster refreshed. Choose an outcome for every active learner, then review again.");
+      } catch (refreshError) {
+        setLearnerOutcomes({});
+        setError(toAppError(refreshError).message);
+      }
+      return;
+    }
     if (targetType === "STUDENT") {
       setStudentResolution(action.intent as StudentLifecycleResolution);
     } else if (targetType === "CLASS") {
       setClassResolution(action.intent as ClassLifecycleResolution);
     }
-    setPrepared(null);
-    setConfirmations([]);
     setError(
       action.requiredFields?.length
         ? `Complete ${action.requiredFields.map(readable).join(", ")}, then review again.`
@@ -677,8 +742,16 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
         <>
           {isActive ? (
             <AdminSection
-              title="Effective academic period"
-              subtitle="The backend current state is selected by default"
+              title={
+                historicalLifecycleTarget
+                  ? "Historical period"
+                  : "Effective academic period"
+              }
+              subtitle={
+                historicalLifecycleTarget
+                  ? `Choose when the remaining ${targetSchoolYear ?? "historical"} memberships ended`
+                  : "The backend current state is selected by default"
+              }
             >
               <View
                 style={{
@@ -1002,16 +1075,34 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
             title={
               manifest.safeToExecute
                 ? "Backend review prepared"
-                : "Cannot continue yet"
+                : retainRequired
+                  ? "Record must be kept"
+                  : "What needs attention"
             }
-            description={`Review expires ${new Date(manifest.expiresAt).toLocaleString()}.`}
-            tone={manifest.safeToExecute ? "green" : "red"}
+            description={
+              retainRequired
+                ? "Official academic or lifecycle history remains attached. Nothing will be deleted."
+                : `Review expires ${new Date(manifest.expiresAt).toLocaleString()}.`
+            }
+            tone={
+              manifest.safeToExecute
+                ? "green"
+                : retainRequired
+                  ? "primary"
+                  : "red"
+            }
             icon={manifest.safeToExecute ? "shield-check" : "shield-alert"}
           />
           {manifest.blockers.length ? (
             <AdminSection
-              title="Blockers"
-              subtitle="These conditions must be resolved before execution"
+              title={
+                retainRequired ? "Why this record must be kept" : "Blockers"
+              }
+              subtitle={
+                retainRequired
+                  ? "These official records are preserved by policy"
+                  : "These conditions must be resolved before execution"
+              }
             >
               {manifest.blockers.map((entry) => (
                 <AdminDataRow
@@ -1025,7 +1116,11 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
             </AdminSection>
           ) : null}
           <AdminSection
-            title={readable(manifest.decision.state)}
+            title={
+              retainRequired
+                ? "Keep this record"
+                : readable(manifest.decision.state)
+            }
             subtitle={manifest.decision.message}
           >
             {manifest.decision.nextActions.map((action) => (
@@ -1039,7 +1134,7 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
                 }
                 status="Next action"
                 statusTone="primary"
-                onPress={() => useNextAction(action)}
+                    onPress={() => void useNextAction(action)}
               />
             ))}
             {!manifest.decision.nextActions.length ? (
@@ -1049,7 +1144,7 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
               />
             ) : null}
           </AdminSection>
-          {manifest.warnings.length ? (
+          {!retainRequired && manifest.warnings.length ? (
             <AdminSection title="Warnings">
               {manifest.warnings.map((entry) => (
                 <AdminDataRow
@@ -1062,25 +1157,27 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
               ))}
             </AdminSection>
           ) : null}
-          <AdminSection
-            title="Will change"
-            subtitle={`${manifest.effects.length} backend-planned effects`}
-          >
-            {manifest.effects.map((entry) => (
-              <AdminDataRow
-                key={`${entry.entityType}-${entry.entityId}-${entry.summary}`}
-                title={entry.summary}
-                subtitle={`${entry.kind} · ${entry.entityType}`}
-                meta={entry.entityId}
-              />
-            ))}
-            {!manifest.effects.length ? (
-              <AdminEmpty
-                title="No changes listed"
-                subtitle="The backend manifest returned no effects."
-              />
-            ) : null}
-          </AdminSection>
+          {!retainRequired ? (
+            <AdminSection
+              title="Will change"
+              subtitle={`${manifest.effects.length} backend-planned effects`}
+            >
+              {manifest.effects.map((entry) => (
+                <AdminDataRow
+                  key={`${entry.entityType}-${entry.entityId}-${entry.summary}`}
+                  title={entry.summary}
+                  subtitle={`${entry.kind} · ${entry.entityType}`}
+                  meta={entry.entityId}
+                />
+              ))}
+              {!manifest.effects.length ? (
+                <AdminEmpty
+                  title="No changes listed"
+                  subtitle="The backend manifest returned no effects."
+                />
+              ) : null}
+            </AdminSection>
+          ) : null}
           <AdminSection title="Will be preserved">
             {manifest.preserved.map((entry) => (
               <AdminDataRow key={entry} title={entry} />
@@ -1238,7 +1335,7 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
                 </View>
               </View>
             </AdminSection>
-          ) : (
+          ) : retainRequired && manifest.decision.nextActions.length ? null : (
             <View style={{ padding: 16 }}>
               <AdminButton
                 label="Change outcome"

@@ -81,6 +81,7 @@ export interface LifecycleParticipant {
   gradingPeriod: AdminLifecyclePeriod;
   recordStatus: 'draft' | 'finalized' | 'locked';
   eligibility: ParticipantEligibility;
+  updatedAt?: Date;
 }
 
 export interface StudentLifecycleSnapshot {
@@ -125,6 +126,7 @@ export interface StudentLifecyclePlan {
 
 export interface StudentLifecyclePlanningOptions {
   allowSectionCapacityOverride?: boolean;
+  allowHistoricalPeriod?: boolean;
 }
 
 const PERIOD_INDEX: Record<AdminLifecyclePeriod, number> = {
@@ -178,7 +180,10 @@ export function planStudentLifecycle(
     );
   const destinationClassMap: Record<string, string> = {};
 
-  if (dto.effectivePeriod !== snapshot.academicState.period) {
+  if (
+    !options.allowHistoricalPeriod &&
+    dto.effectivePeriod !== snapshot.academicState.period
+  ) {
     blockers.push(
       blocker(
         'EFFECTIVE_PERIOD_NOT_CURRENT',

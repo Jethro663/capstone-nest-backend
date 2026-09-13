@@ -10,10 +10,15 @@ import {
   Matches,
   MaxLength,
   MinLength,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 
 export const ADMIN_LIFECYCLE_PERIODS = ['Q1', 'Q2', 'Q3', 'Q4'] as const;
+export const ADMIN_LIFECYCLE_MODES = [
+  'CURRENT_CLOSURE',
+  'HISTORICAL_RETIREMENT',
+] as const;
 export const STUDENT_LIFECYCLE_RESOLUTIONS = [
   'CORRECT_ENROLLMENT',
   'CORRECT_CLASS_ENROLLMENT',
@@ -47,6 +52,7 @@ export const ADMIN_LIFECYCLE_REASON_CODES = [
 export const PURGE_TARGET_TYPES = ['CLASS', 'SECTION', 'USER'] as const;
 
 export type AdminLifecyclePeriod = (typeof ADMIN_LIFECYCLE_PERIODS)[number];
+export type AdminLifecycleMode = (typeof ADMIN_LIFECYCLE_MODES)[number];
 export type StudentLifecycleResolution =
   (typeof STUDENT_LIFECYCLE_RESOLUTIONS)[number];
 export type ClassLifecycleResolution =
@@ -70,10 +76,24 @@ export class PreviewStudentLifecycleDto {
 
 export class PreviewClassLifecycleDto {
   @IsUUID('4') classId: string;
+  @IsOptional()
+  @IsIn(ADMIN_LIFECYCLE_MODES)
+  lifecycleMode?: AdminLifecycleMode;
+  @ValidateIf(
+    (input: PreviewClassLifecycleDto) =>
+      input.lifecycleMode !== 'HISTORICAL_RETIREMENT' ||
+      input.resolution !== undefined,
+  )
   @IsIn(CLASS_LIFECYCLE_RESOLUTIONS)
-  resolution: ClassLifecycleResolution;
+  resolution?: ClassLifecycleResolution;
   @IsOptional() @IsUUID('4') replacementClassId?: string;
-  @IsIn(ADMIN_LIFECYCLE_PERIODS) effectivePeriod: AdminLifecyclePeriod;
+  @ValidateIf(
+    (input: PreviewClassLifecycleDto) =>
+      input.lifecycleMode !== 'HISTORICAL_RETIREMENT' ||
+      input.effectivePeriod !== undefined,
+  )
+  @IsIn(ADMIN_LIFECYCLE_PERIODS)
+  effectivePeriod?: AdminLifecyclePeriod;
 }
 
 export class SectionStudentResolutionDto {
@@ -84,11 +104,25 @@ export class SectionStudentResolutionDto {
 
 export class PreviewSectionLifecycleDto {
   @IsUUID('4') sectionId: string;
-  @IsIn(ADMIN_LIFECYCLE_PERIODS) effectivePeriod: AdminLifecyclePeriod;
+  @IsOptional()
+  @IsIn(ADMIN_LIFECYCLE_MODES)
+  lifecycleMode?: AdminLifecycleMode;
+  @ValidateIf(
+    (input: PreviewSectionLifecycleDto) =>
+      input.lifecycleMode !== 'HISTORICAL_RETIREMENT' ||
+      input.effectivePeriod !== undefined,
+  )
+  @IsIn(ADMIN_LIFECYCLE_PERIODS)
+  effectivePeriod?: AdminLifecyclePeriod;
+  @ValidateIf(
+    (input: PreviewSectionLifecycleDto) =>
+      input.lifecycleMode !== 'HISTORICAL_RETIREMENT' ||
+      input.studentResolutions !== undefined,
+  )
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => SectionStudentResolutionDto)
-  studentResolutions: SectionStudentResolutionDto[];
+  studentResolutions?: SectionStudentResolutionDto[];
 }
 
 export class PreviewPurgeLifecycleDto {

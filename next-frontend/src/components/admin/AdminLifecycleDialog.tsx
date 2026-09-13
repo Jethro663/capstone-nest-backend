@@ -24,6 +24,7 @@ import type {
   AdminLifecycleExecutionEvidence,
   AdminLifecycleExecutionResult,
   AdminLifecyclePreview,
+  AdminMaintenanceNextAction,
 } from "@/types/admin-lifecycle";
 
 export interface LifecycleIntentOption {
@@ -47,6 +48,10 @@ interface AdminLifecycleDialogProps {
   ) => Promise<AdminLifecycleExecutionResult>;
   renderIntentFields?: (intent: string) => React.ReactNode;
   canPreview?: (intent: string) => boolean;
+  previewInputKey?: string;
+  onNextAction?: (
+    action: AdminMaintenanceNextAction,
+  ) => boolean | Promise<boolean>;
   onCompleted?: (result: AdminLifecycleExecutionResult) => void | Promise<void>;
   permanent?: boolean;
 }
@@ -83,6 +88,8 @@ export function AdminLifecycleDialog({
   execute,
   renderIntentFields,
   canPreview,
+  previewInputKey,
+  onNextAction,
   onCompleted,
   permanent = false,
 }: AdminLifecycleDialogProps) {
@@ -114,6 +121,15 @@ export function AdminLifecycleDialog({
     setResult(null);
     setIdempotencyKey(newIdempotencyKey());
   }, [defaultIntent, open]);
+
+  useEffect(() => {
+    if (!open || previewInputKey === undefined) return;
+    setPrepared(null);
+    setConfirmations([]);
+    setPassword("");
+    setError(null);
+    setIdempotencyKey(newIdempotencyKey());
+  }, [open, previewInputKey]);
 
   const required = useMemo(
     () => prepared?.manifest.requiredConfirmations ?? [],
@@ -200,6 +216,15 @@ export function AdminLifecycleDialog({
     nextActions: [],
   };
   const blocked = Boolean(manifest && !manifest.safeToExecute);
+  const disposition =
+    decision.disposition ??
+    (decision.state === "IMMUTABLE"
+      ? "REPAIR_REQUIRED"
+      : decision.state === "NEEDS_CHOICE"
+        ? "CHOICE_REQUIRED"
+        : "EXECUTABLE");
+  const retainRequired = disposition === "RETAIN_REQUIRED";
+  const singleIntent = intents.length <= 1;
   const maintenanceActive = maintenance?.status?.active === true;
   const passwordRequired = permanent;
   const readyToExecute =
@@ -210,11 +235,28 @@ export function AdminLifecycleDialog({
     notes.trim().length >= 5 &&
     (!passwordRequired || password.length > 0);
 
-  const handleNextAction = async (nextIntent: string) => {
-    setIntent(nextIntent);
+  const handleNextAction = async (action: AdminMaintenanceNextAction) => {
     setPrepared(null);
     setConfirmations([]);
-    await loadPreview(nextIntent);
+    setPassword("");
+    setError(null);
+    setIdempotencyKey(newIdempotencyKey());
+    if (onNextAction) {
+      setLoading(true);
+      try {
+        if (await onNextAction(action)) return;
+      } catch (nextError) {
+        setError(
+          getApiErrorMessage(nextError, "Unable to refresh lifecycle inputs"),
+        );
+        return;
+      } finally {
+        setLoading(false);
+      }
+    }
+    if (!action.intent) return;
+    setIntent(action.intent);
+    await loadPreview(action.intent);
   };
 
   return (
@@ -264,23 +306,27 @@ export function AdminLifecycleDialog({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="lifecycle-intent">Outcome</Label>
-              <select
-                id="lifecycle-intent"
-                value={intent}
-                onChange={(event) => {
-                  setIntent(event.target.value);
-                  setPrepared(null);
-                  setError(null);
-                }}
-                className="admin-select w-full"
-              >
-                {intents.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+              {!singleIntent ? (
+                <>
+                  <Label htmlFor="lifecycle-intent">Outcome</Label>
+                  <select
+                    id="lifecycle-intent"
+                    value={intent}
+                    onChange={(event) => {
+                      setIntent(event.target.value);
+                      setPrepared(null);
+                      setError(null);
+                    }}
+                    className="admin-select w-full"
+                  >
+                    {intents.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              ) : null}
               <p className="text-sm text-[var(--admin-text-muted)]">
                 {intents.find((option) => option.value === intent)?.description}
               </p>
@@ -301,7 +347,9 @@ export function AdminLifecycleDialog({
                 {manifest.blockers.length > 0 ? (
                   <section className="rounded-xl border border-red-200 bg-red-50 p-4">
                     <h3 className="font-bold text-red-900">
-                      Cannot continue yet
+                      {retainRequired
+                        ? "Why this record must be kept"
+                        : "What needs attention"}
                     </h3>
                     <ul className="mt-2 space-y-2 text-sm text-red-800">
                       {manifest.blockers.map((entry) => (
@@ -313,7 +361,7 @@ export function AdminLifecycleDialog({
                   </section>
                 ) : null}
 
-                {manifest.warnings.length > 0 ? (
+                {!blocked && manifest.warnings.length > 0 ? (
                   <section className="rounded-xl border border-amber-200 bg-amber-50 p-4">
                     <h3 className="font-bold text-amber-900">
                       Warnings to acknowledge
@@ -330,13 +378,17 @@ export function AdminLifecycleDialog({
 
                 <section
                   className={`rounded-xl border p-4 ${
-                    decision.state === "IMMUTABLE"
-                      ? "border-red-200 bg-red-50"
-                      : "border-blue-200 bg-blue-50"
+                    retainRequired
+                      ? "border-blue-200 bg-blue-50 text-blue-950"
+                      : decision.state === "IMMUTABLE"
+                        ? "border-red-200 bg-red-50"
+                        : "border-blue-200 bg-blue-50"
                   }`}
                 >
                   <p className="text-xs font-bold uppercase tracking-[0.12em]">
-                    {decision.state.replaceAll("_", " ")}
+                    {retainRequired
+                      ? "Record must be kept"
+                      : decision.state.replaceAll("_", " ")}
                   </p>
                   <p className="mt-1 text-sm">{decision.message}</p>
                   {decision.nextActions.length > 0 ? (
@@ -346,13 +398,21 @@ export function AdminLifecycleDialog({
                           <Button key={action.id} variant="outline" asChild>
                             <a href={action.href}>{action.label}</a>
                           </Button>
+                        ) : action.kind === "CANCEL" ? (
+                          <Button
+                            key={action.id}
+                            variant="outline"
+                            onClick={() => onOpenChange(false)}
+                          >
+                            {action.label}
+                          </Button>
                         ) : action.kind === "REPREVIEW" && action.intent ? (
                           <Button
                             key={action.id}
                             variant="outline"
                             disabled={loading}
                             onClick={() =>
-                              void handleNextAction(action.intent!)
+                              void handleNextAction(action)
                             }
                           >
                             {action.label}
@@ -364,30 +424,34 @@ export function AdminLifecycleDialog({
                 </section>
 
                 <div className="grid gap-4 md:grid-cols-2">
-                  <section>
-                    <h3 className="text-sm font-bold text-[var(--admin-text-strong)]">
-                      Will change
-                    </h3>
-                    <ul className="mt-2 space-y-2 text-sm text-[var(--admin-text-muted)]">
-                      {manifest.effects.map((entry) => (
-                        <li
-                          key={`${entry.entityType}-${entry.entityId}-${entry.summary}`}
-                        >
-                          {entry.summary}
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                  <section>
-                    <h3 className="text-sm font-bold text-[var(--admin-text-strong)]">
-                      Will be preserved
-                    </h3>
-                    <ul className="mt-2 space-y-2 text-sm text-[var(--admin-text-muted)]">
-                      {manifest.preserved.map((entry) => (
-                        <li key={entry}>{entry}</li>
-                      ))}
-                    </ul>
-                  </section>
+                  {!retainRequired && manifest.effects.length > 0 ? (
+                    <section>
+                      <h3 className="text-sm font-bold text-[var(--admin-text-strong)]">
+                        Will change
+                      </h3>
+                      <ul className="mt-2 space-y-2 text-sm text-[var(--admin-text-muted)]">
+                        {manifest.effects.map((entry) => (
+                          <li
+                            key={`${entry.entityType}-${entry.entityId}-${entry.summary}`}
+                          >
+                            {entry.summary}
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
+                  ) : null}
+                  {manifest.preserved.length > 0 ? (
+                    <section>
+                      <h3 className="text-sm font-bold text-[var(--admin-text-strong)]">
+                        Will be preserved
+                      </h3>
+                      <ul className="mt-2 space-y-2 text-sm text-[var(--admin-text-muted)]">
+                        {manifest.preserved.map((entry) => (
+                          <li key={entry}>{entry}</li>
+                        ))}
+                      </ul>
+                    </section>
+                  ) : null}
                 </div>
 
                 {!blocked ? (
@@ -502,15 +566,17 @@ export function AdminLifecycleDialog({
               </p>
             ) : null}
 
-            {manifest ? (
+            {manifest && !blocked ? (
               <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setPrepared(null)}
-                  disabled={loading}
-                >
-                  Change outcome
-                </Button>
+                {!singleIntent ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => setPrepared(null)}
+                    disabled={loading}
+                  >
+                    Change outcome
+                  </Button>
+                ) : null}
                 <Button
                   variant={permanent ? "destructive" : "default"}
                   disabled={!readyToExecute || loading}
@@ -520,6 +586,12 @@ export function AdminLifecycleDialog({
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : null}
                   {permanent ? "Permanently delete" : "Confirm and apply"}
+                </Button>
+              </DialogFooter>
+            ) : manifest && decision.nextActions.length === 0 ? (
+              <DialogFooter>
+                <Button variant="outline" onClick={() => onOpenChange(false)}>
+                  Close review
                 </Button>
               </DialogFooter>
             ) : null}

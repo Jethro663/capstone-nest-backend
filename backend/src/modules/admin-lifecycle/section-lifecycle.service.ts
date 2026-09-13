@@ -1,11 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import {
   academicSystemStates,
   classes,
+  enrollmentLifecycleEvents,
   enrollments,
   sections,
+  users,
+  type EnrollmentLifecycleOutcome,
 } from '../../drizzle/schema';
 import type { PreviewSectionLifecycleDto } from './DTO/admin-lifecycle.dto';
 import { buildAdminLifecycleManifest } from './admin-lifecycle.manifest';
@@ -18,7 +21,9 @@ import type {
 import {
   StudentLifecycleService,
   type LifecycleClass,
+  type LifecycleEnrollment,
   type LifecycleExecutionContext,
+  type LifecyclePerson,
   type LifecycleSection,
   type StudentLifecyclePrepared,
   type StudentLifecyclePlanningOptions,
@@ -43,7 +48,9 @@ export interface SectionLifecycleSnapshot {
   };
   section: LifecycleSection;
   linkedClasses: LifecycleClass[];
+  activeEnrollments: LifecycleEnrollment[];
   activeStudentIds: string[];
+  students: LifecyclePerson[];
   learnerPlans: Record<string, LearnerPlanSummary>;
   destinationCapacity?: Record<
     string,
@@ -80,9 +87,12 @@ export function planSectionLifecycle(
   const preserved: string[] = [];
   const confirmations = new Set<string>(['PRESERVE_ACADEMIC_HISTORY']);
   const affectedUserIds = new Set<string>();
+  const historicalRetirement = dto.lifecycleMode === 'HISTORICAL_RETIREMENT';
+  const studentResolutions = dto.studentResolutions ?? [];
   const outcomeByStudent = new Map(
-    dto.studentResolutions.map((entry) => [entry.studentId, entry]),
+    studentResolutions.map((entry) => [entry.studentId, entry]),
   );
+  if (historicalRetirement) confirmations.add('HISTORICAL_RETIREMENT');
 
   if (!snapshot.section.isActive) {
     blockers.push(
@@ -92,23 +102,42 @@ export function planSectionLifecycle(
       ),
     );
   }
-  if (snapshot.section.schoolYear !== snapshot.academicState.schoolYear) {
-    blockers.push(
-      sectionBlocker(
-        'SECTION_NOT_IN_ACTIVE_YEAR',
-        'Historical sections must be handled through academic repair.',
-      ),
-    );
+  if (historicalRetirement) {
+    if (snapshot.section.schoolYear === snapshot.academicState.schoolYear) {
+      blockers.push(
+        sectionBlocker(
+          'HISTORICAL_MODE_NOT_APPLICABLE',
+          'This section belongs to the active school year. Use the current section closure workflow.',
+        ),
+      );
+    }
+    if (snapshot.activeStudentIds.length > 0 && !dto.effectivePeriod) {
+      blockers.push({
+        code: 'HISTORICAL_EFFECTIVE_PERIOD_REQUIRED',
+        message:
+          'Choose the historical grading period for these learner outcomes.',
+        resolvable: true,
+      });
+    }
+  } else {
+    if (snapshot.section.schoolYear !== snapshot.academicState.schoolYear) {
+      blockers.push(
+        sectionBlocker(
+          'SECTION_NOT_IN_ACTIVE_YEAR',
+          'This is a historical section. Start historical retirement from the section workspace.',
+        ),
+      );
+    }
+    if (dto.effectivePeriod !== snapshot.academicState.period) {
+      blockers.push(
+        sectionBlocker(
+          'EFFECTIVE_PERIOD_NOT_CURRENT',
+          `Section closure must use the active period ${snapshot.academicState.period}.`,
+        ),
+      );
+    }
   }
-  if (dto.effectivePeriod !== snapshot.academicState.period) {
-    blockers.push(
-      sectionBlocker(
-        'EFFECTIVE_PERIOD_NOT_CURRENT',
-        `Section closure must use the active period ${snapshot.academicState.period}.`,
-      ),
-    );
-  }
-  if (outcomeByStudent.size !== dto.studentResolutions.length) {
+  if (outcomeByStudent.size !== studentResolutions.length) {
     blockers.push(
       sectionBlocker(
         'DUPLICATE_LEARNER_OUTCOME',
@@ -125,15 +154,13 @@ export function planSectionLifecycle(
       code: 'UNRESOLVED_SECTION_LEARNERS',
       message: `${unresolved.length} active learner(s) do not have a closure outcome.`,
       resolvable: true,
-      resolutionOptions: [
-        'WITHDRAW',
-        'TRANSFER_SECTION',
-        'USE_ACADEMIC_TRANSITION',
-      ],
+      resolutionOptions: historicalRetirement
+        ? ['WITHDRAW', 'TRANSFER_SECTION', 'COMPLETE']
+        : ['WITHDRAW', 'TRANSFER_SECTION', 'USE_ACADEMIC_TRANSITION'],
     });
   }
 
-  const nonMembers = dto.studentResolutions.filter(
+  const nonMembers = studentResolutions.filter(
     (entry) => !snapshot.activeStudentIds.includes(entry.studentId),
   );
   if (nonMembers.length) {
@@ -146,7 +173,7 @@ export function planSectionLifecycle(
   }
 
   const transfersByDestination = new Map<string, number>();
-  for (const outcome of dto.studentResolutions) {
+  for (const outcome of studentResolutions) {
     if (
       outcome.resolution !== 'TRANSFER_SECTION' ||
       !outcome.destinationSectionId
@@ -187,12 +214,31 @@ export function planSectionLifecycle(
     affectedUserIds.add(studentId);
     confirmations.add(outcome.resolution);
     if (outcome.resolution === 'COMPLETE') {
-      blockers.push(
-        sectionBlocker(
-          'USE_ACADEMIC_TRANSITION',
-          'Normal year completion is governed by the academic transition workflow.',
-        ),
-      );
+      if (!historicalRetirement) {
+        blockers.push(
+          sectionBlocker(
+            'USE_ACADEMIC_TRANSITION',
+            'Normal year completion is governed by the academic transition workflow.',
+          ),
+        );
+        continue;
+      }
+      snapshot.activeEnrollments
+        .filter((entry) => entry.studentId === studentId)
+        .forEach((entry) => {
+          effects.push({
+            kind: 'update',
+            entityType: 'enrollment',
+            entityId: entry.id,
+            summary: 'Complete historical membership',
+          });
+          effects.push({
+            kind: 'insert',
+            entityType: 'enrollment_lifecycle_event',
+            entityId: entry.id,
+            summary: 'Append the reviewed historical completion event',
+          });
+        });
       continue;
     }
     const learnerPlan = snapshot.learnerPlans[studentId];
@@ -240,16 +286,19 @@ export function planSectionLifecycle(
     if (entry.teacherId) affectedUserIds.add(entry.teacherId);
   });
 
+  const choiceOnly = historicalRetirement && blockers.length > 0;
   return {
     blockers,
     warnings,
-    effects,
+    effects: choiceOnly ? [] : effects,
     preserved: [...new Set(preserved)],
-    requiredConfirmations: [...confirmations],
+    requiredConfirmations: choiceOnly ? [] : [...confirmations],
     affectedUserIds: [...affectedUserIds],
-    resolvedStudentIds: snapshot.activeStudentIds.filter((studentId) =>
-      outcomeByStudent.has(studentId),
-    ),
+    resolvedStudentIds: choiceOnly
+      ? []
+      : snapshot.activeStudentIds.filter((studentId) =>
+          outcomeByStudent.has(studentId),
+        ),
   };
 }
 
@@ -306,18 +355,37 @@ export class SectionLifecycleService {
         eq(enrollments.sectionId, dto.sectionId),
         eq(enrollments.status, 'enrolled'),
       ),
-      columns: { studentId: true },
+      columns: {
+        id: true,
+        studentId: true,
+        sectionId: true,
+        classId: true,
+        status: true,
+        createdAt: true,
+      },
     });
     const activeStudentIds = [
       ...new Set(activeEnrollments.map((entry) => entry.studentId)),
     ];
+    const students = activeStudentIds.length
+      ? await db.query.users.findMany({
+          where: inArray(users.id, activeStudentIds),
+          columns: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+          },
+        })
+      : [];
     const learnerPrepared: Record<string, StudentLifecyclePrepared> = {};
     const learnerPlans: Record<string, LearnerPlanSummary> = {};
     const destinationCapacity: NonNullable<
       SectionLifecycleSnapshot['destinationCapacity']
     > = {};
 
-    for (const resolution of dto.studentResolutions) {
+    const historicalRetirement = dto.lifecycleMode === 'HISTORICAL_RETIREMENT';
+    for (const resolution of dto.studentResolutions ?? []) {
       if (!activeStudentIds.includes(resolution.studentId)) continue;
       if (resolution.resolution === 'COMPLETE') continue;
       const prepared = await this.studentLifecycleService.prepare(
@@ -329,10 +397,13 @@ export class SectionLifecycleService {
               ? 'TRANSFER_SECTION'
               : 'WITHDRAW',
           destinationSectionId: resolution.destinationSectionId,
-          effectivePeriod: dto.effectivePeriod,
+          effectivePeriod: dto.effectivePeriod!,
         },
         db,
-        options,
+        {
+          ...options,
+          allowHistoricalPeriod: historicalRetirement,
+        },
       );
       learnerPrepared[resolution.studentId] = prepared;
       learnerPlans[resolution.studentId] = prepared.plan;
@@ -355,7 +426,9 @@ export class SectionLifecycleService {
       },
       section,
       linkedClasses,
+      activeEnrollments,
       activeStudentIds,
+      students,
       learnerPlans,
       destinationCapacity,
       evidence: {
@@ -386,6 +459,11 @@ export class SectionLifecycleService {
           entityId: entry.id,
           version: entry.updatedAt.toISOString(),
         })),
+        ...activeEnrollments.map((entry) => ({
+          entityType: 'enrollment',
+          entityId: entry.id,
+          version: `${entry.status}:${entry.createdAt.toISOString()}`,
+        })),
         ...Object.entries(learnerPrepared).map(([studentId, entry]) => ({
           entityType: 'learner_manifest',
           entityId: studentId,
@@ -412,8 +490,66 @@ export class SectionLifecycleService {
       entityId: string;
       outcome: string;
     }> = [];
-    for (const resolution of dto.studentResolutions) {
-      if (resolution.resolution === 'COMPLETE') continue;
+    for (const resolution of dto.studentResolutions ?? []) {
+      if (resolution.resolution === 'COMPLETE') {
+        const completed = prepared.snapshot.activeEnrollments.filter(
+          (entry) => entry.studentId === resolution.studentId,
+        );
+        const completedIds = completed.map((entry) => entry.id);
+        if (completedIds.length) {
+          await this.db
+            .update(enrollments)
+            .set({ status: 'completed' })
+            .where(inArray(enrollments.id, completedIds));
+          const studentById = new Map(
+            prepared.snapshot.students.map((entry) => [entry.id, entry]),
+          );
+          const outcome: EnrollmentLifecycleOutcome = 'completed';
+          await this.db.insert(enrollmentLifecycleEvents).values(
+            completed.map((entry) => {
+              const student = studentById.get(entry.studentId);
+              return {
+                operationId: context.operationId,
+                enrollmentId: entry.id,
+                studentId: entry.studentId,
+                studentSnapshot: student
+                  ? {
+                      userId: student.id,
+                      email: student.email,
+                      firstName: student.firstName,
+                      lastName: student.lastName,
+                    }
+                  : {
+                      userId: entry.studentId,
+                      email: 'retained-by-reference',
+                      firstName: 'Learner',
+                      lastName: 'Record',
+                    },
+                classId: entry.classId,
+                sectionId: entry.sectionId,
+                destinationClassId: null,
+                destinationSectionId: null,
+                fromStatus: entry.status,
+                toStatus: 'completed' as const,
+                outcome,
+                effectivePeriod: dto.effectivePeriod!,
+                reasonCode: context.reasonCode,
+                notes: context.notes,
+                actorId: context.actorId,
+                actorSnapshot: context.actorSnapshot,
+              };
+            }),
+          );
+          changed.push(
+            ...completed.map((entry) => ({
+              entityType: 'enrollment',
+              entityId: entry.id,
+              outcome,
+            })),
+          );
+        }
+        continue;
+      }
       const child = prepared.learnerPrepared[resolution.studentId];
       if (!child) continue;
       const result = await this.studentLifecycleService.apply(
@@ -425,7 +561,7 @@ export class SectionLifecycleService {
               ? 'TRANSFER_SECTION'
               : 'WITHDRAW',
           destinationSectionId: resolution.destinationSectionId,
-          effectivePeriod: dto.effectivePeriod,
+          effectivePeriod: dto.effectivePeriod!,
         },
         child,
         context,

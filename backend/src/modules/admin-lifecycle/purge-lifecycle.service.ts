@@ -78,9 +78,37 @@ export function planPurgeLifecycle(
   if (inventory.hasRetainedEvidence) {
     blockers.push({
       code: 'RETAINED_EVIDENCE',
-      message: `Permanent deletion is blocked by retained evidence: ${inventory.blockingCategories.join(', ')}.`,
+      message: `Permanent deletion is unavailable because this record contains official history: ${inventory.blockingCategories.join(', ')}. Keep the archived record so that history remains available.`,
       resolvable: false,
+      resolutionOptions: ['KEEP_RECORD'],
     });
+  }
+  if (blockers.length > 0) {
+    const labels: Record<string, string> = {
+      enrollmentHistory: 'Enrollment history',
+      lifecycleEvents: 'Lifecycle events',
+      classRecords: 'Class records',
+      finalizedParticipants: 'Finalized participants',
+      scores: 'Scores',
+      attempts: 'Assessment attempts',
+      assessments: 'Assessments',
+      lessons: 'Lessons',
+      linkedClasses: 'Linked classes',
+    };
+    return {
+      blockers,
+      warnings: [],
+      effects: [],
+      preserved: [
+        ...inventory.blockingCategories.map(
+          (category) =>
+            `${labels[category] ?? category}: ${inventory.counts[category]} record(s)`,
+        ),
+        'Lifecycle operation and audit evidence',
+      ],
+      requiredConfirmations: [],
+      affectedUserIds: [],
+    };
   }
   return {
     blockers,

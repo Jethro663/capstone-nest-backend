@@ -175,6 +175,38 @@ describe('admin lifecycle DTOs', () => {
     ).resolves.toEqual([]);
   });
 
+  it('accepts structurally empty historical retirement requests without current-period outcomes', async () => {
+    await expect(
+      errors(PreviewClassLifecycleDto, {
+        classId: ids.class,
+        lifecycleMode: 'HISTORICAL_RETIREMENT',
+      }),
+    ).resolves.toEqual([]);
+
+    await expect(
+      errors(PreviewSectionLifecycleDto, {
+        sectionId: ids.section,
+        lifecycleMode: 'HISTORICAL_RETIREMENT',
+      }),
+    ).resolves.toEqual([]);
+  });
+
+  it('keeps current closure fields required when lifecycle mode is omitted', async () => {
+    const classErrors = await errors(PreviewClassLifecycleDto, {
+      classId: ids.class,
+    });
+    expect(classErrors.map((entry) => entry.property)).toEqual(
+      expect.arrayContaining(['resolution', 'effectivePeriod']),
+    );
+
+    const sectionErrors = await errors(PreviewSectionLifecycleDto, {
+      sectionId: ids.section,
+    });
+    expect(sectionErrors.map((entry) => entry.property)).toEqual(
+      expect.arrayContaining(['effectivePeriod', 'studentResolutions']),
+    );
+  });
+
   it('allows routine execution to omit a repeated password but keeps purge reauthentication mandatory', async () => {
     const routine = {
       studentId: ids.student,

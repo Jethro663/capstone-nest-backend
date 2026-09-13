@@ -24,6 +24,20 @@ describe("administrator governed lifecycle screen contract", () => {
     expect(lifecycle).toContain("result.replayed");
   });
 
+  it("supports historical retirement and a terminal keep-record decision", () => {
+    const lifecycle = source("AdminLifecycleReviewScreen.tsx");
+    const types = source("../types/admin-lifecycle.ts");
+
+    expect(types).toContain('"HISTORICAL_RETIREMENT"');
+    expect(types).toContain('"RETAIN_REQUIRED"');
+    expect(lifecycle).toContain("lifecycleMode: historicalLifecycleTarget");
+    expect(lifecycle).toContain('action.kind === "CANCEL"');
+    expect(lifecycle).toContain('disposition === "RETAIN_REQUIRED"');
+    expect(lifecycle).toContain("setEffectivePeriod(null)");
+    expect(lifecycle).toContain("if (!effectivePeriod) return false;");
+    expect(lifecycle).toContain("await roster.refetch()");
+  });
+
   it("requires a live connection for preview and execution and never queues lifecycle writes", () => {
     const lifecycle = source("AdminLifecycleReviewScreen.tsx");
     expect(lifecycle).toContain("useAdminNetworkStatus");

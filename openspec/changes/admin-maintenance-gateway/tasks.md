@@ -56,3 +56,14 @@
 - [ ] 8.4 Verify exact pushed SHA in GitHub Actions and Railway deployment/provider status.
 - [ ] 8.5 Run non-destructive live health, Maintenance Access capability/status, System Reset capability/status, and served APK checks without executing Full Reset.
 - [ ] 8.6 Record release evidence and explicitly report any physical ARM64 or authenticated-live boundary that remains unverified.
+
+## 9. Retention and Historical Retirement Correction
+
+- [x] 9.1 Add failing backend contract and planner tests for retention disposition, blocked-purge presentation, additive lifecycle mode, empty historical retirement, explicit historical outcomes, and stale/cross-mode manifests.
+- [x] 9.2 Implement backend decision disposition and blocked-purge semantics without weakening evidence-aware deletion, password step-up, authorization, or idempotency.
+- [x] 9.3 Implement class and section historical retirement under existing archive actions, including explicit historical membership outcomes, completion lifecycle events, and atomic linked-class archival.
+- [x] 9.4 Add failing web tests, then implement softer disposition-aware lifecycle presentation, real cancel/close behavior, historical mode selection, period/outcome inputs, and all reported user/class/section entry points.
+- [x] 9.5 Add failing mobile tests, then implement the matching contract, retention presentation, cancel/back behavior, historical mode/outcome review, and query invalidation.
+- [x] 9.6 Pass focused and full backend/web/mobile verification, OpenSpec validation, contract parity, builds, and authenticated or fixture-backed runtime checks.
+- [x] 9.7 Build and verify a new ARM64 APK because mobile bundle inputs changed; update the existing download manifest/artifact contract and record archive, ABI, signature, API URL, size, and checksum evidence.
+- [ ] 9.8 Review the final diff against the plan, commit scoped artifacts and implementation, push `developement`, verify exact-SHA CI/Railway/live health and served APK integrity, and record unverified physical-device boundaries.

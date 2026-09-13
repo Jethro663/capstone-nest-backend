@@ -104,31 +104,56 @@ export function planClassLifecycle(
   const activeStudentIds = snapshot.activeEnrollments.map(
     (entry) => entry.studentId,
   );
+  const historicalRetirement = dto.lifecycleMode === 'HISTORICAL_RETIREMENT';
 
   if (!snapshot.classRecord.isActive) {
     blockers.push(
       classBlocker('CLASS_ALREADY_ARCHIVED', 'Class is already archived.'),
     );
   }
-  if (dto.effectivePeriod !== snapshot.academicState.period) {
-    blockers.push(
-      classBlocker(
-        'EFFECTIVE_PERIOD_NOT_CURRENT',
-        `Class closure must use the active period ${snapshot.academicState.period}.`,
-      ),
-    );
-  }
-  if (snapshot.classRecord.schoolYear !== snapshot.academicState.schoolYear) {
-    blockers.push(
-      classBlocker(
-        'CLASS_NOT_IN_ACTIVE_YEAR',
-        'Historical classes must be handled through academic repair.',
-      ),
-    );
+  if (historicalRetirement) {
+    if (snapshot.classRecord.schoolYear === snapshot.academicState.schoolYear) {
+      blockers.push(
+        classBlocker(
+          'HISTORICAL_MODE_NOT_APPLICABLE',
+          'This class belongs to the active school year. Use the current class closure workflow.',
+        ),
+      );
+    }
+    if (
+      snapshot.activeEnrollments.length > 0 &&
+      dto.resolution &&
+      dto.resolution !== 'ARCHIVE_EMPTY' &&
+      !dto.effectivePeriod
+    ) {
+      blockers.push({
+        code: 'HISTORICAL_EFFECTIVE_PERIOD_REQUIRED',
+        message:
+          'Choose the historical grading period for these membership outcomes.',
+        resolvable: true,
+      });
+    }
+  } else {
+    if (dto.effectivePeriod !== snapshot.academicState.period) {
+      blockers.push(
+        classBlocker(
+          'EFFECTIVE_PERIOD_NOT_CURRENT',
+          `Class closure must use the active period ${snapshot.academicState.period}.`,
+        ),
+      );
+    }
+    if (snapshot.classRecord.schoolYear !== snapshot.academicState.schoolYear) {
+      blockers.push(
+        classBlocker(
+          'CLASS_NOT_IN_ACTIVE_YEAR',
+          'This is a historical class. Start historical retirement from the class workspace.',
+        ),
+      );
+    }
   }
 
   if (
-    dto.resolution === 'ARCHIVE_EMPTY' &&
+    (!dto.resolution || dto.resolution === 'ARCHIVE_EMPTY') &&
     snapshot.activeEnrollments.length > 0
   ) {
     blockers.push({
@@ -207,7 +232,7 @@ export function planClassLifecycle(
   }
 
   for (const enrollment of snapshot.activeEnrollments) {
-    if (dto.resolution === 'ARCHIVE_EMPTY') continue;
+    if (!dto.resolution || dto.resolution === 'ARCHIVE_EMPTY') continue;
     effects.push({
       kind: 'update',
       entityType: 'enrollment',
@@ -227,6 +252,12 @@ export function planClassLifecycle(
         summary: 'Create replacement class membership',
       });
     }
+    effects.push({
+      kind: 'insert',
+      entityType: 'enrollment_lifecycle_event',
+      entityId: enrollment.id,
+      summary: 'Append the reviewed class-membership outcome',
+    });
   }
   effects.push({
     kind: 'archive',
@@ -244,6 +275,7 @@ export function planClassLifecycle(
           (participant) =>
             participant.recordStatus === 'draft' &&
             activeStudentIds.includes(participant.studentId) &&
+            dto.effectivePeriod !== undefined &&
             PERIOD_INDEX[participant.gradingPeriod] >=
               PERIOD_INDEX[dto.effectivePeriod],
         )
@@ -253,6 +285,14 @@ export function planClassLifecycle(
         })),
     );
   }
+  participantChanges.forEach((change) => {
+    effects.push({
+      kind: 'update',
+      entityType: 'class_record_participant',
+      entityId: change.participantId,
+      summary: `Record draft participant eligibility as ${change.eligibility}`,
+    });
+  });
 
   const preserved = [
     `${snapshot.evidence.classRecords} class record(s)`,
@@ -270,13 +310,20 @@ export function planClassLifecycle(
     });
   }
 
+  const choiceOnly = historicalRetirement && blockers.length > 0;
   return {
     blockers,
     warnings,
-    effects,
+    effects: choiceOnly ? [] : effects,
     preserved,
-    requiredConfirmations: ['PRESERVE_ACADEMIC_HISTORY', dto.resolution],
-    participantChanges,
+    requiredConfirmations: choiceOnly
+      ? []
+      : [
+          'PRESERVE_ACADEMIC_HISTORY',
+          ...(historicalRetirement ? ['HISTORICAL_RETIREMENT'] : []),
+          ...(dto.resolution ? [dto.resolution] : []),
+        ],
+    participantChanges: choiceOnly ? [] : participantChanges,
     affectedUserIds: [
       ...new Set(
         [
@@ -370,6 +417,7 @@ export class ClassLifecycleService {
             classRecordId: true,
             studentId: true,
             eligibility: true,
+            updatedAt: true,
           },
         })
       : [];
@@ -386,6 +434,7 @@ export class ClassLifecycleService {
                 gradingPeriod: record.gradingPeriod,
                 recordStatus: record.status,
                 eligibility: entry.eligibility,
+                updatedAt: entry.updatedAt,
               },
             ]
           : [];
@@ -491,6 +540,16 @@ export class ClassLifecycleService {
           entityId: entry.id,
           version: `${entry.status}:${entry.createdAt.toISOString()}`,
         })),
+        ...records.map((entry) => ({
+          entityType: 'class_record',
+          entityId: entry.id,
+          version: `${entry.status}:${entry.revision}:${entry.updatedAt.toISOString()}`,
+        })),
+        ...participants.map((entry) => ({
+          entityType: 'class_record_participant',
+          entityId: entry.id,
+          version: `${entry.eligibility}:${entry.updatedAt?.toISOString() ?? 'unknown'}`,
+        })),
         ...(replacementClass
           ? [
               {
@@ -518,7 +577,10 @@ export class ClassLifecycleService {
     context: LifecycleExecutionContext,
   ) {
     const sourceEnrollments = prepared.snapshot.activeEnrollments;
-    if (dto.resolution === 'TRANSFER') {
+    const resolution = dto.resolution ?? 'ARCHIVE_EMPTY';
+    const effectivePeriod =
+      dto.effectivePeriod ?? prepared.snapshot.academicState.period;
+    if (resolution === 'TRANSFER') {
       const replacement = prepared.snapshot.replacementClass!;
       if (sourceEnrollments.length) {
         await this.db.insert(enrollments).values(
@@ -532,8 +594,7 @@ export class ClassLifecycleService {
       }
     }
 
-    const sourceStatus =
-      dto.resolution === 'COMPLETE' ? 'completed' : 'dropped';
+    const sourceStatus = resolution === 'COMPLETE' ? 'completed' : 'dropped';
     if (sourceEnrollments.length) {
       await this.db
         .update(enrollments)
@@ -554,7 +615,7 @@ export class ClassLifecycleService {
         .update(classRecordParticipants)
         .set({
           eligibility,
-          reason: `${dto.resolution} effective ${dto.effectivePeriod}`,
+          reason: `${resolution} effective ${effectivePeriod}`,
           updatedBy: context.actorId,
           updatedAt: new Date(),
         })
@@ -567,9 +628,9 @@ export class ClassLifecycleService {
       .where(eq(classes.id, dto.classId));
 
     const outcome: EnrollmentLifecycleOutcome =
-      dto.resolution === 'COMPLETE'
+      resolution === 'COMPLETE'
         ? 'completed'
-        : dto.resolution === 'TRANSFER'
+        : resolution === 'TRANSFER'
           ? 'transferred_class'
           : 'withdrawn';
     const studentById = new Map(
@@ -604,7 +665,7 @@ export class ClassLifecycleService {
             fromStatus: entry.status,
             toStatus: sourceStatus,
             outcome,
-            effectivePeriod: dto.effectivePeriod,
+            effectivePeriod,
             reasonCode: context.reasonCode,
             notes: context.notes,
             actorId: context.actorId,
@@ -618,6 +679,23 @@ export class ClassLifecycleService {
       changed: [
         ...sourceEnrollments.map((entry) => ({
           entityType: 'enrollment',
+          entityId: entry.id,
+          outcome,
+        })),
+        ...(resolution === 'TRANSFER' && prepared.snapshot.replacementClass
+          ? sourceEnrollments.map((entry) => ({
+              entityType: 'enrollment',
+              entityId: `${entry.studentId}:${prepared.snapshot.replacementClass!.id}`,
+              outcome: 'created',
+            }))
+          : []),
+        ...prepared.plan.participantChanges.map((entry) => ({
+          entityType: 'class_record_participant',
+          entityId: entry.participantId,
+          outcome: entry.eligibility,
+        })),
+        ...sourceEnrollments.map((entry) => ({
+          entityType: 'enrollment_lifecycle_event',
           entityId: entry.id,
           outcome,
         })),

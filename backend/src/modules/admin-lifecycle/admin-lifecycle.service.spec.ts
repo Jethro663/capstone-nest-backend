@@ -79,6 +79,27 @@ function setup(
       affectedUserIds: [],
     }),
   };
+  const classLifecycle: any = {
+    prepare: jest.fn().mockImplementation((request: Record<string, unknown>) =>
+      Promise.resolve({
+        manifest: { ...manifest, request },
+        plan: { affectedUserIds: [] },
+      }),
+    ),
+    apply: jest.fn().mockResolvedValue({
+      changed: [],
+      preserved: [],
+      affectedUserIds: [],
+    }),
+  };
+  const sectionLifecycle: any = {
+    prepare: jest.fn().mockImplementation((request: Record<string, unknown>) =>
+      Promise.resolve({
+        manifest: { ...manifest, request },
+        plan: { affectedUserIds: [] },
+      }),
+    ),
+  };
   const audit = { log: jest.fn().mockResolvedValue({ id: 'audit-id' }) };
   const maintenanceContext = {
     active: maintenanceActive,
@@ -106,8 +127,8 @@ function setup(
     database,
     { get: jest.fn().mockReturnValue(enabled) } as any,
     student,
-    {} as any,
-    {} as any,
+    classLifecycle,
+    sectionLifecycle,
     {} as any,
     audit as any,
     { createBulkDeduped: jest.fn().mockResolvedValue([]) } as any,
@@ -132,6 +153,8 @@ function setup(
     db,
     database,
     student,
+    classLifecycle,
+    sectionLifecycle,
     audit,
     operationRows,
     maintenance,
@@ -143,6 +166,251 @@ describe('AdminLifecycleService execution', () => {
   beforeEach(() => {
     jest.resetAllMocks();
     (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+  });
+
+  it('normalizes lifecycle mode and empty historical section outcomes before preview hashing', async () => {
+    const { service, classLifecycle, sectionLifecycle } = setup();
+
+    await service.previewClass({
+      classId: targetId,
+      resolution: 'COMPLETE',
+      effectivePeriod: 'Q3',
+    });
+    expect(classLifecycle.prepare).toHaveBeenCalledWith(
+      expect.objectContaining({ lifecycleMode: 'CURRENT_CLOSURE' }),
+      expect.anything(),
+    );
+
+    await service.previewSection({
+      sectionId: targetId,
+      lifecycleMode: 'HISTORICAL_RETIREMENT',
+    });
+    expect(sectionLifecycle.prepare).toHaveBeenCalledWith(
+      expect.objectContaining({
+        lifecycleMode: 'HISTORICAL_RETIREMENT',
+        studentResolutions: [],
+      }),
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it('binds historical mode to the request hash and audit evidence', async () => {
+    const { service, classLifecycle, audit } = setup();
+    const preview = {
+      classId: targetId,
+      lifecycleMode: 'HISTORICAL_RETIREMENT' as const,
+      resolution: 'COMPLETE' as const,
+      replacementClassId: undefined,
+      effectivePeriod: 'Q4' as const,
+    };
+    const manifest = buildAdminLifecycleManifest({
+      action: 'ARCHIVE_CLASS',
+      targetType: 'class',
+      targetId,
+      request: preview,
+      academicState: { schoolYear: '2026-2027', period: 'Q3', version: 1 },
+      dependencyVersions: [],
+      effects: [
+        {
+          kind: 'archive',
+          entityType: 'class',
+          entityId: targetId,
+          summary: 'Retire historical class',
+        },
+      ],
+      preserved: ['Academic evidence'],
+      evidence: {},
+      blockers: [],
+      warnings: [],
+      requiredConfirmations: [
+        'PRESERVE_ACADEMIC_HISTORY',
+        'HISTORICAL_RETIREMENT',
+        'COMPLETE',
+      ],
+    });
+    classLifecycle.prepare.mockResolvedValue({
+      manifest,
+      plan: { affectedUserIds: [] },
+    });
+    const dto = {
+      ...preview,
+      manifestHash: manifest.manifestHash,
+      manifestExpiresAt: manifest.expiresAt,
+      currentPassword: 'correct-password',
+      reasonCode: 'COMPLETED' as const,
+      notes: 'Registrar verified the historical completion.',
+      confirmations: [...manifest.requiredConfirmations],
+      idempotencyKey,
+    };
+
+    expect(
+      service.executionRequestHash({
+        ...dto,
+        lifecycleMode: 'CURRENT_CLOSURE',
+      }),
+    ).not.toBe(service.executionRequestHash(dto));
+    await service.executeClass(dto, actorId);
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          lifecycleMode: 'HISTORICAL_RETIREMENT',
+        }),
+      }),
+    );
+  });
+
+  it('rejects a historical class execution when the re-preview resolves a different lifecycle mode', async () => {
+    const { service, classLifecycle } = setup();
+    const historicalRequest = {
+      classId: targetId,
+      lifecycleMode: 'HISTORICAL_RETIREMENT' as const,
+      resolution: 'COMPLETE' as const,
+      replacementClassId: undefined,
+      effectivePeriod: 'Q4' as const,
+    };
+    const reviewed = buildAdminLifecycleManifest({
+      action: 'ARCHIVE_CLASS',
+      targetType: 'class',
+      targetId,
+      request: historicalRequest,
+      academicState: { schoolYear: '2026-2027', period: 'Q3', version: 1 },
+      dependencyVersions: [],
+      effects: [],
+      preserved: ['Academic evidence'],
+      evidence: {},
+      blockers: [],
+      warnings: [],
+      requiredConfirmations: [
+        'PRESERVE_ACADEMIC_HISTORY',
+        'HISTORICAL_RETIREMENT',
+        'COMPLETE',
+      ],
+    });
+    const changedMode = buildAdminLifecycleManifest({
+      ...reviewed,
+      request: {
+        ...historicalRequest,
+        lifecycleMode: 'CURRENT_CLOSURE',
+      },
+    });
+    classLifecycle.prepare.mockResolvedValue({
+      manifest: changedMode,
+      plan: { affectedUserIds: [] },
+    });
+
+    await expect(
+      service.executeClass(
+        {
+          ...historicalRequest,
+          manifestHash: reviewed.manifestHash,
+          manifestExpiresAt: reviewed.expiresAt,
+          currentPassword: 'correct-password',
+          reasonCode: 'COMPLETED',
+          notes: 'Registrar verified the historical completion.',
+          confirmations: [...reviewed.requiredConfirmations],
+          idempotencyKey,
+        },
+        actorId,
+      ),
+    ).rejects.toThrow(ConflictException);
+    expect(classLifecycle.apply).not.toHaveBeenCalled();
+  });
+
+  it('rejects execution when participant effects change after class preview', async () => {
+    const { service, classLifecycle } = setup();
+    const request = {
+      classId: targetId,
+      lifecycleMode: 'HISTORICAL_RETIREMENT' as const,
+      resolution: 'DROP' as const,
+      replacementClassId: undefined,
+      effectivePeriod: 'Q4' as const,
+    };
+    const reviewed = buildAdminLifecycleManifest({
+      action: 'ARCHIVE_CLASS',
+      targetType: 'class',
+      targetId,
+      request,
+      academicState: { schoolYear: '2026-2027', period: 'Q3', version: 1 },
+      dependencyVersions: [],
+      effects: [],
+      preserved: ['Academic evidence'],
+      evidence: {},
+      blockers: [],
+      warnings: [],
+      requiredConfirmations: [
+        'PRESERVE_ACADEMIC_HISTORY',
+        'HISTORICAL_RETIREMENT',
+        'DROP',
+      ],
+    });
+    const participantChanged = buildAdminLifecycleManifest({
+      ...reviewed,
+      effects: [
+        {
+          kind: 'update',
+          entityType: 'class_record_participant',
+          entityId: '00000000-0000-4000-8000-000000000498',
+          summary: 'Record draft participant eligibility as withdrawn',
+        },
+      ],
+    });
+    classLifecycle.prepare.mockResolvedValue({
+      manifest: participantChanged,
+      plan: { affectedUserIds: [] },
+    });
+
+    await expect(
+      service.executeClass(
+        {
+          ...request,
+          manifestHash: reviewed.manifestHash,
+          manifestExpiresAt: reviewed.expiresAt,
+          currentPassword: 'correct-password',
+          reasonCode: 'WITHDREW',
+          notes: 'Registrar verified the historical withdrawal.',
+          confirmations: [...reviewed.requiredConfirmations],
+          idempotencyKey,
+        },
+        actorId,
+      ),
+    ).rejects.toThrow(ConflictException);
+    expect(classLifecycle.apply).not.toHaveBeenCalled();
+  });
+
+  it('returns the stored result for an identical completed historical-class replay', async () => {
+    const { service, classLifecycle, operationRows } = setup();
+    const request = {
+      classId: targetId,
+      lifecycleMode: 'HISTORICAL_RETIREMENT' as const,
+      resolution: 'COMPLETE' as const,
+      replacementClassId: undefined,
+      effectivePeriod: 'Q4' as const,
+      manifestHash: 'a'.repeat(64),
+      manifestExpiresAt: new Date(Date.now() + 300_000).toISOString(),
+      currentPassword: 'correct-password',
+      reasonCode: 'COMPLETED' as const,
+      notes: 'Registrar verified the historical completion.',
+      confirmations: [
+        'PRESERVE_ACADEMIC_HISTORY',
+        'HISTORICAL_RETIREMENT',
+        'COMPLETE',
+      ],
+      idempotencyKey,
+    };
+    operationRows.push({
+      id: operationId,
+      actorId,
+      status: 'completed',
+      requestHash: service.executionRequestHash(request),
+      result: { operationId, changed: [], preserved: ['Academic evidence'] },
+    });
+
+    await expect(service.executeClass(request, actorId)).resolves.toEqual(
+      expect.objectContaining({ replayed: true }),
+    );
+    expect(classLifecycle.prepare).not.toHaveBeenCalled();
+    expect(classLifecycle.apply).not.toHaveBeenCalled();
   });
 
   it('rejects execution while the operational flag is disabled', async () => {
@@ -212,14 +480,8 @@ describe('AdminLifecycleService execution', () => {
   });
 
   it('requires the same active maintenance session immediately before mutation', async () => {
-    const {
-      service,
-      dto,
-      student,
-      maintenance,
-      maintenanceContext,
-      db,
-    } = setup(true, true, true);
+    const { service, dto, student, maintenance, maintenanceContext, db } =
+      setup(true, true, true);
     maintenance.requireActiveSession
       .mockResolvedValueOnce(maintenanceContext)
       .mockRejectedValueOnce(

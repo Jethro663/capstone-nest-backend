@@ -10,6 +10,7 @@ Admin academic cleanup is currently split across scattered service guards, a glo
 - Preserve lifecycle preview hashing, stale-state revalidation, idempotency, serialized transactions, audit records, and append-only lifecycle evidence.
 - Replace active Admin Demo Mode backend, web, and mobile behavior; keep only bounded fail-closed compatibility until the required mobile release is adopted.
 - Replace direct admin class unenrollment and generic blocker toasts with contextual preview, choice, execution, and receipt flows.
+- Present retained-evidence purge as a clear keep/archive outcome without impossible destructive confirmations, and let historical classes/sections collect explicit membership outcomes and retire through the same governed archive flow.
 - Keep teacher permissions and teacher mutation behavior unchanged.
 - Preserve finalized grades, submitted evidence, and audit/lifecycle history during routine maintenance.
 - Define Full Reset as the separate explicit exception: it deletes every live school/academic record, including finalized grades, and every account except the initiating administrator, while preserving only software/runtime essentials and reset/audit evidence.

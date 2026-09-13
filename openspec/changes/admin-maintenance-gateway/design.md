@@ -84,6 +84,14 @@ The new maintenance-session table is added to the reset catalog and cleared. A l
 
 All endpoints use `{ success, message, data }`. Expected domain dependencies are successful preview responses with a decision, not thrown errors. Security remains `401/403`, validation `400/422`, stale or conflicting state `409`, unavailable maintenance/reset barriers `503`, and unexpected failures `500` with correlation evidence.
 
+### Reuse archive actions for historical repair and retirement
+
+Class and section preview requests gain an additive `lifecycleMode` discriminator. Omission remains current closure. `HISTORICAL_RETIREMENT` is accepted only when the target school year differs from the authoritative active school year. An empty target can archive structurally without artificial learner outcomes. A historical target with active memberships stays inside the same manifest-bound review and requires explicit supported outcomes plus a historical effective period; it never infers an outcome from age, inactivity, or evidence.
+
+The existing `ARCHIVE_CLASS` and `ARCHIVE_SECTION` operation actions remain the durable audit meaning. Historical membership reconciliation and structural archival execute atomically through the existing academic transaction, manifest, idempotency, lifecycle-event, and audit shell. This is selected over a new academic-repair screen because the current recovery surfaces do not own general historical membership outcomes, and over new persisted operation actions because retirement is still an archive operation.
+
+The manifest adds an additive presentation disposition. Existing decision states remain for compatibility: retained-evidence purge stays `IMMUTABLE` with `RETAIN_REQUIRED`, missing outcomes use `NEEDS_CHOICE` with `CHOICE_REQUIRED`, and ready/warning states remain executable. Blocked purge previews contain evidence and preservation information but no destructive confirmations or executable purge effects.
+
 ### Schema changes are additive
 
 Migration `0027` creates `admin_maintenance_sessions`, indexes/checks, and an optional nullable operation link if it does not create a reset deletion cycle. Existing lifecycle operation/event records are not renamed or rewritten. The current Demo table is not dropped in the initial migration.
@@ -95,6 +103,7 @@ Migration `0027` creates `admin_maintenance_sessions`, indexes/checks, and an op
 - **Policy migration can create a temporarily inconsistent rule map** → replace service injections and tests in one feature-flagged backend cutover; never deploy a stage with both global Demo activation and Maintenance execution active.
 - **A new table can block Full Reset's fail-closed catalog** → update catalog/deletion ordering in the same change and run the disposable real reset rehearsal.
 - **Typed next actions may not cover every historical data shape** → return `IMMUTABLE` or `NEEDS_CHOICE`, never guess destructive reconciliation; log stable decision codes for follow-up.
+- **Historical membership rows may be stale but semantically ambiguous** → require an explicit administrator outcome and period in the same review; do not send the actor to the unrelated grade/state recovery panel.
 - **Keeping inert Demo code creates temporary debt** → enforce zero active runtime imports and a dated adoption/removal gate.
 - **The implementation touches backend, web, and mobile** → expand the shared contract gate and ship one exact SHA with Android artifact verification.
 

@@ -64,6 +64,10 @@ const actionMetadata: Record<string, Omit<AdminMaintenanceNextAction, 'id'>> = {
     kind: 'NAVIGATE_REPAIR',
     href: '/dashboard/admin/system-settings/maintenance-access',
   },
+  KEEP_RECORD: {
+    label: 'Keep this record',
+    kind: 'CANCEL',
+  },
 };
 
 function nextActions(
@@ -90,19 +94,24 @@ export function deriveAdminMaintenanceDecision(
   input: AdminLifecycleManifestInput,
 ): AdminMaintenanceDecisionSummary {
   const actions = nextActions(input);
-  if (input.blockers.some((blocker) => !blocker.resolvable)) {
+  const immutable = input.blockers.find((blocker) => !blocker.resolvable);
+  if (immutable) {
+    const retained = input.blockers.find(
+      (blocker) => blocker.code === 'RETAINED_EVIDENCE',
+    );
+    const primary = retained ?? immutable;
     return {
       state: 'IMMUTABLE',
-      code: input.blockers[0]?.code ?? 'IMMUTABLE_EVIDENCE',
-      message:
-        input.blockers[0]?.message ??
-        'Protected academic evidence prevents this ordinary maintenance action.',
+      disposition: retained ? 'RETAIN_REQUIRED' : 'REPAIR_REQUIRED',
+      code: primary.code,
+      message: primary.message,
       nextActions: actions,
     };
   }
   if (input.blockers.length > 0) {
     return {
       state: 'NEEDS_CHOICE',
+      disposition: 'CHOICE_REQUIRED',
       code: input.blockers[0].code,
       message: input.blockers[0].message,
       nextActions: actions,
@@ -114,6 +123,7 @@ export function deriveAdminMaintenanceDecision(
   if (overridable) {
     return {
       state: 'OVERRIDABLE_WARNING',
+      disposition: 'EXECUTABLE',
       code: overridable.code,
       message: overridable.message,
       nextActions: [],
@@ -122,6 +132,7 @@ export function deriveAdminMaintenanceDecision(
   if (input.effects.length > 1) {
     return {
       state: 'AUTO_RESOLVABLE',
+      disposition: 'EXECUTABLE',
       code: 'DEPENDENCIES_AUTO_RESOLVED',
       message: 'Linked academic structure will be reconciled automatically.',
       nextActions: [],
@@ -129,6 +140,7 @@ export function deriveAdminMaintenanceDecision(
   }
   return {
     state: 'READY',
+    disposition: 'EXECUTABLE',
     code: 'READY',
     message: 'This maintenance action is ready to execute.',
     nextActions: [],
