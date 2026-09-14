@@ -44,6 +44,15 @@ function readBlobAsArrayBuffer(blob: Blob) {
   });
 }
 
+function readBlobAsText(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ''));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsText(blob);
+  });
+}
+
 describe('RosterImportPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -120,25 +129,30 @@ describe('RosterImportPage', () => {
     } as PreviewResponse);
   });
 
-  it('uploads a selected roster file for the selected section', async () => {
+  it('validates the edited roster draft without committing it', async () => {
     const { container } = render(<RosterImportPage />);
 
     const sectionSelect = await screen.findByLabelText('Target Section');
     fireEvent.change(sectionSelect, { target: { value: 'section-1' } });
 
     const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
-    const file = new File(['csv-data'], 'roster.csv', { type: 'text/csv' });
+    const file = new File(
+      ['Last Name,First Name,Middle Name,LRN,Email\nDela Cruz,Ana,Santos,202407000010,ana@nexora.edu'],
+      'roster.csv',
+      { type: 'text/csv' },
+    );
     fireEvent.change(fileInput, { target: { files: [file] } });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Upload & Import' }));
+    const lastNameInput = await screen.findByRole('textbox', { name: /row 2, column A/i });
+    fireEvent.change(lastNameInput, { target: { value: 'Santiago' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Validate roster' }));
 
-    await waitFor(
-      () => {
-        expect(mockedRosterImportService.preview).toHaveBeenCalledWith('section-1', file);
-        expect(mockedRosterImportService.commit).toHaveBeenCalledTimes(1);
-      },
-      { timeout: 3000 }
+    await waitFor(() => expect(mockedRosterImportService.preview).toHaveBeenCalledTimes(1));
+    const validatedFile = mockedRosterImportService.preview.mock.calls[0][1];
+    await expect(readBlobAsText(validatedFile)).resolves.toContain(
+      'Santiago,Ana,Santos,202407000010,ana@nexora.edu',
     );
+    expect(mockedRosterImportService.commit).not.toHaveBeenCalled();
   });
 
   it('shows a file attachment notification and local spreadsheet preview when a CSV is attached', async () => {
@@ -151,10 +165,39 @@ describe('RosterImportPage', () => {
     );
     fireEvent.change(fileInput, { target: { files: [file] } });
     expect(await screen.findByText('Attached file preview')).toBeInTheDocument();
-    expect(screen.getByText('Dela Cruz')).toBeInTheDocument();
-    expect(screen.getByText('202407000010')).toBeInTheDocument();
-    expect(screen.getByText('ana@nexora.edu')).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: /row 2, column A/i })).toHaveValue('Dela Cruz');
+    expect(screen.getByRole('textbox', { name: /row 2, column D/i })).toHaveValue('202407000010');
+    expect(screen.getByRole('textbox', { name: /row 2, column E/i })).toHaveValue('ana@nexora.edu');
+    expect(screen.getByText('Import source')).toBeInTheDocument();
     expect(mockedToast.success).toHaveBeenCalledWith(expect.stringContaining('attached and ready for preview'));
+  });
+
+  it('confirms before discarding an edited roster draft', async () => {
+    const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(false);
+    const { container } = render(<RosterImportPage />);
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, {
+      target: {
+        files: [
+          new File(
+            ['Last Name,First Name\nDela Cruz,Ana'],
+            'roster.csv',
+            { type: 'text/csv' },
+          ),
+        ],
+      },
+    });
+    const lastNameInput = await screen.findByRole('textbox', { name: /row 2, column A/i });
+    fireEvent.change(lastNameInput, { target: { value: 'Santiago' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove file' }));
+    expect(confirmSpy).toHaveBeenCalledWith('Discard your roster edits and remove this file?');
+    expect(lastNameInput).toHaveValue('Santiago');
+
+    confirmSpy.mockReturnValue(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove file' }));
+    expect(screen.queryByText('Attached file preview')).not.toBeInTheDocument();
+    confirmSpy.mockRestore();
   });
 
   it('downloads a protected Excel template for the selected section', async () => {
@@ -219,7 +262,7 @@ describe('RosterImportPage', () => {
     }
   }, 30000);
 
-  it('auto-commits using the backend roster contract after preview', async () => {
+  it('commits using the backend roster contract only after explicit confirmation', async () => {
     const { container } = render(<RosterImportPage />);
 
     fireEvent.change(await screen.findByLabelText('Target Section'), {
@@ -227,9 +270,22 @@ describe('RosterImportPage', () => {
     });
     const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
     fireEvent.change(fileInput, {
-      target: { files: [new File(['csv-data'], 'roster.csv', { type: 'text/csv' })] },
+      target: {
+        files: [
+          new File(
+            ['Last Name,First Name,Middle Name,LRN,Email\nDela Cruz,Ana,Santos,202407000010,ana@nexora.edu'],
+            'roster.csv',
+            { type: 'text/csv' },
+          ),
+        ],
+      },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Upload & Import' }));
+    await screen.findByRole('textbox', { name: /row 2, column A/i });
+    fireEvent.click(screen.getByRole('button', { name: 'Validate roster' }));
+
+    expect(await screen.findByRole('button', { name: 'Commit Import' })).toBeInTheDocument();
+    expect(mockedRosterImportService.commit).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Commit Import' }));
 
     await waitFor(() =>
       expect(mockedRosterImportService.commit).toHaveBeenCalledWith('section-1', {
@@ -259,5 +315,59 @@ describe('RosterImportPage', () => {
         ],
       }),
     );
+  });
+
+  it('invalidates the server preview when an edited cell changes again', async () => {
+    const { container } = render(<RosterImportPage />);
+    fireEvent.change(await screen.findByLabelText('Target Section'), {
+      target: { value: 'section-1' },
+    });
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, {
+      target: {
+        files: [
+          new File(
+            ['Last Name,First Name,Middle Name,LRN,Email\nDela Cruz,Ana,Santos,202407000010,ana@nexora.edu'],
+            'roster.csv',
+            { type: 'text/csv' },
+          ),
+        ],
+      },
+    });
+    const lastNameInput = await screen.findByRole('textbox', { name: /row 2, column A/i });
+    fireEvent.click(screen.getByRole('button', { name: 'Validate roster' }));
+    expect(await screen.findByRole('button', { name: 'Commit Import' })).toBeInTheDocument();
+
+    fireEvent.change(lastNameInput, { target: { value: 'Santiago' } });
+
+    expect(screen.queryByRole('button', { name: 'Commit Import' })).not.toBeInTheDocument();
+    expect(lastNameInput).toHaveValue('Santiago');
+  });
+
+  it('retains edited cells when server validation fails', async () => {
+    mockedRosterImportService.preview.mockRejectedValueOnce(new Error('Preview unavailable'));
+    const { container } = render(<RosterImportPage />);
+    fireEvent.change(await screen.findByLabelText('Target Section'), {
+      target: { value: 'section-1' },
+    });
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, {
+      target: {
+        files: [
+          new File(
+            ['Last Name,First Name,Middle Name,LRN,Email\nDela Cruz,Ana,Santos,202407000010,ana@nexora.edu'],
+            'roster.csv',
+            { type: 'text/csv' },
+          ),
+        ],
+      },
+    });
+    const lastNameInput = await screen.findByRole('textbox', { name: /row 2, column A/i });
+    fireEvent.change(lastNameInput, { target: { value: 'Santiago' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Validate roster' }));
+
+    await waitFor(() => expect(mockedToast.error).toHaveBeenCalledWith('Preview unavailable'));
+    expect(lastNameInput).toHaveValue('Santiago');
+    expect(screen.queryByRole('button', { name: 'Commit Import' })).not.toBeInTheDocument();
   });
 });

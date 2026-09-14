@@ -3148,9 +3148,9 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).toContain("Lessons");
     expect(renderedText).toContain("Pending");
     expect(renderedText).toContain("Learning progress");
-    expect(renderedText).toContain("View Tasks");
+    expect(renderedText).toContain("Tasks");
     expect(renderedText).toContain("Continue Learning");
-    expect(renderedText).toContain("View Schedule");
+    expect(renderedText).toContain("Schedule");
     expect(renderedText).toContain("2 Classmates");
     expect(renderedText).not.toContain("English");
     expect(renderedText).not.toContain("Courses & Channels");
@@ -3165,7 +3165,7 @@ describe("mobile rendered screen flows", () => {
       source: "classes",
     });
 
-    const tasksButton = findPressableByText(testRenderer!.root, "View Tasks");
+    const tasksButton = findPressableByText(testRenderer!.root, "Tasks");
     act(() => {
       tasksButton.props.onPress();
     });
@@ -3178,7 +3178,7 @@ describe("mobile rendered screen flows", () => {
 
     const scheduleButton = findPressableByText(
       testRenderer!.root,
-      "View Schedule",
+      "Schedule",
     );
     act(() => {
       scheduleButton.props.onPress();

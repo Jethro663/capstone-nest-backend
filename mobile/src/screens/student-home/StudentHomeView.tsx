@@ -141,17 +141,8 @@ function MoveTile({
         pressed && onPress ? styles.pressed : null,
       ]}
     >
-      <View style={styles.moveTopRow}>
-        <View style={[styles.moveIcon, { backgroundColor: palette.surface }]}>
-          <MaterialCommunityIcons name={icon} size={20} color={palette.icon} />
-        </View>
-        {onPress ? (
-          <MaterialCommunityIcons
-            name="arrow-top-right"
-            size={18}
-            color={theme.dim}
-          />
-        ) : null}
+      <View style={[styles.moveIcon, { backgroundColor: palette.surface }]}>
+        <MaterialCommunityIcons name={icon} size={20} color={palette.icon} />
       </View>
       <View style={styles.moveCopy}>
         <Text style={styles.moveLabel}>{label}</Text>
@@ -162,6 +153,13 @@ function MoveTile({
           {subtitle}
         </Text>
       </View>
+      {onPress ? (
+        <MaterialCommunityIcons
+          name="arrow-top-right"
+          size={18}
+          color={theme.dim}
+        />
+      ) : null}
     </Pressable>
   );
 }
@@ -492,7 +490,7 @@ export function StudentHomeView({
       />
       <View style={styles.section}>
         <SectionHeading eyebrow="Small steps" title="After that" />
-        <View style={styles.moveGrid}>
+        <View style={styles.moveStack}>
           {secondaryLesson ? (
             <MoveTile
               icon="play-circle-outline"
@@ -841,27 +839,22 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: theme.amberSoft,
   },
-  moveGrid: { flexDirection: "row", gap: 9 },
+  moveStack: { gap: 9 },
   moveTile: {
-    flex: 1,
-    minWidth: 0,
-    minHeight: 154,
+    minHeight: 96,
     borderRadius: 17,
     borderWidth: 1,
     borderColor: theme.border,
     backgroundColor: theme.surface,
     padding: 13,
-  },
-  moveTopRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
+    gap: 12,
   },
   moveIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 13,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
   },

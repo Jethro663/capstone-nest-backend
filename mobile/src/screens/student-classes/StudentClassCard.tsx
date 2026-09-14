@@ -148,38 +148,42 @@ export function StudentClassCard({
           </View>
         </View>
 
-        <View style={styles.actionRow}>
-          <View style={[styles.actionSurface, styles.secondarySurface]}>
+        <View style={[styles.actionSurface, styles.primaryActionSurface]}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={isComplete ? "Open class" : "Continue learning"}
+            onPress={onOpenClass}
+            style={({ pressed }) => [styles.primaryButton, pressed ? styles.pressed : null]}
+          >
+            <Text numberOfLines={2} style={styles.primaryButtonText}>{isComplete ? "Open Class" : "Continue Learning"}</Text>
+            <MaterialCommunityIcons name="arrow-right" size={17} color="#FFFFFF" />
+          </Pressable>
+        </View>
+
+        <View style={styles.secondaryActionRow}>
+          <View style={[styles.actionSurface, styles.secondaryActionSurface, styles.secondarySurface]}>
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel="View tasks"
               onPress={onOpenTasks}
               style={({ pressed }) => [styles.secondaryButton, pressed ? styles.pressed : null]}
             >
               <MaterialCommunityIcons name="clipboard-text-outline" size={17} color={theme.redText} />
-              <Text numberOfLines={2} style={styles.secondaryButtonText}>View Tasks</Text>
+              <Text style={styles.secondaryButtonText}>Tasks</Text>
             </Pressable>
           </View>
-          <View style={[styles.actionSurface, styles.primarySurface]}>
+          <View style={[styles.actionSurface, styles.secondaryActionSurface, styles.secondarySurface]}>
             <Pressable
               accessibilityRole="button"
-              onPress={onOpenClass}
-              style={({ pressed }) => [styles.primaryButton, pressed ? styles.pressed : null]}
+              accessibilityLabel="View schedule"
+              onPress={onOpenSchedule}
+              style={({ pressed }) => [styles.secondaryButton, pressed ? styles.pressed : null]}
             >
-              <Text numberOfLines={2} style={styles.primaryButtonText}>{isComplete ? "Open Class" : "Continue Learning"}</Text>
-              <MaterialCommunityIcons name="arrow-right" size={17} color="#FFFFFF" />
+              <MaterialCommunityIcons name="calendar-blank-outline" size={17} color={theme.subtext} />
+              <Text style={styles.scheduleButtonText}>Schedule</Text>
             </Pressable>
           </View>
         </View>
-
-        <Pressable
-          accessibilityRole="button"
-          onPress={onOpenSchedule}
-          style={({ pressed }) => [styles.scheduleButton, pressed ? styles.pressed : null]}
-        >
-          <MaterialCommunityIcons name="calendar-blank-outline" size={17} color={theme.subtext} />
-          <Text style={styles.scheduleButtonText}>View Schedule</Text>
-          <MaterialCommunityIcons name="chevron-right" size={18} color={theme.dim} />
-        </Pressable>
       </View>
     </View>
   );
@@ -237,15 +241,15 @@ const styles = StyleSheet.create({
   contextRow: { marginTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 7 },
   contextChip: { minHeight: 30, borderRadius: 999, backgroundColor: theme.bg, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 6 },
   contextText: { color: theme.subtext, fontSize: 9, fontWeight: "800" },
-  actionRow: { marginTop: 13, flexDirection: "row", alignItems: "stretch", gap: 9 },
-  actionSurface: { flex: 1, minWidth: 0, minHeight: 52, overflow: "hidden", borderRadius: 13 },
+  actionSurface: { minWidth: 0, minHeight: 52, overflow: "hidden", borderRadius: 13 },
+  primaryActionSurface: { marginTop: 13, backgroundColor: theme.redText },
+  secondaryActionRow: { marginTop: 8, flexDirection: "row", alignItems: "stretch", gap: 9 },
+  secondaryActionSurface: { flex: 1 },
   secondarySurface: { borderWidth: 1, borderColor: theme.border2, backgroundColor: theme.surface },
-  primarySurface: { backgroundColor: theme.redText },
   secondaryButton: { minHeight: 52, paddingHorizontal: 8, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
   secondaryButtonText: { flexShrink: 1, textAlign: "center", color: theme.redText, fontSize: 11, lineHeight: 14, fontWeight: "900" },
-  primaryButton: { minHeight: 52, paddingHorizontal: 8, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
-  primaryButtonText: { flexShrink: 1, textAlign: "center", color: "#FFFFFF", fontSize: 11, lineHeight: 14, fontWeight: "900" },
-  scheduleButton: { minHeight: 46, marginTop: 8, borderRadius: 13, backgroundColor: theme.bg, paddingHorizontal: 13, flexDirection: "row", alignItems: "center", gap: 8 },
-  scheduleButtonText: { flex: 1, color: theme.subtext, fontSize: 11, fontWeight: "800" },
+  primaryButton: { minHeight: 52, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  primaryButtonText: { flexShrink: 1, textAlign: "center", color: "#FFFFFF", fontSize: 12, lineHeight: 16, fontWeight: "900" },
+  scheduleButtonText: { flexShrink: 1, textAlign: "center", color: theme.subtext, fontSize: 11, lineHeight: 14, fontWeight: "900" },
   pressed: { opacity: 0.72 },
 });

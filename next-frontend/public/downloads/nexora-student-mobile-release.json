@@ -1,12 +1,12 @@
 {
   "platform": "android",
-  "versionCode": 41,
-  "minSupportedVersionCode": 41,
-  "nativeVersion": "0.1.40",
-  "otaRuntimeVersion": "0.1.40",
+  "versionCode": 42,
+  "minSupportedVersionCode": 42,
+  "nativeVersion": "0.1.41",
+  "otaRuntimeVersion": "0.1.41",
   "apkDownloadUrl": "https://next-frontend-v2-production.up.railway.app/downloads/nexora-student-mobile-release.apk",
   "requiresFullApk": true,
-  "releaseNotes": "Guided teacher assignment setup, a student-friendly home, stricter question assessment containment, safer APK recovery, and clearer administrator evaluation campaign feedback.",
-  "apkSha256": "3fe31fe704552b33a50478a25c42f6c4a4e80ff06d8397f2e9cde474ca438fa9",
-  "apkSizeBytes": 41077427
+  "releaseNotes": "Editable roster validation and corrected student Home and My Classes layouts.",
+  "apkSha256": "a6a65a8b74a42d6d8cade3e5d299fe95293b0cd0b612bdacdd1eaa8a063f4a74",
+  "apkSizeBytes": 41077411
 }

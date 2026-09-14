@@ -12,30 +12,19 @@ import {
 import { sectionService } from '@/services/section-service';
 import type { Section } from '@/types/section';
 import { downloadRosterImportTemplate } from '@/lib/roster-import-template';
+import {
+  createSpreadsheetFilePreview,
+  createSpreadsheetPreviewUpload,
+  getSpreadsheetColumnLabel,
+  updateSpreadsheetPreviewCell,
+  type SpreadsheetFilePreview,
+} from '@/lib/roster-import-preview';
 import { AdminEmptyState, AdminPageShell, AdminSectionCard } from '@/components/admin/AdminPageShell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-
-type SpreadsheetPreviewRow = {
-  rowNumber: number;
-  cells: string[];
-};
-
-type SpreadsheetPreviewSheet = {
-  name: string;
-  rowCount: number;
-  columnCount: number;
-  rows: SpreadsheetPreviewRow[];
-};
-
-type SpreadsheetFilePreview = {
-  fileName: string;
-  fileSizeLabel: string;
-  sheets: SpreadsheetPreviewSheet[];
-};
 
 function formatFileSize(bytes: number): string {
   return `${Math.max(bytes / 1_048_576, 0.01).toFixed(2)} MB`;
@@ -44,156 +33,6 @@ function formatFileSize(bytes: number): string {
 function formatFileLabel(file: File | null): string {
   if (!file) return 'Drop your CSV/Excel file here';
   return `${file.name} (${formatFileSize(file.size)})`;
-}
-
-function getColumnLabel(columnIndex: number): string {
-  let label = '';
-  let current = columnIndex;
-  while (current > 0) {
-    const remainder = (current - 1) % 26;
-    label = String.fromCharCode(65 + remainder) + label;
-    current = Math.floor((current - 1) / 26);
-  }
-  return label;
-}
-
-function cleanSpreadsheetText(value: unknown): string {
-  return String(value ?? '').replace(/\s+/g, ' ').trim();
-}
-
-function formatSpreadsheetCellValue(value: unknown): string {
-  if (value === null || value === undefined) return '';
-  if (value instanceof Date) return value.toLocaleDateString();
-  if (typeof value !== 'object') return cleanSpreadsheetText(value);
-  const record = value as Record<string, unknown>;
-  if (typeof record.text === 'string') return cleanSpreadsheetText(record.text);
-  if ('result' in record) return formatSpreadsheetCellValue(record.result);
-  if (Array.isArray(record.richText)) {
-    return record.richText
-      .map((part) => cleanSpreadsheetText((part as { text?: unknown }).text))
-      .filter(Boolean)
-      .join(' ');
-  }
-  if (typeof record.hyperlink === 'string' && typeof record.text === 'string') return cleanSpreadsheetText(record.text);
-  if (typeof record.error === 'string') return record.error;
-  return Object.values(record)
-    .map((entry) => (typeof entry === 'object' ? '' : cleanSpreadsheetText(entry)))
-    .filter(Boolean)
-    .join(' ');
-}
-
-function rowHasPreviewValue(cells: string[]): boolean {
-  return cells.some((cell) => cell.trim().length > 0);
-}
-
-function normalizePreviewSheet(name: string, rows: SpreadsheetPreviewRow[]): SpreadsheetPreviewSheet {
-  const columnCount = Math.max(...rows.map((row) => row.cells.length), 0);
-  return {
-    name,
-    rowCount: rows.length,
-    columnCount,
-    rows: rows.map((row) => ({
-      rowNumber: row.rowNumber,
-      cells: Array.from({ length: columnCount }, (_, index) => row.cells[index] ?? ''),
-    })),
-  };
-}
-
-function parseCsvRows(text: string): string[][] {
-  const rows: string[][] = [[]];
-  let currentCell = '';
-  let inQuotes = false;
-  for (let index = 0; index < text.length; index += 1) {
-    const char = text[index];
-    const nextChar = text[index + 1];
-    if (char === '"') {
-      if (inQuotes && nextChar === '"') {
-        currentCell += '"';
-        index += 1;
-      } else {
-        inQuotes = !inQuotes;
-      }
-      continue;
-    }
-    if (char === ',' && !inQuotes) {
-      rows[rows.length - 1].push(cleanSpreadsheetText(currentCell));
-      currentCell = '';
-      continue;
-    }
-    const charCode = char.charCodeAt(0);
-    const nextCharCode = nextChar?.charCodeAt(0);
-    if ((charCode === 10 || charCode === 13) && !inQuotes) {
-      if (charCode === 13 && nextCharCode === 10) index += 1;
-      rows[rows.length - 1].push(cleanSpreadsheetText(currentCell));
-      rows.push([]);
-      currentCell = '';
-      continue;
-    }
-    currentCell += char;
-  }
-  rows[rows.length - 1].push(cleanSpreadsheetText(currentCell));
-  return rows;
-}
-
-function readFileAsText(file: File): Promise<string> {
-  if (typeof file.text === 'function') return file.text();
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result ?? ''));
-    reader.onerror = () => reject(reader.error ?? new Error('Unable to read file text'));
-    reader.readAsText(file);
-  });
-}
-
-function readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
-  if (typeof file.arrayBuffer === 'function') return file.arrayBuffer();
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as ArrayBuffer);
-    reader.onerror = () => reject(reader.error ?? new Error('Unable to read workbook'));
-    reader.readAsArrayBuffer(file);
-  });
-}
-
-function getFilePreviewKind(file: File): 'csv' | 'xlsx' | 'unsupported' {
-  const extension = file.name.split('.').pop()?.toLowerCase();
-  if (extension === 'csv' || file.type.includes('csv')) return 'csv';
-  if (extension === 'xlsx' || file.type.includes('spreadsheetml')) return 'xlsx';
-  return 'unsupported';
-}
-
-async function createSpreadsheetFilePreview(file: File): Promise<SpreadsheetFilePreview> {
-  const kind = getFilePreviewKind(file);
-  if (kind === 'csv') {
-    const rows = parseCsvRows(await readFileAsText(file))
-      .map((cells, index) => ({ rowNumber: index + 1, cells }))
-      .filter((row) => rowHasPreviewValue(row.cells));
-    return {
-      fileName: file.name,
-      fileSizeLabel: formatFileSize(file.size),
-      sheets: [normalizePreviewSheet(file.name.replace(/\.[^.]+$/, '') || 'CSV Preview', rows)],
-    };
-  }
-  if (kind !== 'xlsx') {
-    throw new Error('The file remains attached for upload, but browser preview supports CSV and .xlsx files only. Convert old .xls files to .xlsx if you need a table preview first.');
-  }
-  const { default: ExcelJS } = await import('exceljs/dist/exceljs.min.js');
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(await readFileAsArrayBuffer(file));
-  const sheets = workbook.worksheets.map((worksheet) => {
-    const rows: SpreadsheetPreviewRow[] = [];
-    worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-      const cellCount = Math.max(row.cellCount, row.actualCellCount);
-      const cells = Array.from({ length: cellCount }, (_, index) => formatSpreadsheetCellValue(row.getCell(index + 1).value));
-      if (rowHasPreviewValue(cells)) rows.push({ rowNumber, cells });
-    });
-    return normalizePreviewSheet(worksheet.name, rows);
-  });
-  return {
-    fileName: file.name,
-    fileSizeLabel: formatFileSize(file.size),
-    sheets: sheets.length > 0 ? sheets : [normalizePreviewSheet('Sheet 1', [])],
-  };
 }
 
 function formatRosterName(name: RosterParsedName): string {
@@ -225,10 +64,12 @@ function getApiErrorMessage(error: unknown): string | null {
 export default function RosterImportPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const previewRequestRef = useRef(0);
+  const validationRequestRef = useRef(0);
   const [sections, setSections] = useState<Section[]>([]);
   const [sectionId, setSectionId] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<SpreadsheetFilePreview | null>(null);
+  const [filePreviewDirty, setFilePreviewDirty] = useState(false);
   const [filePreviewLoading, setFilePreviewLoading] = useState(false);
   const [filePreviewError, setFilePreviewError] = useState<string | null>(null);
   const [activePreviewSheetIndex, setActivePreviewSheetIndex] = useState(0);
@@ -270,8 +111,11 @@ export default function RosterImportPage() {
 
   const clearSelectedFile = useCallback(() => {
     previewRequestRef.current += 1;
+    validationRequestRef.current += 1;
     setSelectedFile(null);
     setFilePreview(null);
+    setFilePreviewDirty(false);
+    setPreview(null);
     setFilePreviewError(null);
     setFilePreviewLoading(false);
     setActivePreviewSheetIndex(0);
@@ -279,11 +123,21 @@ export default function RosterImportPage() {
   }, []);
 
   const handleFileAttached = useCallback(async (file: File | null) => {
+    if (
+      file &&
+      filePreviewDirty &&
+      !window.confirm('Discard your roster edits and attach a different file?')
+    ) {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
     previewRequestRef.current += 1;
+    validationRequestRef.current += 1;
     const requestId = previewRequestRef.current;
     setSelectedFile(file);
     setPreview(null);
     setFilePreview(null);
+    setFilePreviewDirty(false);
     setFilePreviewError(null);
     setActivePreviewSheetIndex(0);
     if (!file) return;
@@ -301,17 +155,54 @@ export default function RosterImportPage() {
     } finally {
       if (previewRequestRef.current === requestId) setFilePreviewLoading(false);
     }
+  }, [filePreviewDirty]);
+
+  const handlePreviewCellChange = useCallback((
+    sheetIndex: number,
+    rowNumber: number,
+    columnIndex: number,
+    value: string,
+  ) => {
+    validationRequestRef.current += 1;
+    setFilePreview((current) =>
+      current
+        ? updateSpreadsheetPreviewCell(
+          current,
+          sheetIndex,
+          rowNumber,
+          columnIndex,
+          value,
+        )
+        : current,
+    );
+    setFilePreviewDirty(true);
+    setPreview(null);
   }, []);
 
-  const handleUploadPreview = async () => {
-    if (!sectionId || !selectedFile) {
+  const handleDiscardFile = useCallback(() => {
+    if (
+      filePreviewDirty &&
+      !window.confirm('Discard your roster edits and remove this file?')
+    ) {
+      return;
+    }
+    clearSelectedFile();
+  }, [clearSelectedFile, filePreviewDirty]);
+
+  const handleValidatePreview = async () => {
+    if (!sectionId || !filePreview) {
       toast.error('Select a target section and a file first.');
       return;
     }
 
+    const requestId = validationRequestRef.current + 1;
+    validationRequestRef.current = requestId;
     try {
       setUploading(true);
-      const response = await rosterImportService.preview(sectionId, selectedFile);
+      setPreview(null);
+      const editedFile = await createSpreadsheetPreviewUpload(filePreview);
+      const response = await rosterImportService.preview(sectionId, editedFile);
+      if (validationRequestRef.current !== requestId) return;
       const previewData = response.data;
       setPreview(previewData);
 
@@ -322,33 +213,13 @@ export default function RosterImportPage() {
         toast.error('No valid rows found in the file. Please check the template and try again.');
         return;
       }
-
-      setCommitting(true);
-      await rosterImportService.commit(sectionId, {
-        sectionId,
-        enrolledRows: previewData.registered.map((row) => ({
-          userId: row.userId,
-          name: row.name,
-          lrn: row.lrn,
-          email: row.email,
-        })),
-        pendingRows: previewData.pending.map((row) => ({
-          name: row.name,
-          lrn: row.lrn,
-          email: row.email,
-        })),
-      });
-
-      toast.success(`Roster uploaded successfully. ${validRows} account(s) processed.`);
-      setPreview(null);
-      clearSelectedFile();
-      fetchPending();
+      toast.success(`Roster validated. Review ${validRows} valid row(s) before committing.`);
     } catch (error) {
+      if (validationRequestRef.current !== requestId) return;
       const message = getApiErrorMessage(error);
-      toast.error(message ?? 'Failed to import roster file.');
+      toast.error(message ?? 'Failed to validate roster file.');
     } finally {
       setUploading(false);
-      setCommitting(false);
     }
   };
 
@@ -416,7 +287,9 @@ export default function RosterImportPage() {
             <select
               id="roster-target-section"
               value={sectionId}
+              disabled={uploading || committing}
               onChange={(event) => {
+                validationRequestRef.current += 1;
                 setSectionId(event.target.value);
                 setPreview(null);
               }}
@@ -435,9 +308,12 @@ export default function RosterImportPage() {
             className="admin-roster-dropzone"
             role="button"
             tabIndex={0}
-            onClick={() => fileInputRef.current?.click()}
+            aria-disabled={uploading || committing}
+            onClick={() => {
+              if (!uploading && !committing) fileInputRef.current?.click();
+            }}
             onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
+              if (!uploading && !committing && (event.key === 'Enter' || event.key === ' ')) {
                 event.preventDefault();
                 fileInputRef.current?.click();
               }
@@ -445,6 +321,7 @@ export default function RosterImportPage() {
             onDragOver={(event) => event.preventDefault()}
             onDrop={(event) => {
               event.preventDefault();
+              if (uploading || committing) return;
               const file = event.dataTransfer.files?.[0];
               if (file) void handleFileAttached(file);
             }}
@@ -453,6 +330,7 @@ export default function RosterImportPage() {
               ref={fileInputRef}
               type="file"
               accept=".csv,.xlsx,.xls"
+              disabled={uploading || committing}
               className="hidden"
               onChange={(event) => void handleFileAttached(event.target.files?.[0] ?? null)}
             />
@@ -486,25 +364,38 @@ export default function RosterImportPage() {
                   <div>
                     <p className="text-sm font-black text-[#24364f]">Attached file preview</p>
                     <p className="text-xs font-semibold text-[#6f83a3]">{filePreview.fileName} - {filePreview.fileSizeLabel}</p>
-                    <p className="mt-1 text-xs text-[#8ba0bf]">Showing every non-empty row and cell detected in the spreadsheet before upload.</p>
+                    <p className="mt-1 text-xs text-[#8ba0bf]">Edit the import-source cells, then validate the draft before committing it.</p>
                   </div>
                 </div>
-                <Badge variant="secondary">{filePreview.sheets.length} sheet{filePreview.sheets.length === 1 ? '' : 's'}</Badge>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary">{filePreview.sheets.length} sheet{filePreview.sheets.length === 1 ? '' : 's'}</Badge>
+                  <Button type="button" size="sm" variant="outline" onClick={handleDiscardFile} disabled={uploading || committing}>
+                    Remove file
+                  </Button>
+                </div>
               </div>
               {filePreview.sheets.length > 1 ? (
                 <div className="mt-4 flex flex-wrap gap-2">
                   {filePreview.sheets.map((sheet, index) => (
-                    <Button key={sheet.name} type="button" size="sm" variant={index === activePreviewSheetIndex ? 'default' : 'outline'} onClick={() => setActivePreviewSheetIndex(index)}>
-                      {sheet.name}
+                    <Button key={sheet.name} type="button" size="sm" variant={index === activePreviewSheetIndex ? 'default' : 'outline'} onClick={() => setActivePreviewSheetIndex(index)} disabled={uploading || committing}>
+                      {sheet.name} · {index === 0 ? 'Import source' : 'Reference only'}
                     </Button>
                   ))}
                 </div>
               ) : null}
               <div className="mt-4 flex flex-wrap gap-2 text-xs font-bold text-[#6f83a3]">
                 <span className="rounded-full bg-[#f1f6ff] px-3 py-1">Sheet: {activeFilePreviewSheet.name}</span>
+                <span className="rounded-full bg-[#f1f6ff] px-3 py-1">
+                  {activePreviewSheetIndex === 0 ? 'Import source' : 'Reference only'}
+                </span>
                 <span className="rounded-full bg-[#f1f6ff] px-3 py-1">Rows: {activeFilePreviewSheet.rowCount}</span>
                 <span className="rounded-full bg-[#f1f6ff] px-3 py-1">Columns: {activeFilePreviewSheet.columnCount}</span>
               </div>
+              {activePreviewSheetIndex > 0 ? (
+                <p className="mt-3 text-xs font-semibold text-amber-800">
+                  Only the first worksheet is imported. This sheet is shown for reference and cannot be edited here.
+                </p>
+              ) : null}
               {activeFilePreviewSheet.rows.length > 0 ? (
                 <div className="admin-table-shell mt-4 max-h-[24rem] overflow-auto">
                   <Table>
@@ -512,7 +403,7 @@ export default function RosterImportPage() {
                       <TableRow>
                         <TableHead>Row</TableHead>
                         {Array.from({ length: activeFilePreviewSheet.columnCount }, (_, index) => (
-                          <TableHead key={`preview-head-${index}`}>{getColumnLabel(index + 1)}</TableHead>
+                          <TableHead key={`preview-head-${index}`}>{getSpreadsheetColumnLabel(index + 1)}</TableHead>
                         ))}
                       </TableRow>
                     </TableHeader>
@@ -521,8 +412,23 @@ export default function RosterImportPage() {
                         <TableRow key={`${activeFilePreviewSheet.name}-${row.rowNumber}`}>
                           <TableCell className="font-bold text-[#6f83a3]">{row.rowNumber}</TableCell>
                           {row.cells.map((cell, index) => (
-                            <TableCell key={`${row.rowNumber}-${index}`} className="whitespace-pre-wrap text-xs text-[#24364f]">
-                              {cell || '-'}
+                            <TableCell key={`${row.rowNumber}-${index}`} className="min-w-40 p-2 text-xs text-[#24364f]">
+                              {activePreviewSheetIndex === 0 ? (
+                                <input
+                                  aria-label={`${activeFilePreviewSheet.name}, row ${row.rowNumber}, column ${getSpreadsheetColumnLabel(index + 1)}`}
+                                  className="h-9 w-full rounded-lg border border-[#cbd8eb] bg-white px-2 text-xs text-[#24364f] outline-none focus:border-[#1f5fbf] focus:ring-2 focus:ring-[#dbeafe]"
+                                  value={cell}
+                                  disabled={uploading || committing}
+                                  onChange={(event) => handlePreviewCellChange(
+                                    activePreviewSheetIndex,
+                                    row.rowNumber,
+                                    index,
+                                    event.target.value,
+                                  )}
+                                />
+                              ) : (
+                                <span className="whitespace-pre-wrap">{cell || '-'}</span>
+                              )}
                             </TableCell>
                           ))}
                         </TableRow>
@@ -538,11 +444,11 @@ export default function RosterImportPage() {
 
           <Button
             className="admin-roster-upload-button"
-            onClick={handleUploadPreview}
-            disabled={!sectionId || !selectedFile || uploading || committing}
+            onClick={handleValidatePreview}
+            disabled={!sectionId || !filePreview || uploading || committing}
           >
             <Upload className="h-4 w-4" />
-            {uploading || committing ? 'Importing...' : 'Upload & Import'}
+            {uploading ? 'Validating...' : 'Validate roster'}
           </Button>
 
           <Button
@@ -571,7 +477,7 @@ export default function RosterImportPage() {
                 size="sm"
                 className="admin-button-solid rounded-xl font-black"
                 onClick={handleCommit}
-                disabled={committing || preview.summary.registeredCount + preview.summary.pendingCount === 0}
+                disabled={uploading || committing || preview.summary.registeredCount + preview.summary.pendingCount === 0}
               >
                 {committing ? 'Committing...' : 'Commit Import'}
               </Button>

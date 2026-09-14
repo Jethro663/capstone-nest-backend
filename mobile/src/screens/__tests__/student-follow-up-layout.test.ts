@@ -16,7 +16,10 @@ describe("student mobile follow-up layout contracts", () => {
     expect(source).toContain('testID="student-home-section-divider"');
     expect(source).toContain("styles.priorityBody");
     expect(source).toContain("styles.sectionDivider");
-    expect(source).toMatch(/moveGrid:\s*\{[^}]*flexDirection:\s*"row"/);
+    expect(source).toContain("styles.moveStack");
+    expect(source).not.toContain("styles.moveGrid");
+    expect(source).toMatch(/moveTile:\s*\{[^}]*flexDirection:\s*"row"/);
+    expect(source).toMatch(/moveCopy:\s*\{[^}]*flex:\s*1[^}]*minWidth:\s*0/);
     expect(source).not.toContain('priorityKicker: { color: "#FECACA"');
     expect(source).not.toContain(
       'priorityTitle: { marginTop: 15, color: "#FFFFFF"',
@@ -46,6 +49,15 @@ describe("student mobile follow-up layout contracts", () => {
     expect(source).toMatch(/hero:\s*\{[^}]*paddingHorizontal:\s*18/);
     expect(source).toContain("styles.heroPressTarget");
     expect(source).toContain("styles.actionSurface");
+    expect(source).toContain("styles.primaryActionSurface");
+    expect(source).toContain("styles.secondaryActionRow");
+    expect(source.indexOf("styles.primaryActionSurface")).toBeLessThan(
+      source.indexOf("styles.secondaryActionRow"),
+    );
+    expect(source).toContain('accessibilityLabel="View tasks"');
+    expect(source).toContain('accessibilityLabel="View schedule"');
+    expect(source).toContain(">Tasks</Text>");
+    expect(source).toContain(">Schedule</Text>");
     expect(source).toContain(
       "numberOfLines={2} style={styles.primaryButtonText}",
     );
