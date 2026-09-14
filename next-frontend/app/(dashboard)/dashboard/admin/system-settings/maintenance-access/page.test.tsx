@@ -22,6 +22,7 @@ const inactiveStatus = {
   available: true,
   active: false,
   state: "inactive",
+  mode: null,
   sessionId: null,
   serverTime: "2026-09-13T01:00:00.000Z",
   startedAt: null,
@@ -38,12 +39,13 @@ describe("Maintenance Access settings", () => {
     mockStatus = { ...inactiveStatus };
   });
 
-  it("requires the exact reviewed contract and opens one actor-bound window", async () => {
+  it("requires the exact reviewed contract before turning on the actor-bound switch", async () => {
     render(<Page />);
-    const submit = screen.getByRole("button", {
-      name: "Open Maintenance Access",
+    const submit = screen.getByRole("switch", {
+      name: "Turn on Maintenance Access",
     });
     expect(submit).toBeDisabled();
+    expect(submit).toHaveAttribute("aria-checked", "false");
 
     fireEvent.change(screen.getByLabelText("Reason"), {
       target: { value: "Prepare evaluator walkthrough." },
@@ -81,16 +83,24 @@ describe("Maintenance Access settings", () => {
     expect(screen.getByLabelText("Current password")).toHaveValue("");
   });
 
-  it("shows and closes only the active administrator window", async () => {
+  it("shows a persistent manual ON state and turns it off immediately", async () => {
     mockStatus = {
       ...inactiveStatus,
       active: true,
       state: "active",
+      mode: "manual",
       sessionId: "session-1",
-      expiresAt: "2099-09-13T01:15:00.000Z",
+      expiresAt: null,
     };
     render(<Page />);
-    fireEvent.click(screen.getByRole("button", { name: "Close access now" }));
+    expect(
+      screen.getByText(/remains on until you turn it off, sign out, or change/i),
+    ).toBeInTheDocument();
+    const toggle = screen.getByRole("switch", {
+      name: "Turn off Maintenance Access",
+    });
+    expect(toggle).toHaveAttribute("aria-checked", "true");
+    fireEvent.click(toggle);
     await waitFor(() => expect(close).toHaveBeenCalledTimes(1));
   });
 });

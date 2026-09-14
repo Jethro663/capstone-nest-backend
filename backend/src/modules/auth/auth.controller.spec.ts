@@ -2,12 +2,12 @@ import 'reflect-metadata';
 import { ConfigService } from '@nestjs/config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
-import { TokenService } from './token.service';
 import { IS_PUBLIC_KEY } from './decorators/public.decorator';
 
 describe('AuthController logout contract', () => {
   const authService = {
     logout: jest.fn(),
+    logoutAll: jest.fn(),
   } as unknown as jest.Mocked<AuthService>;
 
   const configService = {
@@ -17,15 +17,11 @@ describe('AuthController logout contract', () => {
     }),
   } as unknown as ConfigService;
 
-  const tokenService = {
-    revokeAllForUser: jest.fn(),
-  } as unknown as TokenService;
-
   let controller: AuthController;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    controller = new AuthController(authService, configService, tokenService);
+    controller = new AuthController(authService, configService);
   });
 
   it('marks logout as public so it can clear refresh cookies without a live access token', () => {
@@ -55,5 +51,20 @@ describe('AuthController logout contract', () => {
       success: true,
       message: 'Logout successful',
     });
+  });
+
+  it('routes logout-all through AuthService so Maintenance Access is revoked too', async () => {
+    const clearCookie = jest.fn();
+
+    await controller.logoutAll(
+      { userId: 'user-1' },
+      { clearCookie } as any,
+    );
+
+    expect(authService.logoutAll).toHaveBeenCalledWith('user-1');
+    expect(clearCookie).toHaveBeenCalledWith(
+      'refreshToken',
+      expect.objectContaining({ httpOnly: true, path: '/' }),
+    );
   });
 });

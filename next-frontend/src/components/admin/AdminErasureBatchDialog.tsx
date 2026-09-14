@@ -32,7 +32,9 @@ interface AdminErasureBatchDialogProps {
   targetLabel: string;
   title?: string;
   preview: (input: PreviewPurgeBatchInput) => Promise<AdminErasureBatchPreview>;
-  execute: (input: ExecutePurgeBatchInput) => Promise<AdminErasureExecutionResult>;
+  execute: (
+    input: ExecutePurgeBatchInput,
+  ) => Promise<AdminErasureExecutionResult>;
   onCompleted?: (result: AdminErasureExecutionResult) => void | Promise<void>;
 }
 
@@ -58,7 +60,9 @@ export function AdminErasureBatchDialog({
   onCompleted,
 }: AdminErasureBatchDialogProps) {
   const maintenance = useOptionalAdminMaintenance();
-  const [prepared, setPrepared] = useState<AdminErasureBatchPreview | null>(null);
+  const [prepared, setPrepared] = useState<AdminErasureBatchPreview | null>(
+    null,
+  );
   const [reasonCode, setReasonCode] =
     useState<AdminLifecycleExecutionEvidence["reasonCode"]>("OTHER");
   const [notes, setNotes] = useState("");
@@ -68,7 +72,9 @@ export function AdminErasureBatchDialog({
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<AdminErasureExecutionResult | null>(null);
+  const [result, setResult] = useState<AdminErasureExecutionResult | null>(
+    null,
+  );
   const targetIdsKey = targetIds.join("|");
 
   useEffect(() => {
@@ -95,7 +101,9 @@ export function AdminErasureBatchDialog({
       setConfirmation("");
       return next;
     } catch (nextError) {
-      setError(getApiErrorMessage(nextError, "Unable to review permanent deletion"));
+      setError(
+        getApiErrorMessage(nextError, "Unable to review permanent deletion"),
+      );
       return null;
     } finally {
       setLoading(false);
@@ -121,7 +129,10 @@ export function AdminErasureBatchDialog({
       setResult(completed);
       await onCompleted?.(completed);
     } catch (nextError) {
-      const evidence = getApiErrorEvidence(nextError, "Permanent deletion failed");
+      const evidence = getApiErrorEvidence(
+        nextError,
+        "Permanent deletion failed",
+      );
       if (
         evidence.code === "MAINTENANCE_SESSION_REQUIRED" ||
         evidence.code === "MAINTENANCE_SCOPE_REQUIRED"
@@ -130,7 +141,7 @@ export function AdminErasureBatchDialog({
         setConfirmation("");
         await maintenance?.refresh();
         setError(
-          "Maintenance Access expired or lacks the required scope. Reopen it, then review this batch again.",
+          "Maintenance Access is OFF or lacks the required scope. Turn it ON, then review this batch again.",
         );
       } else if (evidence.statusCode === 409) {
         setIdempotencyKey(globalThis.crypto.randomUUID());
@@ -165,9 +176,12 @@ export function AdminErasureBatchDialog({
           <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 text-red-700">
             <AlertTriangle className="h-5 w-5" />
           </div>
-          <DialogTitle>{title ?? `Permanently delete ${targetLabel}`}</DialogTitle>
+          <DialogTitle>
+            {title ?? `Permanently delete ${targetLabel}`}
+          </DialogTitle>
           <DialogDescription>
-            The whole reviewed batch is deleted atomically. Academic history and content listed below will also be erased.
+            The whole reviewed batch is deleted atomically. Academic history and
+            content listed below will also be erased.
           </DialogDescription>
         </DialogHeader>
 
@@ -176,7 +190,8 @@ export function AdminErasureBatchDialog({
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950">
               <p className="flex items-center gap-2 font-bold">
                 <CheckCircle2 className="h-5 w-5" />
-                {result.deletedCount} record{result.deletedCount === 1 ? "" : "s"} deleted
+                {result.deletedCount} record
+                {result.deletedCount === 1 ? "" : "s"} deleted
               </p>
               <p className="mt-2 text-sm">
                 {result.status === "cleanup_pending"
@@ -216,7 +231,9 @@ export function AdminErasureBatchDialog({
                     <h3 className="font-bold">Cannot continue yet</h3>
                     <ul className="mt-2 space-y-2 text-sm">
                       {prepared.blockers.map((blocker) => (
-                        <li key={`${blocker.code}-${blocker.message}`}>{blocker.message}</li>
+                        <li key={`${blocker.code}-${blocker.message}`}>
+                          {blocker.message}
+                        </li>
                       ))}
                     </ul>
                   </section>
@@ -224,10 +241,14 @@ export function AdminErasureBatchDialog({
 
                 {prepared.warnings.length > 0 ? (
                   <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950">
-                    <h3 className="font-bold">This data will be permanently erased</h3>
+                    <h3 className="font-bold">
+                      This data will be permanently erased
+                    </h3>
                     <ul className="mt-2 space-y-1 text-sm">
                       {prepared.warnings.map((warning) => (
-                        <li key={`${warning.code}-${warning.message}`}>{warning.message}</li>
+                        <li key={`${warning.code}-${warning.message}`}>
+                          {warning.message}
+                        </li>
                       ))}
                     </ul>
                   </section>
@@ -235,19 +256,27 @@ export function AdminErasureBatchDialog({
 
                 <section className="space-y-3">
                   {prepared.targets.map((target) => (
-                    <div key={target.id} className="rounded-xl border border-[var(--admin-outline)] p-4">
+                    <div
+                      key={target.id}
+                      className="rounded-xl border border-[var(--admin-outline)] p-4"
+                    >
                       <p className="font-bold">{target.displayName}</p>
-                      <p className="text-xs text-[var(--admin-text-muted)]">{target.lifecycleState}</p>
+                      <p className="text-xs text-[var(--admin-text-muted)]">
+                        {target.lifecycleState}
+                      </p>
                       {target.impactGroups.length ? (
                         <ul className="mt-2 grid gap-1 text-sm text-[var(--admin-text-muted)] sm:grid-cols-2">
                           {target.impactGroups.map((impact) => (
                             <li key={impact.code}>
-                              {impact.label}: {impact.rowCount} · {impact.action.toLowerCase()}
+                              {impact.label}: {impact.rowCount} ·{" "}
+                              {impact.action.toLowerCase()}
                             </li>
                           ))}
                         </ul>
                       ) : (
-                        <p className="mt-2 text-sm text-[var(--admin-text-muted)]">No linked academic rows found.</p>
+                        <p className="mt-2 text-sm text-[var(--admin-text-muted)]">
+                          No linked academic rows found.
+                        </p>
                       )}
                     </div>
                   ))}
@@ -257,7 +286,9 @@ export function AdminErasureBatchDialog({
                   <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
                     <p className="font-bold">Maintenance Access is required.</p>
                     <Button className="mt-3" variant="outline" asChild>
-                      <a href="/dashboard/admin/system-settings/maintenance-access/">Open Maintenance Access</a>
+                      <a href="/dashboard/admin/system-settings/maintenance-access/">
+                        Turn on Maintenance Access
+                      </a>
                     </Button>
                   </div>
                 ) : null}
@@ -270,17 +301,24 @@ export function AdminErasureBatchDialog({
                         id="erasure-reason"
                         value={reasonCode}
                         onChange={(event) =>
-                          setReasonCode(event.target.value as AdminLifecycleExecutionEvidence["reasonCode"])
+                          setReasonCode(
+                            event.target
+                              .value as AdminLifecycleExecutionEvidence["reasonCode"],
+                          )
                         }
                         className="admin-select w-full"
                       >
                         {reasons.map((reason) => (
-                          <option key={reason.value} value={reason.value}>{reason.label}</option>
+                          <option key={reason.value} value={reason.value}>
+                            {reason.label}
+                          </option>
                         ))}
                       </select>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="erasure-notes">Administrative notes</Label>
+                      <Label htmlFor="erasure-notes">
+                        Administrative notes
+                      </Label>
                       <textarea
                         id="erasure-notes"
                         value={notes}
@@ -296,20 +334,30 @@ export function AdminErasureBatchDialog({
                       <Input
                         id="erasure-confirmation"
                         value={confirmation}
-                        onChange={(event) => setConfirmation(event.target.value)}
+                        onChange={(event) =>
+                          setConfirmation(event.target.value)
+                        }
                         autoComplete="off"
                         className="admin-input font-mono"
                       />
                     </div>
                     <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
-                      Reauthentication is covered by your active Maintenance Access window. No password is requested again.
+                      Reauthentication is covered while Maintenance Access is
+                      ON. No password is requested again.
                     </p>
                   </section>
                 ) : null}
               </>
             )}
 
-            {error ? <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p> : null}
+            {error ? (
+              <p
+                role="alert"
+                className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800"
+              >
+                {error}
+              </p>
+            ) : null}
 
             {prepared?.canExecute ? (
               <DialogFooter>
@@ -318,12 +366,18 @@ export function AdminErasureBatchDialog({
                   disabled={!canExecute || loading}
                   onClick={() => void handleExecute()}
                 >
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  {loading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : null}
                   Permanently delete {targetIds.length}
                 </Button>
               </DialogFooter>
             ) : prepared ? (
-              <DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Close review</Button></DialogFooter>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => onOpenChange(false)}>
+                  Close review
+                </Button>
+              </DialogFooter>
             ) : null}
           </div>
         )}

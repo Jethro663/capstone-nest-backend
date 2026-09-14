@@ -277,6 +277,19 @@ export class TokenService implements OnModuleDestroy {
   }
 
   /**
+   * Resolve the owner of a refresh token before logout mutates either security
+   * state. This lets callers revoke account-bound elevated access first, so a
+   * failed Maintenance Access revocation remains safely retryable.
+   */
+  async findUserIdByToken(rawToken: string): Promise<string | null> {
+    const token = await this.dbService.db.query.refreshTokens.findFirst({
+      where: eq(refreshTokens.tokenHash, this.hashToken(rawToken)),
+      columns: { userId: true },
+    });
+    return token?.userId ?? null;
+  }
+
+  /**
    * Revoke a single token by its raw value (used on logout).
    * Hash-based lookup — no userId required.
    */

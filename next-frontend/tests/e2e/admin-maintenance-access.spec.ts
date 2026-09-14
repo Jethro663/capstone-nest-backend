@@ -47,12 +47,11 @@ async function mockMaintenance(page: Page) {
         available: true,
         active: state.active,
         state: state.active ? "active" : "inactive",
+        mode: state.active ? "manual" : null,
         sessionId: state.active ? "maintenance-session" : null,
         serverTime: now.toISOString(),
         startedAt: state.active ? now.toISOString() : null,
-        expiresAt: state.active
-          ? new Date(now.getTime() + 15 * 60_000).toISOString()
-          : null,
+        expiresAt: null,
         reason: state.active ? "Prepare evaluator walkthrough." : null,
         scopeCodes: state.active
           ? ["ACADEMIC_STRUCTURE", "ROSTER", "ACCOUNT_LIFECYCLE"]
@@ -98,8 +97,8 @@ for (const viewport of viewports) {
     await page.setViewportSize(viewport);
     await page.goto("/dashboard/admin/system-settings/maintenance-access");
 
-    const openButton = page.getByRole("button", {
-      name: "Open Maintenance Access",
+    const openButton = page.getByRole("switch", {
+      name: "Turn on Maintenance Access",
     });
     await expect(openButton).toBeDisabled();
     await page.getByLabel("Reason").fill("Prepare evaluator walkthrough.");
@@ -115,7 +114,7 @@ for (const viewport of viewports) {
     await openButton.click();
 
     await expect(
-      page.getByRole("heading", { name: "Maintenance Access is active" }),
+      page.getByRole("heading", { name: "Maintenance Access is ON" }),
     ).toBeVisible();
     expect(state.openedWith).toEqual({
       currentPassword: "mock-password",
@@ -128,9 +127,11 @@ for (const viewport of viewports) {
     });
     await expect(page.getByLabel("Current password")).toHaveCount(0);
 
-    await page.getByRole("button", { name: "Close access now" }).click();
+    await page
+      .getByRole("switch", { name: "Turn off Maintenance Access" })
+      .click();
     await expect(
-      page.getByRole("heading", { name: "Maintenance Access is closed" }),
+      page.getByRole("heading", { name: "Maintenance Access is OFF" }),
     ).toBeVisible();
 
     expect(

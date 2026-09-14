@@ -4,8 +4,7 @@ import { useNavigation } from "@react-navigation/native";
 import { useAdminMaintenance } from "../../hooks/useAdminMaintenance";
 import { adminTheme as theme } from "../../theme/admin";
 
-function formatTimeRemaining(expiresAt: string | null) {
-  if (!expiresAt) return "expiry unavailable";
+function formatTimeRemaining(expiresAt: string) {
   const remainingSeconds = Math.max(
     0,
     Math.ceil((Date.parse(expiresAt) - Date.now()) / 1_000),
@@ -19,6 +18,11 @@ export function AdminMaintenanceNotice() {
   const navigation = useNavigation();
   const { status, isCachedOffline } = useAdminMaintenance();
   if (!status?.active) return null;
+
+  const statusText =
+    status.mode !== "manual" && status.expiresAt
+      ? formatTimeRemaining(status.expiresAt)
+      : "ON until turned OFF, sign-out, or password change";
 
   const manage = () => {
     const target = navigation.getParent() ?? navigation;
@@ -44,7 +48,7 @@ export function AdminMaintenanceNotice() {
       <MaterialCommunityIcons name="tools" size={18} color={theme.red} />
       <View style={{ flex: 1 }}>
         <Text style={{ fontSize: 12, fontWeight: "900", color: theme.text }}>
-          Maintenance Access active
+          Maintenance Access is ON
         </Text>
         <Text
           style={{
@@ -54,7 +58,7 @@ export function AdminMaintenanceNotice() {
             color: theme.subtext,
           }}
         >
-          {formatTimeRemaining(status.expiresAt)}
+          {statusText}
           {isCachedOffline
             ? " · cached while offline"
             : " · evidence safeguards remain"}

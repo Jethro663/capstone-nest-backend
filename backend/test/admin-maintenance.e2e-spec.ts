@@ -17,7 +17,13 @@ import type { NextFunction, Request, Response } from 'express';
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import { DatabaseService } from '../src/database/database.service';
-import { auditLogs, roles, userRoles, users } from '../src/drizzle/schema';
+import {
+  adminMaintenanceSessions,
+  auditLogs,
+  roles,
+  userRoles,
+  users,
+} from '../src/drizzle/schema';
 import { CurrentUser } from '../src/modules/auth/decorators/current-user.decorator';
 import {
   RoleName,
@@ -66,6 +72,7 @@ class AdminMaintenanceProbeController {
 const databaseUrl = process.env.ADMIN_MAINTENANCE_TEST_DATABASE_URL;
 const describeWithDatabase = databaseUrl ? describe : describe.skip;
 const ADMIN_ID = '10000000-0000-4000-8000-000000000001';
+const SECOND_ADMIN_ID = '10000000-0000-4000-8000-000000000005';
 const TEACHER_ID = '10000000-0000-4000-8000-000000000002';
 const TARGET_ID = '10000000-0000-4000-8000-000000000003';
 const SECOND_TARGET_ID = '10000000-0000-4000-8000-000000000004';
@@ -112,7 +119,7 @@ describeWithDatabase(
           connectionTimeout: 5_000,
           statementTimeout: 15_000,
         },
-        adminMaintenance: { enabled: true, durationMinutes: 15 },
+        adminMaintenance: { enabled: true },
         AUTH_PASSWORD_HASH_ROUNDS: '4',
         NODE_ENV: 'test',
       });
@@ -210,6 +217,15 @@ describeWithDatabase(
           isEmailVerified: true,
         },
         {
+          id: SECOND_ADMIN_ID,
+          email: 'second-admin@example.test',
+          password,
+          firstName: 'Second',
+          lastName: 'Admin',
+          status: 'ACTIVE',
+          isEmailVerified: true,
+        },
+        {
           id: TARGET_ID,
           email: 'archived@example.test',
           password,
@@ -230,6 +246,11 @@ describeWithDatabase(
       ]);
       await database.db.insert(userRoles).values([
         { userId: ADMIN_ID, roleId: adminRole.id, assignedBy: 'SYSTEM' },
+        {
+          userId: SECOND_ADMIN_ID,
+          roleId: adminRole.id,
+          assignedBy: 'SYSTEM',
+        },
         { userId: TEACHER_ID, roleId: teacherRole.id, assignedBy: 'SYSTEM' },
         { userId: TARGET_ID, roleId: studentRole.id, assignedBy: 'SYSTEM' },
         {
@@ -269,7 +290,7 @@ describeWithDatabase(
       ).resolves.toBeUndefined();
     });
 
-    it('opens an audited actor-bound exception while permanent safeguards survive expiry and closure', async () => {
+    it('keeps an audited actor-bound switch on until explicit closure while permanent safeguards survive', async () => {
       const baseline = await request(app.getHttpServer())
         .get('/api/admin/maintenance/session')
         .set(asActor('admin', ADMIN_ID))
@@ -288,10 +309,22 @@ describeWithDatabase(
       expect(opened.body.data).toMatchObject({
         active: true,
         state: 'active',
+        mode: 'manual',
         serverTime: START.toISOString(),
+        expiresAt: null,
         scopeCodes: ['ACADEMIC_STRUCTURE', 'ROSTER', 'ACCOUNT_LIFECYCLE'],
       });
       const sessionId = opened.body.data.sessionId as string;
+
+      const otherAdmin = await request(app.getHttpServer())
+        .get('/api/admin/maintenance/session')
+        .set(asActor('admin', SECOND_ADMIN_ID))
+        .expect(200);
+      expect(otherAdmin.body.data).toMatchObject({
+        active: false,
+        state: 'inactive',
+        mode: null,
+      });
 
       await request(app.getHttpServer())
         .post(`/api/admin/maintenance-probe/users/${TARGET_ID}/reactivate`)
@@ -326,22 +359,18 @@ describeWithDatabase(
         .send({})
         .expect(400);
 
-      now = new Date(START.getTime() + 16 * 60 * 1000);
-      const expired = await request(app.getHttpServer())
+      now = new Date(START.getTime() + 24 * 60 * 60 * 1000);
+      const stillActive = await request(app.getHttpServer())
         .get('/api/admin/maintenance/session')
         .set(asActor('admin', ADMIN_ID))
         .expect(200);
-      expect(expired.body.data).toMatchObject({
-        active: false,
-        state: 'expired',
-        sessionId: null,
+      expect(stillActive.body.data).toMatchObject({
+        active: true,
+        state: 'active',
+        mode: 'manual',
+        sessionId,
+        expiresAt: null,
       });
-      await request(app.getHttpServer())
-        .post(
-          `/api/admin/maintenance-probe/users/${SECOND_TARGET_ID}/reactivate`,
-        )
-        .set(asActor('admin', ADMIN_ID))
-        .expect(400);
 
       const closed = await request(app.getHttpServer())
         .delete('/api/admin/maintenance/session')
@@ -354,7 +383,48 @@ describeWithDatabase(
       });
       const persisted =
         await database.db.query.adminMaintenanceSessions.findFirst();
-      expect(persisted).toMatchObject({ id: sessionId, status: 'EXPIRED' });
+      expect(persisted).toMatchObject({
+        id: sessionId,
+        mode: 'MANUAL',
+        expiresAt: null,
+        status: 'CLOSED',
+      });
+
+      await request(app.getHttpServer())
+        .post(
+          `/api/admin/maintenance-probe/users/${SECOND_TARGET_ID}/reactivate`,
+        )
+        .set(asActor('admin', ADMIN_ID))
+        .expect(400);
+    });
+
+    it('expires a legacy timed session using backend time', async () => {
+      await database.db.insert(adminMaintenanceSessions).values({
+        actorUserId: ADMIN_ID,
+        actorSessionVersion: 0,
+        status: 'ACTIVE',
+        mode: 'TIMED',
+        scopeCodes: ['ACADEMIC_STRUCTURE', 'ROSTER', 'ACCOUNT_LIFECYCLE'],
+        reason: 'Legacy timed session retained during the switch migration.',
+        startedAt: START,
+        expiresAt: new Date(START.getTime() + 15 * 60 * 1000),
+      });
+
+      now = new Date(START.getTime() + 16 * 60 * 1000);
+      const expired = await request(app.getHttpServer())
+        .get('/api/admin/maintenance/session')
+        .set(asActor('admin', ADMIN_ID))
+        .expect(200);
+
+      expect(expired.body.data).toMatchObject({
+        active: false,
+        state: 'expired',
+        mode: 'timed',
+        sessionId: null,
+      });
+      await expect(
+        database.db.query.adminMaintenanceSessions.findFirst(),
+      ).resolves.toMatchObject({ status: 'EXPIRED', mode: 'TIMED' });
     });
   },
 );

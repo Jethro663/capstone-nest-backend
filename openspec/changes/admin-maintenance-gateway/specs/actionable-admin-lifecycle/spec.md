@@ -145,8 +145,8 @@ The web and mobile admin clients SHALL render the shared decision, effects, pres
 - **WHEN** mobile has no verified connection
 - **THEN** it disables maintenance execution and does not queue a destructive request
 
-#### Scenario: Session expires during review
-- **WHEN** Maintenance Access expires before execute
+#### Scenario: Maintenance Access ends during review
+- **WHEN** Maintenance Access is turned off, revoked, or a legacy timed session expires before execute
 - **THEN** the client preserves non-secret choices, clears password fields, and routes the actor to reauthenticate Maintenance Access
 
 ### Requirement: Existing lifecycle consumers remain compatible during adoption

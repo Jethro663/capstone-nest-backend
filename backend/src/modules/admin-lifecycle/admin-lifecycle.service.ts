@@ -335,7 +335,7 @@ export class AdminLifecycleService {
     if (!maintenance.allows(requiredRule)) {
       throw new ForbiddenException({
         code: 'MAINTENANCE_SCOPE_REQUIRED',
-        message: 'Open Maintenance Access with the required erasure scope.',
+        message: 'Turn on Maintenance Access with the required erasure scope.',
       });
     }
     await this.adminMaintenanceService.requireActiveSession(
@@ -369,7 +369,7 @@ export class AdminLifecycleService {
     if (!maintenance.allows(requiredRule)) {
       throw new ForbiddenException({
         code: 'MAINTENANCE_SCOPE_REQUIRED',
-        message: 'Open Maintenance Access with the required erasure scope.',
+        message: 'Turn on Maintenance Access with the required erasure scope.',
       });
     }
     return this.adminErasureService.retryCleanup(operationId);

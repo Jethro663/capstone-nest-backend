@@ -7,6 +7,7 @@ import { TokenService } from './token.service';
 import { UsersService } from '../users/users.service';
 import { OtpService } from '../otp/otp.service';
 import { AuditService } from '../audit/audit.service';
+import { AdminMaintenanceService } from '../admin-maintenance/admin-maintenance.service';
 
 // Mock bcrypt at module level so its properties are configurable
 jest.mock('bcrypt', () => ({
@@ -68,12 +69,17 @@ const mockTokenService = {
   generateRawRefreshToken: jest.fn().mockReturnValue('raw-opaque-token'),
   storeRefreshToken: jest.fn().mockResolvedValue(undefined),
   validateAndRotate: jest.fn(),
+  findUserIdByToken: jest.fn().mockResolvedValue('user-uuid-1'),
   revokeByToken: jest.fn().mockResolvedValue(undefined),
   revokeAllForUser: jest.fn().mockResolvedValue(undefined),
 };
 
 const mockAuditService = {
   log: jest.fn().mockResolvedValue(undefined),
+};
+
+const mockAdminMaintenanceService = {
+  revokeForActor: jest.fn().mockResolvedValue(false),
 };
 
 // ---------------------------------------------------------------------------
@@ -85,6 +91,10 @@ describe('AuthService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockTokenService.findUserIdByToken.mockResolvedValue('user-uuid-1');
+    mockTokenService.revokeByToken.mockResolvedValue('user-uuid-1');
+    mockTokenService.revokeAllForUser.mockResolvedValue(undefined);
+    mockAdminMaintenanceService.revokeForActor.mockResolvedValue(false);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -95,6 +105,10 @@ describe('AuthService', () => {
         { provide: OtpService, useValue: mockOtpService },
         { provide: TokenService, useValue: mockTokenService },
         { provide: AuditService, useValue: mockAuditService },
+        {
+          provide: AdminMaintenanceService,
+          useValue: mockAdminMaintenanceService,
+        },
       ],
     }).compile();
 
@@ -295,16 +309,61 @@ describe('AuthService', () => {
   // -------------------------------------------------------------------------
 
   describe('logout()', () => {
-    it('should call revokeByToken with the provided token', async () => {
+    it('revokes the refresh token and any active Maintenance Access for its owner', async () => {
       await service.logout('raw-token-to-revoke');
+      expect(mockTokenService.findUserIdByToken).toHaveBeenCalledWith(
+        'raw-token-to-revoke',
+      );
       expect(mockTokenService.revokeByToken).toHaveBeenCalledWith(
         'raw-token-to-revoke',
       );
+      expect(mockAdminMaintenanceService.revokeForActor).toHaveBeenCalledWith(
+        'user-uuid-1',
+        'LOGOUT',
+      );
+      expect(
+        mockAdminMaintenanceService.revokeForActor.mock.invocationCallOrder[0],
+      ).toBeLessThan(
+        mockTokenService.revokeByToken.mock.invocationCallOrder[0],
+      );
     });
 
-    it('should not throw if revokeByToken fails (non-critical)', async () => {
-      mockTokenService.revokeByToken.mockRejectedValue(new Error('DB error'));
-      await expect(service.logout('token')).resolves.toBeUndefined();
+    it('does not mutate security state when token ownership lookup fails', async () => {
+      mockTokenService.findUserIdByToken.mockRejectedValue(
+        new Error('DB error'),
+      );
+      await expect(service.logout('token')).rejects.toThrow('DB error');
+      expect(mockAdminMaintenanceService.revokeForActor).not.toHaveBeenCalled();
+      expect(mockTokenService.revokeByToken).not.toHaveBeenCalled();
+    });
+
+    it('leaves token revocation retryable when Maintenance Access cannot be revoked', async () => {
+      mockAdminMaintenanceService.revokeForActor.mockRejectedValue(
+        new Error('maintenance DB error'),
+      );
+      await expect(service.logout('token')).rejects.toThrow(
+        'maintenance DB error',
+      );
+      expect(mockTokenService.revokeByToken).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('logoutAll()', () => {
+    it('revokes Maintenance Access before revoking every refresh token', async () => {
+      await service.logoutAll('user-uuid-1');
+
+      expect(mockAdminMaintenanceService.revokeForActor).toHaveBeenCalledWith(
+        'user-uuid-1',
+        'LOGOUT_ALL',
+      );
+      expect(mockTokenService.revokeAllForUser).toHaveBeenCalledWith(
+        'user-uuid-1',
+      );
+      expect(
+        mockAdminMaintenanceService.revokeForActor.mock.invocationCallOrder[0],
+      ).toBeLessThan(
+        mockTokenService.revokeAllForUser.mock.invocationCallOrder[0],
+      );
     });
   });
 

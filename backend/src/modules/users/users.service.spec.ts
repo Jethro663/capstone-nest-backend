@@ -76,6 +76,7 @@ describe('UsersService', () => {
 
   const mockAdminMaintenanceService = {
     resolveForActor: jest.fn().mockResolvedValue(inactiveDemoContext),
+    revokeForActor: jest.fn().mockResolvedValue(false),
   };
 
   beforeEach(async () => {
@@ -86,6 +87,7 @@ describe('UsersService', () => {
     mockAdminMaintenanceService.resolveForActor.mockResolvedValue(
       inactiveDemoContext,
     );
+    mockAdminMaintenanceService.revokeForActor.mockResolvedValue(false);
 
     mockDb = {
       query: {
@@ -426,6 +428,44 @@ describe('UsersService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
+    it('revokes the target account Maintenance Access before an admin password update', async () => {
+      jest
+        .spyOn(service, 'findById')
+        .mockResolvedValueOnce(makeUser({ email: 'before@example.com' }))
+        .mockResolvedValueOnce(makeUser({ email: 'before@example.com' }));
+      const tx = {
+        query: {
+          studentProfiles: { findFirst: jest.fn() },
+          roles: { findFirst: jest.fn() },
+          teacherProfiles: { findFirst: jest.fn() },
+        },
+        update: jest.fn().mockReturnValue({
+          set: jest.fn().mockReturnValue({
+            where: jest.fn().mockResolvedValue(undefined),
+          }),
+        }),
+        insert: jest.fn(),
+        delete: jest.fn(),
+      };
+      mockDb.transaction.mockImplementation(
+        (callback: (transaction: typeof tx) => unknown) => callback(tx),
+      );
+
+      await service.updateUser(
+        'user-1',
+        { password: 'NewPassword1!' },
+        'admin-1',
+      );
+
+      expect(mockAdminMaintenanceService.revokeForActor).toHaveBeenCalledWith(
+        'user-1',
+        'PASSWORD_CHANGED',
+      );
+      expect(
+        mockAdminMaintenanceService.revokeForActor.mock.invocationCallOrder[0],
+      ).toBeLessThan(tx.update.mock.invocationCallOrder[0]);
+    });
+
     it('rejects editing a deleted account when Maintenance Access is inactive', async () => {
       jest
         .spyOn(service, 'findById')
@@ -729,6 +769,37 @@ describe('UsersService', () => {
           previousStatus: 'ACTIVE',
         },
       });
+    });
+  });
+
+  describe('updatePassword', () => {
+    it('revokes Maintenance Access before persisting the new password', async () => {
+      jest.spyOn(service, 'findById').mockResolvedValue(makeUser());
+      const where = jest.fn().mockResolvedValue(undefined);
+      const set = jest.fn().mockReturnValue({ where });
+      mockDb.update.mockReturnValue({ set });
+
+      await service.updatePassword('user-1', 'NewPassword1!');
+
+      expect(mockAdminMaintenanceService.revokeForActor).toHaveBeenCalledWith(
+        'user-1',
+        'PASSWORD_CHANGED',
+      );
+      expect(
+        mockAdminMaintenanceService.revokeForActor.mock.invocationCallOrder[0],
+      ).toBeLessThan(set.mock.invocationCallOrder[0]);
+    });
+
+    it('does not change the password when Maintenance Access revocation fails', async () => {
+      jest.spyOn(service, 'findById').mockResolvedValue(makeUser());
+      mockAdminMaintenanceService.revokeForActor.mockRejectedValue(
+        new Error('maintenance revocation failed'),
+      );
+
+      await expect(
+        service.updatePassword('user-1', 'NewPassword1!'),
+      ).rejects.toThrow('maintenance revocation failed');
+      expect(mockDb.update).not.toHaveBeenCalled();
     });
   });
 

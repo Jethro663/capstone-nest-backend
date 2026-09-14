@@ -18,6 +18,8 @@ export type AdminMaintenanceSessionStatus =
   | 'EXPIRED'
   | 'REVOKED';
 
+export type AdminMaintenanceSessionMode = 'TIMED' | 'MANUAL';
+
 export type AdminMaintenanceScopeCode =
   | 'ACADEMIC_STRUCTURE'
   | 'ROSTER'
@@ -35,6 +37,10 @@ export const adminMaintenanceSessions = pgTable(
       .$type<AdminMaintenanceSessionStatus>()
       .notNull()
       .default('ACTIVE'),
+    mode: text('mode')
+      .$type<AdminMaintenanceSessionMode>()
+      .notNull()
+      .default('TIMED'),
     scopeCodes: jsonb('scope_codes')
       .$type<AdminMaintenanceScopeCode[]>()
       .notNull(),
@@ -42,7 +48,7 @@ export const adminMaintenanceSessions = pgTable(
     startedAt: timestamp('started_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
-    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
     lastUsedAt: timestamp('last_used_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -60,8 +66,12 @@ export const adminMaintenanceSessions = pgTable(
       sql`${table.status} IN ('ACTIVE','CLOSED','EXPIRED','REVOKED')`,
     ),
     check(
+      'admin_maintenance_session_mode_valid',
+      sql`${table.mode} IN ('TIMED','MANUAL')`,
+    ),
+    check(
       'admin_maintenance_session_expiry_valid',
-      sql`${table.expiresAt} > ${table.startedAt}`,
+      sql`(${table.mode} = 'TIMED' AND ${table.expiresAt} IS NOT NULL AND ${table.expiresAt} > ${table.startedAt}) OR (${table.mode} = 'MANUAL' AND ${table.expiresAt} IS NULL)`,
     ),
     uniqueIndex('admin_maintenance_session_actor_active_unique')
       .on(table.actorUserId)

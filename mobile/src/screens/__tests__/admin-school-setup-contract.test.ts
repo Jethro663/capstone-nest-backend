@@ -106,7 +106,7 @@ describe("administrator School Setup workspaces", () => {
     expect(classes).toContain("classesApi.toggleStatus");
     expect(classes).toContain("Schedule conflict");
     expect(classes).toContain(
-      "Maintenance Access expired or the server rejected this exception",
+      "Maintenance Access is OFF or the server rejected this exception",
     );
   });
 

@@ -59,6 +59,7 @@ const baseStatus = {
   available: true,
   active: false,
   state: "inactive",
+  mode: null,
   sessionId: null,
   serverTime: "2026-09-13T01:00:00.000Z",
   startedAt: null,
@@ -144,9 +145,9 @@ describe("AdminMaintenanceSettingsScreen", () => {
 
   it("requires every field and sends the fixed server contract after native confirmation", async () => {
     const root = renderScreen().root;
-    expect(root.findByProps({ label: "Review and open" }).props.disabled).toBe(
-      true,
-    );
+    expect(
+      root.findByProps({ label: "Review and turn ON" }).props.disabled,
+    ).toBe(true);
 
     act(() => {
       root
@@ -165,13 +166,15 @@ describe("AdminMaintenanceSettingsScreen", () => {
         root.findByProps({ title }).props.onPress();
     });
 
-    expect(root.findByProps({ label: "Review and open" }).props.disabled).toBe(
-      false,
+    expect(
+      root.findByProps({ label: "Review and turn ON" }).props.disabled,
+    ).toBe(false);
+    act(() =>
+      root.findByProps({ label: "Review and turn ON" }).props.onPress(),
     );
-    act(() => root.findByProps({ label: "Review and open" }).props.onPress());
     expect(alert).toHaveBeenCalledWith(
-      "Open Maintenance Access?",
-      expect.any(String),
+      "Turn on Maintenance Access?",
+      expect.stringMatching(/until you turn it off/i),
       expect.any(Array),
     );
     const actions = alert.mock.calls.at(-1)?.[2];
@@ -207,7 +210,9 @@ describe("AdminMaintenanceSettingsScreen", () => {
       ])
         root.findByProps({ title }).props.onPress();
     });
-    act(() => root.findByProps({ label: "Review and open" }).props.onPress());
+    act(() =>
+      root.findByProps({ label: "Review and turn ON" }).props.onPress(),
+    );
     const actions = alert.mock.calls.at(-1)?.[2];
     await act(async () => actions[1].onPress());
     expect(maintenance.refresh).toHaveBeenCalled();
@@ -225,13 +230,32 @@ describe("AdminMaintenanceSettingsScreen", () => {
         .findByProps({ label: "Current password" })
         .props.onChangeText("secret"),
     );
-    expect(root.findByProps({ label: "Review and open" }).props.disabled).toBe(
-      true,
-    );
+    expect(
+      root.findByProps({ label: "Review and turn ON" }).props.disabled,
+    ).toBe(true);
     act(() => appStateListener?.("background"));
     expect(root.findByProps({ label: "Current password" }).props.value).toBe(
       "",
     );
     expect(noticeText(root)).toMatch(/never queued/i);
+  });
+
+  it("renders a manual switch as ON without an expiry and exposes immediate OFF", () => {
+    maintenance.status = {
+      ...baseStatus,
+      active: true,
+      state: "active",
+      mode: "manual",
+      sessionId: "session-1",
+      startedAt: "2026-09-13T01:00:00.000Z",
+      expiresAt: null,
+    };
+
+    const root = renderScreen().root;
+
+    expect(
+      root.findByProps({ title: "Maintenance Access is ON" }).props.subtitle,
+    ).toMatch(/remains on until you turn it off, sign out, or change/i);
+    expect(root.findByProps({ label: "Turn OFF now" })).toBeTruthy();
   });
 });

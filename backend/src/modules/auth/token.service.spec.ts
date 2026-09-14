@@ -160,4 +160,26 @@ describe('TokenService', () => {
       expect(mockTx.update).toHaveBeenCalledTimes(2);
     });
   });
+
+  describe('findUserIdByToken', () => {
+    it('returns the refresh-token owner without revoking the token', async () => {
+      mockDbService.db.query.refreshTokens.findFirst.mockResolvedValue({
+        userId: 'user-123',
+      });
+
+      await expect(service.findUserIdByToken('raw-token')).resolves.toBe(
+        'user-123',
+      );
+      expect(mockDbService.db.update).not.toHaveBeenCalled();
+    });
+
+    it('returns null when the refresh token is unknown', async () => {
+      mockDbService.db.query.refreshTokens.findFirst.mockResolvedValue(
+        undefined,
+      );
+      await expect(
+        service.findUserIdByToken('missing-token'),
+      ).resolves.toBeNull();
+    });
+  });
 });

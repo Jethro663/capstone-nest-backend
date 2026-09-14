@@ -148,7 +148,7 @@ describe("AdminLifecycleDialog", () => {
       await screen.findByText(/destination section will exceed capacity/i),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: /open maintenance access/i }),
+      screen.getByRole("link", { name: /turn on maintenance access/i }),
     ).toHaveAttribute(
       "href",
       "/dashboard/admin/system-settings/maintenance-access/",
@@ -199,7 +199,9 @@ describe("AdminLifecycleDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: /confirm and apply/i }));
 
     expect(
-      await screen.findByText(/maintenance access expired or changed/i),
+      await screen.findByText(
+        /maintenance access is no longer active or changed/i,
+      ),
     ).toBeInTheDocument();
     expect(mockMaintenanceRefresh).toHaveBeenCalledTimes(1);
     expect(

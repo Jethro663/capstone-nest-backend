@@ -6,7 +6,17 @@ import { useAdminMaintenance } from "@/providers/AdminMaintenanceProvider";
 
 export function AdminMaintenanceBanner() {
   const { status } = useAdminMaintenance();
-  if (!status?.active || !status.expiresAt) return null;
+  if (!status?.active) return null;
+
+  const timing =
+    status.mode !== "manual" && status.expiresAt
+      ? `This legacy timed session remains on until ${new Date(
+          status.expiresAt,
+        ).toLocaleTimeString([], {
+          hour: "numeric",
+          minute: "2-digit",
+        })}.`
+      : "It remains ON until you turn it OFF, sign out, or change the account password.";
 
   return (
     <div
@@ -19,13 +29,9 @@ export function AdminMaintenanceBanner() {
           aria-hidden="true"
         />
         <p className="text-sm leading-5">
-          <span className="font-semibold">Maintenance Access is active.</span>{" "}
-          Approved admin workflow warnings can be resolved until{" "}
-          {new Date(status.expiresAt).toLocaleTimeString([], {
-            hour: "numeric",
-            minute: "2-digit",
-          })}
-          . Finalized academic evidence and audit history stay protected.
+          <span className="font-semibold">Maintenance Access is ON.</span>{" "}
+          {timing} Finalized academic evidence and audit history stay
+          protected.
         </p>
       </div>
       <Link

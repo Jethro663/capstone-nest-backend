@@ -200,7 +200,7 @@ export function planSectionLifecycle(
       } else {
         blockers.push({
           code: 'DESTINATION_GROUP_EXCEEDS_CAPACITY',
-          message: `${transferCount} planned transfers would exceed destination capacity. Open Maintenance Access to review the move.`,
+          message: `${transferCount} planned transfers would exceed destination capacity. Turn on Maintenance Access to review the move.`,
           resolvable: true,
           resolutionOptions: ['OPEN_MAINTENANCE_ACCESS'],
         });

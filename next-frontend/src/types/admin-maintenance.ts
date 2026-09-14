@@ -4,6 +4,8 @@ export type AdminMaintenanceState =
   | "active"
   | "expired";
 
+export type AdminMaintenanceMode = "timed" | "manual";
+
 export type AdminMaintenanceScopeCode =
   | "ACADEMIC_STRUCTURE"
   | "ROSTER"
@@ -33,6 +35,7 @@ export type AdminMaintenanceStatus = {
   available: boolean;
   active: boolean;
   state: AdminMaintenanceState;
+  mode: AdminMaintenanceMode | null;
   sessionId: string | null;
   serverTime: string;
   startedAt: string | null;

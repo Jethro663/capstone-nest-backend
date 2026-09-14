@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
-import { and, eq, gt } from 'drizzle-orm';
+import { and, eq, gt, isNull, or } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import {
   adminMaintenanceSessions,
@@ -19,6 +19,7 @@ import { RoleName } from '../auth/decorators/roles.decorator';
 import { AuditService } from '../audit/audit.service';
 import {
   REQUIRED_MAINTENANCE_ACKNOWLEDGEMENTS,
+  type AdminMaintenanceMode,
   type AdminMaintenanceStatusDto,
   type OpenAdminMaintenanceSessionDto,
 } from './DTO/admin-maintenance.dto';
@@ -31,6 +32,11 @@ import {
 } from './admin-maintenance.policy';
 
 export const ADMIN_MAINTENANCE_CLOCK = Symbol('ADMIN_MAINTENANCE_CLOCK');
+
+export type AdminMaintenanceRevocationCause =
+  | 'LOGOUT'
+  | 'LOGOUT_ALL'
+  | 'PASSWORD_CHANGED';
 
 type MaintenanceRow = typeof adminMaintenanceSessions.$inferSelect;
 type ActorRow = {
@@ -45,12 +51,14 @@ type ActorRow = {
 export interface AdminMaintenanceContext {
   active: boolean;
   sessionId: string | null;
+  mode: AdminMaintenanceMode | null;
   expiresAt: Date | null;
   allows: (rule: AdminMaintenanceRuleCode) => boolean;
   audit: (ruleCodes: readonly AdminMaintenanceRuleCode[]) =>
     | {
         maintenanceSessionId: string;
-        maintenanceExpiresAt: string;
+        maintenanceMode: AdminMaintenanceMode;
+        maintenanceExpiresAt: string | null;
         maintenanceRuleCodes: AdminMaintenanceRuleCode[];
       }
     | undefined;
@@ -75,20 +83,11 @@ export class AdminMaintenanceService {
     return this.configService.get<boolean>('adminMaintenance.enabled', false);
   }
 
-  private durationMinutes() {
-    const configured = this.configService.get<number>(
-      'adminMaintenance.durationMinutes',
-      15,
-    );
-    return Number.isInteger(configured) && configured >= 5 && configured <= 30
-      ? configured
-      : 15;
-  }
-
   private inactiveContext(): AdminMaintenanceContext {
     return {
       active: false,
       sessionId: null,
+      mode: null,
       expiresAt: null,
       allows: () => false,
       audit: () => undefined,
@@ -144,6 +143,15 @@ export class AdminMaintenanceService {
     );
   }
 
+  private mode(row: MaintenanceRow): AdminMaintenanceMode {
+    return row.mode === 'MANUAL' ? 'manual' : 'timed';
+  }
+
+  private hasValidLifetime(row: MaintenanceRow, now: Date) {
+    if (row.mode === 'MANUAL') return row.expiresAt === null;
+    return Boolean(row.expiresAt && row.expiresAt.getTime() > now.getTime());
+  }
+
   private isEffective(
     row: MaintenanceRow | null,
     actor: ActorRow | null,
@@ -158,7 +166,7 @@ export class AdminMaintenanceService {
       row.status === 'ACTIVE' &&
       row.actorUserId === actor.id &&
       row.actorSessionVersion === actor.sessionVersion &&
-      row.expiresAt.getTime() > now.getTime(),
+      this.hasValidLifetime(row, now),
     );
   }
 
@@ -167,6 +175,7 @@ export class AdminMaintenanceService {
     return {
       active: true,
       sessionId: row.id,
+      mode: this.mode(row),
       expiresAt: row.expiresAt,
       allows: (rule) => granted.has(ADMIN_MAINTENANCE_RULE_SCOPE[rule]),
       audit: (ruleCodes) => {
@@ -176,7 +185,8 @@ export class AdminMaintenanceService {
         if (!unique.length) return undefined;
         return {
           maintenanceSessionId: row.id,
-          maintenanceExpiresAt: row.expiresAt.toISOString(),
+          maintenanceMode: this.mode(row),
+          maintenanceExpiresAt: row.expiresAt?.toISOString() ?? null,
           maintenanceRuleCodes: unique,
         };
       },
@@ -200,7 +210,16 @@ export class AdminMaintenanceService {
             row.actorSessionVersion,
           ),
           eq(adminMaintenanceSessions.status, 'ACTIVE'),
-          gt(adminMaintenanceSessions.expiresAt, now),
+          or(
+            and(
+              eq(adminMaintenanceSessions.mode, 'MANUAL'),
+              isNull(adminMaintenanceSessions.expiresAt),
+            ),
+            and(
+              eq(adminMaintenanceSessions.mode, 'TIMED'),
+              gt(adminMaintenanceSessions.expiresAt, now),
+            ),
+          ),
         ),
       )
       .returning();
@@ -215,11 +234,25 @@ export class AdminMaintenanceService {
     | { status: 'EXPIRED' | 'REVOKED'; action: string; cause: string }
     | undefined {
     if (row.status !== 'ACTIVE') return undefined;
-    if (row.expiresAt.getTime() <= now.getTime()) {
+    if (
+      row.mode === 'TIMED' &&
+      row.expiresAt &&
+      row.expiresAt.getTime() <= now.getTime()
+    ) {
       return {
         status: 'EXPIRED',
         action: 'ADMIN_MAINTENANCE_EXPIRED',
         cause: 'SESSION_EXPIRED',
+      };
+    }
+    if (
+      (row.mode === 'MANUAL' && row.expiresAt !== null) ||
+      (row.mode === 'TIMED' && row.expiresAt === null)
+    ) {
+      return {
+        status: 'REVOKED',
+        action: 'ADMIN_MAINTENANCE_REVOKED',
+        cause: 'INVALID_SESSION_LIFETIME',
       };
     }
     if (!actor) {
@@ -279,7 +312,8 @@ export class AdminMaintenanceService {
           targetId: row.id,
           metadata: {
             cause: invalidation.cause,
-            expiresAt: row.expiresAt.toISOString(),
+            mode: this.mode(row),
+            expiresAt: row.expiresAt?.toISOString() ?? null,
           },
         },
         tx as never,
@@ -300,7 +334,10 @@ export class AdminMaintenanceService {
       available &&
       row &&
       (row.status === 'EXPIRED' ||
-        (row.status === 'ACTIVE' && row.expiresAt.getTime() <= now.getTime())),
+        (row.status === 'ACTIVE' &&
+          row.mode === 'TIMED' &&
+          row.expiresAt !== null &&
+          row.expiresAt.getTime() <= now.getTime())),
     );
     return {
       available,
@@ -312,10 +349,11 @@ export class AdminMaintenanceService {
           : expired
             ? 'expired'
             : 'inactive',
+      mode: active || expired ? this.mode(row!) : null,
       sessionId: active ? row!.id : null,
       serverTime: now.toISOString(),
       startedAt: active ? row!.startedAt.toISOString() : null,
-      expiresAt: active ? row!.expiresAt.toISOString() : null,
+      expiresAt: active ? (row!.expiresAt?.toISOString() ?? null) : null,
       reason: active ? row!.reason : null,
       scopeCodes: active ? [...row!.scopeCodes] : [],
       rules: ADMIN_MAINTENANCE_RULES,
@@ -395,9 +433,6 @@ export class AdminMaintenanceService {
     }
 
     const now = this.clock();
-    const expiresAt = new Date(
-      now.getTime() + this.durationMinutes() * 60 * 1000,
-    );
     const { created, revokedSessionIds } = await this.db.transaction(
       async (tx) => {
         const revoked = await tx
@@ -416,10 +451,11 @@ export class AdminMaintenanceService {
             actorUserId: actorId,
             actorSessionVersion: actor.sessionVersion,
             status: 'ACTIVE',
+            mode: 'MANUAL',
             scopeCodes: [...ADMIN_MAINTENANCE_SCOPES],
             reason: dto.reason.trim(),
             startedAt: now,
-            expiresAt,
+            expiresAt: null,
             lastUsedAt: now,
             createdAt: now,
             updatedAt: now,
@@ -433,7 +469,8 @@ export class AdminMaintenanceService {
             targetType: 'admin_maintenance_session',
             targetId: row.id,
             metadata: {
-              expiresAt: row.expiresAt.toISOString(),
+              mode: this.mode(row),
+              expiresAt: row.expiresAt?.toISOString() ?? null,
               scopeCodes: row.scopeCodes,
               reason: row.reason,
               revokedSessionIds,
@@ -474,7 +511,10 @@ export class AdminMaintenanceService {
             action: 'ADMIN_MAINTENANCE_CLOSED',
             targetType: 'admin_maintenance_session',
             targetId: row.id,
-            metadata: { expiredAt: row.expiresAt.toISOString() },
+            metadata: {
+              mode: this.mode(row),
+              expiresAt: row.expiresAt?.toISOString() ?? null,
+            },
           },
           tx as never,
         );
@@ -483,6 +523,41 @@ export class AdminMaintenanceService {
     });
     const actor = await this.readActor(actorId);
     return this.toStatus(closed ?? null, actor, roles, now);
+  }
+
+  async revokeForActor(
+    actorId: string,
+    cause: AdminMaintenanceRevocationCause,
+  ): Promise<boolean> {
+    const now = this.clock();
+    return this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(adminMaintenanceSessions)
+        .set({ status: 'REVOKED', closedAt: now, updatedAt: now })
+        .where(
+          and(
+            eq(adminMaintenanceSessions.actorUserId, actorId),
+            eq(adminMaintenanceSessions.status, 'ACTIVE'),
+          ),
+        )
+        .returning();
+      if (!row) return false;
+      await this.auditService.log(
+        {
+          actorId,
+          action: 'ADMIN_MAINTENANCE_REVOKED',
+          targetType: 'admin_maintenance_session',
+          targetId: row.id,
+          metadata: {
+            cause,
+            mode: this.mode(row),
+            expiresAt: row.expiresAt?.toISOString() ?? null,
+          },
+        },
+        tx as never,
+      );
+      return true;
+    });
   }
 
   async resolveForActor(
@@ -536,7 +611,7 @@ export class AdminMaintenanceService {
       throw new ForbiddenException({
         code: 'MAINTENANCE_SESSION_REQUIRED',
         message:
-          'Maintenance Access expired or changed. Reauthenticate and review the current impact again.',
+          'Maintenance Access is off or changed. Reauthenticate and review the current impact again.',
       });
     }
     const touched = await this.touchSession(effectiveRow, now);
@@ -544,7 +619,7 @@ export class AdminMaintenanceService {
       throw new ForbiddenException({
         code: 'MAINTENANCE_SESSION_REQUIRED',
         message:
-          'Maintenance Access expired or changed. Reauthenticate and review the current impact again.',
+          'Maintenance Access is off or changed. Reauthenticate and review the current impact again.',
       });
     }
     return this.context(touched[0]);

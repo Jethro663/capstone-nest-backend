@@ -67,3 +67,12 @@
 - [x] 9.6 Pass focused and full backend/web/mobile verification, OpenSpec validation, contract parity, builds, and authenticated or fixture-backed runtime checks.
 - [x] 9.7 Build and verify a new ARM64 APK because mobile bundle inputs changed; update the existing download manifest/artifact contract and record archive, ABI, signature, API URL, size, and checksum evidence.
 - [ ] 9.8 Review the final diff against the plan, commit scoped artifacts and implementation, push `developement`, verify exact-SHA CI/Railway/live health and served APK integrity, and record unverified physical-device boundaries.
+
+## 10. Maintenance Access Switch Mode
+
+- [x] 10.1 Replace fixed-duration opening with explicit `MANUAL` persistence, nullable expiry, legacy `TIMED` compatibility, and additive status/audit mode fields.
+- [x] 10.2 Revoke active Maintenance Access on logout, logout-all, and every password update through one idempotent audited service method.
+- [x] 10.3 Prove actor isolation, manual persistence beyond the former time limit, immediate close, legacy timed expiry, migration upgrade, and protected-rule behavior in backend contract/integration gates.
+- [x] 10.4 Convert web and mobile Maintenance Access surfaces to persistent ON/OFF semantics without making either client a policy authority.
+- [ ] 10.5 Bump, build, verify, publish, and register Android build 39 because the mobile bundle changes.
+- [ ] 10.6 Complete full verification, final review, exact-SHA CI/Railway deployment, non-destructive authenticated acceptance, and served-artifact integrity checks.

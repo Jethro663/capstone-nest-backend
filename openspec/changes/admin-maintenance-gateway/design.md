@@ -4,13 +4,13 @@ Admin mutation policy currently lives in three places: independent domain-servic
 
 The existing lifecycle executor already has the correct irreversible-operation shell: deterministic preview, canonical hash and expiry, dependency revalidation, idempotency, academic transaction serialization, audit records, and lifecycle events. The existing System Reset already owns the much broader coordinated clean-slate operation. This design replaces the admin policy front door without weakening those two proven boundaries.
 
-The canonical implementation plan is `docs/feature-plans/2026-09-13-admin-maintenance-gateway-and-safeguard-reset.md`; the dependency/blast-radius evidence is in `docs/feature-analysis/2026-09-13-admin-safeguard-system-isolation-analysis.md`.
+The original gateway implementation plan is `docs/feature-plans/2026-09-13-admin-maintenance-gateway-and-safeguard-reset.md`; the switch-mode follow-up is `docs/feature-plans/2026-09-14-maintenance-access-switch-mode.md`, with isolation evidence in `docs/feature-analysis/2026-09-14-maintenance-access-switch-mode-isolation-analysis.md`.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- Give each Admin an actor-bound, short-lived Maintenance Access session after one current-password step-up.
+- Give each Admin an actor-bound Maintenance Access switch after one current-password step-up, remaining on until explicit close or a defined security revocation event.
 - Return structured, executable outcomes instead of expected safeguard exceptions becoming dead ends.
 - Keep authentication, integrity constraints, finalized/submitted evidence, concurrency controls, and audit history non-overrideable during routine maintenance.
 - Keep teacher behavior unchanged on shared endpoints.
@@ -30,7 +30,7 @@ The canonical implementation plan is `docs/feature-plans/2026-09-13-admin-mainte
 
 ### Use actor-bound durable sessions instead of a global mode
 
-`admin_maintenance_sessions` stores the actor, actor session version, fixed scopes, reason, status, and expiry. The policy resolver uses backend time and the authenticated actor. A session is effective only while its actor still has the same `users.session_version`, active/verified account state, and Admin role.
+`admin_maintenance_sessions` stores the actor, actor session version, fixed scopes, reason, status, explicit `MANUAL` or legacy `TIMED` mode, and nullable expiry. The policy resolver uses the authenticated actor and durable server state. A manual session is effective until close or revocation only while its actor still has the same `users.session_version`, active/verified account state, and Admin role. Legacy timed rows also require a future expiry.
 
 This is selected over renaming Demo Mode because the current Demo singleton grants school-wide state and makes unrelated devices/actions share a bypass window. It is selected over a client-held force token because the public client must not become policy authority.
 
@@ -60,7 +60,7 @@ This is selected over rebuilding lifecycle operations because `admin_lifecycle_o
 
 Opening Maintenance Access requires current password, reason, and acknowledgements. During the valid session, routine reversible/guided executes use the session plus manifest evidence and do not ask for the password again. Evidence-aware purge keeps action-specific password and exact confirmation. Full Reset keeps its separate stronger contract.
 
-This balances coworker speed with the risk that another bearer session exists for the same Admin account. The short expiry, session-version binding, visible banner, manual close, and audit reduce that exposure.
+This balances coworker speed with the risk that another bearer session exists for the same Admin account. Account-bound state, session-version and eligibility checks, a persistent visible indicator, immediate close, mandatory logout/logout-all/password revocation, the deployment kill switch, and audit constrain that exposure.
 
 ### Keep teacher policy on normal paths
 
@@ -92,13 +92,13 @@ The existing `ARCHIVE_CLASS` and `ARCHIVE_SECTION` operation actions remain the 
 
 The manifest adds an additive presentation disposition. Existing decision states remain for compatibility: retained-evidence purge stays `IMMUTABLE` with `RETAIN_REQUIRED`, missing outcomes use `NEEDS_CHOICE` with `CHOICE_REQUIRED`, and ready/warning states remain executable. Blocked purge previews contain evidence and preservation information but no destructive confirmations or executable purge effects.
 
-### Schema changes are additive
+### Switch-mode schema changes are additive
 
-Migration `0027` creates `admin_maintenance_sessions`, indexes/checks, and an optional nullable operation link if it does not create a reset deletion cycle. Existing lifecycle operation/event records are not renamed or rewritten. The current Demo table is not dropped in the initial migration.
+Migration `0027` creates `admin_maintenance_sessions`, indexes/checks, and an optional nullable operation link if it does not create a reset deletion cycle. Migration `0030` adds explicit mode, backfills existing rows as `TIMED`, makes expiry nullable, and constrains `TIMED` rows to a real future-at-creation expiry while `MANUAL` rows require `expires_at IS NULL`. Existing lifecycle operation/event records are not renamed or rewritten. The current Demo table is not dropped in the initial migration.
 
 ## Risks / Trade-offs
 
-- **An already-stolen Admin bearer token can benefit while that actor's maintenance session is open** → keep expiry short, bind session version, visibly expose status, close manually, revoke on session/password changes, and retain fresh password for purge/reset.
+- **An already-stolen Admin bearer token can benefit while that account's Maintenance Access is on** → bind actor/session version and eligibility, expose persistent status, support immediate close and kill-switch disablement, revoke on logout/logout-all/password changes, and retain fresh password for purge/reset.
 - **Old mobile builds can call removed endpoints** → preserve lifecycle adapters and return a stable inactive Demo compatibility status until a required app release is registered and served.
 - **Policy migration can create a temporarily inconsistent rule map** → replace service injections and tests in one feature-flagged backend cutover; never deploy a stage with both global Demo activation and Maintenance execution active.
 - **A new table can block Full Reset's fail-closed catalog** → update catalog/deletion ordering in the same change and run the disposable real reset rehearsal.

@@ -37,10 +37,11 @@ const makeSession = (overrides: Record<string, unknown> = {}) => ({
   actorUserId: ACTOR_ID,
   actorSessionVersion: 4,
   status: 'ACTIVE',
+  mode: 'MANUAL',
   scopeCodes: ['ACADEMIC_STRUCTURE', 'ROSTER', 'ACCOUNT_LIFECYCLE'],
   reason: 'Prepare a clean academic presentation.',
   startedAt: NOW,
-  expiresAt: FUTURE,
+  expiresAt: null,
   lastUsedAt: NOW,
   closedAt: null,
   createdAt: NOW,
@@ -48,7 +49,10 @@ const makeSession = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-function setup(enabled = true) {
+const makeTimedSession = (overrides: Record<string, unknown> = {}) =>
+  makeSession({ mode: 'TIMED', expiresAt: FUTURE, ...overrides });
+
+function setup(enabled = true, now = NOW) {
   const sessionFindFirst = jest.fn();
   const userFindFirst = jest.fn().mockResolvedValue(makeActor());
   const resetStateFindFirst = jest.fn().mockResolvedValue(undefined);
@@ -73,7 +77,6 @@ function setup(enabled = true) {
   const config = {
     get: jest.fn((key: string, fallback: unknown) => {
       if (key === 'adminMaintenance.enabled') return enabled;
-      if (key === 'adminMaintenance.durationMinutes') return 15;
       return fallback;
     }),
   };
@@ -82,7 +85,7 @@ function setup(enabled = true) {
     { db } as any,
     config as any,
     audit as any,
-    () => new Date(NOW),
+    () => new Date(now),
   );
   return {
     service,
@@ -90,6 +93,7 @@ function setup(enabled = true) {
     userFindFirst,
     resetStateFindFirst,
     returning,
+    values,
     set,
     update,
     insert,
@@ -118,8 +122,9 @@ describe('AdminMaintenanceService', () => {
     await expect(service.getStatus(ACTOR_ID)).resolves.toMatchObject({
       active: true,
       state: 'active',
+      mode: 'manual',
       sessionId: SESSION_ID,
-      expiresAt: FUTURE.toISOString(),
+      expiresAt: null,
     });
 
     userFindFirst.mockResolvedValue(makeActor({ id: OTHER_ADMIN_ID }));
@@ -132,7 +137,7 @@ describe('AdminMaintenanceService', () => {
   });
 
   it.each([
-    ['expired', makeSession({ expiresAt: PAST })],
+    ['expired', makeTimedSession({ expiresAt: PAST })],
     ['closed', makeSession({ status: 'CLOSED', closedAt: NOW })],
     ['session version changed', makeSession({ actorSessionVersion: 3 })],
   ])('fails closed when the session is %s', async (_label, row) => {
@@ -209,8 +214,8 @@ describe('AdminMaintenanceService', () => {
     expect(insert).not.toHaveBeenCalled();
   });
 
-  it('opens a 15-minute actor-bound session with fixed server scopes', async () => {
-    const { service, returning, set, audit } = setup();
+  it('opens a manual actor-bound session with fixed server scopes', async () => {
+    const { service, returning, values, set, audit } = setup();
     returning.mockResolvedValueOnce([]).mockResolvedValueOnce([makeSession()]);
 
     await expect(
@@ -218,10 +223,14 @@ describe('AdminMaintenanceService', () => {
     ).resolves.toMatchObject({
       active: true,
       state: 'active',
-      expiresAt: FUTURE.toISOString(),
+      mode: 'manual',
+      expiresAt: null,
       scopeCodes: ['ACADEMIC_STRUCTURE', 'ROSTER', 'ACCOUNT_LIFECYCLE'],
     });
 
+    expect(values).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: 'MANUAL', expiresAt: null }),
+    );
     expect(set).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'REVOKED', closedAt: NOW }),
     );
@@ -245,11 +254,27 @@ describe('AdminMaintenanceService', () => {
     expect(context.audit(['schedule_collision', 'schedule_collision'])).toEqual(
       {
         maintenanceSessionId: SESSION_ID,
-        maintenanceExpiresAt: FUTURE.toISOString(),
+        maintenanceMode: 'manual',
+        maintenanceExpiresAt: null,
         maintenanceRuleCodes: ['schedule_collision'],
       },
     );
     expect(set).toHaveBeenCalledWith({ lastUsedAt: NOW, updatedAt: NOW });
+  });
+
+  it('keeps a manual session effective after the former 15-minute boundary', async () => {
+    const later = new Date('2026-09-13T06:00:00.000Z');
+    const { service, sessionFindFirst, returning } = setup(true, later);
+    sessionFindFirst.mockResolvedValue(makeSession());
+    returning.mockResolvedValue([makeSession({ lastUsedAt: later })]);
+
+    await expect(
+      service.resolveForActor(ACTOR_ID, ['admin']),
+    ).resolves.toMatchObject({
+      active: true,
+      mode: 'manual',
+      expiresAt: null,
+    });
   });
 
   it('closes only the actor active session and audits the close', async () => {
@@ -269,7 +294,7 @@ describe('AdminMaintenanceService', () => {
 
   it('persists and audits session expiry before reporting expired state', async () => {
     const { service, sessionFindFirst, returning, audit, set } = setup();
-    const expired = makeSession({ expiresAt: PAST });
+    const expired = makeTimedSession({ expiresAt: PAST });
     sessionFindFirst.mockResolvedValue(expired);
     returning.mockResolvedValueOnce([
       { ...expired, status: 'EXPIRED', closedAt: NOW },
@@ -288,6 +313,30 @@ describe('AdminMaintenanceService', () => {
       expect.objectContaining({
         action: 'ADMIN_MAINTENANCE_EXPIRED',
         metadata: expect.objectContaining({ cause: 'SESSION_EXPIRED' }),
+      }),
+      dbContainingTransaction(),
+    );
+  });
+
+  it('revokes an actor session once and audits the security cause', async () => {
+    const { service, returning, audit } = setup();
+    returning
+      .mockResolvedValueOnce([
+        makeSession({ status: 'REVOKED', closedAt: NOW }),
+      ])
+      .mockResolvedValueOnce([]);
+
+    await expect(service.revokeForActor(ACTOR_ID, 'LOGOUT')).resolves.toBe(
+      true,
+    );
+    await expect(service.revokeForActor(ACTOR_ID, 'LOGOUT')).resolves.toBe(
+      false,
+    );
+    expect(audit.log).toHaveBeenCalledTimes(1);
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'ADMIN_MAINTENANCE_REVOKED',
+        metadata: expect.objectContaining({ cause: 'LOGOUT' }),
       }),
       dbContainingTransaction(),
     );

@@ -211,6 +211,13 @@
       "when": 1789364854429,
       "tag": "0029_repair_legacy_class_record_teacher_constraint",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1789369686256,
+      "tag": "0030_admin_maintenance_switch_mode",
+      "breakpoints": true
     }
   ]
 }

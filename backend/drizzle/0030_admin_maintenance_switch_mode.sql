@@ -1,0 +1,5 @@
+ALTER TABLE "admin_maintenance_sessions" DROP CONSTRAINT "admin_maintenance_session_expiry_valid";--> statement-breakpoint
+ALTER TABLE "admin_maintenance_sessions" ALTER COLUMN "expires_at" DROP NOT NULL;--> statement-breakpoint
+ALTER TABLE "admin_maintenance_sessions" ADD COLUMN "mode" text DEFAULT 'TIMED' NOT NULL;--> statement-breakpoint
+ALTER TABLE "admin_maintenance_sessions" ADD CONSTRAINT "admin_maintenance_session_mode_valid" CHECK ("admin_maintenance_sessions"."mode" IN ('TIMED','MANUAL'));--> statement-breakpoint
+ALTER TABLE "admin_maintenance_sessions" ADD CONSTRAINT "admin_maintenance_session_expiry_valid" CHECK (("admin_maintenance_sessions"."mode" = 'TIMED' AND "admin_maintenance_sessions"."expires_at" IS NOT NULL AND "admin_maintenance_sessions"."expires_at" > "admin_maintenance_sessions"."started_at") OR ("admin_maintenance_sessions"."mode" = 'MANUAL' AND "admin_maintenance_sessions"."expires_at" IS NULL));

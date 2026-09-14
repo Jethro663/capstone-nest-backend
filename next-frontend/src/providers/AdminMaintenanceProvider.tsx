@@ -96,7 +96,13 @@ export function AdminMaintenanceProvider({
   }, [isAdmin, refresh]);
 
   const effectiveStatus = useMemo(() => {
-    if (!status?.active || !status.expiresAt) return status;
+    if (
+      !status?.active ||
+      status.mode === "manual" ||
+      !status.expiresAt
+    ) {
+      return status;
+    }
     const now = clockNow + serverOffsetMs.current;
     return Date.parse(status.expiresAt) > now
       ? status
@@ -113,7 +119,7 @@ export function AdminMaintenanceProvider({
         setError(
           getApiErrorMessage(
             requestError,
-            "Maintenance Access could not be opened.",
+            "Maintenance Access could not be turned on.",
           ),
         );
         throw requestError;
@@ -131,7 +137,10 @@ export function AdminMaintenanceProvider({
       acceptStatus(await adminMaintenanceService.close());
     } catch (requestError) {
       setError(
-        getApiErrorMessage(requestError, "Maintenance Access could not close."),
+        getApiErrorMessage(
+          requestError,
+          "Maintenance Access could not be turned off.",
+        ),
       );
       throw requestError;
     } finally {

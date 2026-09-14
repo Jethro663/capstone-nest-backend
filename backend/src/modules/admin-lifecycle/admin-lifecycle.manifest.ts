@@ -61,7 +61,7 @@ const actionMetadata: Record<string, Omit<AdminMaintenanceNextAction, 'id'>> = {
     href: '/dashboard/admin/system-settings/audit-recovery',
   },
   OPEN_MAINTENANCE_ACCESS: {
-    label: 'Open Maintenance Access',
+    label: 'Turn on Maintenance Access',
     kind: 'NAVIGATE_REPAIR',
     href: '/dashboard/admin/system-settings/maintenance-access',
   },

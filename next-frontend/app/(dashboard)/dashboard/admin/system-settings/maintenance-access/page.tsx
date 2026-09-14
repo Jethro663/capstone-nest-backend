@@ -111,7 +111,7 @@ export default function AdminMaintenanceAccessPage() {
         reason: reason.trim(),
         acknowledgements: acknowledgementOptions.map((item) => item.value),
       });
-      setMessage("Maintenance Access is active for 15 minutes.");
+      setMessage("Maintenance Access is ON until you turn it OFF.");
       setReason("");
       setConfirmation("");
       setAcknowledgements([]);
@@ -119,7 +119,7 @@ export default function AdminMaintenanceAccessPage() {
       setMessage(
         getApiErrorMessage(
           requestError,
-          "Maintenance Access could not be opened.",
+          "Maintenance Access could not be turned on.",
         ),
       );
     } finally {
@@ -132,11 +132,14 @@ export default function AdminMaintenanceAccessPage() {
     try {
       await close();
       setMessage(
-        "Maintenance Access closed. Normal workflow checks are active.",
+        "Maintenance Access is OFF. Normal workflow checks are active.",
       );
     } catch (requestError) {
       setMessage(
-        getApiErrorMessage(requestError, "Maintenance Access could not close."),
+        getApiErrorMessage(
+          requestError,
+          "Maintenance Access could not be turned off.",
+        ),
       );
     }
   };
@@ -158,15 +161,17 @@ export default function AdminMaintenanceAccessPage() {
             </p>
             <h2 className="mt-1 text-xl font-semibold text-[var(--admin-text-strong)]">
               {status.active
-                ? "Maintenance Access is active"
-                : "Maintenance Access is closed"}
+                ? "Maintenance Access is ON"
+                : "Maintenance Access is OFF"}
             </h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--admin-text-muted)]">
-              {status.active && status.expiresAt
-                ? `Routine admin actions can resolve approved workflow warnings until ${new Date(
+              {status.active && status.mode !== "manual" && status.expiresAt
+                ? `This legacy timed session can resolve approved workflow warnings until ${new Date(
                     status.expiresAt,
                   ).toLocaleString()}.`
-                : "Open a short, actor-bound window for academic cleanup. Preview, audit, and permanent evidence protections remain on."}
+                : status.active
+                  ? "Maintenance Access remains ON until you turn it OFF, sign out, or change the account password. Preview, audit, and permanent evidence protections remain on."
+                  : "Turn on actor-bound Maintenance Access for academic cleanup. Preview, audit, and permanent evidence protections remain on."}
             </p>
           </div>
         </div>
@@ -178,22 +183,24 @@ export default function AdminMaintenanceAccessPage() {
         </section>
       ) : status.active ? (
         <AdminSectionCard
-          title="Close Maintenance Access"
-          description="Closing is immediate. It affects only your administrator session."
+          title="Maintenance Access switch"
+          description="Turning it OFF is immediate and affects only your administrator account."
           density="compact"
         >
           <Button
+            role="switch"
+            aria-checked="true"
             variant="outline"
             disabled={mutating}
             onClick={() => void submitClose()}
           >
-            Close access now
+            Turn off Maintenance Access
           </Button>
         </AdminSectionCard>
       ) : (
         <AdminSectionCard
-          title="Open a 15-minute maintenance window"
-          description="Reauthenticate once, review the boundaries, then use the normal admin pages."
+          title="Turn on Maintenance Access"
+          description="Reauthenticate once, review the boundaries, then use the normal admin pages until you turn it OFF."
           density="compact"
         >
           <div className="max-w-2xl space-y-5">
@@ -257,11 +264,13 @@ export default function AdminMaintenanceAccessPage() {
             </div>
 
             <Button
+              role="switch"
+              aria-checked="false"
               disabled={mutating || !ready}
               onClick={() => void submitOpen()}
             >
               <LockKeyhole className="h-4 w-4" aria-hidden="true" />
-              Open Maintenance Access
+              Turn on Maintenance Access
             </Button>
           </div>
         </AdminSectionCard>
@@ -274,7 +283,7 @@ export default function AdminMaintenanceAccessPage() {
       <div className="grid gap-5 xl:grid-cols-2">
         <AdminSectionCard
           title="Available maintenance actions"
-          description="These workflow rules may be resolved during your active window."
+          description="These workflow rules may be resolved while Maintenance Access is ON."
           density="compact"
         >
           <RuleList rules={status.rules} />

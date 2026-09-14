@@ -30,7 +30,13 @@ function effectiveStatus(
   status: AdminMaintenanceStatus | undefined,
   now: number,
 ) {
-  if (!status?.active || !status.expiresAt) return status;
+  if (
+    !status?.active ||
+    status.mode === "manual" ||
+    !status.expiresAt
+  ) {
+    return status;
+  }
   return Date.parse(status.expiresAt) > now
     ? status
     : { ...status, active: false, state: "expired" as const };

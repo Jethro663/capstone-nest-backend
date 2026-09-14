@@ -501,7 +501,7 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
         setIdempotencyKey(Crypto.randomUUID());
         await maintenance.refresh();
         setError(
-          "Maintenance Access expired or changed. Reauthenticate, then return and review the impact again. Your selected outcome, reason, and notes were kept.",
+          "Maintenance Access is no longer active or changed. Turn it on again, then return and review the impact. Your selected outcome, reason, and notes were kept.",
         );
         navigation.navigate("AdminSettingsMaintenance");
       } else if (appError.status === 409) {
@@ -556,7 +556,9 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
     if (action.kind === "NAVIGATE_REPAIR" && action.href) {
       const routeName = repairRouteForHref(action.href);
       if (!routeName) {
-        setError("This repair destination is not available in this app version.");
+        setError(
+          "This repair destination is not available in this app version.",
+        );
         return;
       }
       navigation.navigate(routeName);
@@ -572,7 +574,9 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
         const refreshed = await roster.refetch();
         if (refreshed.error) throw refreshed.error;
         const studentIds = new Set(
-          (refreshed.data ?? []).map((student) => student.studentId ?? student.id),
+          (refreshed.data ?? []).map(
+            (student) => student.studentId ?? student.id,
+          ),
         );
         setLearnerOutcomes((currentOutcomes) =>
           Object.fromEntries(
@@ -581,7 +585,9 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
             ),
           ),
         );
-        setError("Roster refreshed. Choose an outcome for every active learner, then review again.");
+        setError(
+          "Roster refreshed. Choose an outcome for every active learner, then review again.",
+        );
       } catch (refreshError) {
         setLearnerOutcomes({});
         setError(toAppError(refreshError).message);
@@ -1138,7 +1144,7 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
                 }
                 status="Next action"
                 statusTone="primary"
-                    onPress={() => void useNextAction(action)}
+                onPress={() => void useNextAction(action)}
               />
             ))}
             {!manifest.decision.nextActions.length ? (
@@ -1217,12 +1223,12 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
                   <>
                     <AdminNotice
                       title="Maintenance Access required"
-                      description="Open a 15-minute session, then return and review the impact again before applying this change."
+                      description="Turn on Maintenance Access, then return and review the impact again before applying this change."
                       tone="amber"
                       icon="shield-key-outline"
                     />
                     <AdminButton
-                      label="Open Maintenance Access"
+                      label="Turn on Maintenance Access"
                       icon="shield-key-outline"
                       onPress={() =>
                         navigation.navigate("AdminSettingsMaintenance")
@@ -1300,7 +1306,7 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
                 ) : maintenanceActive ? (
                   <AdminNotice
                     title="Already reauthenticated"
-                    description="Your active Maintenance Access window covers this routine action."
+                    description="Maintenance Access is ON and covers this routine action."
                     tone="green"
                     icon="shield-check-outline"
                   />

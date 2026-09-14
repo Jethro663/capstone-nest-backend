@@ -91,12 +91,12 @@ export function AdminMaintenanceSettingsScreen({ navigation }: Props) {
 
   const confirmOpen = () => {
     Alert.alert(
-      "Open Maintenance Access?",
-      "Your 15-minute, actor-bound cleanup window will start now.",
+      "Turn on Maintenance Access?",
+      "Your actor-bound cleanup access remains ON until you turn it OFF, sign out, or change the account password.",
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Open access",
+          text: "Turn ON",
           style: "destructive",
           onPress: () => void submitOpen(),
         },
@@ -104,16 +104,26 @@ export function AdminMaintenanceSettingsScreen({ navigation }: Props) {
     );
   };
 
+  const submitClose = async () => {
+    try {
+      setActionError(null);
+      await maintenance.close();
+    } catch (error) {
+      setActionError(normalizeApiError(error, { present: false }).message);
+      await maintenance.refresh();
+    }
+  };
+
   const confirmClose = () => {
     Alert.alert(
-      "Close Maintenance Access?",
+      "Turn off Maintenance Access?",
       "Normal workflow checks resume immediately for your account.",
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Close now",
+          text: "Turn OFF",
           style: "destructive",
-          onPress: () => void maintenance.close(),
+          onPress: () => void submitClose(),
         },
       ],
     );
@@ -131,7 +141,7 @@ export function AdminMaintenanceSettingsScreen({ navigation }: Props) {
   return (
     <AdminScreen
       title="Maintenance Access"
-      subtitle="Short, audited administrator access for academic cleanup"
+      subtitle="Audited administrator switch for academic cleanup"
       showBackButton
       onBackPress={navigation.goBack}
       refreshing={maintenance.isFetching}
@@ -142,7 +152,7 @@ export function AdminMaintenanceSettingsScreen({ navigation }: Props) {
           title={
             maintenance.isCachedOffline ? "Offline · cached status" : "Offline"
           }
-          description="Reconnect before opening or closing access. Maintenance writes are never queued."
+          description="Reconnect before turning access ON or OFF. Maintenance writes are never queued."
           tone="amber"
           icon="cloud-off-outline"
         />
@@ -174,12 +184,16 @@ export function AdminMaintenanceSettingsScreen({ navigation }: Props) {
 
       {status?.active ? (
         <AdminSection
-          title="Maintenance Access is active"
-          subtitle={`Expires ${status.expiresAt ? new Date(status.expiresAt).toLocaleString() : "at an unavailable time"}`}
+          title="Maintenance Access is ON"
+          subtitle={
+            status.mode !== "manual" && status.expiresAt
+              ? `Legacy timed access ends ${new Date(status.expiresAt).toLocaleString()}`
+              : "It remains ON until you turn it OFF, sign out, or change the account password"
+          }
         >
           <View style={{ padding: 16 }}>
             <AdminButton
-              label={maintenance.isMutating ? "Closing…" : "Close access now"}
+              label={maintenance.isMutating ? "Turning OFF…" : "Turn OFF now"}
               tone="red"
               variant="solid"
               onPress={confirmClose}
@@ -190,13 +204,13 @@ export function AdminMaintenanceSettingsScreen({ navigation }: Props) {
       ) : status?.available ? (
         <>
           <AdminNotice
-            title="Normal safeguards are active"
-            description="Open access once, then use the regular administrator screens without repeated password prompts."
+            title="Maintenance Access is OFF"
+            description="Turn it ON once, then use the regular administrator screens without repeated password prompts."
             tone="green"
             icon="shield-check-outline"
           />
           <AdminSection
-            title="Open a 15-minute window"
+            title="Turn on Maintenance Access"
             subtitle="All fields are required; the password is cleared after every attempt"
           >
             <View style={{ padding: 16, gap: 12 }}>
@@ -248,7 +262,9 @@ export function AdminMaintenanceSettingsScreen({ navigation }: Props) {
             ))}
             <View style={{ padding: 16 }}>
               <AdminButton
-                label={maintenance.isMutating ? "Opening…" : "Review and open"}
+                label={
+                  maintenance.isMutating ? "Turning ON…" : "Review and turn ON"
+                }
                 tone="red"
                 variant="solid"
                 onPress={confirmOpen}

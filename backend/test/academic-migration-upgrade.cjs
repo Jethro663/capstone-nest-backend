@@ -49,6 +49,32 @@ async function main() {
     const item = (await client.query("INSERT INTO class_record_items(gradebook_id,category_id,title,max_score) VALUES ($1,$2,'Legacy zero',10) RETURNING id", [record, category])).rows[0].id;
     await client.query('INSERT INTO class_record_scores(gradebook_item_id,student_id,score) VALUES ($1,$2,0)', [item, student]);
     await client.query("INSERT INTO academic_system_states(school_year,quarter) VALUES ('2026-2027','Q4'),('2026-2027','Q3')");
+    for (const entry of journal.entries.filter(e => e.idx > 10 && e.idx < 30)) {
+      const filename = `${entry.tag}.sql`;
+      await client.query('BEGIN');
+      for (const statement of fs.readFileSync(path.join(root, 'drizzle', filename), 'utf8').split('--> statement-breakpoint').filter(s => s.trim())) {
+        await client.query('SAVEPOINT migration_statement');
+        try { await client.query(statement); }
+        catch (error) {
+          if (!isHarmlessMigrationError(error)) throw error;
+          await client.query('ROLLBACK TO SAVEPOINT migration_statement');
+        }
+        await client.query('RELEASE SAVEPOINT migration_statement');
+      }
+      await client.query('INSERT INTO _applied_migrations(filename) VALUES ($1)', [filename]);
+      await client.query('COMMIT');
+    }
+    const timedMaintenance = (await client.query(`
+      INSERT INTO admin_maintenance_sessions(
+        actor_user_id,
+        actor_session_version,
+        scope_codes,
+        reason,
+        started_at,
+        expires_at
+      ) VALUES ($1, 0, '["ACADEMIC_STRUCTURE"]'::jsonb, 'Legacy timed upgrade fixture', '2026-09-12T04:00:00Z', '2026-09-12T04:15:00Z')
+      RETURNING id
+    `, [student])).rows[0].id;
     const runner = () => execFileSync(process.execPath, ['run-migrations.js'], { cwd: root, env: { ...process.env, DATABASE_URL: connectionString, MIGRATION_BASELINE_STAMP_ONLY: 'false' }, stdio: 'pipe' });
     runner();
     runner();
@@ -64,8 +90,23 @@ async function main() {
     assert.equal((await client.query('SELECT count(*)::int AS count FROM academic_year_policies')).rows[0].count, 0);
     assert.deepEqual((await client.query("SELECT conname, confdeltype FROM pg_constraint WHERE conrelid='public.audit_logs'::regclass AND contype='f'")).rows, [{ conname: 'audit_logs_actor_id_users_id_fk', confdeltype: 'n' }]);
     assert.equal((await client.query("SELECT is_nullable FROM information_schema.columns WHERE table_schema='public' AND table_name='audit_logs' AND column_name='actor_id'")).rows[0].is_nullable, 'YES');
+    assert.deepEqual((await client.query('SELECT mode, expires_at IS NOT NULL AS has_expiry FROM admin_maintenance_sessions WHERE id=$1', [timedMaintenance])).rows[0], { mode: 'TIMED', has_expiry: true });
+    await client.query("UPDATE admin_maintenance_sessions SET status='CLOSED', closed_at=now() WHERE id=$1", [timedMaintenance]);
+    const manualMaintenance = (await client.query(`
+      INSERT INTO admin_maintenance_sessions(actor_user_id, actor_session_version, mode, scope_codes, reason, expires_at)
+      VALUES ($1, 0, 'MANUAL', '["ROSTER"]'::jsonb, 'Manual switch upgrade fixture', NULL)
+      RETURNING mode, expires_at
+    `, [student])).rows[0];
+    assert.deepEqual(manualMaintenance, { mode: 'MANUAL', expires_at: null });
+    await assert.rejects(
+      client.query(`
+        INSERT INTO admin_maintenance_sessions(actor_user_id, actor_session_version, status, mode, scope_codes, reason, expires_at)
+        VALUES ($1, 0, 'CLOSED', 'MANUAL', '["ROSTER"]'::jsonb, 'Invalid manual fixture', now() + interval '15 minutes')
+      `, [student]),
+      error => error?.code === '23514',
+    );
     assert.equal((await client.query('SELECT count(*)::int AS count FROM _applied_migrations')).rows[0].count, journal.entries.length);
-    console.log('Upgrade and replay passed: exact legacy grade, explicit zero, incompatible Q4, duplicate state and unknown roster preserved; no annual result fabricated.');
+    console.log('Upgrade and replay passed: academic evidence preserved; legacy timed Maintenance retained; manual mode accepts only null expiry.');
   } finally { await client.end(); }
 }
 main().catch(error => { console.error(error.message); process.exitCode = 1; });

@@ -186,7 +186,7 @@ export function AdminLifecycleDialog({
         setIdempotencyKey(newIdempotencyKey());
         await maintenance?.refresh();
         setError(
-          "Maintenance Access expired or changed. Reauthenticate, then review the impact again. Your selected outcome, reason, and notes were kept.",
+          "Maintenance Access is no longer active or changed. Turn it on again, then review the impact. Your selected outcome, reason, and notes were kept.",
         );
       } else if (evidence.statusCode === 409) {
         setIdempotencyKey(newIdempotencyKey());
@@ -411,9 +411,7 @@ export function AdminLifecycleDialog({
                             key={action.id}
                             variant="outline"
                             disabled={loading}
-                            onClick={() =>
-                              void handleNextAction(action)
-                            }
+                            onClick={() => void handleNextAction(action)}
                           >
                             {action.label}
                           </Button>
@@ -463,12 +461,12 @@ export function AdminLifecycleDialog({
                           change.
                         </p>
                         <p className="mt-1">
-                          Open a 15-minute session, then return and review the
+                          Turn on Maintenance Access, then return and review the
                           impact again.
                         </p>
                         <Button className="mt-3" variant="outline" asChild>
                           <a href="/dashboard/admin/system-settings/maintenance-access/">
-                            Open Maintenance Access
+                            Turn on Maintenance Access
                           </a>
                         </Button>
                       </div>
@@ -548,8 +546,8 @@ export function AdminLifecycleDialog({
                       </div>
                     ) : maintenanceActive ? (
                       <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
-                        Reauthentication is already covered by your active
-                        Maintenance Access window.
+                        Reauthentication is already covered while Maintenance
+                        Access is ON.
                       </p>
                     ) : null}
                   </section>

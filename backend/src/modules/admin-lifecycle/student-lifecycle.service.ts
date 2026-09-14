@@ -293,7 +293,7 @@ export function planStudentLifecycle(
           blockers.push({
             code: 'DESTINATION_AT_CAPACITY',
             message:
-              'The destination section has reached capacity. Open Maintenance Access to review an over-capacity transfer.',
+              'The destination section has reached capacity. Turn on Maintenance Access to review an over-capacity transfer.',
             resolvable: true,
             resolutionOptions: ['OPEN_MAINTENANCE_ACCESS'],
           });

@@ -16,6 +16,7 @@ import { ResetPasswordDto } from './DTO/reset-password.dto';
 import { OtpService } from '../otp/otp.service';
 import { TokenService } from './token.service';
 import { AuditService } from '../audit/audit.service';
+import { AdminMaintenanceService } from '../admin-maintenance/admin-maintenance.service';
 
 @Injectable()
 export class AuthService {
@@ -28,6 +29,7 @@ export class AuthService {
     private otpService: OtpService,
     private tokenService: TokenService,
     private auditService: AuditService,
+    private adminMaintenanceService: AdminMaintenanceService,
   ) {}
 
   async login(loginDto: LoginDto, ip?: string, userAgent?: string) {
@@ -240,29 +242,32 @@ export class AuthService {
   }
 
   async logout(rawToken: string): Promise<void> {
-    // Revoke the specific refresh token; silently no-op if already gone
+    const tokenUserId = await this.tokenService.findUserIdByToken(rawToken);
+    if (!tokenUserId) return;
+
+    await this.adminMaintenanceService.revokeForActor(tokenUserId, 'LOGOUT');
+    await this.tokenService.revokeByToken(rawToken);
+
     try {
-      const revokedUserId = await this.tokenService.revokeByToken(rawToken);
-      if (revokedUserId) {
-        try {
-          await this.auditService.log({
-            actorId: revokedUserId,
-            action: 'auth.logout',
-            targetType: 'auth_session',
-            targetId: revokedUserId,
-            metadata: {},
-          });
-        } catch (error) {
-          this.logger.warn(
-            `[AUTH] Failed to write logout audit log for user ${revokedUserId}: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-          );
-        }
-      }
-    } catch {
-      // Non-critical — cookie will be cleared regardless
+      await this.auditService.log({
+        actorId: tokenUserId,
+        action: 'auth.logout',
+        targetType: 'auth_session',
+        targetId: tokenUserId,
+        metadata: {},
+      });
+    } catch (error) {
+      this.logger.warn(
+        `[AUTH] Failed to write logout audit log for user ${tokenUserId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     }
+  }
+
+  async logoutAll(userId: string): Promise<void> {
+    await this.adminMaintenanceService.revokeForActor(userId, 'LOGOUT_ALL');
+    await this.tokenService.revokeAllForUser(userId);
   }
 
   private async generateAccessToken(user: {

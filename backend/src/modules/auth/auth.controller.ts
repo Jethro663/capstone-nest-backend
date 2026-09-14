@@ -25,7 +25,6 @@ import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { ConfigService } from '@nestjs/config';
 import express from 'express';
 import { AuthService } from './auth.service';
-import { TokenService } from './token.service';
 import { LoginDto } from './DTO/login.dto';
 import { UpdateProfileDto } from './DTO/update-profile.dto';
 import { ChangePasswordDto } from './DTO/change-password.dto';
@@ -50,7 +49,6 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly configService: ConfigService,
-    private readonly tokenService: TokenService,
   ) {}
 
   /**
@@ -301,7 +299,7 @@ export class AuthController {
       throw new UnauthorizedException('Not authenticated');
     }
 
-    await this.tokenService.revokeAllForUser(user.userId);
+    await this.authService.logoutAll(user.userId);
     this.clearRefreshCookie(response);
 
     return {

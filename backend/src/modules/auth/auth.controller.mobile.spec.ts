@@ -1,7 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
-import { TokenService } from './token.service';
 
 describe('AuthController mobile endpoints', () => {
   const authService = {
@@ -18,15 +17,11 @@ describe('AuthController mobile endpoints', () => {
     }),
   } as unknown as ConfigService;
 
-  const tokenService = {
-    revokeAllForUser: jest.fn(),
-  } as unknown as TokenService;
-
   let controller: AuthController;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    controller = new AuthController(authService, configService, tokenService);
+    controller = new AuthController(authService, configService);
   });
 
   it('returns refresh token payload for mobile login', async () => {

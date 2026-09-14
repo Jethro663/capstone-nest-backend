@@ -49,7 +49,7 @@ export class AdminDemoModeController {
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   async activate(@Body() _dto: ActivateAdminDemoModeDto) {
     throw new ServiceUnavailableException(
-      'Demo mode has been retired. Open Maintenance Access instead.',
+      'Demo mode has been retired. Turn on Maintenance Access instead.',
     );
   }
 

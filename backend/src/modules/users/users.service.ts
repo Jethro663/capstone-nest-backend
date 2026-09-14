@@ -27,7 +27,10 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DatabaseService } from '../../database/database.service';
 import { MailService } from '../mail/mail.service';
 import { AuditService } from '../audit/audit.service';
-import { AdminMaintenanceService } from '../admin-maintenance/admin-maintenance.service';
+import {
+  AdminMaintenanceService,
+  type AdminMaintenanceContext,
+} from '../admin-maintenance/admin-maintenance.service';
 import type { AdminMaintenanceRuleCode } from '../admin-maintenance/admin-maintenance.policy';
 import {
   users,
@@ -829,13 +832,7 @@ export class UsersService {
     if (!existingUser) {
       throw new NotFoundException('User not found');
     }
-    let maintenanceAuditMetadata:
-      | {
-          maintenanceSessionId: string;
-          maintenanceExpiresAt: string;
-          maintenanceRuleCodes: AdminMaintenanceRuleCode[];
-        }
-      | undefined;
+    let maintenanceAuditMetadata: ReturnType<AdminMaintenanceContext['audit']>;
     if (existingUser.status === 'DELETED') {
       const maintenance = actorId
         ? await this.adminMaintenanceService.resolveForActor(actorId)
@@ -853,6 +850,10 @@ export class UsersService {
       );
     }
     this.assertRequiredStudentProfileFields(updateUserDto, existingUser);
+
+    if (updateUserDto.password) {
+      await this.adminMaintenanceService.revokeForActor(id, 'PASSWORD_CHANGED');
+    }
 
     const updateData: Partial<typeof users.$inferInsert> = {};
     let shouldSendEmailVerification = false;
@@ -1086,6 +1087,9 @@ export class UsersService {
     if (!existingUser) {
       throw new NotFoundException('User not found');
     }
+
+    await this.adminMaintenanceService.revokeForActor(id, 'PASSWORD_CHANGED');
+
     const hashedPassword = await bcrypt.hash(
       newPassword,
       this.passwordHashRounds,

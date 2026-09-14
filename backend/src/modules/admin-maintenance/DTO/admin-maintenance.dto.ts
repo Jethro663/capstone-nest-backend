@@ -42,10 +42,13 @@ export type AdminMaintenanceState =
   | 'active'
   | 'expired';
 
+export type AdminMaintenanceMode = 'timed' | 'manual';
+
 export interface AdminMaintenanceStatusDto {
   available: boolean;
   active: boolean;
   state: AdminMaintenanceState;
+  mode: AdminMaintenanceMode | null;
   sessionId: string | null;
   serverTime: string;
   startedAt: string | null;

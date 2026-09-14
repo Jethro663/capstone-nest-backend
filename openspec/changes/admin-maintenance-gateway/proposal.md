@@ -4,7 +4,7 @@ Admin academic cleanup is currently split across scattered service guards, a glo
 
 ## What Changes
 
-- Introduce an Admin-only, actor-bound, short-lived Maintenance Access session backed by durable server state and current-password step-up.
+- Introduce an Admin-only, actor-bound Maintenance Access switch backed by durable server state, current-password step-up, and explicit security-event revocation.
 - Introduce one server-owned decision contract: `READY`, `AUTO_RESOLVABLE`, `NEEDS_CHOICE`, `OVERRIDABLE_WARNING`, or `IMMUTABLE`, with typed next actions.
 - Route admin student, class, section, purge, account, and operational-policy exceptions through the Admin Maintenance Gateway or an explicit evidence-preserving lane.
 - Preserve lifecycle preview hashing, stale-state revalidation, idempotency, serialized transactions, audit records, and append-only lifecycle evidence.
@@ -20,7 +20,7 @@ Admin academic cleanup is currently split across scattered service guards, a glo
 
 ### New Capabilities
 
-- `admin-maintenance-access`: Actor-bound Maintenance Access session, fixed server scopes, protected rule boundary, auditing, expiry, revocation, and Demo Mode retirement.
+- `admin-maintenance-access`: Actor-bound Maintenance Access switch, fixed server scopes, protected rule boundary, auditing, explicit close/security revocation, legacy timed-row compatibility, and Demo Mode retirement.
 - `actionable-admin-lifecycle`: Structured maintenance decisions and executable next actions for admin student, class, section, account, and purge workflows across backend, web, and mobile.
 - `complete-live-school-reset`: Full Reset remains independent of per-record safeguards and completely clears live school data plus non-initiating accounts while retaining only required system and reset/audit evidence.
 

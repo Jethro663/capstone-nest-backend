@@ -358,7 +358,7 @@ export function AdminClassesWorkspaceScreen({ navigation }: Props) {
       await maintenance.refresh();
       Alert.alert(
         "Restore rejected",
-        `Maintenance Access expired or the server rejected this exception. ${toAppError(error).message}`,
+        `Maintenance Access is OFF or the server rejected this exception. ${toAppError(error).message}`,
       );
     } finally {
       setBusy(false);
