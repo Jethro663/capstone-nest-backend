@@ -50,10 +50,7 @@ export interface AcademicBlocker {
   sourceIds?: string[];
 }
 export type PeriodEligibility =
-  | "eligible"
-  | "not_enrolled"
-  | "transferred"
-  | "withdrawn";
+  "eligible" | "not_enrolled" | "transferred" | "withdrawn";
 export interface PeriodRosterParticipant {
   studentId: string;
   firstName: string | null;
@@ -62,6 +59,7 @@ export interface PeriodRosterParticipant {
   reason: string | null;
   source: string | null;
   currentlyEnrolled: boolean;
+  accountState?: "active" | "archived";
 }
 export interface PeriodRoster {
   classRecordId: string;
@@ -146,6 +144,7 @@ export interface AnnualStudent {
   studentId: string;
   firstName: string | null;
   lastName: string | null;
+  accountState?: "active" | "archived";
   components: AnnualComponent[];
   candidates: Array<{
     id: string;

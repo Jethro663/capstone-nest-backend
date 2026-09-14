@@ -429,93 +429,112 @@ export function TeacherClassRecordWorkbook({
                       </tr>
                     </thead>
                     <tbody>
-                      {state.roster?.participants.map((person) => (
-                        <tr key={person.studentId}>
-                          <th
-                            scope="row"
-                            className={styles.secondaryNameCell}
-                            data-surname-band={getSurnameBand(
-                              person.lastName ?? "",
-                            )}
-                          >
-                            <span className={styles.annualLearner}>
-                              <span
-                                className={styles.surnameBadge}
-                                aria-hidden="true"
-                              >
-                                {getSurnameInitial(person.lastName)}
-                              </span>
-                              <span className={styles.learnerIdentity}>
-                                <span>
-                                  <strong>
-                                    {person.lastName ?? "Unknown"}
-                                  </strong>
-                                  , {person.firstName ?? "Unknown"}
-                                </span>
-                                <small>
-                                  {person.currentlyEnrolled
-                                    ? "Currently enrolled"
-                                    : "Not currently enrolled"}
-                                </small>
-                              </span>
-                            </span>
-                          </th>
-                          <td className="p-3">
-                            <select
-                              aria-label={`Eligibility for ${person.firstName} ${person.lastName}`}
-                              required
-                              disabled={!canPrepare}
-                              className={styles.eligibilitySelect}
-                              data-eligibility-status={
-                                decisions[person.studentId]?.eligibility ||
-                                "unconfirmed"
-                              }
-                              value={
-                                decisions[person.studentId]?.eligibility ?? ""
-                              }
-                              onChange={(e) =>
-                                setDecisions((previous) => ({
-                                  ...previous,
-                                  [person.studentId]: {
-                                    ...previous[person.studentId],
-                                    eligibility: e.target
-                                      .value as PeriodEligibility,
-                                  },
-                                }))
+                      {state.roster?.participants.map((person) => {
+                        const archived = person.accountState === "archived";
+                        return (
+                          <tr key={person.studentId}>
+                            <th
+                              scope="row"
+                              className={styles.secondaryNameCell}
+                              data-surname-band={getSurnameBand(
+                                person.lastName ?? "",
+                              )}
+                              data-account-state={
+                                archived ? "archived" : "active"
                               }
                             >
-                              <option value="">Choose explicitly</option>
-                              <option value="eligible">Eligible</option>
-                              <option value="not_enrolled">
-                                Not enrolled in period
-                              </option>
-                              <option value="transferred">Transferred</option>
-                              <option value="withdrawn">Withdrawn</option>
-                            </select>
-                          </td>
-                          <td className="p-3">
-                            <Input
-                              aria-label={`Eligibility reason for ${person.firstName} ${person.lastName}`}
-                              disabled={!canPrepare}
-                              required={Boolean(
-                                decisions[person.studentId]?.eligibility &&
-                                decisions[person.studentId].eligibility !==
-                                  "eligible",
-                              )}
-                              value={decisions[person.studentId]?.reason ?? ""}
-                              onChange={(e) =>
-                                setDecisions((previous) => ({
-                                  ...previous,
-                                  [person.studentId]: {
-                                    ...previous[person.studentId],
-                                    reason: e.target.value,
-                                  },
-                                }))
-                              }
-                            />
-                          </td>
-                        </tr>
-                      ))}
+                              <span className={styles.annualLearner}>
+                                <span
+                                  className={styles.surnameBadge}
+                                  aria-hidden="true"
+                                >
+                                  {getSurnameInitial(person.lastName)}
+                                </span>
+                                <span className={styles.learnerIdentity}>
+                                  <span
+                                    className={
+                                      archived
+                                        ? styles.archivedLearnerName
+                                        : undefined
+                                    }
+                                  >
+                                    <strong>
+                                      {person.lastName ?? "Unknown"}
+                                    </strong>
+                                    , {person.firstName ?? "Unknown"}
+                                  </span>
+                                  {archived && (
+                                    <small className={styles.accountStateLabel}>
+                                      Archived account
+                                    </small>
+                                  )}
+                                  <small>
+                                    {person.currentlyEnrolled
+                                      ? "Currently enrolled"
+                                      : "Not currently enrolled"}
+                                  </small>
+                                </span>
+                              </span>
+                            </th>
+                            <td className="p-3">
+                              <select
+                                aria-label={`Eligibility for ${person.firstName} ${person.lastName}`}
+                                required
+                                disabled={!canPrepare}
+                                className={styles.eligibilitySelect}
+                                data-eligibility-status={
+                                  decisions[person.studentId]?.eligibility ||
+                                  "unconfirmed"
+                                }
+                                value={
+                                  decisions[person.studentId]?.eligibility ?? ""
+                                }
+                                onChange={(e) =>
+                                  setDecisions((previous) => ({
+                                    ...previous,
+                                    [person.studentId]: {
+                                      ...previous[person.studentId],
+                                      eligibility: e.target
+                                        .value as PeriodEligibility,
+                                    },
+                                  }))
+                                }
+                              >
+                                <option value="">Choose explicitly</option>
+                                <option value="eligible">Eligible</option>
+                                <option value="not_enrolled">
+                                  Not enrolled in period
+                                </option>
+                                <option value="transferred">Transferred</option>
+                                <option value="withdrawn">Withdrawn</option>
+                              </select>
+                            </td>
+                            <td className="p-3">
+                              <Input
+                                aria-label={`Eligibility reason for ${person.firstName} ${person.lastName}`}
+                                disabled={!canPrepare}
+                                required={Boolean(
+                                  decisions[person.studentId]?.eligibility &&
+                                  decisions[person.studentId].eligibility !==
+                                    "eligible",
+                                )}
+                                value={
+                                  decisions[person.studentId]?.reason ?? ""
+                                }
+                                onChange={(e) =>
+                                  setDecisions((previous) => ({
+                                    ...previous,
+                                    [person.studentId]: {
+                                      ...previous[person.studentId],
+                                      reason: e.target.value,
+                                    },
+                                  }))
+                                }
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

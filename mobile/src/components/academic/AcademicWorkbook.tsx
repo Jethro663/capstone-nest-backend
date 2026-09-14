@@ -273,7 +273,7 @@ export function AcademicWorkbook({
                 {sheet.students.map((p) => (
                   <Chip
                     key={p.studentId}
-                    label={`${p.lastName}, ${p.firstName}`}
+                    label={`${p.lastName}, ${p.firstName}${p.accountState === "archived" ? " · Archived account" : ""}`}
                     active={studentId === p.studentId}
                     onPress={() => {
                       setStudentId(p.studentId);
@@ -308,7 +308,7 @@ export function AcademicWorkbook({
                 <>
                   <Text style={textStyle}>
                     {person
-                      ? `${person.eligibility ?? "Unconfirmed"} · ${scoreStatus} · ${values?.effectiveScores?.[itemIndex] ?? values?.scores[itemIndex] ?? "No numeric score"}${(values?.bonusPoints?.[itemIndex] ?? 0) > 0 ? ` (+${values?.bonusPoints?.[itemIndex]} bonus)` : ""}`
+                      ? `${person.accountState === "archived" ? "Archived account · " : ""}${person.eligibility ?? "Unconfirmed"} · ${scoreStatus} · ${values?.effectiveScores?.[itemIndex] ?? values?.scores[itemIndex] ?? "No numeric score"}${(values?.bonusPoints?.[itemIndex] ?? 0) > 0 ? ` (+${values?.bonusPoints?.[itemIndex]} bonus)` : ""}`
                       : "Choose a learner to enter scores."}
                   </Text>
                   {!item.assessmentId && (
@@ -462,6 +462,7 @@ export function AcademicWorkbook({
               <View key={p.studentId} style={{ gap: 6 }}>
                 <Text style={textStyle}>
                   {p.lastName}, {p.firstName} ·{" "}
+                  {p.accountState === "archived" ? "Archived account · " : ""}
                   {p.currentlyEnrolled
                     ? "currently enrolled"
                     : "not currently enrolled"}

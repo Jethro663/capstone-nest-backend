@@ -348,7 +348,9 @@ export default function AdminUserDetailPage() {
           ? "Archive user directly?"
           : "Reactivate user directly?",
       description:
-        "Maintenance Access permits this lifecycle sequence exception. Identity, audit, and evidence safeguards remain active.",
+        action === "archive" && isStudent
+          ? "Maintenance Access permits this lifecycle sequence exception. This learner will lose account access. Existing class-record rows, scores, grades, and audit evidence will be retained and marked “Archived account” for teachers and administrators. Archiving does not change class enrollment or period eligibility."
+          : "Maintenance Access permits this lifecycle sequence exception. Identity, audit, and evidence safeguards remain active.",
       confirmLabel: action === "archive" ? "Archive user" : "Reactivate user",
       tone: action === "archive" ? "danger" : "default",
       details: <p className="font-semibold">{fullName}</p>,

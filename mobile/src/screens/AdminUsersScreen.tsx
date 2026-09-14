@@ -240,7 +240,7 @@ export function AdminUsersScreen({ navigation }: Props) {
                 confirmBulk(
                   "archive",
                   "Archive",
-                  "Selected accounts move to deleted status and remain eligible for purge.",
+                  "Selected accounts move to deleted status and remain eligible for purge. For any student account, existing class-record rows, scores, grades, and audit evidence will be retained and marked “Archived account” for teachers and administrators. Archiving does not change class enrollment or period eligibility.",
                 )
               }
               disabled={busy || network.isOffline}

@@ -109,9 +109,7 @@ export function AcademicAnnualSummary({
             <tr>
               <th>Learner</th>
               {summary.periods.map((p) => (
-                <th key={p.key}>
-                  {p.label}
-                </th>
+                <th key={p.key}>{p.label}</th>
               ))}
               <th>Official annual</th>
               <th>SRC / evidence</th>
@@ -120,6 +118,7 @@ export function AcademicAnnualSummary({
           </thead>
           <tbody>
             {summary.students.map((person) => {
+              const archived = person.accountState === "archived";
               const src = person.remediation.find(
                 (r) => r.isCurrent && r.annualGradeId === person.current?.id,
               );
@@ -129,16 +128,28 @@ export function AcademicAnnualSummary({
                     scope="row"
                     className={styles.secondaryNameCell}
                     data-surname-band={getSurnameBand(person.lastName)}
+                    data-account-state={archived ? "archived" : "active"}
                   >
                     <span className={styles.annualLearner}>
                       <span className={styles.surnameBadge} aria-hidden="true">
                         {getSurnameInitial(person.lastName)}
                       </span>
                       <span className={styles.learnerIdentity}>
-                        <span>
-                          <strong>{person.lastName || "Unnamed learner"}</strong>
+                        <span
+                          className={
+                            archived ? styles.archivedLearnerName : undefined
+                          }
+                        >
+                          <strong>
+                            {person.lastName || "Unnamed learner"}
+                          </strong>
                           {person.firstName ? `, ${person.firstName}` : ""}
                         </span>
+                        {archived && (
+                          <small className={styles.accountStateLabel}>
+                            Archived account
+                          </small>
+                        )}
                         <small>Annual academic record</small>
                       </span>
                     </span>
@@ -204,7 +215,9 @@ export function AcademicAnnualSummary({
                             {b.message}
                             {(b.period || b.itemId) && (
                               <small>
-                                {[b.period, b.itemId].filter(Boolean).join(" · ")}
+                                {[b.period, b.itemId]
+                                  .filter(Boolean)
+                                  .join(" · ")}
                               </small>
                             )}
                           </li>
@@ -216,11 +229,10 @@ export function AcademicAnnualSummary({
                     {src ? (
                       <p data-score-status="verified">
                         <strong>
-                          RCM {src.remedialClassMark} · RFG {src.recomputedGrade}
+                          RCM {src.remedialClassMark} · RFG{" "}
+                          {src.recomputedGrade}
                         </strong>
-                        <small>
-                          {src.sourceReference}
-                        </small>
+                        <small>{src.sourceReference}</small>
                       </p>
                     ) : (
                       <span data-score-status="unavailable">No SRC result</span>

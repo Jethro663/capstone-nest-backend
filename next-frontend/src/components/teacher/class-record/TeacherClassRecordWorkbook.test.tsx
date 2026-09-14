@@ -167,6 +167,31 @@ it("renders all three examination components and separates zero, missing and exe
     screen.queryByRole("button", { name: /Q4|Term 4/ }),
   ).not.toBeInTheDocument();
 });
+it("marks an archived account without hiding or disabling its eligible class row", () => {
+  const state = createState();
+  (state.spreadsheet!.students[0] as any).accountState = "archived";
+  (state.roster!.participants[0] as any).accountState = "archived";
+
+  render(<TeacherClassRecordWorkbook state={state} />);
+
+  const learnerCell = screen.getByRole("rowheader", {
+    name: /Santos\s*, Ana.*Archived account.*Eligible/i,
+  });
+  expect(learnerCell).toHaveAttribute("data-account-state", "archived");
+  expect(screen.getByText("Archived account")).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "Ana Santos, ST1: 0" }),
+  ).toBeEnabled();
+  expect(screen.getByLabelText("Filter learners")).toHaveValue("current");
+
+  fireEvent.click(screen.getByRole("tab", { name: "Eligibility" }));
+  expect(
+    screen.getByRole("rowheader", {
+      name: /Santos\s*, Ana.*Archived account.*Currently enrolled/i,
+    }),
+  ).toHaveAttribute("data-account-state", "archived");
+  expect(screen.getByLabelText("Eligibility for Ana Santos")).toBeEnabled();
+});
 it("restores an exempt linked result with evidence instead of overwriting it through ordinary sync", async () => {
   const state = createState();
   render(<TeacherClassRecordWorkbook state={state} />);
@@ -432,11 +457,15 @@ it("defaults active records to current learners and finalized records to all evi
   const { rerender } = render(<TeacherClassRecordWorkbook state={active} />);
 
   expect(screen.getByLabelText("Filter learners")).toHaveValue("current");
-  expect(screen.queryByText("History", { selector: "strong" })).not.toBeInTheDocument();
+  expect(
+    screen.queryByText("History", { selector: "strong" }),
+  ).not.toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("Filter learners"), {
     target: { value: "historical" },
   });
-  expect(screen.getByText("History", { selector: "strong" })).toBeInTheDocument();
+  expect(
+    screen.getByText("History", { selector: "strong" }),
+  ).toBeInTheDocument();
   expect(screen.queryByText("Santos")).not.toBeInTheDocument();
 
   const finalized = createState();

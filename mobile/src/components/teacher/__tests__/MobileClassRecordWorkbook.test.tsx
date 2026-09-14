@@ -65,7 +65,12 @@ const workbook = (status: "draft" | "finalized") => ({
   students: [student("current", false), student("historical", true)],
 });
 
-function text(node: TestRenderer.ReactTestRendererJSON | TestRenderer.ReactTestRendererJSON[] | null): string {
+function text(
+  node:
+    | TestRenderer.ReactTestRendererJSON
+    | TestRenderer.ReactTestRendererJSON[]
+    | null,
+): string {
   if (!node) return "";
   if (Array.isArray(node)) return node.map(text).join(" ");
   return (node.children ?? [])
@@ -85,7 +90,9 @@ describe("MobileClassRecordWorkbook learner visibility", () => {
     expect(text(renderer!.toJSON())).toContain("Santos");
     expect(text(renderer!.toJSON())).not.toContain("History");
     act(() =>
-      renderer!.root.findByProps({ accessibilityLabel: "Show historical learners" }).props.onPress(),
+      renderer!.root
+        .findByProps({ accessibilityLabel: "Show historical learners" })
+        .props.onPress(),
     );
     expect(text(renderer!.toJSON())).toContain("History");
     expect(text(renderer!.toJSON())).not.toContain("Santos");
@@ -100,5 +107,29 @@ describe("MobileClassRecordWorkbook learner visibility", () => {
     });
     expect(text(renderer!.toJSON())).toContain("Santos");
     expect(text(renderer!.toJSON())).toContain("History");
+  });
+
+  it("marks an archived account while keeping its enrolled row current", () => {
+    const archivedWorkbook = workbook("draft");
+    archivedWorkbook.students[0].accountState = "archived";
+    let renderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        <MobileClassRecordWorkbook workbook={archivedWorkbook} />,
+      );
+    });
+
+    expect(text(renderer!.toJSON())).toContain("Santos, Ana");
+    expect(text(renderer!.toJSON())).toContain("Archived account");
+    expect(
+      renderer!.root.findByProps({
+        accessibilityLabel: "Santos, Ana, archived account",
+      }).props.style.textDecorationLine,
+    ).toBe("line-through");
+    expect(
+      renderer!.root.findByProps({
+        accessibilityLabel: "Show current learners",
+      }).props.accessibilityState.selected,
+    ).toBe(true);
   });
 });

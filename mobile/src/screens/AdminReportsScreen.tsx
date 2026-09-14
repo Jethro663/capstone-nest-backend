@@ -27,6 +27,7 @@ import type {
   AdminReportQuery,
   TeacherPaginatedReportResponse,
 } from "../types/report";
+import type { InterventionReportRow } from "../types/class-record";
 
 type Props = BottomTabScreenProps<MainTabParamList, "AdminReports">;
 type BackendReportKey = Exclude<AdminReportKey, "class-record">;
@@ -72,6 +73,18 @@ function humanize(value: string) {
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .replace(/[-_]/g, " ")
     .replace(/^./, (character) => character.toUpperCase());
+}
+
+function interventionStudentName(entry: InterventionReportRow) {
+  const name =
+    [entry.student?.lastName, entry.student?.firstName]
+      .filter(Boolean)
+      .join(", ") ||
+    entry.student?.email ||
+    entry.studentId;
+  return entry.student?.accountState === "archived"
+    ? `${name} · Archived account`
+    : name;
 }
 
 function escapeHtml(value: unknown) {
@@ -285,12 +298,7 @@ export function AdminReportsScreen(_props: Props) {
             classRecordSummary.data?.distribution.distribution ?? {},
           ).map(([band, count]) => ({ title: `Grade band ${band}`, count })),
           ...(classRecordSummary.data?.interventions ?? []).map((entry) => ({
-            title:
-              [entry.student?.lastName, entry.student?.firstName]
-                .filter(Boolean)
-                .join(", ") ||
-              entry.student?.email ||
-              entry.studentId,
+            title: interventionStudentName(entry),
             finalPercentage: entry.finalPercentage,
             remarks: entry.remarks,
             computedAt: new Date(entry.computedAt).toLocaleString(),
@@ -565,13 +573,7 @@ export function AdminReportsScreen(_props: Props) {
             {(classRecordSummary.data?.interventions ?? []).map((entry) => (
               <AdminDataRow
                 key={entry.id}
-                title={
-                  [entry.student?.lastName, entry.student?.firstName]
-                    .filter(Boolean)
-                    .join(", ") ||
-                  entry.student?.email ||
-                  entry.studentId
-                }
+                title={interventionStudentName(entry)}
                 subtitle={`${Number(entry.finalPercentage).toFixed(2)}% · ${entry.remarks}`}
                 meta={new Date(entry.computedAt).toLocaleString()}
                 status="Intervention"

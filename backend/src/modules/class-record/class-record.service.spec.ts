@@ -793,6 +793,7 @@ describe('ClassRecordService', () => {
         firstName: 'Alex',
         lastName: 'Reyes',
         email: 'alex@example.com',
+        status: 'DELETED',
       },
     });
 
@@ -807,7 +808,11 @@ describe('ClassRecordService', () => {
       classRecordId: 'record-1',
       studentId: 'student-1',
       finalPercentage: '88',
+      student: {
+        accountState: 'archived',
+      },
     });
+    expect(result.student).not.toHaveProperty('status');
   });
 
   it('allows teacher final-grade reads when class owner matches even if record teacher is stale', async () => {
@@ -821,11 +826,55 @@ describe('ClassRecordService', () => {
       id: 'class-1',
       teacherId: 'teacher-1',
     });
-    db.query.classRecordFinalGrades.findMany.mockResolvedValue([]);
+    db.query.classRecordFinalGrades.findMany.mockResolvedValue([
+      {
+        studentId: 'student-1',
+        finalPercentage: '88',
+        student: {
+          id: 'student-1',
+          firstName: 'Alex',
+          lastName: 'Reyes',
+          status: 'DELETED',
+        },
+      },
+    ]);
 
     await expect(
       service.getFinalGrades('record-1', 'teacher-1', ['teacher']),
-    ).resolves.toEqual([]);
+    ).resolves.toEqual([
+      expect.objectContaining({
+        student: expect.objectContaining({ accountState: 'archived' }),
+      }),
+    ]);
+  });
+
+  it('projects archived account state into intervention rows without exposing user status', async () => {
+    db.query.classRecords.findFirst.mockResolvedValue({
+      id: 'record-1',
+      classId: 'class-1',
+      teacherId: 'teacher-1',
+      status: 'finalized',
+    });
+    db.query.classRecordFinalGrades.findMany.mockResolvedValue([
+      {
+        studentId: 'student-1',
+        finalPercentage: '72',
+        remarks: 'For Intervention',
+        student: {
+          id: 'student-1',
+          firstName: 'Alex',
+          lastName: 'Reyes',
+          status: 'DELETED',
+        },
+      },
+    ]);
+
+    const [result] = await service.getInterventionList('record-1', 'admin-1', [
+      'admin',
+    ]);
+
+    expect(result.student).toMatchObject({ accountState: 'archived' });
+    expect(result.student).not.toHaveProperty('status');
   });
 
   it('includes removed students with class-record history in spreadsheet output', async () => {
@@ -851,6 +900,7 @@ describe('ClassRecordService', () => {
         lastName: 'Santos',
         middleName: null,
         email: 'ana@nexora.edu',
+        status: 'DELETED',
       },
     ]);
     mockSelectRowsWithJoin(db, [{ studentId: 'student-removed' }]);
@@ -868,6 +918,7 @@ describe('ClassRecordService', () => {
         lastName: 'Lopez',
         middleName: null,
         email: 'ben@nexora.edu',
+        status: 'DELETED',
       },
     ]);
 
@@ -901,11 +952,13 @@ describe('ClassRecordService', () => {
       studentId: 'student-active',
       isRemoved: false,
       enrollmentState: 'active',
+      accountState: 'archived',
     });
     expect(result.students[1]).toMatchObject({
       studentId: 'student-removed',
       isRemoved: true,
       enrollmentState: 'removed',
+      accountState: 'archived',
       quarterlyGrade: 81,
       remarks: 'Passed',
     });

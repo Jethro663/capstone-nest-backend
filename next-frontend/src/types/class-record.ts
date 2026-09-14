@@ -7,6 +7,7 @@ import type {
 import type { GradingPeriod } from "@/utils/constants";
 
 export type ClassRecordStatus = "draft" | "finalized" | "locked";
+export type AccountState = "active" | "archived";
 
 export interface ClassRecord {
   id: string;
@@ -57,7 +58,12 @@ export interface ClassRecordScore {
 
 export interface FinalGrade {
   studentId: string;
-  student?: { firstName?: string; lastName?: string; lrn?: string };
+  student?: {
+    firstName?: string;
+    lastName?: string;
+    lrn?: string;
+    accountState?: AccountState;
+  };
   finalPercentage: number;
   quarterlyGrade: number;
   remarks: "Passed" | "For Intervention";
@@ -131,6 +137,7 @@ export interface SpreadsheetStudentRow {
   blockers?: AcademicBlocker[];
   isRemoved?: boolean;
   enrollmentState?: "active" | "removed";
+  accountState?: AccountState;
 }
 
 export interface SpreadsheetData {
@@ -163,10 +170,7 @@ export interface SpreadsheetData {
 }
 
 export type ClassRecordSlotStatus =
-  | "empty"
-  | "manual"
-  | "linked_self"
-  | "linked_other";
+  "empty" | "manual" | "linked_self" | "linked_other";
 
 export interface ClassRecordSlotOverviewItem {
   itemId: string;
@@ -220,6 +224,7 @@ export interface InterventionReportRow {
     lastName: string | null;
     middleName: string | null;
     email: string | null;
+    accountState?: AccountState;
   } | null;
 }
 

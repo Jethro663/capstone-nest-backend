@@ -156,7 +156,7 @@ function getBulkActions(tab: StatusTab): BulkActionOption[] {
           confirmLabel: "Archive users",
           title: "Archive selected users?",
           description:
-            "Selected suspended accounts will move to deleted status and can still be purged later.",
+            "Selected suspended accounts will move to deleted status and can still be purged later. For any student account, existing class-record rows, scores, grades, and audit evidence will be retained and marked “Archived account” for teachers and administrators. Archiving does not change class enrollment or period eligibility.",
           tone: "danger",
         },
       ];
@@ -354,10 +354,12 @@ export default function UserManagementPage() {
   };
 
   const handleArchivePrompt = (user: User) => {
+    const isStudent = getRoleName(user.roles?.[0]).toLowerCase() === "student";
     setConfirmation({
       title: "Archive user account?",
-      description:
-        "The user will move to deleted status and can still be purged later.",
+      description: isStudent
+        ? "This learner will lose account access. Existing class-record rows, scores, grades, and audit evidence will be retained and marked “Archived account” for teachers and administrators. Archiving does not change class enrollment or period eligibility. The account can still be reviewed for purge later."
+        : "The user will move to deleted status and can still be purged later.",
       confirmLabel: "Archive user",
       tone: "danger",
       details: (

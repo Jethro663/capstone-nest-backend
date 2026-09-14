@@ -2,11 +2,13 @@ import type { SpreadsheetData } from "../types/class-record";
 import type { AnnualSummary } from "../types/academic-grading";
 
 type Cell = string | number | null;
+const accountStateLabel = (state: "active" | "archived" | undefined) =>
+  state === "archived" ? "Archived account" : "Active";
 export function academicExportRows(
   spreadsheet: SpreadsheetData,
   annual: AnnualSummary,
 ) {
-  const periodHeaders: Cell[] = ["Learner", "Eligibility"];
+  const periodHeaders: Cell[] = ["Learner", "Eligibility", "Account state"];
   for (const category of spreadsheet.categories) {
     periodHeaders.push(
       ...category.items.map((item) => `${category.name}: ${item.title}`),
@@ -27,6 +29,7 @@ export function academicExportRows(
       const cells: Cell[] = [
         `${student.lastName}, ${student.firstName}`,
         student.eligibility ?? "Unconfirmed",
+        accountStateLabel(student.accountState),
       ];
       for (const category of spreadsheet.categories) {
         const result = student.categories.find(
@@ -57,6 +60,7 @@ export function academicExportRows(
   const annualRows: Cell[][] = [
     [
       "Learner",
+      "Account state",
       ...annual.periods.map((p) => p.label),
       "Sum",
       "Required divisor",
@@ -75,6 +79,7 @@ export function academicExportRows(
       );
       return [
         `${student.lastName ?? ""}, ${student.firstName ?? ""}`,
+        accountStateLabel(student.accountState),
         ...annual.periods.map(
           (p) =>
             student.components.find((c) => c.period === p.key)?.grade ?? null,
@@ -98,6 +103,7 @@ export function academicExportRows(
   const evidence: Cell[][] = [
     [
       "Learner",
+      "Account state",
       "Item",
       "Score",
       "Status",
@@ -116,6 +122,7 @@ export function academicExportRows(
       category.items.forEach((item, index) =>
         evidence.push([
           `${student.lastName}, ${student.firstName}`,
+          accountStateLabel(student.accountState),
           item.title,
           result?.scores[index] ?? null,
           result?.scoreStatuses?.[index] ?? "missing",

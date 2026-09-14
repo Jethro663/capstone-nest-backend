@@ -78,7 +78,7 @@ export function AcademicAnnualPanel({
         {summary.students.map((s) => (
           <Chip
             key={s.studentId}
-            label={`${s.lastName}, ${s.firstName}`}
+            label={`${s.lastName}, ${s.firstName}${s.accountState === "archived" ? " · Archived account" : ""}`}
             active={student?.studentId === s.studentId}
             onPress={() => {
               setStudentId(s.studentId);
@@ -91,6 +91,14 @@ export function AcademicAnnualPanel({
       </View>
       {student ? (
         <>
+          {student.accountState === "archived" ? (
+            <Text
+              accessibilityLabel="Archived account"
+              style={{ ...style, color: theme.red, fontWeight: "900" }}
+            >
+              Archived account · academic evidence retained
+            </Text>
+          ) : null}
           {summary.periods.map((p) => {
             const c = student.components.find((c) => c.period === p.key);
             return (

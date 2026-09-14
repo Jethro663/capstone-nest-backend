@@ -1,12 +1,12 @@
 {
   "platform": "android",
-  "versionCode": 39,
-  "minSupportedVersionCode": 39,
-  "nativeVersion": "0.1.38",
-  "otaRuntimeVersion": "0.1.38",
+  "versionCode": 40,
+  "minSupportedVersionCode": 40,
+  "nativeVersion": "0.1.39",
+  "otaRuntimeVersion": "0.1.39",
   "apkDownloadUrl": "https://next-frontend-v2-production.up.railway.app/downloads/nexora-student-mobile-release.apk",
   "requiresFullApk": true,
-  "releaseNotes": "Replaces the 15-minute Maintenance Access window with an audited per-admin ON/OFF mode and immediate security revocation.",
-  "apkSha256": "6e4b3664cb10dbf36b8f1acb2d4d3419a33e1c9038ef81d102c2fdfda7118fae",
-  "apkSizeBytes": 41071223
+  "releaseNotes": "Archived student accounts remain visible in teacher and administrator class records, reports, and exports with retained academic evidence.",
+  "apkSha256": "65f08decccc3cc2e11c0ae8b9596a98442e11525a27bbf6d161c2b3853be0aa8",
+  "apkSizeBytes": 92479364
 }

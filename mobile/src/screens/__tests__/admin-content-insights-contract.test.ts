@@ -47,6 +47,8 @@ describe("administrator Content and Insights workspaces", () => {
     expect(source).toContain("classRecordApi.getClassAverageReport");
     expect(source).toContain("classRecordApi.getDistributionReport");
     expect(source).toContain("classRecordApi.getInterventionReport");
+    expect(source).toContain("accountState");
+    expect(source).toContain("Archived account");
     expect(source).toContain("DateTimePicker");
     expect(source).toContain("Export CSV");
     expect(source).toContain("Export PDF");

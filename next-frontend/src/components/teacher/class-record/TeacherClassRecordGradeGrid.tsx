@@ -315,6 +315,7 @@ export function TeacherClassRecordGradeGrid({
           <tbody>
             {students.map((student) => {
               const band = getSurnameBand(student.lastName);
+              const archived = student.accountState === "archived";
               const activeRow = activeCell?.studentId === student.studentId;
               const eligibility = eligibilityLabel(student.eligibility);
               const gradeStatus =
@@ -337,16 +338,26 @@ export function TeacherClassRecordGradeGrid({
                     scope="row"
                     className={styles.learnerCell}
                     data-surname-band={band}
+                    data-account-state={archived ? "archived" : "active"}
                   >
                     <span className={styles.learnerCard} data-learner-card>
                       <span className={styles.surnameBadge} aria-hidden="true">
                         {getSurnameInitial(student.lastName)}
                       </span>
                       <span className={styles.learnerIdentity}>
-                        <span>
+                        <span
+                          className={
+                            archived ? styles.archivedLearnerName : undefined
+                          }
+                        >
                           <strong>{student.lastName}</strong>,{" "}
                           {student.firstName}
                         </span>
+                        {archived && (
+                          <small className={styles.accountStateLabel}>
+                            Archived account
+                          </small>
+                        )}
                         <small>
                           {eligibility}
                           {student.isRemoved

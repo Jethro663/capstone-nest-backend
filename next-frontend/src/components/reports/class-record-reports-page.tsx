@@ -67,10 +67,13 @@ import { toast } from "sonner";
 function formatStudentName(row: InterventionReportRow): string {
   const first = row.student?.firstName?.trim() ?? "";
   const last = row.student?.lastName?.trim() ?? "";
-  if (first && last) return `${last}, ${first}`;
-  if (last) return last;
-  if (first) return first;
-  return row.student?.email ?? row.studentId;
+  const name =
+    first && last
+      ? `${last}, ${first}`
+      : last || first || row.student?.email || row.studentId;
+  return row.student?.accountState === "archived"
+    ? `${name} · Archived account`
+    : name;
 }
 
 interface ClassRecordReportsPageProps {

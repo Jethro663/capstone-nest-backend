@@ -746,7 +746,9 @@ export function AdminUserDetailScreen({ navigation, route }: Props) {
                       onPress={() =>
                         Alert.alert(
                           "Archive account?",
-                          "The account will be soft-deleted; official records remain preserved.",
+                          roleName(record) === "student"
+                            ? "This learner will lose account access. Existing class-record rows, scores, grades, and audit evidence will be retained and marked “Archived account” for teachers and administrators. Archiving does not change class enrollment or period eligibility."
+                            : "The account will be soft-deleted; official records remain preserved.",
                           [
                             { text: "Cancel", style: "cancel" },
                             {

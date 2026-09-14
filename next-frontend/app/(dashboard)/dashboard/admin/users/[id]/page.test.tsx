@@ -46,8 +46,13 @@ jest.mock("@/components/admin/AdminLifecycleDialog", () => ({
 }));
 
 jest.mock("@/components/admin/AdminErasureBatchDialog", () => ({
-  AdminErasureBatchDialog: ({ open, title }: { open: boolean; title: string }) =>
-    open ? <div>{title}</div> : null,
+  AdminErasureBatchDialog: ({
+    open,
+    title,
+  }: {
+    open: boolean;
+    title: string;
+  }) => (open ? <div>{title}</div> : null),
 }));
 
 jest.mock("@/services/user-service", () => ({
@@ -213,8 +218,12 @@ describe("AdminUserDetailPage", () => {
     render(<AdminUserDetailPage />);
 
     await screen.findByRole("heading", { name: "Liam Navarro" });
+    fireEvent.click(screen.getByRole("button", { name: /Archive user/i }));
+
     expect(
-      screen.getByRole("button", { name: /Archive user/i }),
+      screen.getByText(
+        /Existing class-record rows, scores, grades, and audit evidence will be retained and marked “Archived account”/i,
+      ),
     ).toBeInTheDocument();
   });
 

@@ -88,13 +88,13 @@
   background: var(--record-written-bg);
 }
 
-.statusBadge[data-status='draft'],
+.statusBadge[data-status="draft"],
 .revisionBadge {
   color: var(--record-computed-text);
   background: var(--record-computed-bg);
 }
 
-.statusBadge[data-status='finalized'] {
+.statusBadge[data-status="finalized"] {
   color: var(--record-verified-text);
   background: var(--record-verified-bg);
 }
@@ -154,7 +154,7 @@
   background: var(--record-canvas);
 }
 
-.periodButton[aria-pressed='true'] {
+.periodButton[aria-pressed="true"] {
   border-color: #a81d2d;
   background: #a81d2d;
   color: #fff;
@@ -227,7 +227,7 @@
   margin: 0;
 }
 
-.statusCopy [data-status='warning'] {
+.statusCopy [data-status="warning"] {
   color: var(--record-intervention-text);
   font-weight: 650;
 }
@@ -265,7 +265,7 @@
   background: var(--record-canvas);
 }
 
-.tab[aria-selected='true'] {
+.tab[aria-selected="true"] {
   border-bottom-color: #b42334;
   color: #8e1d2b;
 }
@@ -368,7 +368,7 @@
 }
 
 .legend::before {
-  content: 'Status';
+  content: "Status";
   color: var(--record-ink);
   font-weight: 750;
 }
@@ -385,27 +385,27 @@
   border: 1px solid currentColor;
   border-radius: 3px;
   background: currentColor;
-  content: '';
+  content: "";
   opacity: 0.45;
 }
 
-.legend [data-status='missing'] {
+.legend [data-status="missing"] {
   color: var(--record-missing-text);
 }
 
-.legend [data-status='excused'] {
+.legend [data-status="excused"] {
   color: var(--record-excused-text);
 }
 
-.legend [data-status='unavailable'] {
+.legend [data-status="unavailable"] {
   color: var(--record-unavailable-text);
 }
 
-.legend [data-status='intervention'] {
+.legend [data-status="intervention"] {
   color: var(--record-intervention-text);
 }
 
-.legend [data-status='verified'] {
+.legend [data-status="verified"] {
   color: var(--record-verified-text);
 }
 
@@ -460,26 +460,26 @@
   font-weight: 750;
 }
 
-.categoryHeader[data-category-tone='written'],
-.itemHeader[data-category-tone='written'] {
+.categoryHeader[data-category-tone="written"],
+.itemHeader[data-category-tone="written"] {
   background: var(--record-written-bg);
   color: var(--record-written-text);
 }
 
-.categoryHeader[data-category-tone='performance'],
-.itemHeader[data-category-tone='performance'] {
+.categoryHeader[data-category-tone="performance"],
+.itemHeader[data-category-tone="performance"] {
   background: var(--record-performance-bg);
   color: var(--record-performance-text);
 }
 
-.categoryHeader[data-category-tone='exam'],
-.itemHeader[data-category-tone='exam'] {
+.categoryHeader[data-category-tone="exam"],
+.itemHeader[data-category-tone="exam"] {
   background: var(--record-exam-bg);
   color: var(--record-exam-text);
 }
 
-.categoryHeader[data-category-tone='computed'],
-.itemHeader[data-category-tone='computed'],
+.categoryHeader[data-category-tone="computed"],
+.itemHeader[data-category-tone="computed"],
 .computedHeader {
   background: var(--record-computed-bg);
   color: var(--record-computed-text);
@@ -601,6 +601,25 @@
   overflow-wrap: anywhere;
 }
 
+.archivedLearnerName {
+  color: var(--record-muted);
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+}
+
+.accountStateLabel {
+  width: fit-content;
+  border: 1px solid #d9a4a4;
+  border-radius: 999px;
+  padding: 1px 6px;
+  background: #fff4f4;
+  color: #8f1f1f !important;
+  font-size: 0.7rem !important;
+  font-weight: 750 !important;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+}
+
 .learnerIdentity small,
 .finalGradeCell small {
   display: block;
@@ -611,43 +630,43 @@
   overflow-wrap: anywhere;
 }
 
-.learnerCell[data-surname-band='af'] {
+.learnerCell[data-surname-band="af"] {
   border-left-color: #6e9ab8;
 }
 
-.learnerCell[data-surname-band='af'] .surnameBadge {
+.learnerCell[data-surname-band="af"] .surnameBadge {
   background: var(--record-written-bg);
   color: var(--record-written-text);
 }
 
-.learnerCell[data-surname-band='gl'] {
+.learnerCell[data-surname-band="gl"] {
   border-left-color: #6f9d84;
 }
 
-.learnerCell[data-surname-band='gl'] .surnameBadge {
+.learnerCell[data-surname-band="gl"] .surnameBadge {
   background: var(--record-performance-bg);
   color: var(--record-performance-text);
 }
 
-.learnerCell[data-surname-band='mr'] {
+.learnerCell[data-surname-band="mr"] {
   border-left-color: #b99145;
 }
 
-.learnerCell[data-surname-band='mr'] .surnameBadge {
+.learnerCell[data-surname-band="mr"] .surnameBadge {
   background: var(--record-exam-bg);
   color: var(--record-exam-text);
 }
 
-.learnerCell[data-surname-band='sz'] {
+.learnerCell[data-surname-band="sz"] {
   border-left-color: #8573a5;
 }
 
-.learnerCell[data-surname-band='sz'] .surnameBadge {
+.learnerCell[data-surname-band="sz"] .surnameBadge {
   background: var(--record-computed-bg);
   color: var(--record-computed-text);
 }
 
-.learnerCell[data-surname-band='other'] .surnameBadge {
+.learnerCell[data-surname-band="other"] .surnameBadge {
   background: var(--record-unavailable-bg);
   color: var(--record-unavailable-text);
 }
@@ -665,33 +684,37 @@
   font-weight: 650;
 }
 
-.scoreCell[data-score-status='missing'],
-.scoreButton[data-score-status='missing'] {
+.scoreCell[data-score-status="missing"],
+.scoreButton[data-score-status="missing"] {
   background: var(--record-missing-bg);
   color: var(--record-missing-text);
 }
 
-.scoreCell[data-score-status='excused'],
-.scoreButton[data-score-status='excused'] {
+.scoreCell[data-score-status="excused"],
+.scoreButton[data-score-status="excused"] {
   background: var(--record-excused-bg);
   color: var(--record-excused-text);
 }
 
-.scoreCell[data-score-status='unavailable'],
-.scoreButton[data-score-status='unavailable'] {
+.scoreCell[data-score-status="unavailable"],
+.scoreButton[data-score-status="unavailable"] {
   background: var(--record-unavailable-bg);
   color: var(--record-unavailable-text);
 }
 
-.gradeTable [data-active-column='true'] {
-  box-shadow: inset 2px 0 0 #7b91a6, inset -2px 0 0 #7b91a6;
+.gradeTable [data-active-column="true"] {
+  box-shadow:
+    inset 2px 0 0 #7b91a6,
+    inset -2px 0 0 #7b91a6;
 }
 
-.gradeTable tr[data-active-row='true'] > * {
-  box-shadow: inset 0 2px 0 #7b91a6, inset 0 -2px 0 #7b91a6;
+.gradeTable tr[data-active-row="true"] > * {
+  box-shadow:
+    inset 0 2px 0 #7b91a6,
+    inset 0 -2px 0 #7b91a6;
 }
 
-.scoreButton[data-active='true'] {
+.scoreButton[data-active="true"] {
   outline: 2px solid #18324a;
   outline-offset: -2px;
 }
@@ -712,40 +735,40 @@
   font-size: 1rem;
 }
 
-.finalGradeCell[data-grade-status='intervention'] {
+.finalGradeCell[data-grade-status="intervention"] {
   background: var(--record-intervention-bg);
   color: var(--record-intervention-text);
 }
 
-.finalGradeCell[data-grade-status='verified'] {
+.finalGradeCell[data-grade-status="verified"] {
   background: var(--record-verified-bg);
   color: var(--record-verified-text);
 }
 
-.finalGradeCell[data-grade-status='unavailable'] {
+.finalGradeCell[data-grade-status="unavailable"] {
   background: var(--record-unavailable-bg);
   color: var(--record-unavailable-text);
 }
 
-.finalGradeCell[data-grade-status='provisional'] {
+.finalGradeCell[data-grade-status="provisional"] {
   background: var(--record-computed-bg);
   color: var(--record-computed-text);
 }
 
-.finalGradeCell[data-grade-status='legacy'] {
+.finalGradeCell[data-grade-status="legacy"] {
   background: var(--record-unavailable-bg);
   color: var(--record-unavailable-text);
 }
 
-.gradeGrid[data-density='compact'] .gradeTable th,
-.gradeGrid[data-density='compact'] .gradeTable td {
+.gradeGrid[data-density="compact"] .gradeTable th,
+.gradeGrid[data-density="compact"] .gradeTable td {
   height: 36px;
   min-height: 36px;
   padding-top: 5px;
   padding-bottom: 5px;
 }
 
-.gradeGrid[data-density='compact'] .scoreButton {
+.gradeGrid[data-density="compact"] .scoreButton {
   min-height: 28px;
   padding-block: 4px;
 }
@@ -782,43 +805,43 @@
   font-weight: 650;
 }
 
-.secondaryNameCell[data-surname-band='af'] {
+.secondaryNameCell[data-surname-band="af"] {
   border-left-color: #6e9ab8;
 }
 
-.secondaryNameCell[data-surname-band='gl'] {
+.secondaryNameCell[data-surname-band="gl"] {
   border-left-color: #6f9d84;
 }
 
-.secondaryNameCell[data-surname-band='mr'] {
+.secondaryNameCell[data-surname-band="mr"] {
   border-left-color: #b99145;
 }
 
-.secondaryNameCell[data-surname-band='sz'] {
+.secondaryNameCell[data-surname-band="sz"] {
   border-left-color: #8573a5;
 }
 
-.secondaryNameCell[data-surname-band='af'] .surnameBadge {
+.secondaryNameCell[data-surname-band="af"] .surnameBadge {
   background: var(--record-written-bg);
   color: var(--record-written-text);
 }
 
-.secondaryNameCell[data-surname-band='gl'] .surnameBadge {
+.secondaryNameCell[data-surname-band="gl"] .surnameBadge {
   background: var(--record-performance-bg);
   color: var(--record-performance-text);
 }
 
-.secondaryNameCell[data-surname-band='mr'] .surnameBadge {
+.secondaryNameCell[data-surname-band="mr"] .surnameBadge {
   background: var(--record-exam-bg);
   color: var(--record-exam-text);
 }
 
-.secondaryNameCell[data-surname-band='sz'] .surnameBadge {
+.secondaryNameCell[data-surname-band="sz"] .surnameBadge {
   background: var(--record-computed-bg);
   color: var(--record-computed-text);
 }
 
-.secondaryNameCell[data-surname-band='other'] .surnameBadge {
+.secondaryNameCell[data-surname-band="other"] .surnameBadge {
   background: var(--record-unavailable-bg);
   color: var(--record-unavailable-text);
 }
@@ -843,21 +866,21 @@
   font-weight: 650;
 }
 
-.eligibilitySelect[data-eligibility-status='eligible'] {
+.eligibilitySelect[data-eligibility-status="eligible"] {
   border-color: #b9dac6;
   background: var(--record-verified-bg);
   color: var(--record-verified-text);
 }
 
-.eligibilitySelect[data-eligibility-status='not_enrolled'],
-.eligibilitySelect[data-eligibility-status='transferred'],
-.eligibilitySelect[data-eligibility-status='withdrawn'] {
+.eligibilitySelect[data-eligibility-status="not_enrolled"],
+.eligibilitySelect[data-eligibility-status="transferred"],
+.eligibilitySelect[data-eligibility-status="withdrawn"] {
   border-color: #e7b9bf;
   background: var(--record-intervention-bg);
   color: var(--record-intervention-text);
 }
 
-.eligibilitySelect[data-eligibility-status='unconfirmed'] {
+.eligibilitySelect[data-eligibility-status="unconfirmed"] {
   background: var(--record-unavailable-bg);
   color: var(--record-unavailable-text);
 }
@@ -970,13 +993,13 @@
   overflow-wrap: anywhere;
 }
 
-.annualPeriodCell[data-score-status='missing'] {
+.annualPeriodCell[data-score-status="missing"] {
   background: var(--record-missing-bg);
   color: var(--record-missing-text);
   font-weight: 700;
 }
 
-.annualPeriodCell[data-score-status='verified'] {
+.annualPeriodCell[data-score-status="verified"] {
   background: var(--record-verified-bg);
   color: var(--record-verified-text);
 }
@@ -992,17 +1015,17 @@
   font-size: 1rem;
 }
 
-.annualGradeCell[data-grade-status='intervention'] {
+.annualGradeCell[data-grade-status="intervention"] {
   background: var(--record-intervention-bg);
   color: var(--record-intervention-text);
 }
 
-.annualGradeCell[data-grade-status='verified'] {
+.annualGradeCell[data-grade-status="verified"] {
   background: var(--record-verified-bg);
   color: var(--record-verified-text);
 }
 
-.annualGradeCell[data-grade-status='unavailable'] {
+.annualGradeCell[data-grade-status="unavailable"] {
   background: var(--record-unavailable-bg);
   color: var(--record-unavailable-text);
 }
@@ -1038,12 +1061,12 @@
   min-width: 210px;
 }
 
-.annualEvidenceCell > [data-score-status='verified'] {
+.annualEvidenceCell > [data-score-status="verified"] {
   margin: 0;
   color: var(--record-verified-text);
 }
 
-.annualEvidenceCell > [data-score-status='unavailable'] {
+.annualEvidenceCell > [data-score-status="unavailable"] {
   color: var(--record-unavailable-text);
   font-weight: 650;
 }
@@ -1197,5 +1220,4 @@
   .workbookHeader {
     padding: 15px 12px 12px;
   }
-
 }

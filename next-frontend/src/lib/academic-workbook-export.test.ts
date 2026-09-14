@@ -39,6 +39,7 @@ it("exports explicit zero, missing and excused evidence separately without inven
         firstName: "Ana",
         lastName: "Cruz",
         eligibility: "eligible",
+        accountState: "archived",
         categories: [
           {
             categoryId: "ww",
@@ -68,6 +69,7 @@ it("exports explicit zero, missing and excused evidence separately without inven
         studentId: "learner",
         firstName: "Ana",
         lastName: "Cruz",
+        accountState: "archived",
         components: [
           {
             period: "Q1",
@@ -84,8 +86,20 @@ it("exports explicit zero, missing and excused evidence separately without inven
     ],
   } as unknown as AnnualSummary;
   const rows = academicExportRows(sheet, annual);
-  expect(rows.period[1].slice(2, 5)).toEqual([0, null, "EXCUSED"]);
-  expect(rows.annual[1].slice(1, 8)).toEqual([
+  expect(rows.period[0].slice(0, 3)).toEqual([
+    "Learner",
+    "Eligibility",
+    "Account state",
+  ]);
+  expect(rows.period[1].slice(0, 3)).toEqual([
+    "Cruz, Ana",
+    "eligible",
+    "Archived account",
+  ]);
+  expect(rows.annual[0].slice(0, 2)).toEqual(["Learner", "Account state"]);
+  expect(rows.annual[1].slice(0, 2)).toEqual(["Cruz, Ana", "Archived account"]);
+  expect(rows.period[1].slice(3, 6)).toEqual([0, null, "EXCUSED"]);
+  expect(rows.annual[1].slice(2, 9)).toEqual([
     75,
     null,
     null,
@@ -97,6 +111,7 @@ it("exports explicit zero, missing and excused evidence separately without inven
   expect(rows.annual[1]).toContain("period_revision:revision-1");
   expect(rows.evidence[3]).toEqual([
     "Cruz, Ana",
+    "Archived account",
     "Excused",
     null,
     "excused",

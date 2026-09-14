@@ -108,6 +108,7 @@ function mockEvidence(
                 studentId: "student-1",
                 firstName: "Ana",
                 lastName: "Cruz",
+                accountState: "archived",
                 eligibility: "eligible",
                 categories: [
                   {
@@ -215,7 +216,7 @@ it("requires a reason and sends explicit bonus evidence for a manual score", asy
   await act(async () => {
     tree.root
       .findAllByType("Chip" as any)
-      .find((node) => node.props.label === "Cruz, Ana")!
+      .find((node) => node.props.label === "Cruz, Ana · Archived account")!
       .props.onPress();
     tree.root
       .findAllByType("Chip" as any)

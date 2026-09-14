@@ -219,4 +219,34 @@ describe("UserManagementPage", () => {
       }),
     );
   });
+
+  it("warns that archiving a learner retains and marks class-record evidence", async () => {
+    render(<UserManagementPage />);
+    await screen.findByRole("heading", { name: "Users" });
+
+    const suspendedTab = screen.getByRole("tab", { name: /suspended/i });
+    fireEvent.mouseDown(suspendedTab);
+    fireEvent.click(suspendedTab);
+    await waitFor(() =>
+      expect(mockedUserService.getAll).toHaveBeenLastCalledWith({
+        status: "SUSPENDED",
+        role: undefined,
+        limit: 100,
+        includeStatusCounts: true,
+      }),
+    );
+
+    const archiveButtons = await screen.findAllByTitle("Archive user");
+    fireEvent.click(archiveButtons.at(-1)!);
+    expect(
+      screen.getByText(
+        /Existing class-record rows, scores, grades, and audit evidence will be retained and marked “Archived account”/i,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Archiving does not change class enrollment or period eligibility/i,
+      ),
+    ).toBeInTheDocument();
+  });
 });

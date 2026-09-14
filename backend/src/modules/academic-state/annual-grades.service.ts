@@ -42,6 +42,7 @@ import {
 } from './DTO/academic-grade-repair.dto';
 import { selectAnnualSources } from './annual-grade-sources';
 import type { AnnualSource } from './annual-grade-sources';
+import { toClassRecordAccountState } from '../class-record/class-record-account-state';
 
 interface SubjectIdentity {
   schoolYear: string;
@@ -991,7 +992,7 @@ export class AnnualGradesService {
     const people = participantIds.length
       ? await this.db.query.users.findMany({
           where: inArray(users.id, participantIds),
-          columns: { id: true, firstName: true, lastName: true },
+          columns: { id: true, firstName: true, lastName: true, status: true },
         })
       : [];
     const annualIds = annuals
@@ -1020,6 +1021,7 @@ export class AnnualGradesService {
           studentId: student.id,
           firstName: student.firstName,
           lastName: student.lastName,
+          accountState: toClassRecordAccountState(student.status),
           components: selected.components,
           candidates: sources.filter((row) => row.studentId === student.id),
           selections: selections.filter((row) => row.studentId === student.id),

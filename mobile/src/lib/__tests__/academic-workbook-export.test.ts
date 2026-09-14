@@ -36,6 +36,7 @@ it("keeps zero, missing and excused separate and exports policy denominator and 
         firstName: "Ana",
         lastName: "Cruz",
         eligibility: "eligible",
+        accountState: "archived",
         initialGrade: null,
         quarterlyGrade: null,
         provisional: true,
@@ -64,6 +65,7 @@ it("keeps zero, missing and excused separate and exports policy denominator and 
         studentId: "learner",
         firstName: "Ana",
         lastName: "Cruz",
+        accountState: "archived",
         components: [
           {
             period: "Q1",
@@ -79,9 +81,20 @@ it("keeps zero, missing and excused separate and exports policy denominator and 
     ],
   } as unknown as AnnualSummary;
   const rows = academicExportRows(workbook, annual);
-  expect(rows.period[1].slice(2, 5)).toEqual([0, null, "EXCUSED"]);
+  expect(rows.period[0].slice(0, 3)).toEqual([
+    "Learner",
+    "Eligibility",
+    "Account state",
+  ]);
+  expect(rows.period[1].slice(0, 3)).toEqual([
+    "Cruz, Ana",
+    "eligible",
+    "Archived account",
+  ]);
+  expect(rows.period[1].slice(3, 6)).toEqual([0, null, "EXCUSED"]);
   expect(rows.evidence[3]).toEqual([
     "Cruz, Ana",
+    "Archived account",
     "C",
     null,
     "excused",
@@ -91,7 +104,9 @@ it("keeps zero, missing and excused separate and exports policy denominator and 
     20,
     null,
   ]);
-  expect(rows.annual[1].slice(1, 8)).toEqual([
+  expect(rows.annual[0].slice(0, 2)).toEqual(["Learner", "Account state"]);
+  expect(rows.annual[1].slice(0, 2)).toEqual(["Cruz, Ana", "Archived account"]);
+  expect(rows.annual[1].slice(2, 9)).toEqual([
     75,
     null,
     null,

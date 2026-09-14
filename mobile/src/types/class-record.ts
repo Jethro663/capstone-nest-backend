@@ -53,7 +53,12 @@ export interface ClassRecordScore {
 
 export interface FinalGrade {
   studentId: string;
-  student?: { firstName?: string; lastName?: string; lrn?: string };
+  student?: {
+    firstName?: string;
+    lastName?: string;
+    lrn?: string;
+    accountState?: "active" | "archived";
+  };
   finalPercentage: number;
   quarterlyGrade: number;
   remarks: "Passed" | "For Intervention";
@@ -127,6 +132,7 @@ export interface SpreadsheetStudentRow {
   remarks?: "Passed" | "For Intervention" | "Incomplete" | "Not graded";
   isRemoved?: boolean;
   enrollmentState?: "active" | "removed";
+  accountState?: "active" | "archived";
 }
 
 export interface SpreadsheetData {
@@ -184,6 +190,7 @@ export interface InterventionReportRow {
     lastName: string | null;
     middleName: string | null;
     email: string | null;
+    accountState?: "active" | "archived";
   } | null;
 }
 

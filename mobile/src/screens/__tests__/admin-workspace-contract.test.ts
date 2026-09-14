@@ -107,6 +107,16 @@ describe("administrator mobile workspace design contract", () => {
     expect(source).toContain("result.data.failed");
   });
 
+  it("warns that archived learners remain visible in academic evidence", () => {
+    const list = readScreen("AdminUsersScreen");
+    const detail = readScreen("AdminUserDetailScreen");
+    for (const source of [list, detail]) {
+      expect(source).toContain("class-record rows");
+      expect(source).toContain("Archived account");
+      expect(source).toContain("period eligibility");
+    }
+  });
+
   it("matches the web user-detail edit contract without typed transport dates", () => {
     const source = readScreen("AdminUserDetailScreen");
     expect(source).toContain("adminApi.updateUser");

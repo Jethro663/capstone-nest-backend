@@ -309,10 +309,8 @@ export function MobileClassRecordWorkbook({
             style={{
               borderRadius: 999,
               borderWidth: 1,
-              borderColor:
-                learnerFilter === value ? theme.red : theme.border,
-              backgroundColor:
-                learnerFilter === value ? "#FDE8E8" : "#FFFFFF",
+              borderColor: learnerFilter === value ? theme.red : theme.border,
+              backgroundColor: learnerFilter === value ? "#FDE8E8" : "#FFFFFF",
               paddingHorizontal: 12,
               paddingVertical: 7,
             }}
@@ -385,6 +383,9 @@ export function MobileClassRecordWorkbook({
               >
                 {columns.map((column) => {
                   const value = column.getValue(student);
+                  const archivedLearner =
+                    column.key === "learner" &&
+                    student.accountState === "archived";
                   return (
                     <View
                       key={`${student.studentId}:${column.key}`}
@@ -398,21 +399,50 @@ export function MobileClassRecordWorkbook({
                         paddingVertical: 6,
                       }}
                     >
-                      <Text
-                        numberOfLines={2}
-                        style={{
-                          fontSize: column.key === "learner" ? 11 : 10,
-                          lineHeight: 15,
-                          fontWeight:
-                            column.tone === "summary" ||
-                            column.tone === "warning"
-                              ? "900"
-                              : "700",
-                          color: getCellTextColor(column, value),
-                        }}
-                      >
-                        {value}
-                      </Text>
+                      {archivedLearner ? (
+                        <>
+                          <Text
+                            numberOfLines={2}
+                            accessibilityLabel={`${value}, archived account`}
+                            style={{
+                              fontSize: 11,
+                              lineHeight: 15,
+                              fontWeight: "700",
+                              color: theme.subtext,
+                              textDecorationLine: "line-through",
+                            }}
+                          >
+                            {value}
+                          </Text>
+                          <Text
+                            style={{
+                              marginTop: 2,
+                              fontSize: 9,
+                              lineHeight: 12,
+                              fontWeight: "900",
+                              color: theme.red,
+                            }}
+                          >
+                            Archived account
+                          </Text>
+                        </>
+                      ) : (
+                        <Text
+                          numberOfLines={2}
+                          style={{
+                            fontSize: column.key === "learner" ? 11 : 10,
+                            lineHeight: 15,
+                            fontWeight:
+                              column.tone === "summary" ||
+                              column.tone === "warning"
+                                ? "900"
+                                : "700",
+                            color: getCellTextColor(column, value),
+                          }}
+                        >
+                          {value}
+                        </Text>
+                      )}
                     </View>
                   );
                 })}

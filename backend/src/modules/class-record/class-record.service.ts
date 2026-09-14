@@ -46,6 +46,10 @@ import { AuditService } from '../audit/audit.service';
 import { AcademicPolicyService } from '../academic-state/academic-policy.service';
 import { calculateStudentRecord } from './class-record-calculation';
 import { calculateBoundedScore } from '../academic-state/academic-score';
+import {
+  toClassRecordAccountState,
+  withClassRecordAccountState,
+} from './class-record-account-state';
 
 /** DepEd default category configuration and fallback profile */
 const DEFAULT_DEPED_PROFILE = {
@@ -602,6 +606,7 @@ export class ClassRecordService {
         lastName: users.lastName,
         middleName: users.middleName,
         email: users.email,
+        status: users.status,
       })
       .from(enrollments)
       .innerJoin(users, eq(users.id, enrollments.studentId))
@@ -657,6 +662,7 @@ export class ClassRecordService {
               lastName: users.lastName,
               middleName: users.middleName,
               email: users.email,
+              status: users.status,
             })
             .from(users)
             .where(inArray(users.id, removedStudentIds))
@@ -726,6 +732,7 @@ export class ClassRecordService {
             ?.reason ?? null,
         isRemoved: student.enrollmentState === 'removed',
         enrollmentState: student.enrollmentState,
+        accountState: toClassRecordAccountState(student.status),
         categories: categories.map((category) => {
           const breakdown = calculation.categoryBreakdown.find(
             (c) => c.categoryId === category.id,
@@ -1453,7 +1460,7 @@ export class ClassRecordService {
   async getFinalGrades(classRecordId: string, userId: string, roles: string[]) {
     await this.assertClassRecord(classRecordId, userId, roles);
 
-    return this.db.query.classRecordFinalGrades.findMany({
+    const grades = await this.db.query.classRecordFinalGrades.findMany({
       where: eq(classRecordFinalGrades.classRecordId, classRecordId),
       with: {
         student: {
@@ -1463,11 +1470,18 @@ export class ClassRecordService {
             lastName: true,
             middleName: true,
             email: true,
+            status: true,
           },
         },
       },
       orderBy: (fg, { asc }) => [asc(fg.finalPercentage)],
     });
+    return grades.map((grade) => ({
+      ...grade,
+      student: grade.student
+        ? withClassRecordAccountState(grade.student)
+        : grade.student,
+    }));
   }
 
   async getStudentGrade(
@@ -1501,6 +1515,7 @@ export class ClassRecordService {
             firstName: true,
             lastName: true,
             email: true,
+            status: true,
           },
         },
       },
@@ -1512,7 +1527,12 @@ export class ClassRecordService {
       );
     }
 
-    return grade;
+    return {
+      ...grade,
+      student: grade.student
+        ? withClassRecordAccountState(grade.student)
+        : grade.student,
+    };
   }
 
   // ── Adviser Section View ──────────────────────────────────────────────────
@@ -1644,7 +1664,7 @@ export class ClassRecordService {
   ) {
     await this.assertClassRecord(classRecordId, userId, roles);
 
-    return this.db.query.classRecordFinalGrades.findMany({
+    const grades = await this.db.query.classRecordFinalGrades.findMany({
       where: and(
         eq(classRecordFinalGrades.classRecordId, classRecordId),
         eq(classRecordFinalGrades.remarks, 'For Intervention'),
@@ -1657,10 +1677,17 @@ export class ClassRecordService {
             lastName: true,
             middleName: true,
             email: true,
+            status: true,
           },
         },
       },
       orderBy: (fg, { asc }) => [asc(fg.finalPercentage)],
     });
+    return grades.map((grade) => ({
+      ...grade,
+      student: grade.student
+        ? withClassRecordAccountState(grade.student)
+        : grade.student,
+    }));
   }
 }

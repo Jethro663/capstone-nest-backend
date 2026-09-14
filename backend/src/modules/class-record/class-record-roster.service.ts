@@ -20,6 +20,7 @@ import {
 import { AcademicPolicyService } from '../academic-state/academic-policy.service';
 import { AuditService } from '../audit/audit.service';
 import { ConfirmPeriodRosterDto } from './DTO/confirm-period-roster.dto';
+import { toClassRecordAccountState } from './class-record-account-state';
 
 /** Period eligibility is an explicit register, never reconstructed from today's enrollment. */
 @Injectable()
@@ -73,7 +74,7 @@ export class ClassRecordRosterService {
     const people = ids.length
       ? await this.db.query.users.findMany({
           where: inArray(users.id, ids),
-          columns: { id: true, firstName: true, lastName: true },
+          columns: { id: true, firstName: true, lastName: true, status: true },
           orderBy: (u, { asc }) => [asc(u.lastName), asc(u.firstName)],
         })
       : [];
@@ -85,6 +86,7 @@ export class ClassRecordRosterService {
         studentId: person.id,
         firstName: person.firstName,
         lastName: person.lastName,
+        accountState: toClassRecordAccountState(person.status),
         eligibility:
           participants.find((p) => p.studentId === person.id)?.eligibility ??
           null,
