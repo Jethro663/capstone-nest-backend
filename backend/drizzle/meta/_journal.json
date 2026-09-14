@@ -204,6 +204,13 @@
       "when": 1789348698651,
       "tag": "0028_admin_authority_cascade_erasure",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1789364854429,
+      "tag": "0029_repair_legacy_class_record_teacher_constraint",
+      "breakpoints": true
     }
   ]
 }

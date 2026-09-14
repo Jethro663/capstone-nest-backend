@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { sql } from 'drizzle-orm';
@@ -290,5 +292,71 @@ describe('admin cascade erasure on real PostgreSQL', () => {
       await pool.query('SELECT teacher_id FROM classes WHERE id=$1', [classId])
     ).rows[0];
     expect(retainedClass).toEqual({ teacher_id: null });
+  });
+
+  it('repairs the legacy gradebook teacher constraint before reviewing cascade erasure', async () => {
+    const { sectionId } = await seedArchivedClass(301);
+    await pool.query(
+      `ALTER TABLE class_records
+       ADD CONSTRAINT gradebooks_teacher_id_users_id_fk
+       FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE RESTRICT`,
+    );
+
+    const blocked = await erasure.prepare(
+      {
+        targetType: 'SECTION',
+        targetIds: [sectionId],
+        purgeMode: 'CASCADE_ERASE',
+      },
+      actorId,
+    );
+    expect(blocked.canExecute).toBe(false);
+    expect(blocked.blockers).toEqual([
+      expect.objectContaining({
+        code: 'UNCLASSIFIED_DEPENDENCY',
+        message: expect.stringContaining('class_records.teacher_id'),
+      }),
+    ]);
+
+    const repairMigration = readFileSync(
+      join(
+        process.cwd(),
+        'drizzle/0029_repair_legacy_class_record_teacher_constraint.sql',
+      ),
+      'utf8',
+    ).replaceAll('--> statement-breakpoint', '');
+    await pool.query(repairMigration);
+
+    const ready = await erasure.prepare(
+      {
+        targetType: 'SECTION',
+        targetIds: [sectionId],
+        purgeMode: 'CASCADE_ERASE',
+      },
+      actorId,
+    );
+    expect(ready.canExecute).toBe(true);
+    expect(ready.blockers).toEqual([]);
+
+    const teacherConstraints = await pool.query<{
+      conname: string;
+      confdeltype: string;
+    }>(
+      `SELECT constraint_row.conname, constraint_row.confdeltype
+       FROM pg_constraint constraint_row
+       JOIN pg_attribute source_column
+         ON source_column.attrelid = constraint_row.conrelid
+        AND source_column.attnum = ANY(constraint_row.conkey)
+       WHERE constraint_row.conrelid = 'public.class_records'::regclass
+         AND constraint_row.contype = 'f'
+         AND source_column.attname = 'teacher_id'
+       ORDER BY constraint_row.conname`,
+    );
+    expect(teacherConstraints.rows).toEqual([
+      {
+        conname: 'class_records_teacher_id_users_id_fk',
+        confdeltype: 'n',
+      },
+    ]);
   });
 });
