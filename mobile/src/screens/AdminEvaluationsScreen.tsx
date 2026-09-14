@@ -180,13 +180,14 @@ export function AdminEvaluationsScreen(_props: Props) {
       );
       return;
     }
+    const campaignTitle = title.trim();
     try {
       setBusy(true);
       await evaluationsApi.createCampaign({
         formType,
         audienceRole,
         classId: classId || undefined,
-        title: title.trim(),
+        title: campaignTitle,
         startsAt: startsAt.toISOString(),
         endsAt: endsAt.toISOString(),
         status: campaignStatus,
@@ -196,7 +197,7 @@ export function AdminEvaluationsScreen(_props: Props) {
       setClassId("");
       setStartsAt(tomorrow());
       setEndsAt(nextWeek());
-      await Promise.all([
+      await Promise.allSettled([
         queryClient.invalidateQueries({
           queryKey: ["admin-evaluation-campaigns"],
         }),
@@ -204,8 +205,18 @@ export function AdminEvaluationsScreen(_props: Props) {
           queryKey: ["admin-evaluation-responses"],
         }),
       ]);
+      Alert.alert(
+        campaignStatus === "active" ? "Campaign active" : "Campaign saved",
+        `${campaignTitle} is ready for the selected audience.`,
+      );
     } catch (error) {
-      Alert.alert("Campaign not created", toAppError(error).message);
+      const appError = toAppError(error);
+      Alert.alert(
+        appError.code === "APP_UPDATE_REQUIRED"
+          ? "Update required"
+          : "Campaign not created",
+        appError.message,
+      );
     } finally {
       setBusy(false);
     }

@@ -454,6 +454,7 @@ function renderStudentStackScreen(name: StudentStackRouteName) {
           key={name}
           name={name}
           component={studentStackScreens.AssessmentTake}
+          options={{ gestureEnabled: false }}
         />
       );
     case "AssessmentResults":

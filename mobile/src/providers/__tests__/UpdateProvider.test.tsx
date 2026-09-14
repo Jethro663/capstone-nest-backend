@@ -93,6 +93,17 @@ const policy17: AppVersionDecision = {
     "Prevents duplicate latest-version prompts and adds visible app version details.",
 };
 
+const policy18: AppVersionDecision = {
+  ...policy17,
+  latestVersionCode: 18,
+  minSupportedVersionCode: 18,
+  latestNativeVersion: "0.1.17",
+  otaRuntimeVersion: "0.1.17",
+  apkSha256: "7b8b878928f9d1e844bd2d8e02bedfaf7c182848978606d738d187480608b225",
+  apkSizeBytes: 40300000,
+  releaseNotes: "Refreshed signed Android package.",
+};
+
 const noUpdatePolicy: AppVersionDecision = {
   ...policy17,
   latestVersionCode: 16,
@@ -422,8 +433,55 @@ describe("UpdateProvider", () => {
     expect(text).not.toContain("Please check your connection");
   });
 
+  it("automatically retries once when refreshed policy identifies a different package", async () => {
+    mockCheckUpdatePolicy
+      .mockResolvedValueOnce(policy17)
+      .mockResolvedValueOnce(policy18);
+    mockDownloadApk
+      .mockResolvedValueOnce("file:///cache/update-17.apk")
+      .mockResolvedValueOnce("file:///cache/update-18.apk");
+    mockVerifyApkIntegrity
+      .mockRejectedValueOnce(verificationFailure())
+      .mockResolvedValueOnce(undefined);
+
+    const renderer = await renderProvider();
+    await press(renderer, "Download & Install Update");
+
+    expect(mockCheckUpdatePolicy).toHaveBeenCalledTimes(2);
+    expect(mockDownloadApk).toHaveBeenCalledTimes(2);
+    expect(mockDownloadApk).toHaveBeenLastCalledWith(
+      policy18.apkDownloadUrl,
+      policy18.latestVersionCode,
+      expect.any(Function),
+    );
+    expect(mockVerifyApkIntegrity).toHaveBeenLastCalledWith(
+      "file:///cache/update-18.apk",
+      policy18.apkSizeBytes,
+      policy18.apkSha256,
+    );
+    expect(flattenText(renderer.toJSON())).toContain("Ready to Install");
+  });
+
+  it("does not loop when the refreshed package also fails verification", async () => {
+    mockCheckUpdatePolicy
+      .mockResolvedValueOnce(policy17)
+      .mockResolvedValueOnce(policy18);
+    mockVerifyApkIntegrity
+      .mockRejectedValueOnce(verificationFailure())
+      .mockRejectedValueOnce(verificationFailure());
+
+    const renderer = await renderProvider();
+    await press(renderer, "Download & Install Update");
+
+    expect(mockCheckUpdatePolicy).toHaveBeenCalledTimes(2);
+    expect(mockDownloadApk).toHaveBeenCalledTimes(2);
+    expect(mockVerifyApkIntegrity).toHaveBeenCalledTimes(2);
+    expect(flattenText(renderer.toJSON())).toContain("Retry Download");
+  });
+
   it("refreshes policy before retrying a failed download", async () => {
     mockCheckUpdatePolicy
+      .mockResolvedValueOnce(policy12)
       .mockResolvedValueOnce(policy12)
       .mockResolvedValueOnce(policy14);
     mockDownloadApk
@@ -437,7 +495,7 @@ describe("UpdateProvider", () => {
     await press(renderer, "Download & Install Update");
     await press(renderer, "Retry Download");
 
-    expect(mockCheckUpdatePolicy).toHaveBeenCalledTimes(2);
+    expect(mockCheckUpdatePolicy).toHaveBeenCalledTimes(3);
     expect(mockDownloadApk).toHaveBeenLastCalledWith(
       policy14.apkDownloadUrl,
       policy14.latestVersionCode,

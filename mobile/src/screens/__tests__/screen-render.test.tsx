@@ -2558,10 +2558,17 @@ describe("mobile rendered screen flows", () => {
       .join(" ");
 
     expect(renderedText).toContain("Home");
-    expect(renderedText).toContain("Your next move");
+    expect(renderedText).toContain("Today at GABHS");
+    expect(renderedText).toContain("Up next");
     expect(renderedText).toContain("Your day");
-    expect(renderedText).toContain("Keep moving");
+    expect(renderedText).toContain("After that");
     expect(renderedText).toContain("Latest update");
+    expect(
+      testRenderer!.root.findAll(
+        (node) =>
+          node.type === "Image" && node.props.testID === "student-home-ja",
+      ),
+    ).toHaveLength(1);
     expect(renderedText).not.toContain("Next for you");
     expect(renderedText).not.toContain("Continue learning");
     expect(renderedText).not.toContain("Due soon");
@@ -2601,7 +2608,10 @@ describe("mobile rendered screen flows", () => {
       );
     });
 
-    const classesButton = findPressableByText(testRenderer!.root, "Full calendar");
+    const classesButton = findPressableByText(
+      testRenderer!.root,
+      "Full calendar",
+    );
     act(() => {
       classesButton.props.onPress();
     });
@@ -3180,7 +3190,10 @@ describe("mobile rendered screen flows", () => {
       source: "classes",
     });
 
-    const completedFilter = findPressableByText(testRenderer!.root, "Completed");
+    const completedFilter = findPressableByText(
+      testRenderer!.root,
+      "Completed",
+    );
     act(() => {
       completedFilter.props.onPress();
     });
@@ -4311,7 +4324,7 @@ describe("mobile rendered screen flows", () => {
         .find(
           (node) =>
             node.type === "Pressable" &&
-        node.props.accessibilityLabel === "Open class workspace menu",
+            node.props.accessibilityLabel === "Open class workspace menu",
         )
         .props.onPress();
     });
@@ -4466,41 +4479,91 @@ describe("mobile rendered screen flows", () => {
 
   it("preserves rich formatting when opening the student announcement feed details", () => {
     const { AnnouncementsScreen } = require("../AnnouncementsScreen");
-    mockedUseQueries.mockImplementation(({ queries }) => queries.map(() => createQueryState([{
-      id: "rich-notice", title: "Rich notice", content: '<p>Bring <strong>a notebook</strong>.</p><ul><li>Read first</li></ul>',
-    }])));
+    mockedUseQueries.mockImplementation(({ queries }) =>
+      queries.map(() =>
+        createQueryState([
+          {
+            id: "rich-notice",
+            title: "Rich notice",
+            content:
+              "<p>Bring <strong>a notebook</strong>.</p><ul><li>Read first</li></ul>",
+          },
+        ]),
+      ),
+    );
     let renderer: TestRenderer.ReactTestRenderer;
-    act(() => { renderer = TestRenderer.create(React.createElement(AnnouncementsScreen, {})); });
-    expect(renderer!.root.find((node) => node.type === "Pressable" && node.props.accessibilityLabel === "Class: All classes")).toBeTruthy();
-    act(() => findPressableByText(renderer!.root, "Rich notice").props.onPress());
-    const details = renderer!.root.findAllByType("Modal").find((modal) => modal.props.visible);
+    act(() => {
+      renderer = TestRenderer.create(
+        React.createElement(AnnouncementsScreen, {}),
+      );
+    });
+    expect(
+      renderer!.root.find(
+        (node) =>
+          node.type === "Pressable" &&
+          node.props.accessibilityLabel === "Class: All classes",
+      ),
+    ).toBeTruthy();
+    act(() =>
+      findPressableByText(renderer!.root, "Rich notice").props.onPress(),
+    );
+    const details = renderer!.root
+      .findAllByType("Modal")
+      .find((modal) => modal.props.visible);
     expect(details).toBeTruthy();
     expect(details!.props.visible).toBe(true);
     const texts = details!.findAllByType("Text");
-    expect(texts.some(node => node.props.style?.fontWeight === "800" && flattenText(node) === "a notebook")).toBe(true);
+    expect(
+      texts.some(
+        (node) =>
+          node.props.style?.fontWeight === "800" &&
+          flattenText(node) === "a notebook",
+      ),
+    ).toBe(true);
     expect(texts.map(flattenText).join(" ")).toContain("•");
   });
 
   it("renders class announcement paragraphs, emphasis and lists without exposing HTML", () => {
     const { ClassDetailScreen } = require("../ClassDetailScreen");
-    mockedUseAnnouncements.mockReturnValue(createQueryState([{
-      id: "formatted-notice", classId: "class-1", title: "Formatted notice",
-      content: '<p>Bring <strong>your notebook</strong>.</p><ul><li>Read chapter one</li></ul>',
-      isPinned: false, createdAt: "2026-04-18T08:00:00.000Z",
-    }]));
+    mockedUseAnnouncements.mockReturnValue(
+      createQueryState([
+        {
+          id: "formatted-notice",
+          classId: "class-1",
+          title: "Formatted notice",
+          content:
+            "<p>Bring <strong>your notebook</strong>.</p><ul><li>Read chapter one</li></ul>",
+          isPinned: false,
+          createdAt: "2026-04-18T08:00:00.000Z",
+        },
+      ]),
+    );
     let renderer: TestRenderer.ReactTestRenderer;
     act(() => {
-      renderer = TestRenderer.create(React.createElement(ClassDetailScreen, {
-        navigation: { goBack: jest.fn(), navigate: jest.fn() },
-        route: { params: { classId: "class-1", initialTab: "announcements" } },
-      }));
+      renderer = TestRenderer.create(
+        React.createElement(ClassDetailScreen, {
+          navigation: { goBack: jest.fn(), navigate: jest.fn() },
+          route: {
+            params: { classId: "class-1", initialTab: "announcements" },
+          },
+        }),
+      );
     });
-    const text = renderer!.root.findAllByType("Text").map(flattenText).join(" ");
+    const text = renderer!.root
+      .findAllByType("Text")
+      .map(flattenText)
+      .join(" ");
     expect(text).toContain("Read chapter one");
     expect(text).not.toMatch(/<\/?(?:p|strong|ul|li)>/);
-    expect(renderer!.root.findAllByType("Text").some(node =>
-      node.props.style?.fontWeight === "800" && flattenText(node) === "your notebook",
-    )).toBe(true);
+    expect(
+      renderer!.root
+        .findAllByType("Text")
+        .some(
+          (node) =>
+            node.props.style?.fontWeight === "800" &&
+            flattenText(node) === "your notebook",
+        ),
+    ).toBe(true);
     expect(text).toContain("•");
   });
 
@@ -6308,8 +6371,7 @@ describe("mobile rendered screen flows", () => {
     expect(
       testRenderer!.root.find(
         (node) =>
-          node.type === "Text" &&
-          flattenText(node).includes("Performance"),
+          node.type === "Text" && flattenText(node).includes("Performance"),
       ),
     ).toBeTruthy();
   });
@@ -6373,26 +6435,64 @@ describe("mobile rendered screen flows", () => {
     const { AssessmentsScreen } = require("../AssessmentsScreen");
     mockAssessmentsAccordionQueries({
       assessments: [
-        { id: "pending-one", classId: "class-1", title: "Upcoming task", type: "quiz", isPublished: true, dueDate: "2099-01-01T00:00:00Z" },
-        { id: "late-one", classId: "class-1", title: "Overdue task", type: "quiz", isPublished: true, dueDate: "2000-01-01T00:00:00Z" },
-        { id: "done-one", classId: "class-1", title: "Finished task", type: "quiz", isPublished: true },
+        {
+          id: "pending-one",
+          classId: "class-1",
+          title: "Upcoming task",
+          type: "quiz",
+          isPublished: true,
+          dueDate: "2099-01-01T00:00:00Z",
+        },
+        {
+          id: "late-one",
+          classId: "class-1",
+          title: "Overdue task",
+          type: "quiz",
+          isPublished: true,
+          dueDate: "2000-01-01T00:00:00Z",
+        },
+        {
+          id: "done-one",
+          classId: "class-1",
+          title: "Finished task",
+          type: "quiz",
+          isPublished: true,
+        },
       ],
-      attemptsByAssessmentId: { "done-one": [{ id: "attempt-done", isSubmitted: true, submittedAt: "2026-04-18T08:00:00Z" }] },
+      attemptsByAssessmentId: {
+        "done-one": [
+          {
+            id: "attempt-done",
+            isSubmitted: true,
+            submittedAt: "2026-04-18T08:00:00Z",
+          },
+        ],
+      },
     });
     let renderer: TestRenderer.ReactTestRenderer;
     act(() => {
-      renderer = TestRenderer.create(React.createElement(AssessmentsScreen, {
-        navigation: { navigate: jest.fn() }, route: { name: "Assessments" },
-      }));
+      renderer = TestRenderer.create(
+        React.createElement(AssessmentsScreen, {
+          navigation: { navigate: jest.fn() },
+          route: { name: "Assessments" },
+        }),
+      );
     });
     const labels = ["Pending", "Past Due", "Completed", "All Assessments"];
-    const filters = renderer!.root.findAllByType("Pressable").filter(node => labels.includes(flattenText(node)));
+    const filters = renderer!.root
+      .findAllByType("Pressable")
+      .filter((node) => labels.includes(flattenText(node)));
     expect(filters.map(flattenText)).toEqual(labels);
-    const rendered = () => renderer!.root.findAllByType("Text").map(flattenText).join(" ");
+    const rendered = () =>
+      renderer!.root.findAllByType("Text").map(flattenText).join(" ");
     expect(rendered()).toContain("Upcoming task");
     expect(rendered()).not.toContain("Overdue task");
     expect(rendered()).not.toContain("Finished task");
-    for (const [label, title] of [["Past Due", "Overdue task"], ["Completed", "Finished task"], ["All Assessments", "Upcoming task"]]) {
+    for (const [label, title] of [
+      ["Past Due", "Overdue task"],
+      ["Completed", "Finished task"],
+      ["All Assessments", "Upcoming task"],
+    ]) {
       act(() => findPressableByText(renderer!.root, label).props.onPress());
       expect(rendered()).toContain(title);
     }
@@ -6417,8 +6517,7 @@ describe("mobile rendered screen flows", () => {
     expect(
       testRenderer!.root.find(
         (node) =>
-          node.type === "Text" &&
-          flattenText(node).includes("Assessment work"),
+          node.type === "Text" && flattenText(node).includes("Assessment work"),
       ),
     ).toBeTruthy();
 
@@ -6436,7 +6535,10 @@ describe("mobile rendered screen flows", () => {
       source: "assessments",
     });
 
-    const renderedText = testRenderer!.root.findAllByType("Text").map(flattenText).join(" ");
+    const renderedText = testRenderer!.root
+      .findAllByType("Text")
+      .map(flattenText)
+      .join(" ");
     expect(renderedText).not.toContain("Open Class");
     expect(renderedText).not.toContain("Latest Status");
   });
@@ -6500,8 +6602,12 @@ describe("mobile rendered screen flows", () => {
       );
     });
 
-    expect(testRenderer!.root.findByProps({ testID: "assessment-facts-ledger" })).toBeTruthy();
-    expect(testRenderer!.root.findByProps({ testID: "student-bottom-action-bar" })).toBeTruthy();
+    expect(
+      testRenderer!.root.findByProps({ testID: "assessment-facts-ledger" }),
+    ).toBeTruthy();
+    expect(
+      testRenderer!.root.findByProps({ testID: "student-bottom-action-bar" }),
+    ).toBeTruthy();
 
     const resultButton = findPressableByText(
       testRenderer!.root,
@@ -6588,8 +6694,12 @@ describe("mobile rendered screen flows", () => {
       .findAll((node) => node.type === "Text")
       .map((node) => flattenText(node));
 
-    expect(testRenderer!.root.findByProps({ testID: "assessment-facts-ledger" })).toBeTruthy();
-    expect(testRenderer!.root.findByProps({ testID: "student-bottom-action-bar" })).toBeTruthy();
+    expect(
+      testRenderer!.root.findByProps({ testID: "assessment-facts-ledger" }),
+    ).toBeTruthy();
+    expect(
+      testRenderer!.root.findByProps({ testID: "student-bottom-action-bar" }),
+    ).toBeTruthy();
     expect(texts).toContain("Reference material");
     expect(texts).toContain("My work");
     expect(texts).toContain("MOA-SIT-FORM-006.pdf");
@@ -6931,6 +7041,148 @@ describe("mobile rendered screen flows", () => {
 
     expect(expandedText).toContain("Blue");
     expect(expandedText).toContain("Red");
+  });
+
+  it("contains an active question attempt and warns instead of leaving", async () => {
+    const { AssessmentTakeScreen } = require("../AssessmentTakeScreen");
+    const { Alert, BackHandler } = require("react-native") as {
+      Alert: { alert: jest.Mock };
+      BackHandler: { addEventListener: jest.Mock };
+    };
+    const dispatch = jest.fn();
+    const goBack = jest.fn();
+    const addListener = jest.fn(() => jest.fn());
+    const future = new Date(Date.now() + 120_000).toISOString();
+    mockedAssessmentsApi.getOngoingAttempt.mockResolvedValueOnce({
+      attempt: {
+        id: "attempt-contained",
+        assessmentId: "assessment-1",
+        startedAt: new Date().toISOString(),
+        expiresAt: future,
+        isSubmitted: false,
+        violationCount: 0,
+      },
+      expiresAt: future,
+      timeLimitMinutes: 30,
+    });
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      testRenderer = TestRenderer.create(
+        React.createElement(AssessmentTakeScreen, {
+          navigation: {
+            replace: jest.fn(),
+            goBack,
+            addListener,
+            dispatch,
+          } as never,
+          route: {
+            key: "AssessmentTake",
+            name: "AssessmentTake",
+            params: { assessmentId: "assessment-1" },
+          } as never,
+        }),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const text = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+    expect(text).toContain("Attempt in progress");
+    expect(text).toContain("Leaving the app is recorded");
+    expect(text).toContain("Violation 0 of 3");
+
+    const beforeRemove = [...addListener.mock.calls]
+      .reverse()
+      .find(([event]) => event === "beforeRemove")?.[1];
+    const preventDefault = jest.fn();
+    act(() => {
+      beforeRemove?.({ preventDefault, data: { action: { type: "GO_BACK" } } });
+    });
+    expect(preventDefault).toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
+
+    const hardwareBack = BackHandler.addEventListener.mock.calls.at(-1)?.[1];
+    expect(hardwareBack?.()).toBe(true);
+    expect(goBack).not.toHaveBeenCalled();
+    expect(Alert.alert).toHaveBeenCalledWith(
+      "Assessment in progress",
+      expect.stringContaining("submit"),
+    );
+  });
+
+  it("keeps file-upload attempts compatible with system pickers", async () => {
+    const { AssessmentTakeScreen } = require("../AssessmentTakeScreen");
+    const ScreenCapture = require("expo-screen-capture") as {
+      preventScreenCaptureAsync: jest.Mock;
+      addScreenshotListener: jest.Mock;
+    };
+    mockedUseAssessmentDetail.mockReturnValue(
+      createQueryState({
+        id: "assessment-upload",
+        classId: "class-1",
+        title: "Portfolio upload",
+        description: "Attach your files.",
+        type: "file_upload",
+        isPublished: true,
+        totalPoints: 100,
+        passingScore: 75,
+        maxAttempts: 1,
+        questions: [],
+      }) as ReturnType<typeof useAssessmentDetail>,
+    );
+    mockedAssessmentsApi.getOngoingAttempt.mockResolvedValueOnce({
+      attempt: {
+        id: "attempt-upload",
+        assessmentId: "assessment-upload",
+        startedAt: new Date().toISOString(),
+        isSubmitted: false,
+      },
+    });
+    const addListener = jest.fn(() => jest.fn());
+    ScreenCapture.preventScreenCaptureAsync.mockClear();
+    ScreenCapture.addScreenshotListener.mockClear();
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      testRenderer = TestRenderer.create(
+        React.createElement(AssessmentTakeScreen, {
+          navigation: {
+            replace: jest.fn(),
+            goBack: jest.fn(),
+            addListener,
+            dispatch: jest.fn(),
+          } as never,
+          route: {
+            key: "AssessmentTake",
+            name: "AssessmentTake",
+            params: { assessmentId: "assessment-upload" },
+          } as never,
+        }),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const text = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+    expect(text).not.toContain("Attempt in progress");
+    expect(ScreenCapture.preventScreenCaptureAsync).not.toHaveBeenCalled();
+    expect(ScreenCapture.addScreenshotListener).not.toHaveBeenCalled();
+
+    const beforeRemove = [...addListener.mock.calls]
+      .reverse()
+      .find(([event]) => event === "beforeRemove")?.[1];
+    const preventDefault = jest.fn();
+    act(() => {
+      beforeRemove?.({ preventDefault, data: { action: { type: "GO_BACK" } } });
+    });
+    expect(preventDefault).not.toHaveBeenCalled();
   });
 
   it("resumes the server-randomized question position and keeps strict back navigation locked", async () => {

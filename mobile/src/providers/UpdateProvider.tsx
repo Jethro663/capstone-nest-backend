@@ -90,6 +90,20 @@ function installationFailureReason(error: unknown): string | null {
   return reason === "cancelled_or_blocked" ? reason : null;
 }
 
+function isSameApkPackage(
+  left: UpdateState["decision"],
+  right: UpdateState["decision"],
+) {
+  return Boolean(
+    left &&
+    right &&
+    left.latestVersionCode === right.latestVersionCode &&
+    left.apkSha256 === right.apkSha256 &&
+    left.apkSizeBytes === right.apkSizeBytes &&
+    left.apkDownloadUrl === right.apkDownloadUrl,
+  );
+}
+
 const noUpdateValue: UpdateContextValue = {
   state: { ...initialState, access: "allowed" },
   checkForUpdates: async () => {},
@@ -169,12 +183,10 @@ function AndroidUpdateProvider({ children }: PropsWithChildren) {
             decision.isForceUpdate || decision.updateType === "apk_forced";
           setAndroidAdmission(mandatory ? "blocked" : "allowed");
           if (!mandatory) setHasAdmitted(true);
-          const samePackage =
-            previousState.decision?.latestVersionCode ===
-              decision.latestVersionCode &&
-            previousState.decision?.apkSha256 === decision.apkSha256 &&
-            previousState.decision?.apkSizeBytes === decision.apkSizeBytes &&
-            previousState.decision?.apkDownloadUrl === decision.apkDownloadUrl;
+          const samePackage = isSameApkPackage(
+            previousState.decision,
+            decision,
+          );
           const retainedUri = samePackage ? previousState.verifiedApkUri : null;
           setState((prev) => ({
             ...prev,
@@ -212,72 +224,106 @@ function AndroidUpdateProvider({ children }: PropsWithChildren) {
       if (operationBusy.current) return;
       operationBusy.current = true;
       try {
-        setState((prev) => ({
-          ...prev,
-          decision,
-          status: "downloading_apk",
-          downloadProgress: 0,
-          downloadedBytes: 0,
-          totalBytes: decision.apkSizeBytes ?? 0,
-          errorMessage: null,
-          failureStage: null,
-          verifiedApkUri: null,
-        }));
+        let activeDecision = decision;
 
-        let localUri: string;
-        try {
-          localUri = await downloadApk(
-            decision.apkDownloadUrl,
-            decision.latestVersionCode,
-            (downloaded, total, pct) => {
-              setState((prev) => ({
-                ...prev,
-                downloadedBytes: downloaded,
-                totalBytes: total > 0 ? total : prev.totalBytes,
-                downloadProgress: pct,
-              }));
-            },
-          );
-        } catch (err: unknown) {
+        for (let packageAttempt = 0; packageAttempt < 2; packageAttempt += 1) {
           setState((prev) => ({
             ...prev,
-            status: "error",
-            errorMessage: errorMessage(err, "APK download failed."),
-            failureStage: "download",
+            decision: activeDecision,
+            status: "downloading_apk",
+            downloadProgress: 0,
+            downloadedBytes: 0,
+            totalBytes: activeDecision.apkSizeBytes ?? 0,
+            errorMessage: null,
+            failureStage: null,
             verifiedApkUri: null,
+          }));
+
+          let localUri: string;
+          try {
+            localUri = await downloadApk(
+              activeDecision.apkDownloadUrl,
+              activeDecision.latestVersionCode,
+              (downloaded, total, pct) => {
+                setState((prev) => ({
+                  ...prev,
+                  downloadedBytes: downloaded,
+                  totalBytes: total > 0 ? total : prev.totalBytes,
+                  downloadProgress: pct,
+                }));
+              },
+            );
+          } catch (err: unknown) {
+            setState((prev) => ({
+              ...prev,
+              status: "error",
+              errorMessage: errorMessage(err, "APK download failed."),
+              failureStage: "download",
+              verifiedApkUri: null,
+            }));
+            return;
+          }
+
+          setState((prev) => ({ ...prev, status: "verifying_apk" }));
+
+          try {
+            await verifyApkIntegrity(
+              localUri,
+              activeDecision.apkSizeBytes,
+              activeDecision.apkSha256,
+            );
+          } catch (err: unknown) {
+            const failureReason = verificationFailureReason(err);
+            const canRefreshPackage =
+              packageAttempt === 0 &&
+              (failureReason === "size_mismatch" ||
+                failureReason === "checksum_mismatch");
+
+            if (canRefreshPackage) {
+              try {
+                const refreshedDecision = await checkUpdatePolicy();
+                checkedDecision.current = refreshedDecision;
+                if (
+                  refreshedDecision.updateType !== "none" &&
+                  !isSameApkPackage(activeDecision, refreshedDecision)
+                ) {
+                  const mandatory =
+                    refreshedDecision.isForceUpdate ||
+                    refreshedDecision.updateType === "apk_forced";
+                  setAndroidAdmission(mandatory ? "blocked" : "allowed");
+                  if (!mandatory) setHasAdmitted(true);
+                  activeDecision = refreshedDecision;
+                  continue;
+                }
+              } catch {
+                // Keep the original integrity error; it is the actionable failure.
+              }
+            }
+
+            setState((prev) => ({
+              ...prev,
+              decision: activeDecision,
+              status: "error",
+              errorMessage: errorMessage(
+                err,
+                "APK package verification failed. Download it again.",
+              ),
+              failureStage: "verification",
+              verifiedApkUri: null,
+            }));
+            return;
+          }
+
+          // Stop at ready_to_install; do NOT auto-launch installer to prevent duplicate launch race conditions.
+          setState((prev) => ({
+            ...prev,
+            decision: activeDecision,
+            status: "ready_to_install",
+            failureStage: null,
+            verifiedApkUri: localUri,
           }));
           return;
         }
-
-        setState((prev) => ({ ...prev, status: "verifying_apk" }));
-
-        try {
-          await verifyApkIntegrity(
-            localUri,
-            decision.apkSizeBytes,
-            decision.apkSha256,
-          );
-        } catch (err: unknown) {
-          setState((prev) => ({
-            ...prev,
-            status: "error",
-            errorMessage: errorMessage(
-              err,
-              "APK package verification failed. Download it again.",
-            ),
-            failureStage: "verification",
-            verifiedApkUri: null,
-          }));
-          return;
-        }
-
-        // Stop at ready_to_install; do NOT auto-launch installer to prevent duplicate launch race conditions.
-        setState((prev) => ({
-          ...prev,
-          status: "ready_to_install",
-          failureStage: null,
-          verifiedApkUri: localUri,
-        }));
       } catch (err: unknown) {
         setState((prev) => ({
           ...prev,
@@ -450,7 +496,9 @@ function AndroidUpdateProvider({ children }: PropsWithChildren) {
     state.status === "idle" ||
     state.failureStage === "check";
   const isAdmittedRecheck =
-    hasAdmitted && state.status === "checking" && state.failureStage !== "check";
+    hasAdmitted &&
+    state.status === "checking" &&
+    state.failureStage !== "check";
   const clientVersionInfo = getClientVersionInfo();
   const installedVersionLabel = `Installed v${clientVersionInfo.currentNativeVersion} (build ${clientVersionInfo.currentVersionCode})`;
   const availableVersionLabel = state.decision
@@ -507,7 +555,14 @@ function AndroidUpdateProvider({ children }: PropsWithChildren) {
               }}
             >
               <ActivityIndicator size="small" color="#DC2626" />
-              <Text style={{ flex: 1, fontSize: 13, fontWeight: "700", color: colors.text }}>
+              <Text
+                style={{
+                  flex: 1,
+                  fontSize: 13,
+                  fontWeight: "700",
+                  color: colors.text,
+                }}
+              >
                 Verifying app version…
               </Text>
             </View>

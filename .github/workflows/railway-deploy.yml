@@ -93,8 +93,11 @@ jobs:
       - name: Verify public security headers and API policy ownership
         env:
           SECURITY_CHECK_ORIGIN: https://nexora-lms.com
-          SECURITY_CHECK_API: 'true'
+          SECURITY_CHECK_API: "true"
         run: node next-frontend/scripts/check-security-headers.mjs
+
+      - name: Verify live APK and register the exact backend release policy
+        run: railway run --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT_NAME" --service capstone-backend-v2 --no-local -- node .github/scripts/register-mobile-release.cjs
 
       - name: Record deployment provenance
         run: |
