@@ -10,9 +10,14 @@ jest.mock('../../system-reset/system-reset.work', () => ({
 }));
 
 describe('LibraryIndexingProcessor', () => {
-  const buildDatabase = () => {
+  const buildDatabase = (fileExists = true) => {
     const updates: Array<Record<string, unknown>> = [];
     const db = {
+      query: {
+        uploadedFiles: {
+          findFirst: jest.fn().mockResolvedValue(fileExists ? { id: 'file-1' } : null),
+        },
+      },
       update: jest.fn(() => ({
         set: jest.fn((values: Record<string, unknown>) => {
           updates.push(values);
@@ -22,6 +27,24 @@ describe('LibraryIndexingProcessor', () => {
     };
     return { databaseService: { db }, updates };
   };
+
+  it('completes as a no-op when the uploaded file was erased', async () => {
+    const { databaseService } = buildDatabase(false);
+    const processor = new LibraryIndexingProcessor(
+      { get: jest.fn() } as unknown as ConfigService,
+      databaseService as never,
+      { log: jest.fn() } as never,
+    );
+    const fetchMock = jest.spyOn(globalThis, 'fetch');
+
+    await expect(
+      processor.process({
+        name: 'index-library-file',
+        data: { fileId: 'erased-file', reason: 'retry', queuedAt: '' },
+      } as never),
+    ).resolves.toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 
   afterEach(() => {
     jest.restoreAllMocks();

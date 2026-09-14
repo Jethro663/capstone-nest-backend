@@ -376,7 +376,7 @@ export class ClassRecordService {
       this.assertEditable(record);
       if (record.gradingPeriod === period || event === 'joined') {
         for (const studentId of [...new Set(studentIds)]) {
-          await this.db
+          const participantInsert = this.db
             .insert(classRecordParticipants)
             .values({
               classRecordId: record.id,
@@ -385,8 +385,24 @@ export class ClassRecordService {
               source: `enrollment_${event}`,
               reason: `Class enrollment ${event} during ${period}; teacher confirmation required`,
               updatedBy: actorId,
-            })
-            .onConflictDoNothing();
+            });
+          if (event === 'joined') {
+            await participantInsert.onConflictDoUpdate({
+              target: [
+                classRecordParticipants.classRecordId,
+                classRecordParticipants.studentId,
+              ],
+              set: {
+                eligibility: 'eligible',
+                source: 'enrollment_joined',
+                reason: `Class enrollment joined during ${period}; teacher confirmation required`,
+                updatedBy: actorId,
+                updatedAt: new Date(),
+              },
+            });
+          } else {
+            await participantInsert.onConflictDoNothing();
+          }
         }
       }
       await this.db

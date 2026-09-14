@@ -8,6 +8,7 @@ import { academicStateService } from '@/services/academic-state-service';
 import { adminLifecycleService } from '@/services/admin-lifecycle-service';
 import { AdminEmptyState, AdminPageShell, AdminSectionCard } from '@/components/admin/AdminPageShell';
 import { AdminLifecycleDialog } from '@/components/admin/AdminLifecycleDialog';
+import { AdminErasureBatchDialog } from '@/components/admin/AdminErasureBatchDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -67,6 +68,7 @@ export default function SectionManagementPage() {
   const [search, setSearch] = useState('');
   const [selectedSectionIds, setSelectedSectionIds] = useState<string[]>([]);
   const [lifecycleTarget, setLifecycleTarget] = useState<Section | null>(null);
+  const [erasureTargets, setErasureTargets] = useState<Section[]>([]);
   const [lifecycleRoster, setLifecycleRoster] = useState<RosterStudent[]>([]);
   const [activePeriod, setActivePeriod] = useState<AcademicPeriodKey>('Q1');
   const [currentSchoolYear, setCurrentSchoolYear] = useState('');
@@ -165,13 +167,21 @@ export default function SectionManagementPage() {
   }, [fetchData]);
 
   const toggleSectionSelection = (sectionId: string) => {
-    setSelectedSectionIds((current) =>
-      current.includes(sectionId) ? current.filter((id) => id !== sectionId) : [...current, sectionId],
-    );
+    setSelectedSectionIds((current) => {
+      if (current.includes(sectionId)) return current.filter((id) => id !== sectionId);
+      if (current.length >= 50) {
+        toast.error('A permanent-deletion batch can contain up to 50 sections.');
+        return current;
+      }
+      return [...current, sectionId];
+    });
   };
 
   const handleSelectAllVisible = () => {
-    setSelectedSectionIds(allVisibleSelected ? [] : selectableVisibleIds);
+    if (!allVisibleSelected && selectableVisibleIds.length > 50) {
+      toast.info('Selected the first 50 visible sections, the batch limit.');
+    }
+    setSelectedSectionIds(allVisibleSelected ? [] : selectableVisibleIds.slice(0, 50));
   };
 
   const openSingleActionConfirmation = async (section: Section) => {
@@ -196,13 +206,12 @@ export default function SectionManagementPage() {
   };
 
   const openBulkConfirmation = (option: BulkActionOption) => {
-    const next = selectedSections[0];
-    if (!next) return;
-    toast.info(
-      `${selectedSections.length} selected. Review begins with ${next.name}; failed or unreviewed sections stay selected.`,
-    );
-    void option;
-    void openSingleActionConfirmation(next);
+    if (selectedSections.length === 0) return;
+    if (option.action === 'purge') {
+      setErasureTargets(selectedSections);
+      return;
+    }
+    void openSingleActionConfirmation(selectedSections[0]);
   };
 
   if (initialLoading) {
@@ -449,7 +458,7 @@ export default function SectionManagementPage() {
                               type="button"
                               className="admin-icon-button"
                               onClick={() => {
-                                void openSingleActionConfirmation(section);
+                                setErasureTargets([section]);
                               }}
                               title="Purge section"
                             >
@@ -695,6 +704,34 @@ export default function SectionManagementPage() {
           onCompleted={async () => {
             toast.success(lifecycleTarget.isActive ? 'Section archived' : 'Section permanently deleted');
             setSelectedSectionIds((current) => current.filter((id) => id !== lifecycleTarget.id));
+            await refreshTable();
+          }}
+        />
+      ) : null}
+      {erasureTargets.length > 0 ? (
+        <AdminErasureBatchDialog
+          open
+          onOpenChange={(open) => !open && setErasureTargets([])}
+          targetType="SECTION"
+          targetIds={erasureTargets.map((target) => target.id)}
+          targetLabel={
+            erasureTargets.length === 1
+              ? erasureTargets[0].name
+              : `${erasureTargets.length} archived sections`
+          }
+          preview={async (input) =>
+            (await adminLifecycleService.previewPurgeBatch(input)).data
+          }
+          execute={async (input) =>
+            (await adminLifecycleService.executePurgeBatch(input)).data
+          }
+          onCompleted={async (result) => {
+            toast.success(
+              `${result.deletedCount} section${result.deletedCount === 1 ? '' : 's'} permanently deleted`,
+            );
+            setSelectedSectionIds((current) =>
+              current.filter((id) => !result.targetIds.includes(id)),
+            );
             await refreshTable();
           }}
         />

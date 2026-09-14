@@ -28,6 +28,8 @@ describe('system reset preservation contract', () => {
     'transmutation_tables',
     'audit_logs',
     'admin_lifecycle_operations',
+    'admin_erasure_operations',
+    'admin_erasure_items',
     'enrollment_lifecycle_events',
     'grade_score_repair_evidence',
     'system_reset_evidence',

@@ -42,6 +42,8 @@ const groups: Array<{ action: ResetAction; group: string; tables: string[] }> =
         'audit_logs',
         'grade_score_repair_evidence',
         'admin_lifecycle_operations',
+        'admin_erasure_operations',
+        'admin_erasure_items',
         'enrollment_lifecycle_events',
       ],
     },
@@ -203,7 +205,7 @@ export const RESET_CATALOG: Readonly<Record<string, ResetTableRule>> =
       ),
     ),
   );
-export const RESET_CATALOG_VERSION = 2;
+export const RESET_CATALOG_VERSION = 3;
 export const RESET_QUEUE_NAMES = [
   'announcements',
   'notifications',
@@ -212,6 +214,7 @@ export const RESET_QUEUE_NAMES = [
   'library-indexing',
   'performance-recompute',
   'ai-teacher-generation',
+  'admin-erasure-cleanup',
 ] as const;
 export const RESET_ACKNOWLEDGEMENTS = [
   'OTHER_ACCOUNTS_REMOVED',

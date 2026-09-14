@@ -98,3 +98,19 @@ export interface AdminLifecycleExecutionResult {
   preserved: string[];
   auditLogId?: string;
 }
+
+export interface AdminErasureBatchContract {
+  schemaVersion: 2;
+  targetIds: string[];
+  purgeMode: 'EMPTY_ONLY' | 'CASCADE_ERASE';
+  confirmation: string;
+  catalogVersion: number;
+  databaseSchemaHash: string;
+  cleanupStatus: 'pending' | 'not_required' | 'completed' | 'failed';
+  status:
+    | 'executing'
+    | 'cleanup_pending'
+    | 'completed'
+    | 'completed_with_cleanup_errors'
+    | 'failed';
+}

@@ -381,7 +381,7 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
   };
 
   const canPreview = useMemo(() => {
-    if (!isActive) return true;
+    if (!isActive) return false;
     if (!current.data?.data.quarter) return false;
     if (!effectivePeriod) return false;
     if (targetType === "STUDENT") {
@@ -773,9 +773,9 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
             </AdminSection>
           ) : (
             <AdminNotice
-              title="No override is available"
-              description="Permanent deletion proceeds only when the backend finds no retained academic or lifecycle evidence."
-              tone="red"
+              title="Use the web Admin console"
+              description="Permanent cascade deletion and whole-batch impact review are available on the web Admin console. Mobile keeps archive and historical repair flows available."
+              tone="amber"
               icon="delete-alert-outline"
             />
           )}
@@ -1057,7 +1057,11 @@ export function AdminLifecycleReviewScreen({ navigation, route }: Props) {
           <View style={{ padding: 16 }}>
             <AdminButton
               label={
-                busy || loadingInputs ? "Preparing review…" : "Review impact"
+                !isActive
+                  ? "Use web Admin console"
+                  : busy || loadingInputs
+                    ? "Preparing review…"
+                    : "Review impact"
               }
               icon="shield-search"
               tone={isActive ? "primary" : "red"}

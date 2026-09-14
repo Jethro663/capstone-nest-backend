@@ -9,6 +9,8 @@ export const CLASS_RECORD_DENSITY_STORAGE_KEY =
 export type ClassRecordDensity = 'comfortable' | 'compact';
 export type ClassRecordFilter =
   | 'all'
+  | 'current'
+  | 'historical'
   | 'needs_attention'
   | 'missing'
   | 'excused'
@@ -84,6 +86,10 @@ function matchesFilter(
   categories: SpreadsheetCategory[],
   filter: ClassRecordFilter,
 ) {
+  const historical =
+    student.isRemoved === true || student.enrollmentState === 'removed';
+  if (filter === 'current') return !historical;
+  if (filter === 'historical') return historical;
   const missing = hasMissingScore(student, categories);
   const eligibility = student.eligibility !== 'eligible';
   const intervention = student.remarks === 'For Intervention';

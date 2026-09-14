@@ -14,10 +14,12 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import {
   ExecuteClassLifecycleDto,
   ExecutePurgeLifecycleDto,
+  ExecutePurgeBatchDto,
   ExecuteSectionLifecycleDto,
   ExecuteStudentLifecycleDto,
   PreviewClassLifecycleDto,
   PreviewPurgeLifecycleDto,
+  PreviewPurgeBatchDto,
   PreviewSectionLifecycleDto,
   PreviewStudentLifecycleDto,
 } from './DTO/admin-lifecycle.dto';
@@ -130,6 +132,42 @@ export class AdminMaintenanceLifecycleController {
       await this.lifecycle.executePurge(dto, actor.userId, {
         requireMaintenance: true,
       }),
+    );
+  }
+
+  @Post('purge/batch/preview')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
+  async previewPurgeBatch(
+    @Body() dto: PreviewPurgeBatchDto,
+    @CurrentUser() actor: Actor,
+  ) {
+    return this.response(
+      'Permanent deletion batch preview generated',
+      await this.lifecycle.previewPurgeBatch(dto, actor.userId),
+    );
+  }
+
+  @Post('purge/batch/execute')
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  async executePurgeBatch(
+    @Body() dto: ExecutePurgeBatchDto,
+    @CurrentUser() actor: Actor,
+  ) {
+    return this.response(
+      'Permanent deletion batch accepted',
+      await this.lifecycle.executePurgeBatch(dto, actor.userId),
+    );
+  }
+
+  @Post('operations/:id/retry-cleanup')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  async retryCleanup(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() actor: Actor,
+  ) {
+    return this.response(
+      'Permanent deletion cleanup retry accepted',
+      await this.lifecycle.retryErasureCleanup(id, actor.userId),
     );
   }
 

@@ -21,10 +21,12 @@ import { NotificationsService } from '../notifications/notifications.service';
 import type {
   ExecuteClassLifecycleDto,
   ExecutePurgeLifecycleDto,
+  ExecutePurgeBatchDto,
   ExecuteSectionLifecycleDto,
   ExecuteStudentLifecycleDto,
   PreviewClassLifecycleDto,
   PreviewPurgeLifecycleDto,
+  PreviewPurgeBatchDto,
   PreviewSectionLifecycleDto,
   PreviewStudentLifecycleDto,
 } from './DTO/admin-lifecycle.dto';
@@ -58,6 +60,7 @@ import {
   type AdminMaintenanceContext,
 } from '../admin-maintenance/admin-maintenance.service';
 import type { AdminMaintenanceRuleCode } from '../admin-maintenance/admin-maintenance.policy';
+import { AdminErasureService } from './admin-erasure.service';
 
 type ExecutionDto =
   | ExecuteStudentLifecycleDto
@@ -101,6 +104,7 @@ export class AdminLifecycleService {
     private readonly auditService: AuditService,
     private readonly notificationsService: NotificationsService,
     private readonly adminMaintenanceService: AdminMaintenanceService,
+    private readonly adminErasureService?: AdminErasureService,
   ) {}
 
   private get db() {
@@ -296,6 +300,79 @@ export class AdminLifecycleService {
       },
       options,
     );
+  }
+
+  async previewPurgeBatch(dto: PreviewPurgeBatchDto, actorId: string) {
+    if (!this.adminErasureService) {
+      throw new ServiceUnavailableException('Batch erasure is unavailable.');
+    }
+    return this.db.transaction(
+      (tx) =>
+        this.adminErasureService!.prepare(dto, actorId, { db: tx as never }),
+      { isolationLevel: 'repeatable read', accessMode: 'read only' },
+    );
+  }
+
+  async executePurgeBatch(dto: ExecutePurgeBatchDto, actorId: string) {
+    if (!this.adminErasureService) {
+      throw new ServiceUnavailableException('Batch erasure is unavailable.');
+    }
+    const maintenance = await this.adminMaintenanceService.resolveForActor(
+      actorId,
+      ['admin'],
+    );
+    if (!maintenance.active) {
+      throw new ForbiddenException({
+        code: 'MAINTENANCE_SESSION_REQUIRED',
+        message:
+          'Maintenance Access is required. Reauthenticate and review the current impact again.',
+      });
+    }
+    const requiredRule =
+      dto.targetType === 'USER'
+        ? 'cascade_account_erasure'
+        : 'cascade_academic_erasure';
+    if (!maintenance.allows(requiredRule)) {
+      throw new ForbiddenException({
+        code: 'MAINTENANCE_SCOPE_REQUIRED',
+        message: 'Open Maintenance Access with the required erasure scope.',
+      });
+    }
+    await this.adminMaintenanceService.requireActiveSession(
+      actorId,
+      ['admin'],
+      maintenance.sessionId!,
+    );
+    const actorSnapshot = await this.verifyActor(actorId, undefined, false);
+    return this.adminErasureService.execute(dto, actorId, actorSnapshot);
+  }
+
+  async retryErasureCleanup(operationId: string, actorId: string) {
+    if (!this.adminErasureService) {
+      throw new ServiceUnavailableException('Batch erasure is unavailable.');
+    }
+    const maintenance = await this.adminMaintenanceService.resolveForActor(
+      actorId,
+      ['admin'],
+    );
+    if (!maintenance.active) {
+      throw new ForbiddenException({
+        code: 'MAINTENANCE_SESSION_REQUIRED',
+        message: 'Maintenance Access is required to retry cleanup.',
+      });
+    }
+    const operation = await this.adminErasureService.getOperation(operationId);
+    const requiredRule =
+      operation.targetType === 'USER'
+        ? 'cascade_account_erasure'
+        : 'cascade_academic_erasure';
+    if (!maintenance.allows(requiredRule)) {
+      throw new ForbiddenException({
+        code: 'MAINTENANCE_SCOPE_REQUIRED',
+        message: 'Open Maintenance Access with the required erasure scope.',
+      });
+    }
+    return this.adminErasureService.retryCleanup(operationId);
   }
 
   private async verifyActor(
@@ -628,8 +705,12 @@ export class AdminLifecycleService {
         completedAt: true,
       },
     });
-    if (!operation)
+    if (!operation) {
+      if (this.adminErasureService) {
+        return this.adminErasureService.getOperation(operationId);
+      }
       throw new NotFoundException('Lifecycle operation not found');
+    }
     return operation;
   }
 }

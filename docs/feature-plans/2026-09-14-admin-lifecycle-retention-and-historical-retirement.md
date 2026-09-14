@@ -1,607 +1,727 @@
-# Admin Lifecycle Retention and Historical Retirement Implementation Plan
+# Admin Authority Mode, Cascade Erasure, Bulk Lifecycle, and Roster Consistency Implementation Plan
+
+> **For agentic workers:** Use `superpowers:subagent-driven-development` in the same session or `superpowers:executing-plans` in a separate session. Apply `superpowers:test-driven-development` for each behavior change and `superpowers:verification-before-completion` before any release claim.
 
 Plan date: 2026-09-14
 
-Repository state inspected: `f46235a34466ec8460a7017e21a78ae85da7001d` on `developement`
+Repository state inspected: `ad043f8bf62cca3f4f2d14faeb66876ffea23c69` on `developement`, equal to `origin/developement` when inspected
 
-Planning status: Implemented and locally verified; exact-SHA release verification is in progress
+Planning status: Decision-ready; implementation, commit, push, deployment, and destructive execution are not authorized by this plan
 
-Implementation authorization: Subsequently granted through the repository's finish-and-ship workflow.
+Canonical-plan note: This document intentionally replaces the earlier retention-only direction at the same path. It is the sole implementation plan for the revised administrator-authority requirement.
 
 Companion analysis: [`docs/feature-analysis/2026-09-13-admin-lifecycle-blocker-dead-ends.md`](../feature-analysis/2026-09-13-admin-lifecycle-blocker-dead-ends.md)
 
-Related completed parent design: [`docs/feature-plans/2026-09-13-admin-maintenance-gateway-and-safeguard-reset.md`](2026-09-13-admin-maintenance-gateway-and-safeguard-reset.md)
+Related foundation: [`docs/feature-plans/2026-09-13-admin-maintenance-gateway-and-safeguard-reset.md`](2026-09-13-admin-maintenance-gateway-and-safeguard-reset.md)
 
-This is a focused corrective extension to the existing Admin Maintenance Gateway. It does not replace or compete with that broader plan. It addresses the remaining dead-end behavior for evidence-protected permanent deletion and historical class or section archiving.
+**Goal:** Let a school administrator complete legitimate account, class, section, roster, and permanent-deletion work without dead-end policy messages, including intentional deletion of retained academic content through one explicit cascade-erasure workflow.
+
+**Architecture:** Keep ordinary lifecycle operations and the existing short-lived Maintenance Access session, then add a target-scoped erasure catalog, atomic database executor, durable batch receipt, and retryable post-commit cleanup. Retained evidence becomes a high-severity impact warning in explicit `CASCADE_ERASE` mode rather than an absolute blocker.
+
+**Tech stack:** NestJS 11, Drizzle/PostgreSQL, BullMQ/Redis, Next.js 16/React 19, Expo 54/React Native, Jest, Playwright, and the existing admin contract checker.
 
 ## 1. Decision summary and feature brief
 
 ### Decision
 
-There is no architectural blocker to implementing this feature.
+Implement **Admin Authority Mode** as the destructive capability of an active, actor-bound Maintenance Access session:
 
-The recommended change has two separate outcomes:
+1. An administrator opens Maintenance Access once using the current password, required acknowledgements, and a reason.
+2. Archived classes, archived sections, and soft-deleted accounts may be previewed in either `EMPTY_ONLY` or `CASCADE_ERASE` mode.
+3. In `CASCADE_ERASE`, academic history and content are listed as data that **will be erased**, not as `IMMUTABLE` evidence that blocks the administrator.
+4. One preview may contain up to 50 selected targets of one type. The database phase is all-or-none, so “33 selected” means all 33 are reviewed and executed together.
+5. The administrator enters one batch confirmation. The execute call does not request the password again while the same Maintenance Access session is valid.
+6. A minimal, append-only erasure receipt survives. It records who erased which target identities, when, why, and aggregate counts; it does not preserve the deleted scores, attempts, learner notes, or content.
+7. Object-storage and index cleanup occurs after the database commit and retries without making the deleted records reappear.
 
-1. Permanent deletion remains impossible when retained academic or lifecycle evidence exists. The product must present that as a useful retention outcome, not as a confirmation ceremony that can never continue.
-2. Historical classes and sections gain an evidence-preserving retirement mode under the existing archive workflow. A structurally empty historical target can be retired directly; a target with lingering active memberships must collect explicit outcomes in the same governed preview before the retirement can execute atomically.
+This interprets the reported Tagalog statement—“I can already archive historical classes, sections and users, but permanent deletion is still very rigid”—as confirmation that historical retirement now works and that the remaining product problem is permanent deletion plus batch and roster behavior.
 
-The implementation must not add a `force`, evidence override, or cascade-delete path. It must not infer that a historical learner completed, withdrew, dropped, or transferred.
+### Administrator experience after implementation
 
-### Recommended contract shape
+- The user, class, or section page no longer ends at “Why this record must be kept” when an authorized administrator explicitly chooses cascade erasure.
+- The dialog says exactly what will be lost, groups the impact by data type, and exposes one executable action.
+- Selecting 33 classes or sections reviews all 33; it never silently starts with only the first selected row.
+- Re-enrolling a previously dropped or completed learner reactivates the historical membership instead of returning a false `409`.
+- Active class workspaces show currently enrolled learners by default. Historical learners remain available through an explicit filter and remain included in evidence-preserving exports until the class itself is intentionally erased.
+- Historical archive/retirement continues to use the already implemented governed outcome flow; this plan does not rebuild it.
 
-Add an optional discriminant to the existing class and section archive requests:
+### Non-negotiable boundaries
 
-```ts
-lifecycleMode?: "CURRENT_CLOSURE" | "HISTORICAL_RETIREMENT"
-```
+“Admin freedom” does not mean an unscoped `force=true`. The following remain mandatory because removing them would create account lockout, cross-tenant authority, silent partial deletion, or database corruption:
 
-Absence means `CURRENT_CLOSURE`, preserving existing callers. In historical-retirement mode, outcome and effective-period fields are optional only for a structurally empty target. If active memberships remain, the same preview requires an explicit supported outcome and historical effective period before execution. The backend verifies that the target is historical and that no unresolved active memberships remain.
+- authenticated `admin` RBAC;
+- an active Maintenance Access session bound to actor, login session version, and expiry;
+- no self-account purge;
+- no purge of the last active administrator;
+- archived/soft-deleted target state before permanent deletion;
+- DTO validation and homogeneous batch type;
+- complete dependency classification and schema-drift detection;
+- transaction and target locking;
+- manifest hash, expiry, exact target set, and idempotency;
+- minimal append-only erasure/audit receipt;
+- deterministic object/index cleanup state;
+- AI remains non-authoritative.
 
-Keep the persisted operation actions as `ARCHIVE_CLASS` and `ARCHIVE_SECTION`. This avoids inventing a second meaningfully identical database operation and avoids changing the `admin_lifecycle_operation_action_valid` check.
-
-Add an optional decision disposition to the response contract while retaining the existing decision states:
-
-```ts
-disposition?:
-  | "EXECUTABLE"
-  | "CHOICE_REQUIRED"
-  | "REPAIR_REQUIRED"
-  | "RETAIN_REQUIRED";
-```
-
-This lets web and mobile distinguish protected retention, missing outcome choices, and true repair-only states without breaking older clients that only understand `state`.
-
-### User-visible outcomes
-
-| Case | Required outcome |
-|---|---|
-| Student permanent deletion with retained evidence | Explain that permanent deletion is unavailable, show the retained categories, and offer a close/keep-record action. Do not ask for acknowledgements. |
-| Class permanent deletion with retained evidence | Explain that the class must be retained; offer archive-instead only if the existing archive workflow is actually applicable. |
-| Section permanent deletion with retained evidence | Explain that the section must be retained; offer archive-instead only if the existing archive workflow is actually applicable. |
-| Historical class archive with no active memberships | Preview and execute evidence-preserving historical retirement. |
-| Historical section archive with no active memberships | Preview and execute retirement of the section and linked structural classes while preserving academic evidence. |
-| Historical class or section with active memberships | Name the unresolved count, collect explicit outcomes and a historical period in the same review, then require a fresh executable preview. |
+Everything else that currently produces a retained-evidence dead end becomes either a warning, a cleanup action, or an actionable next step.
 
 ## 2. Scope, non-goals, permissions, and assumptions
 
 ### In scope
 
-- Backend decision semantics for purge retention and historical retirement.
-- Existing `/api/admin/maintenance/classes/preview|execute`, `/sections/preview|execute`, and `/purge/preview` contracts.
-- The compatibility `/api/admin/lifecycle/*` controller wherever it delegates to the same DTOs and service methods.
-- Web Admin users, classes, and sections lifecycle dialogs.
-- Mobile Admin lifecycle review and the matching API/type layer.
-- Target-aware historical membership repair inside the existing governed class/section review.
-- Audit, idempotency, manifest integrity, authorization, throttling, and post-commit effects already owned by Admin Lifecycle.
-- Targeted unit, contract, UI, and integration verification.
+- Permanent deletion of an archived class with class records, enrollments, lifecycle events, lessons, assessments, attempts, scores, uploads, indexed content, and other class-owned descendants.
+- Permanent deletion of an archived section and its linked archived classes plus their descendants.
+- Permanent deletion of a soft-deleted user, including student-participant evidence and account-owned data, while detaching authored school records that must not disappear merely because their author account is removed.
+- Single-target and multi-target preview/execute contracts.
+- Removal of the web classes/sections “first selected row only” behavior.
+- Maintenance Access step-up simplification: password once per short-lived session, one confirmation per reviewed batch.
+- Re-enrollment of a historical same-class membership.
+- Current-versus-historical learner filtering on class records for web and mobile consumers.
+- Backend, web, and mobile contract parity, even where destructive execution remains web-admin-only.
+- Feature flag, audit/metrics, rollout, rollback, and destructive rehearsal requirements.
 
-### Non-goals
+### Out of scope
 
-- Deleting scores, attempts, class records, assessments, lessons, lifecycle events, or enrollment history to make purge eligible.
-- Adding a retained-evidence override, `force=true`, or administrator bypass.
-- Changing teacher grading, assessment, lesson, or student enrollment APIs.
-- Reinterpreting historical active memberships without an administrator-provided outcome.
-- General academic-repair redesign, school-year transition redesign, or full-system reset changes.
-- Retrofitting unrelated admin dialogs or CRUD flows.
-- Deployment, migration execution, APK generation, or production data repair under this planning authorization.
+- Weakening teacher permissions or exposing permanent erasure to teacher/student roles.
+- Letting AI decide what official records to erase.
+- Full-school reset; the target-scoped erasure engine must not call System Reset.
+- Deleting the audit log or the erasure receipt itself through this feature.
+- Automatically inferring completion, withdrawal, or transfer outcomes for historical archiving.
+- Purging an active class/section/account without first transitioning it through the existing archive/soft-delete lifecycle.
+- Deleting an entire class merely because a deleted teacher authored or taught it.
+- Claiming legal or Department of Education retention compliance; product authority and institutional policy must be confirmed separately.
+- Shipping an APK unless implementation separately changes mobile code and the release request explicitly includes a verified mobile artifact.
 
 ### Permissions and authorization boundary
 
-- This document is the only repository mutation authorized during planning.
-- Implementation, commits, push, deployment, database changes, and live data repair require separate authorization.
-- Existing Admin role checks, Maintenance Access checks, password reauthentication for permanent deletion, manifest expiry/hash checks, and idempotency requirements remain authoritative.
+- This document authorizes only this Markdown plan update.
+- It does not authorize product-code edits, migrations, dependency changes, data deletion, commits, pushes, deployments, feature-flag changes, or destructive rehearsals.
+- The implementing session must obtain explicit implementation/release authority before performing those actions.
 
 ### Assumptions
 
-- **Confirmed:** Web and mobile call the canonical `/admin/maintenance/*` endpoints through typed service wrappers.
-- **Confirmed:** Existing request callers remain valid when `lifecycleMode` is omitted and defaults to `CURRENT_CLOSURE`.
-- **Inferred:** A historical class or section with zero active memberships can be retired by changing only structural active/archive fields because existing archive apply paths already preserve evidence and archive linked structures.
-- **Confirmed plan correction:** The existing web/mobile academic-recovery panels do not provide general historical membership outcomes. Sending the user there would preserve the dead end, so historical outcomes must stay inside the manifest-bound lifecycle review.
-- **Assumption requiring implementation-time characterization:** “Active membership” means the same enrollment status predicate currently used by `ClassLifecycleService` and `SectionLifecycleService`; the implementation must not introduce a second predicate.
-- **Unverified:** The exact number and shape of affected historical rows in deployed databases. A read-only inventory query is required before rollout, not before coding.
+- **Confirmed:** `admin` is the existing role used by Maintenance Access and lifecycle controllers.
+- **Confirmed:** Maintenance Access already verifies current password, actor/session binding, acknowledgements, reason, and a default 15-minute expiry.
+- **Confirmed:** historical class and section retirement is implemented on the inspected SHA.
+- **Assumed design decision:** any authenticated administrator with active Maintenance Access may use `CASCADE_ERASE`, not only a separate super-admin role.
+- **Assumed design decision:** target archival/soft deletion remains a prerequisite, but the UI gives an actionable archive-first path instead of an unexplained block.
+- **Unverified:** the institution has authorized permanent destruction of official academic records. This must be resolved before production enablement, but it does not prevent implementation in a disposable demonstration environment.
 
 ## 3. Current-state evidence ledger
 
-| Status | Evidence | Consequence |
-|---|---|---|
-| Confirmed | `backend/src/modules/admin-lifecycle/purge-lifecycle.service.ts` inventories retained evidence for users, classes, and sections and emits a permanent-action warning, confirmation, and effect even when `safeToExecute` is false. | Backend correctly blocks deletion but supplies executable-looking ceremony for a terminal result. |
-| Confirmed | `backend/src/modules/admin-lifecycle/admin-lifecycle.evidence.ts` treats any non-zero retained-evidence category as a purge blocker. | The evidence-retention floor is intentional and should remain unchanged. |
-| Confirmed | `backend/src/modules/admin-lifecycle/admin-lifecycle.service.ts` re-previews execution, verifies hash/expiry, claims idempotency, writes audit evidence, and rejects blocked manifests. | Historical retirement should reuse this execution shell rather than introduce a parallel write path. |
-| Confirmed | `backend/src/modules/admin-lifecycle/admin-lifecycle.manifest.ts:68-135` derives next actions only from blocker `resolutionOptions` and maps every non-resolvable blocker to `IMMUTABLE`. | One state currently conflates “must retain” with “wrong workflow” and “repair first.” |
-| Confirmed | `backend/src/modules/admin-lifecycle/class-lifecycle.service.ts:95-289` blocks every target outside the active year with `CLASS_NOT_IN_ACTIVE_YEAR`, while still calculating archive effects and confirmations. | Historical class retirement is prevented before the existing archive apply path can run. |
-| Confirmed | `backend/src/modules/admin-lifecycle/section-lifecycle.service.ts:71-253` behaves the same for `SECTION_NOT_IN_ACTIVE_YEAR`. | Historical section retirement is also a dead end. |
-| Confirmed | `backend/src/modules/admin-lifecycle/DTO/admin-lifecycle.dto.ts:23-33,70-91` has no operation mode; class closure requires a current-period resolution and section closure requires a learner-outcome array. | Historical structural retirement is not representable without pretending it is a current closure. |
-| Confirmed | `backend/src/drizzle/schema/admin-lifecycle.schema.ts:21-27,86-92` and `backend/drizzle/0027_admin_maintenance_gateway.sql:30-31` already allow `ARCHIVE_CLASS` and `ARCHIVE_SECTION`. | Reusing those actions requires no action-check migration. |
-| Confirmed | `next-frontend/src/components/admin/AdminLifecycleDialog.tsx:191-218,301-391` renders “Cannot continue yet,” warnings, an `IMMUTABLE` card, and prospective effects for blocked manifests. | The web dialog needs disposition-aware presentation and must suppress acknowledgements/effects for terminal retention. |
-| Confirmed | The same web component renders `NAVIGATE_REPAIR` and `REPREVIEW` actions but does not render `CANCEL`. | A backend-provided keep/close action currently cannot help the user. |
-| Confirmed | `mobile/src/screens/AdminLifecycleReviewScreen.tsx:513-535,1001-1064` handles repair/re-preview actions but not `CANCEL`, and renders warnings after a blocked decision. | Mobile has the same contract and dead-end presentation risk. |
-| Confirmed | `next-frontend/app/(dashboard)/dashboard/admin/users/[id]/page.tsx`, `.../classes/page.tsx`, and `.../sections/page.tsx` own the affected web entry points. | The fix must preserve route behavior while selecting the correct lifecycle mode and next action. |
-| Confirmed | `mobile/src/screens/AdminUserDetailScreen.tsx`, `AdminClassesScreen.tsx`, `AdminClassesWorkspaceScreen.tsx`, `AdminSectionsScreen.tsx`, and `AdminSectionDetailScreen.tsx` consume the same lifecycle review flow. | Backend contract changes have mobile consumers and cannot be treated as web-only. |
-| Confirmed | `next-frontend/src/services/admin-lifecycle-service.ts:19-51` and `mobile/src/api/services/admin-lifecycle.ts` own client transport. | Pages/screens should not issue raw API calls. |
-| Confirmed | `next-frontend/src/types/admin-lifecycle.ts:17-37,129-148` and `mobile/src/types/admin-lifecycle.ts:20-42,132-152` mirror the lifecycle contract separately. | Producer changes require two typed-consumer updates. |
-| Confirmed | `next-frontend/src/components/admin/AcademicRecoveryPanel.tsx` currently owns grade, state, assessment, and duplicate-class repair; duplicate retirement is limited to a current-year duplicate-class case in backend academic repair. | The message “handled through academic repair” points to a workflow that cannot complete this task; the lifecycle review must collect the required historical outcomes itself. |
-| Confirmed | `openspec status --change admin-maintenance-gateway --json` reported all proposal/design/spec/task artifacts complete on 2026-09-14. | This plan is a corrective extension; implementation should update or supersede the affected OpenSpec requirements before code changes. |
-| Unverified | No authenticated browser or physical-device flow was executed during planning. | Exact copy, focus order, and navigation behavior remain acceptance-test work. |
-| Unverified | No external API consumer registry exists in the inspected evidence. | Repository consumers are mapped; out-of-repository clients must be checked before contract rollout. |
+| Status | Evidence | Owner / symbol | Consequence |
+|---|---|---|---|
+| Confirmed | Any retained purge evidence produces `RETAINED_EVIDENCE` and an immutable blocker. | `backend/src/modules/admin-lifecycle/purge-lifecycle.service.ts` — `PurgeLifecycleService` | The current dead end is intentional policy, not a random frontend error. |
+| Confirmed | Purge execution re-verifies current password even when Maintenance Access is active. | `backend/src/modules/admin-lifecycle/admin-lifecycle.service.ts` — `execute`, `executePurge` | The destructive action has redundant step-up friction. |
+| Confirmed | Maintenance Access already verifies password and binds actor/session/expiry. | `backend/src/modules/admin-maintenance/admin-maintenance.service.ts` — `open`; `admin-maintenance.policy.ts` | It can safely be the single step-up boundary for a short session. |
+| Confirmed | Purge manifests are hash/expiry checked and operations are idempotently claimed. | `AdminLifecycleService.assertExecutionEvidence`, `claimOperation` | Reuse these mechanisms rather than create an unreviewed direct-delete path. |
+| Confirmed | Current purge apply methods ultimately delete a class/section/user and rely heavily on FK behavior. | `PurgeLifecycleService.applyClass`, `applySection`, `applyUser` | Removing one blocker would be unsafe because the actual cascade is wider than the current preview. |
+| Confirmed | Official grading tables use restrictive references in addition to many cascade and set-null references. | `backend/src/drizzle/schema/academic-grading.schema.ts` and related schema modules | A simple delete may either erase much more than shown or fail at PostgreSQL. |
+| Confirmed | System Reset has exhaustive table classification, FK inspection, schema hashing, write barriers, storage cleanup, and queue coordination. | `backend/src/modules/system-reset/*` | Reuse its design principles, not its whole-school action. |
+| Confirmed | The reset catalog currently preserves `admin_lifecycle_operations` and `enrollment_lifecycle_events`. | `backend/src/modules/system-reset/system-reset.catalog.ts` | New erasure receipt tables need an explicit reset disposition. |
+| Confirmed | `StorageService.deleteObject(key)` supports local and S3-compatible storage. | `backend/src/modules/file-upload/storage/storage.service.ts` | Physical deletion must be explicit; deleting `uploaded_files` rows alone is incomplete. |
+| Confirmed | Classes and sections bulk handlers choose `selectedClasses[0]` / `selectedSections[0]`. | admin classes/sections `page.tsx` — `openBulkConfirmation` | The reported “33 selected; review begins with first” behavior is a frontend implementation defect. |
+| Confirmed | Legacy class/section bulk purge calls routes that intentionally reject and redirect to lifecycle review. | `ClassesService.bulkLifecycleAction`, `SectionsService.bulkLifecycleAction` | Existing bulk endpoints cannot be reused for governed cascade erasure without contract changes. |
+| Confirmed | Active masterlist lookup filters `status = enrolled`, but transactional duplicate lookup ignores status. | `backend/src/modules/classes/classes.service.ts` — `enrollStudent` | A dropped/completed historical row is hidden in selection but still triggers `409`. |
+| Confirmed | Enrollment uniqueness is `(studentId, classId)`. | enrollment schema | Historical re-enrollment must reactivate the existing row, not insert another one. |
+| Confirmed | `captureClassEnrollment` inserts class-record participants with conflict-do-nothing behavior. | `backend/src/modules/class-record/class-record.service.ts` | Reactivation also needs explicit participant eligibility reconciliation. |
+| Confirmed | Class-record roster composition intentionally includes evidence-bearing removed learners. | `class-record-roster.service.ts` and existing tests | Backend evidence should not be globally hidden or discarded. |
+| Confirmed | Web grade grid defaults to `All learners`. | `TeacherClassRecordGradeGrid.tsx` | The active-workspace confusion is a presentation default, not proof of a wrong roster contract. |
+| Confirmed | Web and mobile share admin lifecycle and class-record contracts. | `scripts/check-admin-client-contracts.cjs`, client types/services | Contract additions must remain additive and synchronized. |
+| Inferred | No current last-active-admin purge guard was found in lifecycle/user service search. | No matching owner on inspected SHA | Add and test this guard before enabling cascade user erasure. |
+| Unverified | Runtime data may include legacy references or tables not represented by current Drizzle source. | Deployed PostgreSQL schema | Preview must compare its catalog against live FK/schema metadata and refuse only unclassified dependencies. |
 
 ## 4. End-to-end impact and consumer map
 
-### Producer-to-consumer flow
+### Command flow
 
-| Layer | Owner | Planned impact |
+```text
+Admin UI selection
+    -> Maintenance Access status
+    -> POST /api/admin/maintenance/purge/batch/preview
+    -> target snapshots + live dependency inventory + schema hash
+    -> one impact dialog and batch confirmation
+    -> POST /api/admin/maintenance/purge/batch/execute
+    -> idempotent operation claim + advisory/row locks
+    -> re-preview and hash comparison inside transaction
+    -> explicit detach/delete order for every selected target
+    -> minimal audit + erasure receipt
+    -> commit all targets or none
+    -> enqueue object/index cleanup
+    -> UI removes every successful selected row and polls cleanup status
+```
+
+### Producer and consumer map
+
+| Producer / owner | Direct consumers | Required change |
 |---|---|---|
-| Domain request validation | `backend/src/modules/admin-lifecycle/DTO/admin-lifecycle.dto.ts` | Add `lifecycleMode`, conditional validation, and normalized defaults. |
-| Decision vocabulary | `backend/src/modules/admin-lifecycle/admin-lifecycle.types.ts`, `admin-lifecycle.manifest.ts` | Add optional disposition and explicit metadata for retain, repair, and retry outcomes. |
-| Class planning/execution | `backend/src/modules/admin-lifecycle/class-lifecycle.service.ts` | Separate current closure from historical retirement; preserve evidence and reject inferred outcomes. |
-| Section planning/execution | `backend/src/modules/admin-lifecycle/section-lifecycle.service.ts` | Retire historical sections and linked classes only after every active membership has an explicit outcome. |
-| Purge planning | `backend/src/modules/admin-lifecycle/purge-lifecycle.service.ts` | Return a terminal retention decision without confirmations or executable effects when evidence blocks deletion. |
-| Execution shell | `backend/src/modules/admin-lifecycle/admin-lifecycle.service.ts` | Normalize and hash the mode, preserve re-preview/idempotency/audit behavior, and keep purge reauthentication. |
-| HTTP surfaces | `admin-maintenance-lifecycle.controller.ts`, compatibility `admin-lifecycle.controller.ts` | Preserve route names and envelopes; consume updated DTOs. No new public bypass endpoint. |
-| Persistence | `backend/src/drizzle/schema/admin-lifecycle.schema.ts`, `backend/drizzle/*` | No schema change recommended. Verify that operation request JSON and audit details retain the normalized mode. |
-| Web contract | `next-frontend/src/types/admin-lifecycle.ts`, `src/services/admin-lifecycle-service.ts` | Mirror mode/disposition and keep the service boundary. |
-| Web presentation | `next-frontend/src/components/admin/AdminLifecycleDialog.tsx` | Render disposition-specific headings, implement cancel/close, hide impossible confirmations/effects, and support historical retirement copy. |
-| Web entry points | Admin users/classes/sections pages listed in the evidence ledger | Choose historical mode from backend-owned target metadata; never infer membership outcomes in the page. |
-| Mobile contract | `mobile/src/types/admin-lifecycle.ts`, `src/api/services/admin-lifecycle.ts` | Mirror the additive contract and normalized request shape. |
-| Mobile presentation | `mobile/src/screens/AdminLifecycleReviewScreen.tsx` | Match web semantics, implement cancel/back, and route repair without no-op actions. |
-| Mobile entry points | Admin user/class/section screens and navigation types | Pass target year/type context and invalidate affected queries after successful retirement. |
-| Historical outcome inputs | Existing web class/section lifecycle pages and `mobile/src/screens/AdminLifecycleReviewScreen.tsx` | Collect real outcomes and a historical period inside the reviewed request; never send the administrator to a recovery screen that lacks this capability. |
-| Audit/notifications | Existing Admin Lifecycle service, audit service, lifecycle events, and notification post-commit hooks | Record the mode and outcome; notify only after commit using existing affected-user calculations. |
-| Specifications | `openspec/changes/admin-maintenance-gateway/specs/actionable-admin-lifecycle/spec.md` and tasks/design if implementation is authorized | Clarify that protected evidence yields retention guidance and that historical retirement is a governed archive mode. |
+| `admin-maintenance.policy.ts` | backend account/lifecycle services; maintenance settings clients | Replace “evidence-aware deletion is never overrideable” with explicit cascade-erasure capability while retaining structural boundaries. |
+| `admin-lifecycle.dto.ts` | both lifecycle controllers, web/mobile types, contract checker | Add purge mode, batch preview/execute DTOs, batch confirmation, and operation status. |
+| `admin-lifecycle.types.ts` / manifest helpers | dialog models, tests, audit | Add erasure impact groups and change retained evidence from blocker to warning only in cascade mode. |
+| New `admin-erasure.catalog.ts` | preview and executor | Classify target references as delete, detach, preserve receipt, or unsupported. |
+| New `admin-erasure.service.ts` | `AdminLifecycleService` | Prepare and atomically execute target-scoped erasure. |
+| New operation/item schema | operation endpoint, cleanup worker, System Reset | Persist batch identity, per-target result, counts, cleanup state, actor snapshot, and idempotency. |
+| `StorageService` and cleanup worker | local/S3 uploads and indexed derivatives | Delete collected keys after commit and retry failures. |
+| queue processors | RAG, library indexing, performance, AI generation, notifications/discussions | Treat a missing/erased target as a successful no-op so stale work cannot recreate deleted state. |
+| web admin lifecycle service/dialog | users, classes, sections pages | Show whole-batch impact and execute once. |
+| mobile admin lifecycle types/API | mobile lifecycle model/tests | Accept additive contract; keep cascade execute hidden unless a mobile admin UX is separately approved. |
+| `ClassesService.enrollStudent` | teacher/admin add-student pages; mobile class detail | Reactivate historical same-class rows and report real active duplicates only. |
+| class-record response | web/mobile workbook components and exports | Preserve history, add deterministic current/historical filters and defaults. |
 
-### Data flow
+### Target semantics
 
-1. The client requests preview with target ID and `lifecycleMode`.
-2. The backend loads current academic state, target school year, active memberships, linked structures, and evidence counts in the existing repeatable-read preview.
-3. The domain planner returns one of four dispositions:
-   - `EXECUTABLE`: ready to archive/retire or purge.
-   - `CHOICE_REQUIRED`: current closure needs explicit outcomes.
-   - `CHOICE_REQUIRED`: active memberships, including historical ones, need real outcomes in the current review.
-   - `REPAIR_REQUIRED`: protected evidence requires a separate repair operation that actually exists.
-   - `RETAIN_REQUIRED`: retained evidence makes permanent deletion impossible.
-4. For executable operations, the client acknowledges only real warnings/confirmations and sends the signed manifest evidence.
-5. The backend re-previews, verifies the same normalized request and manifest, executes transactionally, writes audit/lifecycle records, and dispatches post-commit effects.
-6. When choices are required, the client keeps the target context, collects the missing outcomes/period, discards the old manifest, and requests a new preview.
+| Target | Delete | Detach / preserve | Never infer |
+|---|---|---|---|
+| CLASS | Class-owned enrollments, records, grades, assessments, attempts, lessons, completions, uploads, discussions, AI/index rows, schedules, lifecycle evidence scoped to the class | Minimal erasure item/receipt; unrelated user accounts | Transfer grades or content to another class |
+| SECTION | Section record, section enrollments/preferences/pending roster, every linked class and the class descendants above | Minimal erasure item/receipt; unrelated learner/teacher accounts | A replacement section or academic outcome |
+| USER | Sessions/roles/profiles, the learner's enrollments/participants/scores/attempts/progress/private data, user-owned uploads | Authored school content and audit records are detached or retain an actor snapshot; teacher-owned classes are not deleted | That author deletion means school-content deletion |
 
 ### External and asynchronous boundaries
 
-- No AI-service, BullMQ job, Redis queue, file storage, or external provider participates in this feature.
-- Existing notification dispatch after commit remains in scope because affected users may need lifecycle notifications.
-- Any analytics or logs must use target IDs, counts, decision code, and disposition only; they must not include score contents, passwords, or free-form student notes.
+- PostgreSQL is the authority for the atomic domain deletion and durable receipt.
+- Redis/BullMQ jobs are not part of the PostgreSQL transaction. Stale jobs must no-op against erased targets.
+- Local or S3 object deletion is post-commit and retryable. Cleanup failure changes operation status, not domain deletion success.
+- AI service calls remain indirect through backend jobs and cannot approve or block erasure.
+- Browser/mobile caches must invalidate target lists, details, class records, rosters, reports, and notifications after completion.
 
 ## 5. Conflicts, invariants, risks, and design options
 
-### Intentional invariants to preserve
+### Requirement conflicts resolved
 
-1. Retained academic evidence is not purgeable through ordinary admin maintenance.
-2. The backend, not the UI, decides whether an operation is safe.
-3. No historical membership outcome is inferred from age, school year, inactivity, or record evidence.
-4. Preview and execute are bound by the same normalized request, manifest hash, expiry, and transactional re-preview.
-5. Existing evidence, class-record ownership, scores, attempts, assessments, lessons, and lifecycle history remain attached after archive/retirement.
-6. Permanent deletion keeps step-up password verification even when an evidence-free target is eligible.
+1. **Administrator freedom versus official-history retention**
+   - Resolution: ordinary purge stays `EMPTY_ONLY`; deliberate `CASCADE_ERASE` is executable in Maintenance Access and visibly destroys the listed history.
+2. **Delete every selected row versus partial failures**
+   - Resolution: one homogeneous batch and one PostgreSQL transaction. Any database failure rolls back all selected targets; post-commit file cleanup is separately retryable.
+3. **Permanent deletion versus auditability**
+   - Resolution: delete the requested domain data but preserve a minimal receipt with identities, actor snapshot, reason, counts, hashes, and timestamps—not the erased content.
+4. **User deletion versus school content ownership**
+   - Resolution: erase the user's participant/private evidence; detach authorship on shared institutional content rather than deleting unrelated classes or lessons.
+5. **Simpler admin flow versus stolen-session risk**
+   - Resolution: authenticate once when opening a visible 15-minute Maintenance Access session; bind it to actor and session version, then use one exact confirmation per batch.
 
-### Avoidable friction to remove
+### Options considered
 
-- “Cannot continue yet” implies a temporary missing step when deletion is permanently disallowed.
-- The `IMMUTABLE` label is exposed as implementation language instead of a user decision.
-- Blocked purge manifests ask the administrator to acknowledge warnings and preview changes that cannot execute.
-- Historical archive tells the administrator to use academic repair, but no general retirement operation is available there.
-- Web and mobile receive typed next actions that they do not fully handle, especially `CANCEL`.
+#### Option A — Global force bypass or FK cascade conversion
 
-### Design options
+- Change retained-evidence checks to always pass or add `force=true`.
+- Convert restrictive FKs broadly to `ON DELETE CASCADE`.
+- **Benefit:** smallest apparent code change.
+- **Cost:** preview and physical cleanup are incomplete, user deletion could erase unrelated content, schema changes silently widen blast radius, and failures become data-dependent.
+- **Decision:** reject.
 
-#### Option A — Presentation-only correction
+#### Option B — Frontend queue over the existing single-target lifecycle dialog
 
-Change dialog copy and hide blocked confirmations/effects, while leaving historical records unarchivable.
+- Keep backend one-target preview/execute and automatically open the next selected target after completion.
+- **Benefit:** quick repair for the “first selected” symptom and useful as an emergency presentation fallback.
+- **Cost:** 33 separate previews, confirmations, and requests; refresh/interruption loses progress; no atomicity or durable batch receipt.
+- **Decision:** allow only as a temporary, feature-flagged fallback if backend batch work misses the demonstration cut. Do not call it complete bulk deletion.
 
-- Advantages: smallest change and lowest immediate execution risk.
-- Disadvantages: does not solve the historical archive dead end; backend semantics remain ambiguous; mobile and future clients must duplicate code-to-copy mapping.
-- Decision: Reject because it treats only the symptom.
+#### Option C — Target-scoped cascade engine with batch manifest
 
-#### Option B — Add separate historical-retirement endpoints and operation actions
+- Add explicit dependency classification, one reviewed batch, atomic database execution, durable receipt, and post-commit cleanup.
+- **Benefit:** fulfils administrator intent without silent or partial deletion and makes new dependencies fail visibly during development.
+- **Cost:** schema, contract, backend, clients, queue/storage, and destructive-test work.
+- **Decision:** recommended.
 
-Create new preview/execute routes plus `RETIRE_HISTORICAL_CLASS` and `RETIRE_HISTORICAL_SECTION` persisted actions.
+### Highest risks and mitigations
 
-- Advantages: explicit API surface and isolated DTOs.
-- Disadvantages: duplicates archive orchestration; requires a database check-constraint migration; widens controller, audit, operation, and client surfaces for an operation whose durable effect is still archive.
-- Decision: Do not select unless characterization proves existing archive planners cannot cleanly branch by mode.
-
-#### Option C — Add a discriminated mode to existing archive contracts
-
-Use the existing routes, operation actions, execution shell, and audit records. Branch domain planning by a server-verified `lifecycleMode`; add a response disposition for client presentation.
-
-- Advantages: preserves compatibility, avoids a schema migration, keeps one audit meaning for archive, and fixes both server semantics and client UX.
-- Disadvantages: requires careful conditional DTO validation and characterization so current closure cannot accidentally enter the historical branch.
-- Decision: Recommended.
-
-### Highest-impact risks and mitigations
-
-| Risk | Mitigation |
-|---|---|
-| Historical mode archives a current-year class/section | Server rejects `HISTORICAL_RETIREMENT` unless target school year differs from the authoritative active year. Add negative tests. |
-| Lingering active membership is silently completed or dropped | Historical mode blocks until the administrator supplies explicit outcomes and a period; the reviewed manifest lists every enrollment mutation before atomic execution. |
-| Old clients misread new response data | Keep existing state/action fields, add optional disposition, default absent request mode to current closure, and do not emit a new next-action kind. |
-| Manifest replay crosses modes | Normalize mode before hashing and include it in preview request/audit payload; execute re-previews the same mode. |
-| Section retirement partially archives linked classes | Keep the existing academic transaction and test rollback on a forced mid-operation failure. |
-| UI offers archive-instead where archive is also blocked | Derive next actions from the actual preview; do not hard-code an archive button solely from target type. |
-| A blocked purge still looks executable in one client | Add shared contract fixtures and matching web/mobile rendering tests for all three purge target types. |
-
-## 6. Recommended architecture, data flow, security, and error behavior
-
-### Domain model
-
-Introduce `AdminLifecycleMode` in the backend DTO/domain layer:
-
-- `CURRENT_CLOSURE`: present behavior and default for omitted mode.
-- `HISTORICAL_RETIREMENT`: archive historical structure only after proving there are no active memberships.
-
-Normalize request DTOs into internal command types before planning so the planners do not carry optional fields:
-
-- Current class closure requires `resolution` and `effectivePeriod`.
-- Historical class retirement requires neither learner resolution nor replacement class only when the target has no active memberships; otherwise it requires the selected outcome, period, and any transfer destination.
-- Current section closure requires `effectivePeriod` and a student-resolution array.
-- Historical section retirement requires neither a period nor supplied student outcomes only when the target has no active memberships; otherwise it requires one outcome per active learner and a historical period.
-
-The wire DTO may remain additive and conditionally validated, but internal planner inputs must be discriminated unions. This avoids scattered non-null assertions and protects the execution branch.
-
-### Historical class retirement policy
-
-The backend must verify:
-
-1. Target exists and is still active.
-2. Target school year is not the authoritative active school year.
-3. Every enrollment matching the existing active-membership predicate has an explicit supported outcome, or no such enrollment remains.
-4. A historical effective period is supplied whenever a membership will change.
-5. No concurrent state change invalidated the preview.
-
-For an empty class, effects contain only the class archive mutation plus existing audit/lifecycle/post-commit behavior. When active memberships exist, effects also contain only the explicitly selected completion, withdrawal/drop, or compatible transfer changes and their append-only lifecycle events. Class records, scores, attempts, assessments, lessons, teacher ownership, and schedule identity remain unchanged.
-
-When active memberships exist without complete outcomes, return `CHOICE_REQUIRED` with the unresolved count and required input fields. Do not include executable archive effects or confirmations until a fresh preview contains all required outcomes.
-
-### Historical section retirement policy
-
-The backend must verify the same conditions for the section and all memberships governed by the section closure planner. Historical completion is allowed only as an explicit administrator choice; it closes the matching enrollment rows and appends lifecycle events without rewriting grade evidence. When ready, reconcile the selected outcomes and archive the section and active linked structural classes in one existing academic transaction. Preserve enrollment history and all linked evidence.
-
-If any active membership lacks a valid outcome, block the whole operation and keep the administrator in the review. Do not partially reconcile learners or retire linked classes.
-
-### Protected purge policy
-
-When any retained-evidence category is non-zero:
-
-- Keep `safeToExecute: false`.
-- Keep a non-resolvable blocker for enforcement.
-- Return `decision.state: "IMMUTABLE"` for backward compatibility and `decision.disposition: "RETAIN_REQUIRED"` for precise presentation.
-- Set `requiredConfirmations` to `[]`.
-- Set executable `effects` to `[]`; retained evidence stays in `preserved`/evidence inventory.
-- Do not return password-entry or acknowledgement requirements.
-- Return a target-aware `CANCEL` next action such as “Keep student record,” “Keep class archived,” or “Keep section archived.”
-- Return archive-instead only if a separately computed archive preview is applicable; otherwise show the retained state as the completed outcome.
-
-Eligible evidence-free purge behavior remains unchanged, including password reauthentication and destructive confirmation.
-
-### Security and authorization
-
-- Preserve global JWT authentication and explicit Admin role guards on both controller prefixes.
-- Preserve Maintenance Access gating for execution.
-- Preserve lower preview and execution throttles already defined by the controllers.
-- Preserve current-password verification for eligible purge execution; never send it in preview, manifest, logs, audit details, or idempotency hashing.
-- Reject client-supplied school-year authority; fetch current academic state from the database.
-- Treat the manifest as evidence of a reviewed snapshot, not as authority to bypass a changed target.
-- Keep all mutations in the existing database transaction and all notifications after commit.
-
-### Error and decision behavior
-
-| Condition | API behavior | Client behavior |
+| Risk | Impact | Mitigation |
 |---|---|---|
-| Retained evidence blocks purge | Successful preview envelope with `RETAIN_REQUIRED`; execute remains rejected if attempted | Explain retention; no acknowledgements/password/effects; close or archive if valid |
-| Historical target has active memberships but incomplete outcomes | Successful preview with `CHOICE_REQUIRED` and exact missing fields | Collect outcomes/period in place, then re-preview |
-| Historical target has no active memberships | Successful executable preview | Show preserved evidence and one retirement confirmation |
-| Historical mode used for active-year target | Validation/domain conflict, stable code `HISTORICAL_MODE_NOT_APPLICABLE` | Explain that current closure is required; re-preview in current mode |
-| Current mode used for historical target | Successful blocked preview with a stable historical-mode-required code | Updated clients re-preview in historical mode from authoritative target-year data; older clients remain safely blocked |
-| Manifest expired or target changed | Existing stale/review-mismatch conflict | Clear confirmations and force fresh preview |
-| Missing Admin/Maintenance Access | Existing 401/403/maintenance response | Preserve access-recovery UI; never downgrade authority |
-| Unexpected database failure | Existing sanitized server error with operation failure audit where applicable | Preserve retry boundary; do not claim partial success |
+| An unclassified table or restrictive FK appears in production | Batch fails or data survives unexpectedly | Live schema hash plus catalog-completeness check; return `UNCLASSIFIED_DEPENDENCY` before mutation. |
+| Section deletion unintentionally erases linked class history | Broad academic loss | Preview section as an explicit tree of linked classes and aggregate every descendant count. |
+| User purge follows authorship links and removes whole-school content | Cross-user data loss | Relationship action catalog distinguishes identity-owned evidence from institutional authored content; authored records detach. |
+| Object cleanup fails after database commit | Orphaned files | Persist exact keys before delete, enqueue cleanup, retry with status `cleanup_pending` / `completed_with_cleanup_errors`. |
+| Old BullMQ work recreates data | Deleted target partially reappears | Processor-level target existence/erasure checks; missing target is a logged successful no-op. |
+| One batch causes long locks | Admin timeout and classroom disruption | Max 50 targets, precomputed manifest, deterministic order, transaction timeout, duplicate-target normalization, and no network calls in transaction. |
+| Compromised admin bearer token is used during open Maintenance Access | Unauthorized irreversible deletion | Short actor/session-bound window, visible banner, manual close, session-version revocation, self/last-admin guards, audit receipt, and immediate notification to other active admins. |
+| Re-enrollment changes a finalized roster | Grade inconsistency | Only reopen/reactivate mutable current-period participants automatically; finalized records require existing governed reopen/roster-confirmation procedure. |
 
-## 7. Contract, schema, migration, and compatibility changes
+## 6. Recommended architecture, contracts, security, and errors
 
-### Request contract
+### 6.1 Purge modes
 
-Backend DTO ownership: `backend/src/modules/admin-lifecycle/DTO/admin-lifecycle.dto.ts`.
+```ts
+export const PURGE_MODES = ['EMPTY_ONLY', 'CASCADE_ERASE'] as const;
+export type PurgeMode = (typeof PURGE_MODES)[number];
+```
 
-1. Add `ADMIN_LIFECYCLE_MODES` and `AdminLifecycleMode`.
-2. Add optional `lifecycleMode` to class and section preview DTOs; normalize omission to `CURRENT_CLOSURE` in `AdminLifecycleService`.
-3. Use conditional validation so current closure retains all current required fields, empty historical retirement can omit outcome fields, and historical retirement with memberships is enforced by the domain snapshot rather than ignored.
-4. Keep execute DTO inheritance and manifest execution evidence unchanged.
-5. Include normalized mode in `classPreview`, `sectionPreview`, request hashing, operation request JSON, and audit details.
+- Omitted mode on legacy single-target requests means `EMPTY_ONLY` for compatibility.
+- `EMPTY_ONLY` preserves the current evidence-free behavior.
+- `CASCADE_ERASE` changes `RETAINED_EVIDENCE` from `IMMUTABLE`/`RETAIN_REQUIRED` to an executable `DATA_WILL_BE_ERASED` warning with counts and named groups.
+- Both modes require the target to already be archived/soft-deleted. The preview returns an `ARCHIVE_FIRST` next action for active targets.
 
-Client mirrors:
+### 6.2 Batch request shape
 
-- `next-frontend/src/types/admin-lifecycle.ts`
-- `mobile/src/types/admin-lifecycle.ts`
-- Corresponding service tests and request fixtures
+```ts
+export class PreviewPurgeBatchDto {
+  @IsIn(PURGE_TARGET_TYPES)
+  targetType: PurgeTargetType;
 
-### Response contract
+  @ArrayMinSize(1)
+  @ArrayMaxSize(50)
+  @ArrayUnique()
+  @IsUUID('4', { each: true })
+  targetIds: string[];
 
-1. Add optional `decision.disposition` to the backend, web, and mobile types.
-2. Retain all existing `decision.state` values and next-action kinds.
-3. Use existing `REPREVIEW`, `NAVIGATE_REPAIR`, and `CANCEL`; do not add a new action kind in this change.
-4. Implement `CANCEL` in both clients.
-5. Keep the existing `success/message/data` response envelope.
-6. Keep manifest `schemaVersion: 1` because changes are additive and old requests/responses remain meaningful; characterize any exact runtime validator before implementation and bump only if that evidence contradicts this assumption.
+  @IsIn(PURGE_MODES)
+  purgeMode: PurgeMode;
+}
 
-### Schema and migration decision
+export class ExecutePurgeBatchDto extends PreviewPurgeBatchDto {
+  @IsString() manifestHash: string;
+  @IsISO8601() manifestExpiresAt: string;
+  @IsString() reasonCode: string;
+  @IsOptional() @IsString() notes?: string;
+  @IsString() confirmation: string;
+  @IsUUID('4') idempotencyKey: string;
+}
+```
 
-No database schema migration is recommended.
+The canonical endpoints are:
 
-- `admin_lifecycle_operations.action` already accepts `ARCHIVE_CLASS` and `ARCHIVE_SECTION`.
-- Request/audit payloads are JSON-capable and can retain the normalized mode without a new column.
-- No evidence table or target table needs a new field.
+- `POST /api/admin/maintenance/purge/batch/preview`
+- `POST /api/admin/maintenance/purge/batch/execute`
+- `GET /api/admin/maintenance/operations/:id` (extend the existing route to return erasure operations)
+- `POST /api/admin/maintenance/operations/:id/retry-cleanup`
 
-Implementation must add a schema regression test proving the action check remains unchanged. If code work discovers a hard requirement for a new persisted action, stop and revise this plan before generating a migration; do not silently widen scope.
+Existing `/admin/maintenance/purge/preview|execute` and `/admin/lifecycle/purge/preview|execute` remain additive single-target adapters. A legacy `currentPassword` property remains accepted during one compatibility window, but the Maintenance Access path does not require it after the session was opened.
 
-### Compatibility
+### 6.3 Preview response
 
-- Old clients omit `lifecycleMode` and retain current behavior.
-- New clients receive `disposition` but must fall back to existing `state` if it is absent during a staggered rollout.
-- The backend must not emit unfamiliar next-action kinds.
-- Canonical `/admin/maintenance/*` behavior changes first; compatibility `/admin/lifecycle/*` must remain aligned because both controllers import the same DTOs/service.
-- No teacher, student, or AI-service contract changes are expected.
+The preview returns:
 
-## 8. Ordered implementation phases with exact owners
+```ts
+interface AdminErasureBatchPreview {
+  schemaVersion: 2;
+  targetType: 'CLASS' | 'SECTION' | 'USER';
+  targetIds: string[];
+  purgeMode: 'EMPTY_ONLY' | 'CASCADE_ERASE';
+  targets: Array<{
+    id: string;
+    displayName: string;
+    lifecycleState: 'ACTIVE' | 'ARCHIVED' | 'SOFT_DELETED' | 'MISSING';
+    impactGroups: Array<{
+      code: string;
+      label: string;
+      rowCount: number;
+      action: 'DELETE' | 'DETACH' | 'PRESERVE_RECEIPT';
+    }>;
+    storageObjectCount: number;
+    storageBytes: number | null;
+  }>;
+  totals: Record<string, number>;
+  warnings: AdminLifecycleWarning[];
+  blockers: AdminLifecycleBlocker[];
+  canExecute: boolean;
+  confirmationText: string;
+  catalogVersion: number;
+  databaseSchemaHash: string;
+  manifestHash: string;
+  manifestExpiresAt: string;
+}
+```
 
-### Phase 0 — Specification and characterization
+For 33 classes, the confirmation is one generated value such as `ERASE 33 CLASSES`. It is derived from the exact normalized target set and cannot be reused after selection or schema changes.
 
-Owners:
+### 6.4 Target-scoped dependency catalog
 
-- `openspec/changes/admin-maintenance-gateway/specs/actionable-admin-lifecycle/spec.md`
-- `openspec/changes/admin-maintenance-gateway/design.md`
-- `openspec/changes/admin-maintenance-gateway/tasks.md`
-- Existing backend/web/mobile lifecycle specs
+Create `backend/src/modules/admin-lifecycle/admin-erasure.catalog.ts` with explicit descriptors:
 
-Tasks:
+```ts
+type ErasureAction = 'DELETE' | 'DETACH' | 'PRESERVE_RECEIPT';
 
-1. Add explicit requirements for `RETAIN_REQUIRED` and `HISTORICAL_RETIREMENT` before product code.
-2. Characterize the current active-membership predicate, manifest request normalization, both controller prefixes, and blocked purge output.
-3. Add failing contract fixtures for all five reported cases plus historical targets with lingering active memberships.
+interface ErasureDependencyRule {
+  table: string;
+  targetTypes: PurgeTargetType[];
+  action: ErasureAction;
+  selector: 'DIRECT_ID' | 'CLASS_DESCENDANT' | 'SECTION_DESCENDANT' | 'USER_PARTICIPANT' | 'USER_AUTHOR';
+  group: string;
+}
+```
 
-Exit condition: tests capture the current dead ends and the desired additive contract without changing enforcement.
+The catalog is exhaustive by design. Preview introspects the live public schema, compares every FK path touching a selected target against the catalog, and refuses only an unknown/unclassified path. The executor uses catalog-defined delete/detach statements and a topological order; it does not depend on accidental FK cascade behavior.
 
-### Phase 1 — Backend decision and purge presentation semantics
+### 6.5 Durable operation model
 
-Owners:
+Add migration `backend/drizzle/0028_admin_authority_cascade_erasure.sql` and Drizzle schema additions in `backend/src/drizzle/schema/admin-lifecycle.schema.ts`:
 
-- `backend/src/modules/admin-lifecycle/admin-lifecycle.types.ts`
-- `backend/src/modules/admin-lifecycle/admin-lifecycle.manifest.ts`
-- `backend/src/modules/admin-lifecycle/purge-lifecycle.service.ts`
-- `backend/src/modules/admin-lifecycle/admin-lifecycle.manifest.spec.ts`
-- `backend/src/modules/admin-lifecycle/admin-lifecycle.evidence.spec.ts`
-- Purge coverage in `admin-lifecycle.service.spec.ts`
+```text
+admin_erasure_operations
+  id, idempotency_key, target_type, purge_mode, actor_id nullable,
+  actor_snapshot jsonb, status, request_hash, manifest_hash,
+  database_schema_hash, catalog_version, reason_code, notes,
+  target_count, impact_summary jsonb, cleanup_summary jsonb,
+  result jsonb, failure_code, failure_message,
+  created_at, updated_at, completed_at
 
-Tasks:
+admin_erasure_items
+  id, operation_id, target_id (no FK), target_snapshot jsonb,
+  status, impact_counts jsonb, storage_objects jsonb,
+  result jsonb, failure_code, failure_message,
+  created_at, updated_at
+```
 
-1. Add the optional disposition mapping without changing existing states.
-2. Make blocked purge return retention information rather than confirmation/effect ceremony.
-3. Add target-aware cancel/keep metadata using the existing next-action vocabulary.
-4. Prove evidence-free purge is unchanged and retained-evidence execution is still rejected.
+Constraints:
 
-Exit condition: user/class/section purge previews are informative and non-executable, while the hard evidence guard is unchanged.
+- unique `idempotency_key`;
+- unique `(operation_id, target_id)`;
+- action/status check constraints;
+- operation FK from item uses `ON DELETE RESTRICT`;
+- actor FK uses `ON DELETE SET NULL` and keeps a minimal actor snapshot;
+- target IDs intentionally have no FK so the receipt survives target deletion;
+- System Reset classifies both tables as `preserve` and adds its write barriers.
 
-### Phase 2 — Backend historical retirement
+Operation status is one of:
 
-Owners:
+```text
+executing
+cleanup_pending
+completed
+completed_with_cleanup_errors
+failed
+```
+
+### 6.6 Atomic database execution
+
+`AdminErasureService.execute()` performs this exact order:
+
+1. Validate `admin` RBAC, feature flag, active actor-bound Maintenance Access, confirmation, and idempotency.
+2. Normalize and sort target IDs; reject duplicates before manifest creation.
+3. Claim/replay the operation.
+4. Start one `academicTransaction` and acquire an advisory lock plus target row locks in sorted order.
+5. Re-read target lifecycle state, live dependency counts, catalog version, and database schema hash.
+6. Compare the regenerated manifest hash and expiry.
+7. Reject self-user, last-active-admin, active target, unknown table/path, concurrent reset, or schema drift.
+8. Persist minimal target snapshots and storage keys before deletion.
+9. Detach institutional author/actor references that must survive a user deletion.
+10. Delete target-owned descendants in catalog topological order, then delete the target rows.
+11. Insert audit and erasure result records inside the same transaction.
+12. Commit all targets together. No storage/network/Redis call occurs inside the transaction.
+13. Enqueue `admin-erasure-cleanup` if physical objects or index cleanup remain.
+
+### 6.7 Post-commit cleanup
+
+- Add `backend/src/modules/admin-lifecycle/admin-erasure-cleanup.processor.ts` and register queue `admin-erasure-cleanup` in `admin-lifecycle.module.ts`.
+- Call `StorageService.deleteObject` for each captured object key with bounded retries and per-key results.
+- Remove target-scoped index/cache artifacts where database cascade is insufficient.
+- Add `admin-erasure-cleanup` to `RESET_QUEUE_NAMES` so Full Reset remains exhaustive.
+- Update the known queue processors below so missing/erased targets complete as no-op rather than retrying or re-creating data:
+  - `backend/src/modules/rag/processors/rag-indexing.processor.ts`
+  - `backend/src/modules/file-upload/processors/library-indexing.processor.ts`
+  - `backend/src/modules/performance/performance-recompute.processor.ts`
+  - `backend/src/modules/ai-mentor/processors/ai-generation.processor.ts`
+  - `backend/src/modules/discussion-board/discussion-board.processor.ts`
+  - notification processors under `backend/src/modules/notifications/processors/`
+
+The UI must say “Records deleted; file cleanup is continuing” for `cleanup_pending`. It must not present that as a failed domain deletion.
+
+### 6.8 Security and policy behavior
+
+- Add rule `cascade_academic_erasure` under `ACADEMIC_STRUCTURE` and rule `cascade_account_erasure` under `ACCOUNT_LIFECYCLE` in `admin-maintenance.policy.ts`.
+- Keep current password, reason, and acknowledgements at `AdminMaintenanceService.open()`.
+- Remove the unconditional “fresh password for every purge” branch only for the `/admin/maintenance` path with an active session.
+- Keep session expiry at 15 minutes unless existing configuration overrides it.
+- Send an audit/notification event to other active administrators after a cascade erase; notification failure is post-commit and retryable.
+- Never log confirmation text, score values, assessment responses, passwords, tokens, or deleted notes.
+
+### 6.9 Error contract
+
+| HTTP | Stable code | Meaning / client action |
+|---|---|---|
+| 400 | `INVALID_ERASURE_REQUEST` | malformed IDs, mixed/duplicate target set, unsupported mode, or wrong confirmation; keep selection. |
+| 401 | existing auth code | sign in again. |
+| 403 | `MAINTENANCE_SESSION_REQUIRED` | open/reopen Maintenance Access, then re-preview. |
+| 403 | `SELF_ACCOUNT_ERASURE_FORBIDDEN` | permanent boundary; remove self from selection. |
+| 403 | `LAST_ADMIN_ERASURE_FORBIDDEN` | create/verify another active administrator first. |
+| 404 | `ERASURE_TARGET_NOT_FOUND` | single target missing; batch preview marks exact missing items and cannot mint a manifest. |
+| 409 | `TARGET_MUST_BE_ARCHIVED` | present the existing archive/soft-delete next action. |
+| 409 | `ERASURE_MANIFEST_STALE` | data/selection changed; automatically re-preview. |
+| 409 | `ERASURE_SCHEMA_CHANGED` | deploy/catalog mismatch; stop execution and alert operators. |
+| 409 | `UNCLASSIFIED_DEPENDENCY` | new dependency needs a reviewed catalog rule; no rows changed. |
+| 409 | `ERASURE_ALREADY_EXECUTING` | poll the returned operation. |
+| 423 | `SYSTEM_RESET_IN_PROGRESS` | wait until reset completes; no competing destructive transaction. |
+| 200 | `completed` | domain and cleanup complete. |
+| 202 | `cleanup_pending` | domain deletion complete; poll cleanup state. |
+
+## 7. Contract, schema, migration, and compatibility plan
+
+### OpenSpec ownership
+
+During implementation, create a new change rather than editing completed historical changes:
+
+- `openspec/changes/admin-authority-cascade-erasure/proposal.md`
+- `openspec/changes/admin-authority-cascade-erasure/design.md`
+- `openspec/changes/admin-authority-cascade-erasure/tasks.md`
+- `openspec/changes/admin-authority-cascade-erasure/specs/actionable-admin-lifecycle/spec.md`
+- `openspec/changes/admin-authority-cascade-erasure/specs/admin-maintenance-access/spec.md`
+
+The delta explicitly supersedes the old requirements that retained evidence can never be purged. It preserves empty-only compatibility and adds the cascade-erasure scenarios above.
+
+### Backend contract owners
 
 - `backend/src/modules/admin-lifecycle/DTO/admin-lifecycle.dto.ts`
+- `backend/src/modules/admin-lifecycle/admin-lifecycle.types.ts`
+- `backend/src/modules/admin-lifecycle/admin-lifecycle.manifest.ts`
+- `backend/src/modules/admin-lifecycle/admin-maintenance-lifecycle.controller.ts`
+- `backend/src/modules/admin-lifecycle/admin-lifecycle.controller.ts`
 - `backend/src/modules/admin-lifecycle/admin-lifecycle.service.ts`
-- `backend/src/modules/admin-lifecycle/class-lifecycle.service.ts`
-- `backend/src/modules/admin-lifecycle/section-lifecycle.service.ts`
-- Both lifecycle controllers
-- `admin-lifecycle.dto.spec.ts`
-- `class-lifecycle.service.spec.ts`
-- `section-lifecycle.service.spec.ts`
-- `admin-lifecycle.controller.spec.ts`
-- `admin-lifecycle.service.spec.ts`
-- `admin-lifecycle.schema.spec.ts`
+- new `admin-erasure.catalog.ts`, `admin-erasure.service.ts`, and cleanup processor/specs
 
-Tasks:
-
-1. Add and normalize the discriminated lifecycle mode.
-2. Split current closure and historical retirement planners into explicit branches.
-3. Block historical retirement until every active membership has an explicit supported outcome and historical period.
-4. Execute structural-only retirement when the target is empty; otherwise execute only the reviewed membership outcomes and structural retirement in the same operation/audit transaction.
-5. Implement explicit historical section completion without academic-transition inference and preserve linked-class atomicity.
-6. Verify request hashes differ across modes and stale manifests cannot cross-execute.
-7. Verify no migration or new operation action is introduced.
-
-Exit condition: both historical target types have safe preview/execute coverage, negative membership tests, transaction rollback coverage, and unchanged current-year closure behavior.
-
-### Phase 3 — Web contract and lifecycle UX
-
-Owners:
+### Client contract owners
 
 - `next-frontend/src/types/admin-lifecycle.ts`
 - `next-frontend/src/services/admin-lifecycle-service.ts`
-- `next-frontend/src/components/admin/AdminLifecycleDialog.tsx`
-- `next-frontend/app/(dashboard)/dashboard/admin/users/[id]/page.tsx`
-- `next-frontend/app/(dashboard)/dashboard/admin/classes/page.tsx`
-- `next-frontend/app/(dashboard)/dashboard/admin/classes/[id]/page.tsx`
-- `next-frontend/app/(dashboard)/dashboard/admin/sections/page.tsx`
-- Relevant dialog, service, and page tests
-
-Tasks:
-
-1. Mirror the additive request/response contract and fallback behavior.
-2. Choose retirement mode only from target metadata and let the backend verify it.
-3. Replace technical headings with disposition-aware language:
-   - `RETAIN_REQUIRED`: “Permanent deletion is unavailable.”
-   - `CHOICE_REQUIRED`: “Choose outcomes for historical memberships.”
-   - executable historical mode: “Retire this historical class/section.”
-4. Hide outcome selectors when historical retirement does not require an outcome.
-5. Hide warnings-to-acknowledge, password, confirmations, and executable-effect sections for retained-evidence purge.
-6. Render retained categories under “Why this record must be kept.”
-7. Implement `CANCEL` as a real close/keep action and preserve keyboard/focus behavior.
-8. Keep unresolved historical outcomes in the originating dialog, invalidate the stale preview when inputs change, and re-preview before enabling execution.
-
-Exit condition: the five reported web entry points no longer dead-end or show impossible acknowledgement UI.
-
-### Phase 4 — Mobile contract and parity
-
-Owners:
-
 - `mobile/src/types/admin-lifecycle.ts`
 - `mobile/src/api/services/admin-lifecycle.ts`
-- `mobile/src/features/admin-lifecycle/model.ts`
-- `mobile/src/screens/AdminLifecycleReviewScreen.tsx`
-- Admin class/section/user entry screens
-- `mobile/src/navigation/types.ts` and `AppNavigator.tsx` only if repair return context requires navigation typing
-- Existing mobile lifecycle API/model/screen contract tests
+- `scripts/check-admin-client-contracts.cjs`
 
-Tasks:
+The contract checker must compare purge modes, target types, batch limits, warning/blocker codes, operation states, and endpoint paths. Additive fields are optional for legacy clients; new web code requires schema version 2 for cascade mode.
 
-1. Mirror mode/disposition and state fallback.
-2. Implement `CANCEL` as back/close rather than a displayed no-op row.
-3. Match web copy hierarchy and suppress impossible warnings/effects/password fields.
-4. Select historical mode from target data and preserve backend authority.
-5. Keep typed historical outcome context in the lifecycle screen and re-preview after input changes.
-6. Invalidate class/section detail and list queries after successful retirement.
+### Migration and reset compatibility
 
-Exit condition: mobile and web reach the same decision for the same manifest and every rendered next action performs a real operation.
+1. Add `0028_admin_authority_cascade_erasure.sql`; never edit applied migration `0027`.
+2. Export new tables/relations from the existing Drizzle schema index used by the application.
+3. Add both tables to the System Reset preserve catalog and increment `RESET_CATALOG_VERSION`.
+4. Add reset write-barrier triggers for both tables using the established migration pattern.
+5. Update migration integrity tests and schema snapshots/checks.
+6. Rehearse upgrade from `0027` and a clean database.
+7. Rollback is feature-flag disable plus forward migration; do not drop receipt tables during incident response.
 
-### Phase 5 — Integrated verification and release preparation
+### Feature flags
 
-Owners:
+- Keep `ADMIN_MAINTENANCE_ENABLED` and `ADMIN_LIFECYCLE_ENABLED` as prerequisites.
+- Add `ADMIN_CASCADE_ERASE_ENABLED=false` to `backend/src/config/admin-lifecycle.config.ts`, its spec, `backend/.env.example`, and `.env.compose.example`.
+- When false, cascade preview returns stable capability-unavailable metadata; empty-only purge and all existing lifecycle behavior remain available.
+- Enable it first in disposable demo/staging. Production enablement requires the rehearsal gates in section 9.
 
-- Backend, web, and mobile package scripts
-- Release workflow selected under separate authorization
+## 8. Ordered implementation phases with exact owners
 
-Tasks:
+### Phase 0 — Freeze the revised contract with failing tests
 
-1. Run targeted specs first, then required typecheck/build gates.
-2. Execute authenticated browser flows for the five reported paths.
-3. Execute at least one data-backed mobile Admin flow for retain, repair, and successful retirement.
-4. Run a read-only deployed-data inventory of historical active targets and lingering active memberships before enabling execution.
-5. Release backend and web together; release mobile only after backend backward compatibility is live.
-6. If a mobile binary is distributed, produce and verify the required Android artifact under the repository release procedure.
+- [ ] Create the OpenSpec change and validate it strictly.
+- [ ] Add DTO tests in `backend/src/modules/admin-lifecycle/DTO/admin-lifecycle.dto.spec.ts` for modes, unique 1–50 UUIDs, confirmation, and no required execute password in active Maintenance Access.
+- [ ] Add manifest tests in `admin-lifecycle.manifest.spec.ts` proving retained evidence is a blocker in `EMPTY_ONLY` and an executable warning in `CASCADE_ERASE`.
+- [ ] Add controller contract tests for all four batch endpoints and single-target adapters.
+- [ ] Extend `scripts/check-admin-client-contracts.cjs` fixtures before changing implementation types.
+- [ ] Record exact current single-target response snapshots so omitted `purgeMode` remains backward compatible.
 
-Exit condition: exact release SHA, CI, deployment, web runtime, mobile artifact/emulator, and any physical-device evidence are reported separately without conflation.
+### Phase 1 — Fix the independent enrollment `409`
+
+- [ ] Add `ClassesService.enrollStudent` tests in `backend/src/modules/classes/classes.service.spec.ts` for active duplicate, dropped same-class, completed same-class, inactive section row, wrong-section row, and finalized participant cases.
+- [ ] Change the transaction lookup to branch on enrollment status rather than treating every same-class row as active.
+- [ ] If the same-class row is `dropped` or `completed`, update that row to `enrolled`, refresh `enrolledAt`, clear incompatible terminal metadata, and append a reactivation lifecycle/audit event.
+- [ ] Require any section-level row used for promotion to have active `enrolled` status; update both `classId` and status atomically.
+- [ ] Add an explicit class-record participant reactivation method in `backend/src/modules/class-record/class-record.service.ts`; change mutable current-period eligibility back to `eligible` instead of relying on `onConflictDoNothing`.
+- [ ] Keep finalized/locked participant evidence governed: return a typed next action to reopen/confirm the roster instead of a false duplicate message.
+- [ ] Add web admin/teacher and mobile API regression tests proving one successful request and one visible active learner.
+
+### Phase 2 — Make active learners the default without hiding history
+
+- [ ] Add shared filter values `current | historical | all` to the web class-record visual/model helpers.
+- [ ] Change `TeacherClassRecordGradeGrid.tsx` default to `current` for active/draft workspaces and retain `all` for finalized/historical evidence views and exports.
+- [ ] Add labels explaining that Historical contains dropped/completed learners with retained records.
+- [ ] Add tests to `TeacherClassRecordWorkbook.test.tsx` and a focused `TeacherClassRecordGradeGrid.test.tsx` for default, filter switching, finalized mode, and exports.
+- [ ] Implement the same default/filter semantics in `mobile/src/components/teacher/MobileClassRecordWorkbook.tsx` and `mobile/src/components/academic/AcademicWorkbook.tsx` with focused tests.
+- [ ] Do not remove historical learners from backend roster/spreadsheet responses.
+
+### Phase 3 — Add erasure schema and completeness guard
+
+- [ ] Add migration `backend/drizzle/0028_admin_authority_cascade_erasure.sql` and Drizzle table definitions.
+- [ ] Add schema tests for checks, unique idempotency, target ID survival, actor `SET NULL`, item-operation `RESTRICT`, and reset write barriers.
+- [ ] Update `system-reset.catalog.ts`, its catalog tests, and `RESET_CATALOG_VERSION`.
+- [ ] Implement `admin-erasure.catalog.ts` with initial class, section, and user rules covering every table in the live test schema.
+- [ ] Extract/reuse a read-only FK/topological-order helper from System Reset where this avoids duplicate algorithms; keep target selectors in admin lifecycle.
+- [ ] Add a completeness test that creates an unclassified FK table and proves preview returns `UNCLASSIFIED_DEPENDENCY` before any delete.
+- [ ] Add target semantics tests proving user-author detach does not delete the authored class/lesson.
+
+### Phase 4 — Implement preview and atomic database executor
+
+- [ ] Add `AdminErasureService.prepare()` tests for empty target, evidence-heavy class, section tree, student user, teacher author, self user, last admin, active target, missing target, schema drift, and 50-target aggregate counts.
+- [ ] Implement grouped dependency counts, storage inventory, catalog/schema hashes, exact normalized target set, one confirmation, and 10-minute manifest expiry.
+- [ ] Add `execute()` tests for stale manifest, changed target set, expired Maintenance Access, duplicate idempotency replay, concurrent operation, and rollback of all 33 targets on one failure.
+- [ ] Implement sorted locks, in-transaction re-preview, detach-before-delete, explicit topological deletes, receipt/audit creation, and no external I/O in transaction.
+- [ ] Route single-target cascade calls through a one-ID batch internally so there is only one destructive engine.
+- [ ] Keep old direct class/section purge endpoints as reviewed-flow redirects; do not create a second bypass path.
+
+### Phase 5 — Add cleanup and stale-job containment
+
+- [ ] Capture all physical object keys and bytes in erasure items before database rows are removed.
+- [ ] Register and implement the `admin-erasure-cleanup` BullMQ processor with bounded retries and idempotent per-key results.
+- [ ] Add `retry-cleanup` authorization/idempotency tests and operator-visible failure summaries.
+- [ ] Add erased/missing-target no-op tests to RAG, library-indexing, performance-recompute, AI-generation, discussion, and notification processors.
+- [ ] Add the cleanup queue to System Reset queue inventory and tests.
+- [ ] Verify logs contain operation/target IDs and counts but no deleted academic values or credentials.
+
+### Phase 6 — Expose batch APIs and policy capability
+
+- [ ] Add feature-flag/config validation and specs.
+- [ ] Update `admin-maintenance.policy.ts` so `cascade_academic_erasure` and `cascade_account_erasure` are explicit Maintenance rules while identity/integrity rules remain protected.
+- [ ] Add batch routes to `admin-maintenance-lifecycle.controller.ts` and compatibility adapters to `admin-lifecycle.controller.ts`.
+- [ ] Change purge execution password behavior: active Maintenance path uses the open session; compatibility path may verify a supplied password during the deprecation window.
+- [ ] Return stable errors from section 6.9 and preserve the existing response envelope.
+- [ ] Add an after-commit notification to other active administrators with target type/count, actor, reason, operation ID, and no deleted content.
+
+### Phase 7 — Replace first-item web bulk behavior
+
+- [ ] Extend web lifecycle types/service and make contract tests pass.
+- [ ] Refactor `AdminLifecycleDialog.tsx` to accept `targetIds`, render batch target/impact summaries, show one confirmation, and poll cleanup state.
+- [ ] In admin classes and sections pages, replace `selectedClasses[0]` / `selectedSections[0]` with one batch preview containing the full selected ID array.
+- [ ] On database completion, remove all completed IDs from selection. On pre-commit failure, keep all selected. On stale preview, refresh once and require reconfirmation.
+- [ ] Add `page.test.tsx` beside both admin list pages for 33 selections, full payload, atomic failure, cancel, stale re-preview, and cleanup-pending success.
+- [ ] Update the user detail page to offer `EMPTY_ONLY` and `CASCADE_ERASE` for a soft-deleted non-self account and render user-specific detach/delete groups.
+- [ ] Keep historical archive actions unchanged except for copy that points active targets to archive first.
+
+### Phase 8 — Mobile contract parity and intentional exposure boundary
+
+- [ ] Update mobile types/API/model fixtures for schema version 2, purge mode, batch preview, and operation states.
+- [ ] Keep cascade execute unavailable from mobile UI for this release; display a clear “Use the web Admin console for permanent cascade deletion” action when encountered.
+- [ ] Preserve existing mobile historical archive/repair flows.
+- [ ] Add contract and model tests proving additive fields do not break current mobile screens.
+- [ ] Re-run `contract:admin` in backend, web, and mobile.
+
+### Phase 9 — Destructive rehearsal, presentation slice, and release gate
+
+- [ ] Seed a disposable database with: one empty archive, one evidence-heavy class, one section with linked classes, one historical student account, one teacher-author account, one self admin, and one last-admin scenario.
+- [ ] Snapshot database and object storage, run previews, save manifests/counts, execute single and 33-target batches, and verify exact absence/detach/receipt outcomes.
+- [ ] Force one database failure and prove all targets roll back.
+- [ ] Force one storage failure and prove domain deletion completes with retryable cleanup.
+- [ ] Verify System Reset completeness after new tables/queue are introduced.
+- [ ] Demonstrate the enrollment reactivation and current/historical class-record filter on both admin and teacher web flows.
+- [ ] Enable `ADMIN_CASCADE_ERASE_ENABLED` only in demo/staging after the above passes.
+- [ ] Production enablement requires written institutional retention approval, backup/restore evidence, exact-SHA CI/deployment success, and an authenticated smoke test.
 
 ## 9. Verification matrix and acceptance criteria
 
-### Automated verification matrix
+### Automated matrix
 
-| Surface | Required proof |
+| Layer | Required proof |
 |---|---|
-| DTO validation | Old requests pass; historical mode accepts only its intended fields; contradictory modes/fields fail deterministically. |
-| Manifest decision | Disposition mapping is stable; old state remains present; no unfamiliar next-action kind is emitted. |
-| Purge policy | Non-zero retained evidence always blocks; zero evidence remains eligible; blocked output has no confirmations/effects. |
-| Class planner | Historical empty class is executable; historical memberships require explicit outcomes/period; active-year historical mode is rejected. |
-| Section planner | Historical empty section retires linked structure atomically; incomplete learner outcomes block all changes; complete historical outcomes execute atomically. |
-| Execution | Mode is hashed/audited; stale/cross-mode manifest fails; idempotent replay returns the original result. |
-| Security | Non-admin, inactive Maintenance Access, invalid current password, and throttling behavior remain enforced. |
-| Web | Disposition-specific copy, hidden ceremony, cancel handling, historical mode, in-place outcome correction, and focus behavior. |
-| Mobile | Same decision semantics, real cancel/back, repair navigation, query invalidation, and no no-op next actions. |
-| Persistence | No migration generated; action-check schema test remains unchanged; evidence row counts/checksums are unchanged by retirement. |
+| DTO/contract | 1 and 50 IDs accepted; 0, 51, mixed/duplicate/invalid IDs rejected; web/mobile parity passes. |
+| Policy/auth | non-admin, missing/foreign/expired Maintenance session, self user, and last admin rejected; active valid admin accepted. |
+| Preview | exact target set/counts, section descendants, user detach semantics, storage counts, schema/catalog hash, warning/blocker conversion by mode. |
+| Atomic execute | all selected targets deleted or none; stale manifest/schema rejected; idempotency replays one receipt. |
+| Cleanup | object keys deleted; retries are idempotent; permanent cleanup errors are visible without resurrecting rows. |
+| Queue safety | known stale jobs no-op when target is absent/erased. |
+| Bulk UI | every selected ID sent once; cancel mutates nothing; selection handling matches operation outcome. |
+| Enrollment | active duplicate still 409; dropped/completed same-class row reactivates; participant eligibility reconciles. |
+| Class record | current default for active workspace; historical/all filters and exports preserve evidence. |
+| Migration/reset | clean install, `0027 -> 0028` upgrade, catalog completeness, write barriers, and System Reset pass. |
 
 ### Suggested commands
 
-Run from each package directory as appropriate:
+From `backend/`:
 
 ```bash
-cd backend
-npm test -- --runInBand src/modules/admin-lifecycle
+npm test -- --runInBand src/modules/admin-lifecycle src/modules/classes/classes.service.spec.ts src/modules/class-record
+npm run contract:admin
+npm run test:system-reset
+npm run build
+npm run lint
+```
+
+From `next-frontend/`:
+
+```bash
+npm test -- --runInBand src/components/admin/AdminLifecycleDialog.test.tsx app/\(dashboard\)/dashboard/admin/classes/page.test.tsx app/\(dashboard\)/dashboard/admin/sections/page.test.tsx app/\(dashboard\)/dashboard/admin/users/\[id\]/page.test.tsx src/components/teacher/class-record
+npm run typecheck
 npm run lint
 npm run build
+npm run test:e2e -- --grep "admin cascade erasure|historical reenrollment"
+```
 
-cd ../next-frontend
-npm test -- --runInBand src/components/admin/AdminLifecycleDialog.test.tsx src/services/admin-lifecycle-service.test.ts
-npm run lint
-npm run build
+From `mobile/`:
 
-cd ../mobile
-npm test -- --runInBand src/api/__tests__/admin-lifecycle-api.test.ts src/features/admin-lifecycle/__tests__/model.test.ts src/screens/__tests__/admin-lifecycle-contract.test.ts
+```bash
+npm test -- --runInBand src/api/__tests__/admin-lifecycle-api.test.ts src/screens/__tests__/admin-lifecycle-contract.test.ts src/api/__tests__/academic-class-record.test.ts
 npm run typecheck
 ```
 
-If package test filtering differs from the installed Jest configuration, use the nearest repository-supported targeted invocation, record the exact command, and do not treat a filter error as a product failure.
+OpenSpec and repository checks:
+
+```bash
+openspec validate admin-authority-cascade-erasure --strict
+git diff --check
+```
 
 ### Acceptance criteria
 
-1. On `/dashboard/admin/users/<student-id>`, retained enrollment history, lifecycle events, scores, or attempts blocks permanent deletion and displays no acknowledgement/password/effect ceremony.
-2. On `/dashboard/admin/classes`, retained enrollment history or lifecycle events blocks permanent deletion and explains that the class must remain retained; no evidence override is offered.
-3. On `/dashboard/admin/sections`, retained class records, assessments, lessons, or linked classes blocks permanent deletion and presents retention as the outcome.
-4. Archiving a historical class with no active memberships succeeds through a reviewed, auditable retirement preview and preserves all evidence.
-5. Archiving a historical section with no active memberships archives the section and active linked classes atomically while preserving all evidence.
-6. Historical class or section retirement with active memberships cannot execute until the administrator records real outcomes and a historical effective period in the same review.
-7. Changing an outcome or period invalidates the old manifest; a fresh preview is required before execution.
-8. Existing current-year class/section closure behavior and learner outcomes are unchanged.
-9. Eligible evidence-free purge still requires current-password verification, irreversible confirmation, and idempotent execution.
-10. Backend, web, and mobile produce equivalent decisions for shared fixtures.
-11. No score, attempt, class record, assessment, lesson, lifecycle event, or enrollment-history row is deleted or reassigned by historical retirement.
-12. All rendered next actions work; no button or row is displayed with a no-op handler.
+- [ ] An admin with active Maintenance Access can cascade-erase an evidence-heavy archived class, section, or soft-deleted non-self user.
+- [ ] The preview lists the actual descendant groups and counts; retained evidence is a warning in cascade mode, not `IMMUTABLE`.
+- [ ] Password is entered once when Maintenance Access opens, not again for every target; one batch confirmation is required.
+- [ ] Selecting 33 archived classes/sections sends and executes all 33 atomically.
+- [ ] Self-user and last-active-admin erasure remain impossible.
+- [ ] A teacher account purge does not delete unrelated classes or school content it authored.
+- [ ] Every database dependency is deleted/detached or explicitly preserved; unknown dependencies block before mutation with a stable operator code.
+- [ ] Physical cleanup is tracked and retryable; UI distinguishes cleanup pending from deletion failure.
+- [ ] A historical same-class enrollment can be reactivated; a genuinely active duplicate still returns 409.
+- [ ] Active class records initially show active learners only, with historical/all filters and complete exports.
+- [ ] Existing historical retirement, teacher permissions, mobile flows, and System Reset remain green.
+
+### Manual destructive evidence
+
+For each target type, record:
+
+- pre-preview row counts and named target;
+- manifest hash, schema hash, catalog version, and target count;
+- post-commit target/descendant absence queries;
+- detach checks for preserved institutional content;
+- receipt/audit row without erased content;
+- object-storage key absence or cleanup-pending/retry result;
+- idempotency replay response;
+- rollback proof from one injected failure.
+
+No production release claim is valid without this evidence on the exact deployed SHA.
 
 ## 10. Rollout, rollback, observability, cleanup, and unverified boundaries
 
 ### Rollout
 
-1. Land OpenSpec clarification and tests with the implementation change.
-2. Deploy the backward-compatible backend first with historical execution disabled by a narrow configuration flag if staged rollout is required. The retained-evidence guard itself must never be flag-disabled.
-3. Deploy web after backend compatibility is confirmed.
-4. Release mobile after backend is live; old mobile clients continue using current mode.
-5. Enable historical retirement for internal/admin acceptance, inspect decision counts and failure codes, then widen to normal Admin use.
+1. Land enrollment and class-record visibility fixes independently; they do not require destructive capability.
+2. Land schema/catalog/preview behind `ADMIN_CASCADE_ERASE_ENABLED=false`.
+3. Complete disposable-database and storage rehearsal.
+4. Enable only in the presentation/demo environment and run the exact scripted scenarios.
+5. Obtain institutional retention approval and backup/restore evidence.
+6. Enable in production for a narrow administrator window, observe first operations, then retain as an ordinary Maintenance Access capability if healthy.
 
-Recommended flag boundary: execution of `HISTORICAL_RETIREMENT` only. Preview, retention explanations, and evidence protection can remain available regardless of the flag.
+The presentation can honestly demonstrate the complete flow tomorrow only if phases 0–9 and the disposable rehearsal pass. If the erasure engine is not verified, present the batch preview behind the disabled feature flag and ship only the independent 409/filter fixes; do not convert an unverified broad delete into a production shortcut.
 
 ### Rollback
 
-- Disable historical-retirement execution while leaving the evidence-retention guard active.
-- Revert client mode selection and disposition presentation only if necessary; old request defaults remain current closure.
-- Do not roll back by deleting operation/audit/lifecycle evidence.
-- A successfully retired structure can be reactivated only through an explicit, audited inverse operation or existing governed repair; do not perform direct database edits as rollback.
-- Because no schema migration is planned, application rollback does not require database DDL reversal.
+- Immediate containment: set `ADMIN_CASCADE_ERASE_ENABLED=false`; empty-only purge and existing lifecycle flows remain available.
+- Cancel queued cleanup only if it has not started and keeping the orphaned object is required for incident investigation.
+- Do not attempt to reconstruct erased academic rows automatically from the minimal receipt.
+- Restore deleted domain data only through the verified database/object backup procedure.
+- Keep migration `0028` and receipt rows during rollback; use a forward fix rather than dropping audit evidence.
 
 ### Observability
 
-Record structured, non-sensitive fields for preview and execution:
+Emit structured logs/metrics for:
 
-- action and normalized lifecycle mode
-- decision state, disposition, and stable code
-- target type and target ID
-- active-membership count and retained-evidence category counts
-- manifest age/stale reason
-- operation ID, replayed status, success/failure, and duration
-- repair navigation selected and subsequent re-preview outcome where client analytics already exist
+- preview count by target type/mode;
+- preview-to-execute conversion and cancel rate;
+- target and descendant row counts;
+- `UNCLASSIFIED_DEPENDENCY`, stale manifest/schema, self, last-admin, and concurrent-operation refusals;
+- transaction duration, lock wait, rollback count, and batch size;
+- cleanup objects/bytes, retries, terminal failures, and age of `cleanup_pending`;
+- stale queue jobs that no-op against erased targets;
+- enrollment active-duplicate versus historical-reactivation results.
 
-Alert or investigate:
+Never emit deleted score values, assessment responses, password material, access tokens, or free-form learner notes.
 
-- any attempted execution with `RETAIN_REQUIRED`
-- any successful historical retirement whose preview reported active memberships
-- repeated stale-manifest or cross-mode mismatches
-- unexpected growth in historical active targets after rollout
-- web/mobile next-action handling failures
+### Cleanup and follow-up
 
-Do not log current passwords, score contents, student notes, tokens, or full manifests containing sensitive details.
-
-### Cleanup
-
-- Remove the technical “IMMUTABLE” label from user-visible copy while retaining the compatibility state internally.
-- Remove redundant permanent-action warnings from blocked-retention acknowledgement sections.
-- Consolidate shared decision fixtures so backend, web, and mobile do not drift.
-- Document the difference between current closure, historical retirement, academic repair, and permanent purge in Admin help text.
-- Consider deprecating the `/admin/lifecycle/*` compatibility controller only as a separate, consumer-verified change.
+- Remove the frontend single-item queue fallback once backend batch execution is enabled everywhere.
+- After one compatibility window, remove `currentPassword` from single purge execute clients while continuing to reject calls without Maintenance Access.
+- Review whether a dedicated `school_it_admin` role is needed after the presentation; do not silently add one in this change.
+- Review cleanup failure metrics after the first 10 operations and adjust worker concurrency/retry timing if needed.
+- Archive the OpenSpec change only after exact-SHA release and authenticated acceptance evidence.
 
 ### Unverified boundaries
 
-- Deployed database counts and whether historical active memberships contain exceptional legacy statuses.
-- Authenticated browser focus behavior and exact responsive layout after copy changes.
-- Physical Android behavior, artifact integrity, and iOS parity.
-- Out-of-repository consumers of `/api/admin/lifecycle/*` or `/api/admin/maintenance/*`.
-- Whether current deployment configuration already has a suitable narrowly scoped feature-flag mechanism; if not, implement a typed config entry without weakening default-off behavior for historical execution.
-- Whether notification recipients for a purely structural historical retirement should be all existing affected users or administrators only. Preserve current archive recipients unless characterization proves that this would send a misleading notification.
+- The exact deployed PostgreSQL schema, legacy tables, triggers, row counts, and longest lock duration were not inspected in this planning turn.
+- Object keys outside `uploaded_files` and structured banner/profile fields need confirmation during catalog implementation.
+- Out-of-repository consumers of `/api/admin/lifecycle/*` and `/api/admin/maintenance/*` are unknown.
+- Institutional policy may legally require retention even when the product allows erasure; production enablement needs an explicit owner decision.
+- Backup recency, restore duration, Railway deployment state, and current feature-flag values were not verified.
+- Physical browser, mobile-device, and APK behavior were not tested because this is a planning-only turn.
 
-None of these unverified boundaries blocks implementation. They are explicit verification or rollout gates. If implementation discovers that historical retirement requires mutating academic evidence or inferring membership outcomes, stop and revise the design rather than weakening the invariants above.
-
-## 11. Local implementation evidence and Android distribution boundary
-
-The implementation preserves evidence-aware deletion and adds governed historical retirement across backend, web, and mobile. Local verification completed with 157 backend suites / 1,661 tests, 191 web suites / 856 tests, and 124 mobile suites / 700 tests, plus package type/contract gates, lint, production builds, strict OpenSpec validation, disposable-database academic and end-to-end suites, System Reset rehearsals, and independent code review.
-
-The rebuilt Android package is Nexora Mobile `0.1.36` (`versionCode` 37), ARM64-only, and embeds the production backend API. Its committed download manifest is generated from the exact APK and release verification checks its package identity, version, installer permission, byte size, and SHA-256 checksum.
-
-Android signing remains a known release boundary. This repository's established update lineage signs the APK with the tracked Android debug certificate. Preserving that certificate keeps upgrades compatible with already-installed builds, but it does not provide production-grade signer custody: anyone with repository access to that key material can create a package accepted under the same signer. Therefore this APK is classified as internal/test distribution, not a production-secure public release. Moving to a protected release key requires a separate credential-provisioning and installed-base migration decision; silently changing the signer would break in-place updates.
+These items are release gates or implementation discovery tasks, not reasons to restore the current dead-end retained-evidence policy. The executable design remains: explicit cascade mode, one Maintenance Access step-up, one batch review, atomic database deletion, minimal receipt, and retryable cleanup.

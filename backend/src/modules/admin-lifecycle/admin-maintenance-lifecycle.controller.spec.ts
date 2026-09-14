@@ -14,6 +14,9 @@ describe('AdminMaintenanceLifecycleController', () => {
     executeSection: jest.fn(),
     previewPurge: jest.fn(),
     executePurge: jest.fn(),
+    previewPurgeBatch: jest.fn(),
+    executePurgeBatch: jest.fn(),
+    retryErasureCleanup: jest.fn(),
     getOperation: jest.fn(),
   };
   const controller = new AdminMaintenanceLifecycleController(lifecycle as any);
@@ -74,5 +77,34 @@ describe('AdminMaintenanceLifecycleController', () => {
       requireMaintenance: true,
     });
     expect(lifecycle.getOperation).toHaveBeenCalledWith('operation-id');
+  });
+
+  it('delegates one complete purge batch and cleanup retry with the actor', async () => {
+    lifecycle.previewPurgeBatch.mockResolvedValue({ targets: [] });
+    lifecycle.executePurgeBatch.mockResolvedValue({ operationId: 'operation-id' });
+    lifecycle.retryErasureCleanup.mockResolvedValue({ status: 'cleanup_pending' });
+    const preview = {
+      targetType: 'CLASS',
+      targetIds: ['00000000-0000-4000-8000-000000000001'],
+      purgeMode: 'CASCADE_ERASE',
+    } as never;
+    const execute = { ...preview, confirmation: 'ERASE 1 CLASS' } as never;
+
+    await controller.previewPurgeBatch(preview, ACTOR);
+    await controller.executePurgeBatch(execute, ACTOR);
+    await controller.retryCleanup('operation-id', ACTOR);
+
+    expect(lifecycle.previewPurgeBatch).toHaveBeenCalledWith(
+      preview,
+      ACTOR.userId,
+    );
+    expect(lifecycle.executePurgeBatch).toHaveBeenCalledWith(
+      execute,
+      ACTOR.userId,
+    );
+    expect(lifecycle.retryErasureCleanup).toHaveBeenCalledWith(
+      'operation-id',
+      ACTOR.userId,
+    );
   });
 });

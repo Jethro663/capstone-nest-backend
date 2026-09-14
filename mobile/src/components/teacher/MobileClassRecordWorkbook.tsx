@@ -1,4 +1,5 @@
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { useEffect, useState } from "react";
 import type {
   SpreadsheetCategory,
   SpreadsheetData,
@@ -17,6 +18,8 @@ type Props = {
   workbook?: SpreadsheetData | null;
   students?: SpreadsheetStudentRow[];
 };
+
+type LearnerFilter = "current" | "historical" | "all";
 
 type SheetColumn = {
   key: string;
@@ -164,7 +167,23 @@ export function MobileClassRecordWorkbook({
   students,
   hideExport = false,
 }: Props) {
-  const rows = students ?? workbook?.students ?? [];
+  const [learnerFilter, setLearnerFilter] = useState<LearnerFilter>(() =>
+    workbook?.classRecord.status === "draft" ? "current" : "all",
+  );
+  useEffect(() => {
+    setLearnerFilter(
+      workbook?.classRecord.status === "draft" ? "current" : "all",
+    );
+  }, [workbook?.classRecord.id, workbook?.classRecord.status]);
+
+  const allRows = students ?? workbook?.students ?? [];
+  const rows = allRows.filter((student) => {
+    const historical =
+      student.isRemoved === true || student.enrollmentState === "removed";
+    if (learnerFilter === "current") return !historical;
+    if (learnerFilter === "historical") return historical;
+    return true;
+  });
 
   if (!workbook) {
     return (
@@ -263,6 +282,52 @@ export function MobileClassRecordWorkbook({
             | {workbook.header.section || "Section"}
           </Text>
         </View>
+      </View>
+
+      <View
+        style={{
+          flexDirection: "row",
+          flexWrap: "wrap",
+          gap: 8,
+          paddingHorizontal: 14,
+          paddingBottom: 10,
+        }}
+      >
+        {(
+          [
+            ["current", "Current"],
+            ["historical", "Historical"],
+            ["all", "All"],
+          ] as const
+        ).map(([value, label]) => (
+          <Pressable
+            key={value}
+            accessibilityRole="button"
+            accessibilityLabel={`Show ${value} learners`}
+            accessibilityState={{ selected: learnerFilter === value }}
+            onPress={() => setLearnerFilter(value)}
+            style={{
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor:
+                learnerFilter === value ? theme.red : theme.border,
+              backgroundColor:
+                learnerFilter === value ? "#FDE8E8" : "#FFFFFF",
+              paddingHorizontal: 12,
+              paddingVertical: 7,
+            }}
+          >
+            <Text
+              style={{
+                color: learnerFilter === value ? theme.red : theme.subtext,
+                fontSize: 12,
+                fontWeight: "800",
+              }}
+            >
+              {label}
+            </Text>
+          </Pressable>
+        ))}
       </View>
 
       {rows.length ? (

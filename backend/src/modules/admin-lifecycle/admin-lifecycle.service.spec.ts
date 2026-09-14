@@ -123,6 +123,20 @@ function setup(
     resolveForActor: jest.fn().mockResolvedValue(maintenanceContext),
     requireActiveSession: jest.fn().mockResolvedValue(maintenanceContext),
   };
+  const adminErasure = {
+    prepare: jest.fn().mockResolvedValue({ canExecute: true }),
+    execute: jest.fn().mockResolvedValue({
+      operationId,
+      status: 'completed',
+      targetType: 'CLASS',
+      targetIds: [targetId],
+      deletedCount: 1,
+      cleanupStatus: 'not_required',
+      replayed: false,
+    }),
+    retryCleanup: jest.fn(),
+    getOperation: jest.fn().mockResolvedValue({ targetType: 'CLASS' }),
+  };
   const service = new AdminLifecycleService(
     database,
     { get: jest.fn().mockReturnValue(enabled) } as any,
@@ -133,6 +147,7 @@ function setup(
     audit as any,
     { createBulkDeduped: jest.fn().mockResolvedValue([]) } as any,
     maintenance as any,
+    adminErasure as any,
   );
   const dto = {
     studentId: targetId,
@@ -159,6 +174,7 @@ function setup(
     operationRows,
     maintenance,
     maintenanceContext,
+    adminErasure,
   };
 }
 
@@ -593,5 +609,43 @@ describe('AdminLifecycleService execution', () => {
       'event insert failed',
     );
     expect(db.update).toHaveBeenCalled();
+  });
+
+  it('uses active Maintenance Access without requesting the password again for a batch erase', async () => {
+    const { service, adminErasure } = setup(true, true, true);
+    const dto = {
+      targetType: 'CLASS' as const,
+      targetIds: [targetId],
+      purgeMode: 'CASCADE_ERASE' as const,
+      manifestHash: 'a'.repeat(64),
+      manifestExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+      reasonCode: 'OTHER' as const,
+      notes: 'Approved batch erasure.',
+      confirmation: 'ERASE 1 CLASS',
+      idempotencyKey,
+    };
+
+    await service.executePurgeBatch(dto, actorId);
+
+    expect(bcrypt.compare).not.toHaveBeenCalled();
+    expect(adminErasure.execute).toHaveBeenCalledWith(
+      dto,
+      actorId,
+      expect.objectContaining({ userId: actorId }),
+    );
+  });
+
+  it('requires the matching Maintenance Access scope to retry erasure cleanup', async () => {
+    const allowed = setup(true, true, true);
+    await allowed.service.retryErasureCleanup(operationId, actorId);
+    expect(allowed.adminErasure.retryCleanup).toHaveBeenCalledWith(operationId);
+
+    const denied = setup(true, false, true);
+    await expect(
+      denied.service.retryErasureCleanup(operationId, actorId),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'MAINTENANCE_SCOPE_REQUIRED' }),
+    });
+    expect(denied.adminErasure.retryCleanup).not.toHaveBeenCalled();
   });
 });

@@ -4,6 +4,9 @@ import { runSystemResetWork } from '../system-reset/system-reset.work';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { UnrecoverableError, type Job } from 'bullmq';
 import { PerformanceService } from './performance.service';
+import { eq } from 'drizzle-orm';
+import { DatabaseService } from '../../database/database.service';
+import { assessments, classes, users } from '../../drizzle/schema';
 
 interface RecomputeAssessmentJobData {
   assessmentId: string;
@@ -23,6 +26,7 @@ export class PerformanceRecomputeProcessor extends WorkerHost {
   constructor(
     private readonly performanceService: PerformanceService,
     @Optional() private readonly modules?: ModuleRef,
+    @Optional() private readonly databaseService?: DatabaseService,
   ) {
     super();
   }
@@ -38,6 +42,19 @@ export class PerformanceRecomputeProcessor extends WorkerHost {
   ): Promise<void> {
     if (job.name === 'recompute-assessment') {
       const data = job.data as RecomputeAssessmentJobData;
+      if (this.databaseService) {
+        const [assessment, student] = await Promise.all([
+          this.databaseService.db.query.assessments.findFirst({
+            where: eq(assessments.id, data.assessmentId),
+            columns: { id: true },
+          }),
+          this.databaseService.db.query.users.findFirst({
+            where: eq(users.id, data.studentId),
+            columns: { id: true },
+          }),
+        ]);
+        if (!assessment || !student) return;
+      }
       this.logger.debug(
         `Processing recompute-assessment for student ${data.studentId} on assessment ${data.assessmentId}`,
       );
@@ -47,6 +64,13 @@ export class PerformanceRecomputeProcessor extends WorkerHost {
       );
     } else if (job.name === 'recompute-class-scores') {
       const data = job.data as RecomputeClassScoresJobData;
+      if (this.databaseService) {
+        const target = await this.databaseService.db.query.classes.findFirst({
+          where: eq(classes.id, data.classId),
+          columns: { id: true },
+        });
+        if (!target) return;
+      }
       this.logger.debug(
         `Processing recompute-class-scores for class ${data.classId}`,
       );

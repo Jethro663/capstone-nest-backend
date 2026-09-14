@@ -5,7 +5,7 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { UnrecoverableError, type Job } from 'bullmq';
 import { and, eq } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
-import { enrollments } from '../../drizzle/schema';
+import { classes, enrollments } from '../../drizzle/schema';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationsGateway } from '../notifications/notifications.gateway';
 
@@ -58,6 +58,24 @@ export class DiscussionBoardProcessor extends WorkerHost {
   private async processAdmitted(
     job: Job<ThreadPublishedJobData | CommentCreatedJobData>,
   ): Promise<void> {
+    if (
+      job.name === 'thread-published' ||
+      job.name === 'comment-created'
+    ) {
+      const classId = job.data.classId;
+      const classQuery = (
+        this.db.query as unknown as {
+          classes?: { findFirst?: (input: unknown) => Promise<unknown> };
+        }
+      ).classes;
+      if (classQuery?.findFirst) {
+        const target = await classQuery.findFirst({
+          where: eq(classes.id, classId),
+          columns: { id: true },
+        });
+        if (!target) return;
+      }
+    }
     if (job.name === 'thread-published') {
       await this.handleThreadPublished(job as Job<ThreadPublishedJobData>);
       return;

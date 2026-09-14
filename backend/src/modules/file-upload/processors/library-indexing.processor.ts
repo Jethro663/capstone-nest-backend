@@ -54,6 +54,14 @@ export class LibraryIndexingProcessor extends WorkerHost {
         `Unsupported library-indexing job: ${job.name}`,
       );
     }
+    const fileRecord = await this.db.query.uploadedFiles.findFirst({
+      where: eq(uploadedFiles.id, job.data.fileId),
+      columns: { id: true },
+    });
+    if (!fileRecord) {
+      this.logger.log(`Skipping erased library file ${job.data.fileId}`);
+      return;
+    }
 
     const aiServiceUrl =
       this.configService.get<string>('AI_SERVICE_URL') ??

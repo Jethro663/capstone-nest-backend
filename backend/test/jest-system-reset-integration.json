@@ -2,7 +2,7 @@
   "moduleFileExtensions": ["js", "json", "ts"],
   "rootDir": ".",
   "testEnvironment": "node",
-  "testRegex": "system-reset(-coordinator)?\\.integration-spec\\.ts$",
+  "testRegex": "(system-reset(-coordinator)?|admin-erasure)\\.integration-spec\\.ts$",
   "transform": { "^.+\\.(t|j)s$": "ts-jest" },
   "testTimeout": 30000
 }

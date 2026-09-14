@@ -19,7 +19,9 @@ export type AdminMaintenanceRuleCode =
   | "archive_active_memberships"
   | "restore_archived_class"
   | "admin_academic_window"
-  | "governed_execution_availability";
+  | "governed_execution_availability"
+  | "cascade_academic_erasure"
+  | "cascade_account_erasure";
 
 export type AdminMaintenanceRule = {
   code: string;

@@ -17,7 +17,7 @@ function buildMockDb() {
     query: {
       classRecordItems: { findFirst: jest.fn() },
       classRecordScores: { findMany: jest.fn().mockResolvedValue([]) },
-      classRecords: { findFirst: jest.fn() },
+      classRecords: { findFirst: jest.fn(), findMany: jest.fn() },
       classRecordCategories: { findMany: jest.fn() },
       classRecordParticipants: { findMany: jest.fn().mockResolvedValue([]) },
       classes: { findFirst: jest.fn() },
@@ -954,5 +954,46 @@ describe('ClassRecordService', () => {
 
     expect(result.students).toHaveLength(1);
     expect(result.students[0].studentId).toBe('student-active');
+  });
+
+  it('reactivates an existing mutable participant when enrollment rejoins', async () => {
+    db.query.classRecords.findFirst.mockResolvedValue({
+      id: 'record-1',
+      classId: 'class-1',
+      gradingPeriod: 'Q1',
+      status: 'draft',
+    });
+    db.query.classRecords.findMany.mockResolvedValue([
+      {
+        id: 'record-1',
+        classId: 'class-1',
+        gradingPeriod: 'Q1',
+        status: 'draft',
+      },
+    ]);
+    const onConflictDoUpdate = jest.fn().mockResolvedValue(undefined);
+    const values = jest.fn().mockReturnValue({ onConflictDoUpdate });
+    db.insert.mockReturnValue({ values });
+    const where = jest.fn().mockResolvedValue(undefined);
+    const set = jest.fn().mockReturnValue({ where });
+    db.update.mockReturnValue({ set });
+
+    await service.captureClassEnrollment(
+      'class-1',
+      ['student-1'],
+      'joined',
+      'teacher-1',
+      ['teacher'],
+    );
+
+    expect(onConflictDoUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        set: expect.objectContaining({
+          eligibility: 'eligible',
+          source: 'enrollment_joined',
+          updatedBy: 'teacher-1',
+        }),
+      }),
+    );
   });
 });

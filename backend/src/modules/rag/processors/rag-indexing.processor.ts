@@ -4,6 +4,9 @@ import { ModuleRef } from '@nestjs/core';
 import { runSystemResetWork } from '../../system-reset/system-reset.work';
 import { ConfigService } from '@nestjs/config';
 import { Job, UnrecoverableError } from 'bullmq';
+import { eq } from 'drizzle-orm';
+import { DatabaseService } from '../../../database/database.service';
+import { classes } from '../../../drizzle/schema';
 
 type ReindexJobData = {
   classId: string;
@@ -21,6 +24,7 @@ export class RagIndexingProcessor extends WorkerHost {
   constructor(
     private readonly configService: ConfigService,
     @Optional() private readonly modules?: ModuleRef,
+    @Optional() private readonly databaseService?: DatabaseService,
   ) {
     super();
   }
@@ -41,6 +45,16 @@ export class RagIndexingProcessor extends WorkerHost {
   private async processAdmitted(job: Job<ReindexJobData>) {
     if (job.name !== 'reindex-class') {
       throw new UnrecoverableError(`Unsupported rag-indexing job: ${job.name}`);
+    }
+    if (this.databaseService) {
+      const target = await this.databaseService.db.query.classes.findFirst({
+        where: eq(classes.id, job.data.classId),
+        columns: { id: true },
+      });
+      if (!target) {
+        this.logger.log(`Skipping erased class ${job.data.classId}`);
+        return;
+      }
     }
 
     const aiServiceUrl =

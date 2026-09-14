@@ -38,6 +38,7 @@ function fixture(kind: string, blocked = false, missing = false) {
       query: {
         enrollments: { findMany: effect },
         classes: { findFirst: effect },
+        uploadedFiles: { findFirst: effect },
       },
       update: () => ({ set: () => ({ where: effect }) }),
     },

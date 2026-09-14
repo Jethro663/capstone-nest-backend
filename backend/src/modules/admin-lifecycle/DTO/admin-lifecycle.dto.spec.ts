@@ -3,10 +3,12 @@ import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import {
   ExecuteClassLifecycleDto,
+  ExecutePurgeBatchDto,
   ExecutePurgeLifecycleDto,
   ExecuteSectionLifecycleDto,
   ExecuteStudentLifecycleDto,
   PreviewClassLifecycleDto,
+  PreviewPurgeBatchDto,
   PreviewPurgeLifecycleDto,
   PreviewSectionLifecycleDto,
   PreviewStudentLifecycleDto,
@@ -207,7 +209,7 @@ describe('admin lifecycle DTOs', () => {
     );
   });
 
-  it('allows routine execution to omit a repeated password but keeps purge reauthentication mandatory', async () => {
+  it('allows Maintenance execution, including purge, to omit a repeated password', async () => {
     const routine = {
       studentId: ids.student,
       sectionId: ids.section,
@@ -227,8 +229,50 @@ describe('admin lifecycle DTOs', () => {
     };
     delete (purge as { currentPassword?: string }).currentPassword;
     const purgeErrors = await errors(ExecutePurgeLifecycleDto, purge);
-    expect(purgeErrors.map((entry) => entry.property)).toContain(
-      'currentPassword',
+    expect(purgeErrors).toEqual([]);
+  });
+
+  it('accepts one to fifty unique targets in a cascade-erasure batch', async () => {
+    const targetIds = Array.from(
+      { length: 33 },
+      (_, index) =>
+        `00000000-0000-4000-8000-${(index + 100).toString(16).padStart(12, '0')}`,
     );
+    const preview = {
+      targetType: 'CLASS',
+      targetIds,
+      purgeMode: 'CASCADE_ERASE',
+    };
+
+    await expect(errors(PreviewPurgeBatchDto, preview)).resolves.toEqual([]);
+    await expect(
+      errors(ExecutePurgeBatchDto, {
+        ...preview,
+        manifestHash: 'b'.repeat(64),
+        manifestExpiresAt: execution.manifestExpiresAt,
+        reasonCode: 'OTHER',
+        notes: 'Approved permanent removal after reviewing the full batch.',
+        confirmation: 'ERASE 33 CLASSES',
+        idempotencyKey: ids.idempotency,
+      }),
+    ).resolves.toEqual([]);
+  });
+
+  it('rejects empty, duplicate, and oversized erasure batches', async () => {
+    const one = '00000000-0000-4000-8000-000000000100';
+    const oversized = Array.from(
+      { length: 51 },
+      (_, index) =>
+        `00000000-0000-4000-8000-${(index + 200).toString(16).padStart(12, '0')}`,
+    );
+
+    for (const targetIds of [[], [one, one], oversized]) {
+      const result = await errors(PreviewPurgeBatchDto, {
+        targetType: 'SECTION',
+        targetIds,
+        purgeMode: 'CASCADE_ERASE',
+      });
+      expect(result.map((entry) => entry.property)).toContain('targetIds');
+    }
   });
 });

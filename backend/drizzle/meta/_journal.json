@@ -197,6 +197,13 @@
       "when": 1789295749000,
       "tag": "0027_admin_maintenance_gateway",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1789348698651,
+      "tag": "0028_admin_authority_cascade_erasure",
+      "breakpoints": true
     }
   ]
 }

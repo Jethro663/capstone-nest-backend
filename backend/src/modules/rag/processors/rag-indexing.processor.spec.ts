@@ -137,4 +137,23 @@ describe('RagIndexingProcessor', () => {
     ).rejects.toThrow('Unsupported rag-indexing job: unknown-job');
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it('completes as a no-op when the class was permanently erased', async () => {
+    const processor = new RagIndexingProcessor(
+      { get: jest.fn() } as unknown as ConfigService,
+      undefined,
+      {
+        db: { query: { classes: { findFirst: jest.fn().mockResolvedValue(null) } } },
+      } as never,
+    );
+    const fetchMock = jest.spyOn(globalThis, 'fetch');
+
+    await expect(
+      processor.process({
+        name: 'reindex-class',
+        data: { classId: 'erased-class', reason: 'lesson_updated' },
+      } as never),
+    ).resolves.toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

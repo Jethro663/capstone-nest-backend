@@ -45,6 +45,11 @@ jest.mock("@/components/admin/AdminLifecycleDialog", () => ({
     open ? <div>{title}</div> : null,
 }));
 
+jest.mock("@/components/admin/AdminErasureBatchDialog", () => ({
+  AdminErasureBatchDialog: ({ open, title }: { open: boolean; title: string }) =>
+    open ? <div>{title}</div> : null,
+}));
+
 jest.mock("@/services/user-service", () => ({
   userService: {
     getById: jest.fn(),

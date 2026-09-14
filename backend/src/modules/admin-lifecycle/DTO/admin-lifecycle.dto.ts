@@ -1,6 +1,9 @@
 import { Type } from 'class-transformer';
 import {
   ArrayNotEmpty,
+  ArrayMaxSize,
+  ArrayMinSize,
+  ArrayUnique,
   IsArray,
   IsIn,
   IsISO8601,
@@ -50,6 +53,7 @@ export const ADMIN_LIFECYCLE_REASON_CODES = [
   'OTHER',
 ] as const;
 export const PURGE_TARGET_TYPES = ['CLASS', 'SECTION', 'USER'] as const;
+export const PURGE_MODES = ['EMPTY_ONLY', 'CASCADE_ERASE'] as const;
 
 export type AdminLifecyclePeriod = (typeof ADMIN_LIFECYCLE_PERIODS)[number];
 export type AdminLifecycleMode = (typeof ADMIN_LIFECYCLE_MODES)[number];
@@ -62,6 +66,7 @@ export type SectionStudentResolution =
 export type AdminLifecycleReasonCode =
   (typeof ADMIN_LIFECYCLE_REASON_CODES)[number];
 export type PurgeTargetType = (typeof PURGE_TARGET_TYPES)[number];
+export type PurgeMode = (typeof PURGE_MODES)[number];
 
 export class PreviewStudentLifecycleDto {
   @IsUUID('4') studentId: string;
@@ -128,6 +133,18 @@ export class PreviewSectionLifecycleDto {
 export class PreviewPurgeLifecycleDto {
   @IsIn(PURGE_TARGET_TYPES) targetType: PurgeTargetType;
   @IsUUID('4') targetId: string;
+  @IsOptional() @IsIn(PURGE_MODES) purgeMode?: PurgeMode;
+}
+
+export class PreviewPurgeBatchDto {
+  @IsIn(PURGE_TARGET_TYPES) targetType: PurgeTargetType;
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(50)
+  @ArrayUnique()
+  @IsUUID('4', { each: true })
+  targetIds: string[];
+  @IsIn(PURGE_MODES) purgeMode: PurgeMode;
 }
 
 export class AdminLifecycleExecutionEvidenceDto {
@@ -188,9 +205,22 @@ export class ExecuteSectionLifecycleDto extends PreviewSectionLifecycleDto {
 export class ExecutePurgeLifecycleDto extends PreviewPurgeLifecycleDto {
   @Matches(/^[a-f0-9]{64}$/) manifestHash: string;
   @IsISO8601() manifestExpiresAt: string;
-  @IsString() @MinLength(1) @MaxLength(128) currentPassword: string;
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(128)
+  currentPassword?: string;
   @IsIn(ADMIN_LIFECYCLE_REASON_CODES) reasonCode: AdminLifecycleReasonCode;
   @IsString() @MinLength(5) @MaxLength(2000) notes: string;
   @IsArray() @ArrayNotEmpty() @IsString({ each: true }) confirmations: string[];
+  @IsUUID('4') idempotencyKey: string;
+}
+
+export class ExecutePurgeBatchDto extends PreviewPurgeBatchDto {
+  @Matches(/^[a-f0-9]{64}$/) manifestHash: string;
+  @IsISO8601() manifestExpiresAt: string;
+  @IsIn(ADMIN_LIFECYCLE_REASON_CODES) reasonCode: AdminLifecycleReasonCode;
+  @IsString() @MinLength(5) @MaxLength(2000) notes: string;
+  @IsString() @MinLength(1) @MaxLength(128) confirmation: string;
   @IsUUID('4') idempotencyKey: string;
 }

@@ -53,6 +53,8 @@ function student(
     initialGrade: overrides.initialGrade ?? 80,
     quarterlyGrade: overrides.quarterlyGrade ?? 82,
     remarks: overrides.remarks ?? 'Passed',
+    isRemoved: overrides.isRemoved,
+    enrollmentState: overrides.enrollmentState,
   };
 }
 
@@ -148,5 +150,36 @@ describe('class-record visual helpers', () => {
       'eligibility',
       'intervention',
     ]);
+  });
+
+  it('separates current and historical learners without dropping either from all', () => {
+    const rows = [
+      student({
+        studentId: 'current',
+        enrollmentState: 'active',
+        isRemoved: false,
+      }),
+      student({
+        studentId: 'historical',
+        enrollmentState: 'removed',
+        isRemoved: true,
+      }),
+    ];
+
+    expect(
+      filterClassRecordStudents(rows, categories, '', 'current').map(
+        (row) => row.studentId,
+      ),
+    ).toEqual(['current']);
+    expect(
+      filterClassRecordStudents(rows, categories, '', 'historical').map(
+        (row) => row.studentId,
+      ),
+    ).toEqual(['historical']);
+    expect(
+      filterClassRecordStudents(rows, categories, '', 'all').map(
+        (row) => row.studentId,
+      ),
+    ).toEqual(['current', 'historical']);
   });
 });

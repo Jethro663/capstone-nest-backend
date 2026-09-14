@@ -10,7 +10,9 @@ export type AdminMaintenanceRuleCode =
   | 'archive_active_memberships'
   | 'restore_archived_class'
   | 'admin_academic_window'
-  | 'governed_execution_availability';
+  | 'governed_execution_availability'
+  | 'cascade_academic_erasure'
+  | 'cascade_account_erasure';
 
 export type AdminMaintenanceProtectedRuleCode =
   | 'authentication_and_rbac'
@@ -55,6 +57,8 @@ export const ADMIN_MAINTENANCE_RULE_SCOPE: Readonly<
   restore_archived_class: 'ACADEMIC_STRUCTURE',
   admin_academic_window: 'ACADEMIC_STRUCTURE',
   governed_execution_availability: 'ACADEMIC_STRUCTURE',
+  cascade_academic_erasure: 'ACADEMIC_STRUCTURE',
+  cascade_account_erasure: 'ACCOUNT_LIFECYCLE',
 });
 
 export const ADMIN_MAINTENANCE_RULES: ReadonlyArray<
@@ -109,6 +113,16 @@ export const ADMIN_MAINTENANCE_RULES: ReadonlyArray<
     'governed_execution_availability',
     'Governed execution availability',
     'Use the reviewed lifecycle executor during Maintenance Access.',
+  ),
+  defineRule(
+    'cascade_academic_erasure',
+    'Academic cascade erasure',
+    'Permanently erase a reviewed archived class or section and its listed descendants.',
+  ),
+  defineRule(
+    'cascade_account_erasure',
+    'Account cascade erasure',
+    'Permanently erase a reviewed deleted account and its identity-owned evidence.',
   ),
 ]);
 

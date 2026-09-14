@@ -100,6 +100,7 @@ export class S3StorageProvider implements StorageProviderInterface {
       this.logger.warn(
         `Failed to delete S3 object ${key} from bucket ${this.bucket}: ${(error as Error).message}`,
       );
+      throw error;
     }
   }
 

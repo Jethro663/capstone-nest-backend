@@ -1,11 +1,14 @@
 import { apiClient } from "../client";
 import type {
   AdminLifecycleExecutionResult,
+  AdminErasureBatchPreview,
+  AdminErasureExecutionResult,
   AdminLifecyclePreview,
   AdminLifecycleResponse,
   ExecuteLifecycleInput,
   PreviewClassLifecycleInput,
   PreviewPurgeLifecycleInput,
+  PreviewPurgeBatchInput,
   PreviewSectionLifecycleInput,
   PreviewStudentLifecycleInput,
 } from "../../types/admin-lifecycle";
@@ -51,6 +54,19 @@ export const adminLifecycleApi = {
       "/admin/maintenance/purge/execute",
       input,
     ),
+  previewPurgeBatch: (input: PreviewPurgeBatchInput) =>
+    post<AdminErasureBatchPreview>(
+      "/admin/maintenance/purge/batch/preview",
+      input,
+    ),
+  // CASCADE_ERASE is intentionally web-admin-only in this release.
+  // Mobile accepts the additive contract for compatibility and status display.
+  getErasureOperation: async (operationId: string) => {
+    const response = await apiClient.get<
+      AdminLifecycleResponse<AdminErasureExecutionResult>
+    >(`/admin/maintenance/operations/${operationId}`);
+    return response.data;
+  },
   async getOperation(operationId: string) {
     const response = await apiClient.get<
       AdminLifecycleResponse<Record<string, unknown>>

@@ -87,4 +87,33 @@ describe('AiGenerationProcessor', () => {
       { bullmqJobId: 'extraction-extraction-123', attempt: 2 },
     );
   });
+
+  it('completes as a no-op when the durable generation job was erased', async () => {
+    const localProxy = {
+      runInternalLessonPlanJob: jest.fn(),
+      runInternalExtractionJob: jest.fn(),
+    };
+    const localProcessor = new AiGenerationProcessor(
+      localProxy as never,
+      undefined,
+      {
+        db: {
+          query: {
+            aiGenerationJobs: { findFirst: jest.fn().mockResolvedValue(null) },
+            extractedModules: { findFirst: jest.fn() },
+          },
+        },
+      } as never,
+    );
+
+    await expect(
+      localProcessor.process({
+        name: 'lesson-plan-generation',
+        id: 'queue-id',
+        attemptsMade: 0,
+        data: { jobId: 'erased-job', requestedByUserId: 'teacher-1' },
+      } as never),
+    ).resolves.toBeUndefined();
+    expect(localProxy.runInternalLessonPlanJob).not.toHaveBeenCalled();
+  });
 });

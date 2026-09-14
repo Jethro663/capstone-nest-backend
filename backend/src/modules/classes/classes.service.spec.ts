@@ -1789,6 +1789,76 @@ describe('ClassesService', () => {
       ).rejects.toThrow(ConflictException);
     });
 
+    it.each(['dropped', 'completed'] as const)(
+      'reactivates a %s same-class enrollment instead of reporting an active duplicate',
+      async (status) => {
+        const txMock: any = {
+          query: { enrollments: { findFirst: jest.fn() } },
+          update: jest.fn(),
+          insert: jest.fn(),
+        };
+        const updateChain = makeUpdateChain();
+        mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
+        mockDb.query.users.findFirst.mockResolvedValue({
+          id: STUDENT_ID,
+          profile: { gradeLevel: '7', graduatedAt: null },
+        });
+        txMock.query.enrollments.findFirst.mockResolvedValueOnce(
+          makeEnrollment({ status }),
+        );
+        txMock.update.mockReturnValue(updateChain);
+        mockDb.transaction.mockImplementation((cb: Function) => cb(txMock));
+        mockDb.query.enrollments.findFirst.mockResolvedValueOnce(
+          makeEnrollment({ status: 'enrolled' }),
+        );
+
+        await service.enrollStudent(CLASS_ID, STUDENT_ID, TEACHER_ID);
+
+        expect(updateChain.set).toHaveBeenCalledWith(
+          expect.objectContaining({ status: 'enrolled' }),
+        );
+        expect(txMock.insert).not.toHaveBeenCalled();
+        expect(mockClassRecordService.captureClassEnrollment).toHaveBeenCalledWith(
+          CLASS_ID,
+          [STUDENT_ID],
+          'joined',
+          TEACHER_ID,
+          ['teacher'],
+        );
+        expect(mockAuditService.log).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'class.enrollment.reactivated',
+            metadata: expect.objectContaining({ previousStatus: status }),
+          }),
+        );
+      },
+    );
+
+    it('does not promote an inactive section-level membership', async () => {
+      const txMock: any = {
+        query: { enrollments: { findFirst: jest.fn() } },
+        update: jest.fn(),
+        insert: jest.fn(),
+      };
+      mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
+      mockDb.query.users.findFirst.mockResolvedValue({
+        id: STUDENT_ID,
+        profile: { gradeLevel: '7', graduatedAt: null },
+      });
+      txMock.query.enrollments.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(
+          makeEnrollment({ classId: null, status: 'completed' }),
+        );
+      mockDb.transaction.mockImplementation((cb: Function) => cb(txMock));
+
+      await expect(
+        service.enrollStudent(CLASS_ID, STUDENT_ID, TEACHER_ID),
+      ).rejects.toThrow('Student is not actively enrolled in the section');
+      expect(txMock.update).not.toHaveBeenCalled();
+      expect(txMock.insert).not.toHaveBeenCalled();
+    });
+
     it('throws BadRequestException when the student is not in the section', async () => {
       const txMock: any = {
         query: { enrollments: { findFirst: jest.fn() } },

@@ -2,7 +2,7 @@
   "expo": {
     "name": "Nexora Mobile",
     "slug": "nexora-lms-mobile",
-    "version": "0.1.36",
+    "version": "0.1.37",
     "orientation": "default",
     "scheme": "nexora-lms-mobile",
     "userInterfaceStyle": "light",
@@ -21,7 +21,7 @@
         "foregroundImage": "./assets/ja/apk_logo.png",
         "backgroundColor": "#000000"
       },
-      "versionCode": 37,
+      "versionCode": 38,
       "permissions": [
         "android.permission.REQUEST_INSTALL_PACKAGES",
         "POST_NOTIFICATIONS",

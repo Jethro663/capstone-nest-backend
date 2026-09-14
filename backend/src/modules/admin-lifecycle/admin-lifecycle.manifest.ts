@@ -13,6 +13,7 @@ const OVERRIDABLE_WARNING_CODES = new Set([
   'SCHEDULE_COLLISION',
   'ROOM_ADVISER_EXCLUSIVITY',
   'ADMIN_ACADEMIC_WINDOW',
+  'DATA_WILL_BE_ERASED',
 ]);
 
 const actionMetadata: Record<string, Omit<AdminMaintenanceNextAction, 'id'>> = {
@@ -195,10 +196,30 @@ export function buildAdminLifecycleManifest(
   input: AdminLifecycleManifestInput,
   now = new Date(),
 ): AdminLifecycleManifest {
+  const cascadeErase = input.request.purgeMode === 'CASCADE_ERASE';
+  const retainedEvidence = cascadeErase
+    ? input.blockers.find((blocker) => blocker.code === 'RETAINED_EVIDENCE')
+    : undefined;
+  const effectiveInput: AdminLifecycleManifestInput = retainedEvidence
+    ? {
+        ...input,
+        blockers: input.blockers.filter(
+          (blocker) => blocker.code !== 'RETAINED_EVIDENCE',
+        ),
+        warnings: [
+          ...input.warnings,
+          {
+            code: 'DATA_WILL_BE_ERASED',
+            message:
+              'Cascade erasure will permanently delete the retained academic and lifecycle evidence listed in this preview.',
+          },
+        ],
+      }
+    : input;
   const stableManifest = {
     schemaVersion: 1 as const,
-    ...input,
-    decision: deriveAdminMaintenanceDecision(input),
+    ...effectiveInput,
+    decision: deriveAdminMaintenanceDecision(effectiveInput),
   };
 
   const expiresAt = new Date(now.getTime() + MANIFEST_TTL_MS).toISOString();
@@ -206,7 +227,7 @@ export function buildAdminLifecycleManifest(
     ...stableManifest,
     generatedAt: now.toISOString(),
     expiresAt,
-    safeToExecute: input.blockers.length === 0,
+    safeToExecute: effectiveInput.blockers.length === 0,
   };
   return {
     ...unsigned,

@@ -35,7 +35,7 @@ import {
   ConfirmationDialog,
   type ConfirmationDialogConfig,
 } from "@/components/shared/ConfirmationDialog";
-import { AdminLifecycleDialog } from "@/components/admin/AdminLifecycleDialog";
+import { AdminErasureBatchDialog } from "@/components/admin/AdminErasureBatchDialog";
 import { useAdminMaintenance } from "@/providers/AdminMaintenanceProvider";
 import { adminLifecycleService } from "@/services/admin-lifecycle-service";
 import { hasAdminMaintenanceRule } from "@/types/admin-maintenance";
@@ -723,42 +723,23 @@ export default function AdminUserDetailPage() {
         onClose={() => setConfirmation(null)}
       />
 
-      <AdminLifecycleDialog
+      <AdminErasureBatchDialog
         open={showPurgeConfirm}
         onOpenChange={setShowPurgeConfirm}
         title="Permanently delete account"
-        description="Review every linked record before deletion. Retained academic evidence remains immutable, and Maintenance Access plus your current password are required."
+        targetType="USER"
+        targetIds={[userId]}
         targetLabel={fullName}
-        intents={[
-          {
-            value: "PURGE_USER",
-            label: "Permanently delete empty archived account",
-            description:
-              "Delete this archived account only when the preview confirms that no retained academic evidence would be lost.",
-          },
-        ]}
-        preview={async () =>
-          (
-            await adminLifecycleService.previewPurge({
-              targetType: "USER",
-              targetId: userId,
-            })
-          ).data
+        preview={async (input) =>
+          (await adminLifecycleService.previewPurgeBatch(input)).data
         }
-        execute={async (_intent, evidence) =>
-          (
-            await adminLifecycleService.executePurge({
-              targetType: "USER",
-              targetId: userId,
-              ...evidence,
-            })
-          ).data
+        execute={async (input) =>
+          (await adminLifecycleService.executePurgeBatch(input)).data
         }
         onCompleted={() => {
           toast.success("User permanently deleted");
           router.push("/dashboard/admin/users");
         }}
-        permanent
       />
     </AdminPageShell>
   );

@@ -44,6 +44,7 @@ const CONTROL_TABLES = new Set([
 ]);
 const DETACH_COLUMNS: Record<string, readonly string[]> = {
   audit_logs: ['actor_id'],
+  admin_erasure_operations: ['actor_id'],
   admin_lifecycle_operations: ['actor_id'],
   enrollment_lifecycle_events: [
     'enrollment_id',

@@ -58,7 +58,9 @@ export function TeacherClassRecordGradeGrid({
   onOpenCell,
 }: TeacherClassRecordGradeGridProps) {
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<ClassRecordFilter>("all");
+  const [filter, setFilter] = useState<ClassRecordFilter>(() =>
+    sheet.classRecord.status === "draft" ? "current" : "all",
+  );
   const [density, setDensity] = useState<ClassRecordDensity>("comfortable");
   const [activeCell, setActiveCell] = useState<{
     studentId: string;
@@ -133,6 +135,8 @@ export function TeacherClassRecordGradeGrid({
                 setFilter(event.target.value as ClassRecordFilter)
               }
             >
+              <option value="current">Currently enrolled</option>
+              <option value="historical">Historical learners</option>
               <option value="all">All learners</option>
               <option value="needs_attention">Needs attention</option>
               <option value="missing">Missing scores</option>

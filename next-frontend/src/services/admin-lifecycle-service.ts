@@ -2,10 +2,14 @@ import { api } from "@/lib/api-client";
 import type {
   AdminLifecycleExecutionEvidence,
   AdminLifecycleExecutionResult,
+  AdminErasureBatchPreview,
+  AdminErasureExecutionResult,
   AdminLifecyclePreview,
   AdminLifecycleResponse,
   PreviewClassLifecycleInput,
   PreviewPurgeLifecycleInput,
+  PreviewPurgeBatchInput,
+  ExecutePurgeBatchInput,
   PreviewSectionLifecycleInput,
   PreviewStudentLifecycleInput,
 } from "@/types/admin-lifecycle";
@@ -45,6 +49,21 @@ export const adminLifecycleService = {
     post<AdminLifecycleExecutionResult>(
       "/admin/maintenance/purge/execute",
       input,
+    ),
+  previewPurgeBatch: (input: PreviewPurgeBatchInput) =>
+    post<AdminErasureBatchPreview>(
+      "/admin/maintenance/purge/batch/preview",
+      input,
+    ),
+  executePurgeBatch: (input: ExecutePurgeBatchInput) =>
+    post<AdminErasureExecutionResult>(
+      "/admin/maintenance/purge/batch/execute",
+      input,
+    ),
+  retryErasureCleanup: (operationId: string) =>
+    post<Record<string, unknown>>(
+      `/admin/maintenance/operations/${operationId}/retry-cleanup`,
+      {},
     ),
   async getOperation(operationId: string) {
     const { data } = await api.get<

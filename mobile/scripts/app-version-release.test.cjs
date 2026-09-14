@@ -160,7 +160,7 @@ test("verifyManifest rejects a changed APK", async () => {
   );
 });
 
-test("historical lifecycle release keeps Expo and Gradle at 0.1.36 build 37", async () => {
+test("admin cascade erasure release keeps Expo and Gradle at 0.1.37 build 38", async () => {
   const appJson = JSON.parse(
     await readFile(path.join(__dirname, "..", "app.json"), "utf8"),
   );
@@ -169,9 +169,9 @@ test("historical lifecycle release keeps Expo and Gradle at 0.1.36 build 37", as
     "utf8",
   );
 
-  assert.equal(appJson.expo.version, "0.1.36");
-  assert.equal(appJson.expo.android.versionCode, 37);
-  assert.match(buildGradle, /\bversionCode\s+37\b/);
-  assert.match(buildGradle, /\bversionName\s+["']0\.1\.36["']/);
+  assert.equal(appJson.expo.version, "0.1.37");
+  assert.equal(appJson.expo.android.versionCode, 38);
+  assert.match(buildGradle, /\bversionCode\s+38\b/);
+  assert.match(buildGradle, /\bversionName\s+["']0\.1\.37["']/);
   assert.equal(appJson.expo.ios.buildNumber, "3");
 });

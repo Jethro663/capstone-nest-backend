@@ -3125,7 +3125,7 @@ export class ClassesService {
     }
 
     // Run the duplicate-check + write atomically
-    const enrollmentId = await this.db.transaction(async (tx) => {
+    const enrollmentResult = await this.db.transaction(async (tx) => {
       // Re-check inside the transaction to close the TOCTOU race window
       const existingEnrollment = await tx.query.enrollments.findFirst({
         where: and(
@@ -3133,21 +3133,36 @@ export class ClassesService {
           eq(enrollments.classId, classId),
         ),
       });
-      if (existingEnrollment) {
+      if (existingEnrollment?.status === 'enrolled') {
         throw new ConflictException(
           `Student is already enrolled in this class`,
         );
+      }
+      if (existingEnrollment) {
+        await tx
+          .update(enrollments)
+          .set({
+            status: 'enrolled',
+            sectionId: classRecord.sectionId,
+            enrolledAt: new Date(),
+          })
+          .where(eq(enrollments.id, existingEnrollment.id));
+        return {
+          id: existingEnrollment.id,
+          previousStatus: existingEnrollment.status,
+        };
       }
 
       const sectionEnrollment = await tx.query.enrollments.findFirst({
         where: and(
           eq(enrollments.studentId, studentId),
           eq(enrollments.sectionId, classRecord.sectionId),
+          eq(enrollments.status, 'enrolled'),
         ),
       });
-      if (!sectionEnrollment) {
+      if (!sectionEnrollment || sectionEnrollment.status !== 'enrolled') {
         throw new BadRequestException(
-          `Student is not enrolled in the section for this class`,
+          `Student is not actively enrolled in the section for this class`,
         );
       }
 
@@ -3157,7 +3172,7 @@ export class ClassesService {
           .update(enrollments)
           .set({ classId, enrolledAt: new Date() })
           .where(eq(enrollments.id, sectionEnrollment.id));
-        return sectionEnrollment.id;
+        return { id: sectionEnrollment.id, previousStatus: null };
       } else {
         // Student already has another class; create a new enrollment row
         const [newEnrollment] = await tx
@@ -3169,7 +3184,7 @@ export class ClassesService {
             status: 'enrolled',
           })
           .returning();
-        return newEnrollment.id;
+        return { id: newEnrollment.id, previousStatus: null };
       }
     });
 
@@ -3182,21 +3197,26 @@ export class ClassesService {
     );
 
     // Read the fully populated enrollment after the transaction is committed
-    const enrollment = await this.getEnrollmentById(enrollmentId);
+    const enrollment = await this.getEnrollmentById(enrollmentResult.id);
     if (!enrollment) {
       throw new NotFoundException(
-        `Enrollment "${enrollmentId}" not found after creation`,
+        `Enrollment "${enrollmentResult.id}" not found after creation`,
       );
     }
     const maintenanceAccess = maintenance.audit(bypassedRules);
     await this.auditService.log({
       actorId,
-      action: 'class.enrollment.added',
+      action: enrollmentResult.previousStatus
+        ? 'class.enrollment.reactivated'
+        : 'class.enrollment.added',
       targetType: 'class_enrollment',
       targetId: enrollment.id,
       metadata: {
         classId,
         studentId,
+        ...(enrollmentResult.previousStatus
+          ? { previousStatus: enrollmentResult.previousStatus }
+          : {}),
         ...(maintenanceAccess ? { maintenanceAccess } : {}),
       },
     });

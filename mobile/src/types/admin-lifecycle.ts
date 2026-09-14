@@ -163,6 +163,64 @@ export interface PreviewSectionLifecycleInput {
 export interface PreviewPurgeLifecycleInput {
   targetType: "CLASS" | "SECTION" | "USER";
   targetId: string;
+  purgeMode?: AdminPurgeMode;
+}
+
+export type AdminPurgeTargetType = "CLASS" | "SECTION" | "USER";
+export type AdminPurgeMode = "EMPTY_ONLY" | "CASCADE_ERASE";
+
+export interface AdminErasureBatchPreview {
+  schemaVersion: 2;
+  targetType: AdminPurgeTargetType;
+  targetIds: string[];
+  purgeMode: AdminPurgeMode;
+  targets: Array<{
+    id: string;
+    displayName: string;
+    lifecycleState: "ACTIVE" | "ARCHIVED" | "SOFT_DELETED" | "MISSING";
+    impactGroups: Array<{
+      code: string;
+      label: string;
+      rowCount: number;
+      action: "DELETE" | "DETACH" | "PRESERVE_RECEIPT";
+    }>;
+    storageObjectCount: number;
+    storageBytes: number | null;
+  }>;
+  totals: Record<string, number>;
+  warnings: Array<{ code: string; message: string }>;
+  blockers: AdminLifecycleBlocker[];
+  canExecute: boolean;
+  confirmationText: string;
+  catalogVersion: number;
+  databaseSchemaHash: string;
+  manifestHash: string;
+  manifestExpiresAt: string;
+}
+
+export interface PreviewPurgeBatchInput {
+  targetType: AdminPurgeTargetType;
+  targetIds: string[];
+  purgeMode: AdminPurgeMode;
+}
+
+export interface ExecutePurgeBatchInput extends PreviewPurgeBatchInput {
+  manifestHash: string;
+  manifestExpiresAt: string;
+  reasonCode: AdminLifecycleReasonCode;
+  notes: string;
+  confirmation: string;
+  idempotencyKey: string;
+}
+
+export interface AdminErasureExecutionResult {
+  operationId: string;
+  status: "cleanup_pending" | "completed";
+  targetType: AdminPurgeTargetType;
+  targetIds: string[];
+  deletedCount: number;
+  cleanupStatus: "pending" | "not_required" | "completed" | "failed";
+  replayed: boolean;
 }
 
 export type ExecuteLifecycleInput<T> = T & AdminLifecycleExecutionEvidence;

@@ -197,6 +197,41 @@ describe('admin lifecycle manifest', () => {
     );
   });
 
+  it('turns retained evidence into executable deletion impact only in cascade-erasure mode', () => {
+    const manifest = buildAdminLifecycleManifest({
+      ...base,
+      action: 'PURGE_CLASS',
+      request: {
+        targetType: 'CLASS',
+        targetIds: [base.targetId],
+        purgeMode: 'CASCADE_ERASE',
+      },
+      blockers: [
+        {
+          code: 'RETAINED_EVIDENCE',
+          message: 'Official history will be permanently erased.',
+          resolvable: false,
+          resolutionOptions: ['KEEP_RECORD'],
+        },
+      ],
+      warnings: [],
+      requiredConfirmations: ['ERASE 1 CLASS'],
+    });
+
+    expect(manifest.safeToExecute).toBe(true);
+    expect(manifest.blockers).toEqual([]);
+    expect(manifest.warnings).toContainEqual(
+      expect.objectContaining({ code: 'DATA_WILL_BE_ERASED' }),
+    );
+    expect(manifest.decision).toEqual(
+      expect.objectContaining({
+        state: 'OVERRIDABLE_WARNING',
+        disposition: 'EXECUTABLE',
+        code: 'DATA_WILL_BE_ERASED',
+      }),
+    );
+  });
+
   it('hashes idempotency requests without execution secrets', () => {
     const first = hashAdminLifecycleRequest({
       ...base.request,

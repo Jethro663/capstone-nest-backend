@@ -32,6 +32,20 @@ export type AdminLifecycleOperationStatus =
   | 'completed'
   | 'failed';
 
+export type AdminErasureOperationStatus =
+  | 'executing'
+  | 'cleanup_pending'
+  | 'completed'
+  | 'completed_with_cleanup_errors'
+  | 'failed';
+
+export type AdminErasureItemStatus =
+  | 'pending'
+  | 'deleted'
+  | 'cleanup_pending'
+  | 'completed'
+  | 'cleanup_failed';
+
 export type EnrollmentLifecycleOutcome =
   | 'corrected'
   | 'withdrawn'
@@ -103,6 +117,118 @@ export const adminLifecycleOperations = pgTable(
     ),
     index('admin_lifecycle_operation_status_idx').on(table.status),
     index('admin_lifecycle_operation_created_at_idx').on(table.createdAt),
+  ],
+);
+
+export const adminErasureOperations = pgTable(
+  'admin_erasure_operations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    idempotencyKey: uuid('idempotency_key').notNull().unique(),
+    targetType: text('target_type').notNull(),
+    purgeMode: text('purge_mode').notNull(),
+    actorId: uuid('actor_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    actorSnapshot: jsonb('actor_snapshot')
+      .$type<LifecycleActorSnapshot>()
+      .notNull(),
+    status: text('status')
+      .$type<AdminErasureOperationStatus>()
+      .notNull()
+      .default('executing'),
+    requestHash: text('request_hash').notNull(),
+    manifestHash: text('manifest_hash').notNull(),
+    databaseSchemaHash: text('database_schema_hash').notNull(),
+    catalogVersion: integer('catalog_version').notNull(),
+    reasonCode: text('reason_code').notNull(),
+    notes: text('notes').notNull(),
+    targetCount: integer('target_count').notNull(),
+    impactSummary: jsonb('impact_summary')
+      .$type<Record<string, number>>()
+      .notNull(),
+    cleanupSummary: jsonb('cleanup_summary')
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
+    result: jsonb('result').$type<Record<string, unknown>>(),
+    failureCode: text('failure_code'),
+    failureMessage: text('failure_message'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+  },
+  (table) => [
+    check(
+      'admin_erasure_operation_target_type_valid',
+      sql`${table.targetType} IN ('CLASS','SECTION','USER')`,
+    ),
+    check(
+      'admin_erasure_operation_purge_mode_valid',
+      sql`${table.purgeMode} IN ('EMPTY_ONLY','CASCADE_ERASE')`,
+    ),
+    check(
+      'admin_erasure_operation_status_valid',
+      sql`${table.status} IN ('executing','cleanup_pending','completed','completed_with_cleanup_errors','failed')`,
+    ),
+    check(
+      'admin_erasure_operation_target_count_valid',
+      sql`${table.targetCount} BETWEEN 1 AND 50`,
+    ),
+    index('admin_erasure_operation_actor_idx').on(table.actorId),
+    index('admin_erasure_operation_status_idx').on(table.status),
+    index('admin_erasure_operation_created_at_idx').on(table.createdAt),
+  ],
+);
+
+export const adminErasureItems = pgTable(
+  'admin_erasure_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    operationId: uuid('operation_id')
+      .notNull()
+      .references(() => adminErasureOperations.id, { onDelete: 'restrict' }),
+    targetId: uuid('target_id').notNull(),
+    targetSnapshot: jsonb('target_snapshot')
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    status: text('status')
+      .$type<AdminErasureItemStatus>()
+      .notNull()
+      .default('pending'),
+    impactCounts: jsonb('impact_counts')
+      .$type<Record<string, number>>()
+      .notNull(),
+    storageObjects: jsonb('storage_objects')
+      .$type<Array<{ key: string; bytes: number | null }>>()
+      .notNull()
+      .default([]),
+    result: jsonb('result').$type<Record<string, unknown>>(),
+    failureCode: text('failure_code'),
+    failureMessage: text('failure_message'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    check(
+      'admin_erasure_item_status_valid',
+      sql`${table.status} IN ('pending','deleted','cleanup_pending','completed','cleanup_failed')`,
+    ),
+    unique('admin_erasure_item_operation_target_unique').on(
+      table.operationId,
+      table.targetId,
+    ),
+    index('admin_erasure_item_operation_idx').on(table.operationId),
+    index('admin_erasure_item_target_idx').on(table.targetId),
+    index('admin_erasure_item_status_idx').on(table.status),
   ],
 );
 
@@ -183,6 +309,27 @@ export const adminLifecycleOperationsRelations = relations(
       references: [users.id],
     }),
     events: many(enrollmentLifecycleEvents),
+  }),
+);
+
+export const adminErasureOperationsRelations = relations(
+  adminErasureOperations,
+  ({ one, many }) => ({
+    actor: one(users, {
+      fields: [adminErasureOperations.actorId],
+      references: [users.id],
+    }),
+    items: many(adminErasureItems),
+  }),
+);
+
+export const adminErasureItemsRelations = relations(
+  adminErasureItems,
+  ({ one }) => ({
+    operation: one(adminErasureOperations, {
+      fields: [adminErasureItems.operationId],
+      references: [adminErasureOperations.id],
+    }),
   }),
 );
 

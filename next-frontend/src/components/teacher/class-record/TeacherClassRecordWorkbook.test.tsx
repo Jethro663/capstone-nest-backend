@@ -416,6 +416,42 @@ it("resets search and filters when the selected record changes", async () => {
       screen.getByRole("searchbox", { name: "Search learners" }),
     ).toHaveValue(""),
   );
+  expect(screen.getByLabelText("Filter learners")).toHaveValue("current");
+});
+
+it("defaults active records to current learners and finalized records to all evidence", () => {
+  const active = createState();
+  active.spreadsheet!.students.push({
+    ...active.spreadsheet!.students[0],
+    studentId: "historical",
+    firstName: "Hanna",
+    lastName: "History",
+    isRemoved: true,
+    enrollmentState: "removed",
+  });
+  const { rerender } = render(<TeacherClassRecordWorkbook state={active} />);
+
+  expect(screen.getByLabelText("Filter learners")).toHaveValue("current");
+  expect(screen.queryByText("History", { selector: "strong" })).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Filter learners"), {
+    target: { value: "historical" },
+  });
+  expect(screen.getByText("History", { selector: "strong" })).toBeInTheDocument();
+  expect(screen.queryByText("Santos")).not.toBeInTheDocument();
+
+  const finalized = createState();
+  const finalizedRecord = {
+    ...finalized.selectedRecord!,
+    id: "record-final",
+    status: "finalized" as const,
+  };
+  finalized.selectedRecord = finalizedRecord;
+  finalized.classRecords = [finalizedRecord];
+  finalized.spreadsheet = {
+    ...finalized.spreadsheet!,
+    classRecord: finalizedRecord,
+  };
+  rerender(<TeacherClassRecordWorkbook state={finalized} />);
   expect(screen.getByLabelText("Filter learners")).toHaveValue("all");
 });
 

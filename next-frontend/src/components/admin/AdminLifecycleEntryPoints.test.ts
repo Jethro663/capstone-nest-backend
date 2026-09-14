@@ -15,9 +15,9 @@ describe("admin lifecycle entry-point contract", () => {
     );
 
     for (const entryPoint of [userDetail, classes, sections]) {
-      expect(entryPoint).toContain("AdminLifecycleDialog");
-      expect(entryPoint).toContain("previewPurge");
-      expect(entryPoint).toContain("executePurge");
+      expect(entryPoint).toContain("AdminErasureBatchDialog");
+      expect(entryPoint).toContain("previewPurgeBatch");
+      expect(entryPoint).toContain("executePurgeBatch");
     }
   });
 

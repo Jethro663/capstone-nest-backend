@@ -4,6 +4,8 @@ import { storageCleanupFailures } from '../../../monitoring/utils/metrics';
 import type { StorageProviderInterface } from './storage.provider';
 import { StorageService } from './storage.service';
 import { runResetWorkContext } from '../../system-reset/system-reset.context';
+import { LocalStorageProvider } from './local-storage.provider';
+import { S3StorageProvider } from './s3-storage.provider';
 
 jest.mock('fs', () => {
   const actual = jest.requireActual<typeof import('fs')>('fs');
@@ -68,5 +70,31 @@ describe('StorageService cleanup observability', () => {
       component: 'storage-service',
       operation: 'unlink-after-s3-upload',
     });
+  });
+
+  it('surfaces local object deletion failures so cleanup can retry', async () => {
+    jest.mocked(fs.existsSync).mockReturnValue(true);
+    jest.mocked(fs.promises.unlink).mockRejectedValue(new Error('disk busy'));
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+    const provider = new LocalStorageProvider();
+
+    await expect(provider.deleteObject('generation/file.pdf')).rejects.toThrow(
+      'disk busy',
+    );
+  });
+
+  it('surfaces S3 object deletion failures so cleanup can retry', async () => {
+    const provider = new S3StorageProvider();
+    const client = (
+      provider as unknown as { s3Client: { send: () => Promise<unknown> } }
+    ).s3Client;
+    jest
+      .spyOn(client, 'send')
+      .mockRejectedValue(new Error('bucket unavailable'));
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+
+    await expect(provider.deleteObject('generation/file.pdf')).rejects.toThrow(
+      'bucket unavailable',
+    );
   });
 });

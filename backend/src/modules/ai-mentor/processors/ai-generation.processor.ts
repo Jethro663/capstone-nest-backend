@@ -3,7 +3,10 @@ import { Logger, Optional } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { runSystemResetWork } from '../../system-reset/system-reset.work';
 import { UnrecoverableError, type Job } from 'bullmq';
+import { eq } from 'drizzle-orm';
 import { AiProxyService } from '../ai-proxy.service';
+import { DatabaseService } from '../../../database/database.service';
+import { aiGenerationJobs, extractedModules } from '../../../drizzle/schema';
 
 const TEACHER_AI_QUEUE_CONCURRENCY = 2;
 
@@ -24,6 +27,7 @@ export class AiGenerationProcessor extends WorkerHost {
   constructor(
     private readonly proxy: AiProxyService,
     @Optional() private readonly modules?: ModuleRef,
+    @Optional() private readonly databaseService?: DatabaseService,
   ) {
     super();
   }
@@ -59,6 +63,22 @@ export class AiGenerationProcessor extends WorkerHost {
     const executionId = job.name === 'module-extraction' ? extractionId : jobId;
     if (!executionId) {
       throw new Error(`Missing execution id for ${job.name}`);
+    }
+    if (this.databaseService) {
+      const target =
+        job.name === 'module-extraction'
+          ? await this.databaseService.db.query.extractedModules.findFirst({
+              where: eq(extractedModules.id, executionId),
+              columns: { id: true },
+            })
+          : await this.databaseService.db.query.aiGenerationJobs.findFirst({
+              where: eq(aiGenerationJobs.id, executionId),
+              columns: { id: true },
+            });
+      if (!target) {
+        this.logger.log(`Skipping erased ${job.name} job ${executionId}`);
+        return;
+      }
     }
     const attempt = job.attemptsMade + 1;
     const queueWaitMs = queuedAt

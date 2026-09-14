@@ -24,6 +24,7 @@ import {
   AdminSectionCard,
 } from "@/components/admin/AdminPageShell";
 import { AdminLifecycleDialog } from "@/components/admin/AdminLifecycleDialog";
+import { AdminErasureBatchDialog } from "@/components/admin/AdminErasureBatchDialog";
 import {
   ConfirmationDialog,
   type ConfirmationDialogConfig,
@@ -120,6 +121,7 @@ export default function ClassManagementPage() {
   const [lifecycleTarget, setLifecycleTarget] = useState<ClassItem | null>(
     null,
   );
+  const [erasureTargets, setErasureTargets] = useState<ClassItem[]>([]);
   const [replacementClassId, setReplacementClassId] = useState("");
   const [activePeriod, setActivePeriod] = useState<AcademicPeriodKey>("Q1");
   const [currentSchoolYear, setCurrentSchoolYear] = useState("");
@@ -239,15 +241,25 @@ export default function ClassManagementPage() {
   }, [fetchData]);
 
   const toggleClassSelection = (classId: string) => {
-    setSelectedClassIds((current) =>
-      current.includes(classId)
-        ? current.filter((id) => id !== classId)
-        : [...current, classId],
-    );
+    setSelectedClassIds((current) => {
+      if (current.includes(classId)) {
+        return current.filter((id) => id !== classId);
+      }
+      if (current.length >= 50) {
+        toast.error("A permanent-deletion batch can contain up to 50 classes.");
+        return current;
+      }
+      return [...current, classId];
+    });
   };
 
   const handleSelectAllVisible = () => {
-    setSelectedClassIds(allVisibleSelected ? [] : selectableVisibleIds);
+    if (!allVisibleSelected && selectableVisibleIds.length > 50) {
+      toast.info("Selected the first 50 visible classes, the batch limit.");
+    }
+    setSelectedClassIds(
+      allVisibleSelected ? [] : selectableVisibleIds.slice(0, 50),
+    );
   };
 
   const openSingleActionConfirmation = (classItem: ClassItem) => {
@@ -277,13 +289,12 @@ export default function ClassManagementPage() {
   };
 
   const openBulkConfirmation = (option: BulkActionOption) => {
-    const next = selectedClasses[0];
-    if (!next) return;
-    toast.info(
-      `${selectedClasses.length} selected. Review begins with ${next.subjectName}; failed or unreviewed classes stay selected.`,
-    );
-    void option;
-    openSingleActionConfirmation(next);
+    if (selectedClasses.length === 0) return;
+    if (option.action === "purge") {
+      setErasureTargets(selectedClasses);
+      return;
+    }
+    openSingleActionConfirmation(selectedClasses[0]);
   };
 
   if (initialLoading) {
@@ -603,7 +614,7 @@ export default function ClassManagementPage() {
                                 className="admin-icon-button"
                                 onClick={() => {
                                   setReplacementClassId("");
-                                  setLifecycleTarget(classItem);
+                                  setErasureTargets([classItem]);
                                 }}
                                 title="Purge class"
                               >
@@ -800,6 +811,34 @@ export default function ClassManagementPage() {
             );
             setSelectedClassIds((current) =>
               current.filter((id) => id !== lifecycleTarget.id),
+            );
+            await refreshTable();
+          }}
+        />
+      ) : null}
+      {erasureTargets.length > 0 ? (
+        <AdminErasureBatchDialog
+          open
+          onOpenChange={(open) => !open && setErasureTargets([])}
+          targetType="CLASS"
+          targetIds={erasureTargets.map((target) => target.id)}
+          targetLabel={
+            erasureTargets.length === 1
+              ? `${erasureTargets[0].subjectName} (${erasureTargets[0].subjectCode})`
+              : `${erasureTargets.length} archived classes`
+          }
+          preview={async (input) =>
+            (await adminLifecycleService.previewPurgeBatch(input)).data
+          }
+          execute={async (input) =>
+            (await adminLifecycleService.executePurgeBatch(input)).data
+          }
+          onCompleted={async (result) => {
+            toast.success(
+              `${result.deletedCount} class${result.deletedCount === 1 ? "" : "es"} permanently deleted`,
+            );
+            setSelectedClassIds((current) =>
+              current.filter((id) => !result.targetIds.includes(id)),
             );
             await refreshTable();
           }}

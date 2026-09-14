@@ -133,6 +133,12 @@
         "changed",
         "preserved",
         "auditLogId",
+        "targetIds",
+        "purgeMode",
+        "confirmation",
+        "catalogVersion",
+        "databaseSchemaHash",
+        "cleanupStatus",
         "lifecycleMode",
         "decision",
         "disposition",
@@ -155,7 +161,8 @@
             "backend/src/modules/admin-lifecycle/admin-lifecycle.controller.ts",
             "backend/src/modules/admin-lifecycle/admin-maintenance-lifecycle.controller.ts"
           ],
-          "endpoint": "maintenance"
+          "endpoint": "maintenance",
+          "tokens": ["purge/batch/preview", "CASCADE_ERASE", "cleanup_pending"]
         },
         "web": {
           "sources": [
@@ -163,7 +170,8 @@
             "next-frontend/src/types/admin-lifecycle.ts",
             "next-frontend/src/components/admin/AdminLifecycleDialog.tsx"
           ],
-          "endpoint": "/admin/maintenance"
+          "endpoint": "/admin/maintenance",
+          "tokens": ["purge/batch/preview", "CASCADE_ERASE", "cleanup_pending"]
         },
         "mobile": {
           "sources": [
@@ -171,7 +179,8 @@
             "mobile/src/types/admin-lifecycle.ts",
             "mobile/src/screens/AdminLifecycleReviewScreen.tsx"
           ],
-          "endpoint": "/admin/maintenance"
+          "endpoint": "/admin/maintenance",
+          "tokens": ["purge/batch/preview", "CASCADE_ERASE", "cleanup_pending"]
         }
       }
     },

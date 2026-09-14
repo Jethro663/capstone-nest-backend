@@ -64,6 +64,7 @@ export class LocalStorageProvider implements StorageProviderInterface {
       this.logger.warn(
         `Failed to delete local object ${key}: ${(error as Error).message}`,
       );
+      throw error;
     }
   }
 

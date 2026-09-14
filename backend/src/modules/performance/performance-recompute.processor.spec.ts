@@ -28,4 +28,26 @@ describe('PerformanceRecomputeProcessor', () => {
     ).not.toHaveBeenCalled();
     expect(performanceService.recomputeStudentsForClass).not.toHaveBeenCalled();
   });
+
+  it('completes as a no-op when a class was permanently erased', async () => {
+    const localService = {
+      recomputeFromAssessmentSubmission: jest.fn(),
+      recomputeStudentsForClass: jest.fn(),
+    };
+    const localProcessor = new PerformanceRecomputeProcessor(
+      localService as never,
+      undefined,
+      {
+        db: { query: { classes: { findFirst: jest.fn().mockResolvedValue(null) } } },
+      } as never,
+    );
+
+    await expect(
+      localProcessor.process({
+        name: 'recompute-class-scores',
+        data: { classId: 'erased-class' },
+      } as never),
+    ).resolves.toBeUndefined();
+    expect(localService.recomputeStudentsForClass).not.toHaveBeenCalled();
+  });
 });
