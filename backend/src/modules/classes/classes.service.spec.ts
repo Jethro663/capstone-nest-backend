@@ -1818,13 +1818,11 @@ describe('ClassesService', () => {
           expect.objectContaining({ status: 'enrolled' }),
         );
         expect(txMock.insert).not.toHaveBeenCalled();
-        expect(mockClassRecordService.captureClassEnrollment).toHaveBeenCalledWith(
-          CLASS_ID,
-          [STUDENT_ID],
-          'joined',
-          TEACHER_ID,
-          ['teacher'],
-        );
+        expect(
+          mockClassRecordService.captureClassEnrollment,
+        ).toHaveBeenCalledWith(CLASS_ID, [STUDENT_ID], 'joined', TEACHER_ID, [
+          'teacher',
+        ]);
         expect(mockAuditService.log).toHaveBeenCalledWith(
           expect.objectContaining({
             action: 'class.enrollment.reactivated',

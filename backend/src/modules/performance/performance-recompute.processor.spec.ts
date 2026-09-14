@@ -38,7 +38,9 @@ describe('PerformanceRecomputeProcessor', () => {
       localService as never,
       undefined,
       {
-        db: { query: { classes: { findFirst: jest.fn().mockResolvedValue(null) } } },
+        db: {
+          query: { classes: { findFirst: jest.fn().mockResolvedValue(null) } },
+        },
       } as never,
     );
 

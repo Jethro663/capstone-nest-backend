@@ -143,7 +143,9 @@ describe('RagIndexingProcessor', () => {
       { get: jest.fn() } as unknown as ConfigService,
       undefined,
       {
-        db: { query: { classes: { findFirst: jest.fn().mockResolvedValue(null) } } },
+        db: {
+          query: { classes: { findFirst: jest.fn().mockResolvedValue(null) } },
+        },
       } as never,
     );
     const fetchMock = jest.spyOn(globalThis, 'fetch');

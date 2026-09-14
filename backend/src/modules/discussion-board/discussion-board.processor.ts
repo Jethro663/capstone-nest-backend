@@ -58,10 +58,7 @@ export class DiscussionBoardProcessor extends WorkerHost {
   private async processAdmitted(
     job: Job<ThreadPublishedJobData | CommentCreatedJobData>,
   ): Promise<void> {
-    if (
-      job.name === 'thread-published' ||
-      job.name === 'comment-created'
-    ) {
+    if (job.name === 'thread-published' || job.name === 'comment-created') {
       const classId = job.data.classId;
       const classQuery = (
         this.db.query as unknown as {

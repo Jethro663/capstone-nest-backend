@@ -81,8 +81,12 @@ describe('AdminMaintenanceLifecycleController', () => {
 
   it('delegates one complete purge batch and cleanup retry with the actor', async () => {
     lifecycle.previewPurgeBatch.mockResolvedValue({ targets: [] });
-    lifecycle.executePurgeBatch.mockResolvedValue({ operationId: 'operation-id' });
-    lifecycle.retryErasureCleanup.mockResolvedValue({ status: 'cleanup_pending' });
+    lifecycle.executePurgeBatch.mockResolvedValue({
+      operationId: 'operation-id',
+    });
+    lifecycle.retryErasureCleanup.mockResolvedValue({
+      status: 'cleanup_pending',
+    });
     const preview = {
       targetType: 'CLASS',
       targetIds: ['00000000-0000-4000-8000-000000000001'],

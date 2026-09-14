@@ -15,7 +15,9 @@ describe('LibraryIndexingProcessor', () => {
     const db = {
       query: {
         uploadedFiles: {
-          findFirst: jest.fn().mockResolvedValue(fileExists ? { id: 'file-1' } : null),
+          findFirst: jest
+            .fn()
+            .mockResolvedValue(fileExists ? { id: 'file-1' } : null),
         },
       },
       update: jest.fn(() => ({

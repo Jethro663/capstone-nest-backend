@@ -34,6 +34,8 @@ describe('admin lifecycle config', () => {
     expect(adminLifecycleConfig()).toMatchObject({ cascadeEraseEnabled: true });
 
     process.env.ADMIN_CASCADE_ERASE_ENABLED = '1';
-    expect(adminLifecycleConfig()).toMatchObject({ cascadeEraseEnabled: false });
+    expect(adminLifecycleConfig()).toMatchObject({
+      cascadeEraseEnabled: false,
+    });
   });
 });
