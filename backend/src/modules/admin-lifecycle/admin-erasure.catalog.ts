@@ -1,19 +1,20 @@
 import { BadRequestException } from '@nestjs/common';
 import type { PurgeTargetType } from './DTO/admin-lifecycle.dto';
 
-export const ADMIN_ERASURE_CATALOG_VERSION = 1;
+export const ADMIN_ERASURE_CATALOG_VERSION = 2;
 
 export type ErasureAction = 'DELETE' | 'DETACH' | 'PRESERVE_RECEIPT';
 
 export interface ErasureDependencyRule {
   table: string;
   column: string;
-  targetTable: 'classes' | 'sections' | 'users';
+  targetTable: 'classes' | 'class_records' | 'sections' | 'users';
   targetTypes: PurgeTargetType[];
   action: ErasureAction;
   selector:
     | 'DIRECT_ID'
     | 'CLASS_DESCENDANT'
+    | 'CLASS_RECORD_DESCENDANT'
     | 'SECTION_DESCENDANT'
     | 'USER_PARTICIPANT'
     | 'USER_AUTHOR';
@@ -68,6 +69,33 @@ export const ADMIN_ERASURE_RESTRICT_RULES: readonly ErasureDependencyRule[] = [
     action: 'DELETE',
     selector: 'CLASS_DESCENDANT',
     group: 'academicEvidence',
+  },
+  {
+    table: 'academic_legacy_grade_evidence',
+    column: 'class_record_id',
+    targetTable: 'class_records',
+    targetTypes: ['CLASS', 'SECTION'],
+    action: 'DELETE',
+    selector: 'CLASS_RECORD_DESCENDANT',
+    group: 'legacyGradeEvidence',
+  },
+  {
+    table: 'academic_period_grade_revisions',
+    column: 'class_record_id',
+    targetTable: 'class_records',
+    targetTypes: ['CLASS', 'SECTION'],
+    action: 'DELETE',
+    selector: 'CLASS_RECORD_DESCENDANT',
+    group: 'gradeRevisions',
+  },
+  {
+    table: 'class_record_participants',
+    column: 'class_record_id',
+    targetTable: 'class_records',
+    targetTypes: ['CLASS', 'SECTION'],
+    action: 'DELETE',
+    selector: 'CLASS_RECORD_DESCENDANT',
+    group: 'classRecordParticipants',
   },
   userStudentRule('academic_annual_source_selections'),
   userAuthorRule('academic_annual_source_selections', 'selected_by'),

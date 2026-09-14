@@ -3,7 +3,17 @@ import {
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
-import { and, eq, count, desc, SQL, inArray, sql } from 'drizzle-orm';
+import {
+  and,
+  eq,
+  count,
+  desc,
+  SQL,
+  inArray,
+  isNull,
+  or,
+  sql,
+} from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { notifications } from '../../drizzle/schema';
 import { QueryNotificationsDto } from './DTO/query-notifications.dto';
@@ -24,6 +34,23 @@ export interface CreateNotificationInput {
   title: string;
   body: string;
   metadata?: Record<string, unknown>;
+}
+
+export interface ArchivedTeacherNotificationContext {
+  userIds: string[];
+  classIds: string[];
+  sectionIds: string[];
+}
+
+export function visibleNotificationsWhere(userId: string, isRead?: boolean) {
+  const conditions: SQL<unknown>[] = [
+    eq(notifications.userId, userId),
+    isNull(notifications.hiddenAt),
+  ];
+  if (typeof isRead === 'boolean') {
+    conditions.push(eq(notifications.isRead, isRead));
+  }
+  return and(...conditions);
 }
 
 @Injectable()
@@ -65,6 +92,7 @@ export class NotificationsService {
           body: sql`excluded.body`,
           metadata: sql`excluded.metadata`,
           isRead: false,
+          hiddenAt: null,
           readAt: null,
           createdAt: new Date(),
         },
@@ -117,17 +145,63 @@ export class NotificationsService {
     }));
   }
 
+  async hideArchivedTeacherContext(
+    context: ArchivedTeacherNotificationContext,
+  ): Promise<void> {
+    const userIds = [...new Set(context.userIds)];
+    const classIds = [...new Set(context.classIds)];
+    const sectionIds = [...new Set(context.sectionIds)];
+    if (
+      userIds.length === 0 ||
+      (classIds.length === 0 && sectionIds.length === 0)
+    ) {
+      return;
+    }
+
+    const contextConditions: SQL<unknown>[] = [];
+    if (classIds.length > 0) {
+      contextConditions.push(
+        inArray(sql<string>`${notifications.metadata}->>'classId'`, classIds),
+        and(
+          eq(notifications.type, 'academic_lifecycle_changed'),
+          eq(sql<string>`${notifications.metadata}->>'targetType'`, 'CLASS'),
+          inArray(
+            sql<string>`${notifications.metadata}->>'targetId'`,
+            classIds,
+          ),
+        )!,
+      );
+    }
+    if (sectionIds.length > 0) {
+      contextConditions.push(
+        and(
+          eq(notifications.type, 'academic_lifecycle_changed'),
+          eq(sql<string>`${notifications.metadata}->>'targetType'`, 'SECTION'),
+          inArray(
+            sql<string>`${notifications.metadata}->>'targetId'`,
+            sectionIds,
+          ),
+        )!,
+      );
+    }
+
+    await this.db
+      .update(notifications)
+      .set({ hiddenAt: new Date() })
+      .where(
+        and(
+          inArray(notifications.userId, userIds),
+          isNull(notifications.hiddenAt),
+          or(...contextConditions),
+        ),
+      );
+  }
+
   async findByUser(userId: string, query: QueryNotificationsDto) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const offset = (page - 1) * limit;
-    const conditions: SQL<unknown>[] = [eq(notifications.userId, userId)];
-
-    if (typeof query.isRead === 'boolean') {
-      conditions.push(eq(notifications.isRead, query.isRead));
-    }
-
-    const whereClause = and(...conditions);
+    const whereClause = visibleNotificationsWhere(userId, query.isRead);
 
     const [rows, totalResult] = await Promise.all([
       this.db.query.notifications.findMany({
@@ -156,9 +230,7 @@ export class NotificationsService {
     const [result] = await this.db
       .select({ value: count() })
       .from(notifications)
-      .where(
-        and(eq(notifications.userId, userId), eq(notifications.isRead, false)),
-      );
+      .where(visibleNotificationsWhere(userId, false));
 
     return result?.value ?? 0;
   }
@@ -197,9 +269,7 @@ export class NotificationsService {
     const result = await this.db
       .update(notifications)
       .set({ isRead: true, readAt: new Date() })
-      .where(
-        and(eq(notifications.userId, userId), eq(notifications.isRead, false)),
-      )
+      .where(visibleNotificationsWhere(userId, false))
       .returning({ id: notifications.id });
 
     return { updatedCount: result.length };

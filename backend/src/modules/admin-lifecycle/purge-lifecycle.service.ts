@@ -6,6 +6,8 @@ import {
 import { eq, inArray, or } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import {
+  academicLegacyGradeEvidence,
+  academicPeriodGradeRevisions,
   assessmentAttempts,
   assessments,
   archivedUsers,
@@ -88,6 +90,9 @@ export function planPurgeLifecycle(
       enrollmentHistory: 'Enrollment history',
       lifecycleEvents: 'Lifecycle events',
       classRecords: 'Class records',
+      classRecordParticipants: 'Class-record participants',
+      legacyGradeEvidence: 'Legacy grade evidence',
+      gradeRevisions: 'Period grade revisions',
       finalizedParticipants: 'Finalized participants',
       scores: 'Scores',
       attempts: 'Assessment attempts',
@@ -159,6 +164,28 @@ async function collectClassEvidence(db: LifecycleDb, classId: string) {
         columns: { id: true },
       })
     : [];
+  const participantRows = recordIds.length
+    ? await db.query.classRecordParticipants.findMany({
+        where: inArray(classRecordParticipants.classRecordId, recordIds),
+        columns: { id: true },
+      })
+    : [];
+  const legacyGradeEvidenceRows = recordIds.length
+    ? await db.query.academicLegacyGradeEvidence.findMany({
+        where: inArray(academicLegacyGradeEvidence.classRecordId, recordIds),
+        columns: { id: true },
+      })
+    : [];
+  const gradeRevisionRows =
+    await db.query.academicPeriodGradeRevisions.findMany({
+      where: recordIds.length
+        ? or(
+            eq(academicPeriodGradeRevisions.classId, classId),
+            inArray(academicPeriodGradeRevisions.classRecordId, recordIds),
+          )
+        : eq(academicPeriodGradeRevisions.classId, classId),
+      columns: { id: true },
+    });
   const itemIds = itemRows.map((entry) => entry.id);
   const scoreRows = itemIds.length
     ? await db.query.classRecordScores.findMany({
@@ -185,6 +212,9 @@ async function collectClassEvidence(db: LifecycleDb, classId: string) {
     enrollmentHistory: enrollmentRows.length,
     lifecycleEvents: eventRows.length,
     classRecords: recordRows.length,
+    classRecordParticipants: participantRows.length,
+    legacyGradeEvidence: legacyGradeEvidenceRows.length,
+    gradeRevisions: gradeRevisionRows.length,
     scores: scoreRows.length,
     attempts: attemptRows.length,
     assessments: assessmentRows.length,
@@ -331,6 +361,14 @@ export async function collectPurgeLifecycleSnapshot(
     const inventory = await collectClassEvidence(db, linkedClass.id);
     nested = {
       classRecords: (nested.classRecords ?? 0) + (inventory.classRecords ?? 0),
+      classRecordParticipants:
+        (nested.classRecordParticipants ?? 0) +
+        (inventory.classRecordParticipants ?? 0),
+      legacyGradeEvidence:
+        (nested.legacyGradeEvidence ?? 0) +
+        (inventory.legacyGradeEvidence ?? 0),
+      gradeRevisions:
+        (nested.gradeRevisions ?? 0) + (inventory.gradeRevisions ?? 0),
       scores: (nested.scores ?? 0) + (inventory.scores ?? 0),
       attempts: (nested.attempts ?? 0) + (inventory.attempts ?? 0),
       assessments: (nested.assessments ?? 0) + (inventory.assessments ?? 0),

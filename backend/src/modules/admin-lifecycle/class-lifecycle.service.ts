@@ -26,6 +26,7 @@ import type {
   AdminLifecycleEffect,
   AdminLifecycleManifest,
   AdminLifecycleWarning,
+  AdminArchiveNotificationRetirement,
 } from './admin-lifecycle.types';
 import type {
   LifecycleClass,
@@ -70,6 +71,8 @@ export interface ClassLifecyclePlan {
     eligibility: 'withdrawn' | 'transferred';
   }>;
   affectedUserIds: string[];
+  notificationUserIds: string[];
+  notificationRetirement: AdminArchiveNotificationRetirement;
 }
 
 export interface ClassLifecyclePrepared {
@@ -311,6 +314,14 @@ export function planClassLifecycle(
   }
 
   const choiceOnly = historicalRetirement && blockers.length > 0;
+  const staffUserIds = [
+    ...new Set(
+      [
+        snapshot.classRecord.teacherId,
+        snapshot.replacementClass?.teacherId,
+      ].filter((value): value is string => Boolean(value)),
+    ),
+  ];
   return {
     blockers,
     warnings,
@@ -333,6 +344,12 @@ export function planClassLifecycle(
         ].filter((value): value is string => Boolean(value)),
       ),
     ],
+    notificationUserIds: choiceOnly ? [] : [...new Set(activeStudentIds)],
+    notificationRetirement: {
+      userIds: staffUserIds,
+      classIds: [snapshot.classRecord.id],
+      sectionIds: [],
+    },
   };
 }
 
@@ -703,6 +720,8 @@ export class ClassLifecycleService {
       ],
       preserved: prepared.plan.preserved,
       affectedUserIds: prepared.plan.affectedUserIds,
+      notificationUserIds: prepared.plan.notificationUserIds,
+      notificationRetirement: prepared.plan.notificationRetirement,
     };
   }
 }

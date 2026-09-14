@@ -226,11 +226,11 @@ export function AdminErasureBatchDialog({
               </Button>
             ) : (
               <>
-                {prepared.blockers.length > 0 ? (
+                {prepared.globalBlockers.length > 0 ? (
                   <section className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-900">
                     <h3 className="font-bold">Cannot continue yet</h3>
                     <ul className="mt-2 space-y-2 text-sm">
-                      {prepared.blockers.map((blocker) => (
+                      {prepared.globalBlockers.map((blocker) => (
                         <li key={`${blocker.code}-${blocker.message}`}>
                           {blocker.message}
                         </li>
@@ -264,6 +264,29 @@ export function AdminErasureBatchDialog({
                       <p className="text-xs text-[var(--admin-text-muted)]">
                         {target.lifecycleState}
                       </p>
+                      {target.blockers.length > 0 ? (
+                        <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+                          <p className="font-bold">
+                            This record cannot be deleted yet
+                          </p>
+                          <ul className="mt-1 space-y-1">
+                            {target.blockers.map((blocker) => (
+                              <li key={`${blocker.code}-${blocker.message}`}>
+                                {blocker.message}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+                      {target.warnings.length > 0 ? (
+                        <ul className="mt-3 space-y-1 text-sm text-amber-800">
+                          {target.warnings.map((warning) => (
+                            <li key={`${warning.code}-${warning.message}`}>
+                              {warning.message}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
                       {target.impactGroups.length ? (
                         <ul className="mt-2 grid gap-1 text-sm text-[var(--admin-text-muted)] sm:grid-cols-2">
                           {target.impactGroups.map((impact) => (

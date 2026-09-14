@@ -218,6 +218,13 @@
       "when": 1789369686256,
       "tag": "0030_admin_maintenance_switch_mode",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1789386703538,
+      "tag": "0031_retire_archived_teacher_notifications",
+      "breakpoints": true
     }
   ]
 }

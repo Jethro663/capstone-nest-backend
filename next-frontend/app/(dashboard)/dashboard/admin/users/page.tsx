@@ -43,6 +43,8 @@ import { useAuth } from "@/providers/AuthProvider";
 import type { User } from "@/types/user";
 import { getRoleName } from "@/utils/helpers";
 import { resolveUserProfilePicture } from "@/utils/profile";
+import { AdminErasureBatchDialog } from "@/components/admin/AdminErasureBatchDialog";
+import { adminLifecycleService } from "@/services/admin-lifecycle-service";
 
 type StatusTab = "active" | "pending" | "suspended" | "deleted";
 type RoleFilter = "all" | "student" | "teacher" | "admin";
@@ -214,6 +216,7 @@ export default function UserManagementPage() {
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [confirmation, setConfirmation] =
     useState<ConfirmationDialogConfig | null>(null);
+  const [showPurgeConfirm, setShowPurgeConfirm] = useState(false);
 
   const fetchUsers = useCallback(
     async (mode: "initial" | "table") => {
@@ -283,7 +286,8 @@ export default function UserManagementPage() {
     () =>
       filtered
         .filter((entry) => currentUser?.id !== entry.id)
-        .map((entry) => entry.id),
+        .map((entry) => entry.id)
+        .slice(0, 50),
     [currentUser?.id, filtered],
   );
 
@@ -308,11 +312,16 @@ export default function UserManagementPage() {
   }, [fetchUsers]);
 
   const toggleUserSelection = (userId: string) => {
-    setSelectedUserIds((current) =>
-      current.includes(userId)
-        ? current.filter((id) => id !== userId)
-        : [...current, userId],
-    );
+    setSelectedUserIds((current) => {
+      if (current.includes(userId)) {
+        return current.filter((id) => id !== userId);
+      }
+      if (current.length >= 50) {
+        toast.error("You can review up to 50 accounts at a time.");
+        return current;
+      }
+      return [...current, userId];
+    });
   };
 
   const handleSelectAllVisible = () => {
@@ -505,7 +514,11 @@ export default function UserManagementPage() {
       <AdminSectionCard title="Account Directory" contentClassName="space-y-5">
         <Tabs
           value={tab}
-          onValueChange={(value) => setTab(value as StatusTab)}
+          onValueChange={(value) => {
+            setSelectedUserIds([]);
+            setShowPurgeConfirm(false);
+            setTab(value as StatusTab);
+          }}
           className="space-y-5"
         >
           <TabsList className="admin-tab-list h-auto flex-wrap justify-start">
@@ -597,7 +610,7 @@ export default function UserManagementPage() {
             </div>
           </div>
 
-          {filtered.length > 0 && tab !== "deleted" ? (
+          {filtered.length > 0 ? (
             <div className="admin-bulk-bar">
               <div className="admin-controls">
                 <span className="admin-pill">
@@ -609,7 +622,7 @@ export default function UserManagementPage() {
                   size="sm"
                   className="admin-button-outline rounded-[1rem] px-4 font-bold"
                   onClick={handleSelectAllVisible}
-                  disabled={selectableVisibleIds.length === 0}
+                  disabled={tableLoading || selectableVisibleIds.length === 0}
                 >
                   {allVisibleSelected
                     ? "Clear visible selection"
@@ -641,11 +654,24 @@ export default function UserManagementPage() {
                         : "admin-button-outline rounded-[1rem] px-4 font-bold"
                     }
                     onClick={() => openBulkConfirmation(option)}
-                    disabled={selectedUserIds.length === 0}
+                    disabled={tableLoading || selectedUserIds.length === 0}
                   >
                     {option.label}
                   </Button>
                 ))}
+                {tab === "deleted" ? (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    className="rounded-[1rem] px-4 font-bold"
+                    aria-label="Review selected accounts for permanent deletion"
+                    onClick={() => setShowPurgeConfirm(true)}
+                    disabled={tableLoading || selectedUserIds.length === 0}
+                  >
+                    Review permanent deletion
+                  </Button>
+                ) : null}
               </div>
             </div>
           ) : null}
@@ -665,9 +691,7 @@ export default function UserManagementPage() {
               <Table>
                 <TableHeader className="admin-table-head">
                   <TableRow>
-                    <TableHead className="w-[6rem]">
-                      {tab === "deleted" ? "Review" : "Select"}
-                    </TableHead>
+                    <TableHead className="w-[6rem]">Select</TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Role</TableHead>
@@ -695,21 +719,15 @@ export default function UserManagementPage() {
                         className="border-t border-[var(--admin-outline)] hover:bg-[#fbfcfe]"
                       >
                         <TableCell onClick={(event) => event.stopPropagation()}>
-                          {tab === "deleted" ? (
-                            <span className="text-xs font-semibold text-[var(--admin-text-muted)]">
-                              Individual
-                            </span>
-                          ) : (
-                            <input
-                              type="checkbox"
-                              role="checkbox"
-                              aria-label={`Select ${entry.firstName} ${entry.lastName}`}
-                              className="admin-row-checkbox"
-                              checked={isSelected}
-                              disabled={isSelf}
-                              onChange={() => toggleUserSelection(entry.id)}
-                            />
-                          )}
+                          <input
+                            type="checkbox"
+                            role="checkbox"
+                            aria-label={`Select ${entry.firstName} ${entry.lastName}`}
+                            className="admin-row-checkbox"
+                            checked={isSelected}
+                            disabled={isSelf || tableLoading}
+                            onChange={() => toggleUserSelection(entry.id)}
+                          />
                         </TableCell>
                         <TableCell
                           className="admin-table-row-link"
@@ -855,6 +873,28 @@ export default function UserManagementPage() {
       <ConfirmationDialog
         config={confirmation}
         onClose={() => setConfirmation(null)}
+      />
+
+      <AdminErasureBatchDialog
+        open={showPurgeConfirm}
+        onOpenChange={setShowPurgeConfirm}
+        title="Permanently delete selected accounts"
+        targetType="USER"
+        targetIds={selectedUserIds}
+        targetLabel={`${selectedUserIds.length} deleted account${selectedUserIds.length === 1 ? "" : "s"}`}
+        preview={async (input) =>
+          (await adminLifecycleService.previewPurgeBatch(input)).data
+        }
+        execute={async (input) =>
+          (await adminLifecycleService.executePurgeBatch(input)).data
+        }
+        onCompleted={async (result) => {
+          toast.success(
+            `${result.deletedCount} account${result.deletedCount === 1 ? "" : "s"} permanently deleted`,
+          );
+          setSelectedUserIds([]);
+          await refreshTable();
+        }}
       />
     </AdminPageShell>
   );

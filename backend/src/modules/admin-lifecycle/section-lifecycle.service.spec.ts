@@ -201,6 +201,7 @@ describe('section lifecycle planning', () => {
   });
 
   it('retires an empty historical section and linked classes', () => {
+    const linkedTeacherId = '00000000-0000-4000-8000-000000000211';
     const result = planSectionLifecycle(
       snapshot({
         section: { ...snapshot().section, schoolYear: '2025-2026' },
@@ -212,7 +213,7 @@ describe('section lifecycle planning', () => {
             subjectName: 'Mathematics 7',
             schoolYear: '2025-2026',
             isActive: true,
-            teacherId: null,
+            teacherId: linkedTeacherId,
             updatedAt: new Date('2025-06-01T00:00:00Z'),
           },
         ],
@@ -225,6 +226,12 @@ describe('section lifecycle planning', () => {
     );
 
     expect(result.blockers).toEqual([]);
+    expect(result.notificationUserIds).toEqual([]);
+    expect(result.notificationRetirement).toEqual({
+      userIds: ['00000000-0000-4000-8000-000000000203', linkedTeacherId],
+      classIds: ['00000000-0000-4000-8000-000000000210'],
+      sectionIds: [sectionId],
+    });
     expect(result.effects).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ entityType: 'class', kind: 'archive' }),

@@ -1,7 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
-import { NotificationsService } from './notifications.service';
+import {
+  NotificationsService,
+  visibleNotificationsWhere,
+} from './notifications.service';
 import { DatabaseService } from '../../database/database.service';
+import { PgDialect } from 'drizzle-orm/pg-core';
 
 // ─── Fixtures ───────────────────────────────────────────────────────────────
 
@@ -188,6 +192,16 @@ describe('NotificationsService', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('findByUser()', () => {
+    it('uses the same hidden-row exclusion for inbox and unread queries', () => {
+      const dialect = new PgDialect();
+      const compiled = dialect.sqlToQuery(
+        visibleNotificationsWhere(USER_ID, false)!,
+      );
+
+      expect(compiled.sql).toContain('"notifications"."hidden_at" is null');
+      expect(compiled.sql).toContain('"notifications"."is_read" = $2');
+    });
+
     it('returns paginated notifications from db', async () => {
       const rows = [makeNotification()];
       mockDb.select = jest.fn().mockReturnValue({
@@ -242,6 +256,38 @@ describe('NotificationsService', () => {
           where: expect.anything(),
         }),
       );
+    });
+  });
+
+  describe('hideArchivedTeacherContext()', () => {
+    it('sets hiddenAt only when staff and archived context ids are supplied', async () => {
+      const where = jest.fn().mockResolvedValue(undefined);
+      const set = jest.fn().mockReturnValue({ where });
+      mockDb.update.mockReturnValue({ set });
+
+      await service.hideArchivedTeacherContext({
+        userIds: ['teacher-1'],
+        classIds: ['class-1'],
+        sectionIds: ['section-1'],
+      });
+
+      expect(set).toHaveBeenCalledWith({ hiddenAt: expect.any(Date) });
+      expect(where).toHaveBeenCalledWith(expect.anything());
+    });
+
+    it('does not update when there is no staff recipient or context', async () => {
+      await service.hideArchivedTeacherContext({
+        userIds: [],
+        classIds: ['class-1'],
+        sectionIds: [],
+      });
+      await service.hideArchivedTeacherContext({
+        userIds: ['teacher-1'],
+        classIds: [],
+        sectionIds: [],
+      });
+
+      expect(mockDb.update).not.toHaveBeenCalled();
     });
   });
 

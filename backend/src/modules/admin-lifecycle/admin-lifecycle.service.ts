@@ -35,6 +35,7 @@ import {
   hashAdminLifecycleRequest,
 } from './admin-lifecycle.manifest';
 import type {
+  AdminArchiveNotificationRetirement,
   AdminLifecycleExecutionResult,
   AdminLifecycleManifest,
 } from './admin-lifecycle.types';
@@ -72,6 +73,8 @@ interface ApplyResult {
   changed: Array<{ entityType: string; entityId: string; outcome: string }>;
   preserved: string[];
   affectedUserIds: string[];
+  notificationUserIds?: string[];
+  notificationRetirement?: AdminArchiveNotificationRetirement;
 }
 
 interface ExecutionDomain<P> {
@@ -602,8 +605,15 @@ export class AdminLifecycleService {
           notes: dto.notes,
         };
         const applied = await domain.apply(prepared, context);
+        if (applied.notificationRetirement) {
+          await this.notificationsService.hideArchivedTeacherContext(
+            applied.notificationRetirement,
+          );
+        }
+        const notificationUserIds =
+          applied.notificationUserIds ?? applied.affectedUserIds;
         const notificationInputs = [
-          ...new Set(applied.affectedUserIds.filter((id) => id !== actorId)),
+          ...new Set(notificationUserIds.filter((id) => id !== actorId)),
         ].map((userId) => ({
           userId,
           type: 'academic_lifecycle_changed' as const,

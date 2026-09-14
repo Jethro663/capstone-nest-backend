@@ -2,7 +2,9 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  HttpException,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
   Optional,
 } from '@nestjs/common';
@@ -56,10 +58,13 @@ export interface AdminErasureTargetPreview {
   impactGroups: AdminErasureImpactGroup[];
   storageObjectCount: number;
   storageBytes: number | null;
+  warnings: AdminLifecycleWarning[];
+  blockers: AdminLifecycleBlocker[];
+  canExecute: boolean;
 }
 
 export interface AdminErasureBatchPreview {
-  schemaVersion: 2;
+  schemaVersion: 3;
   targetType: PurgeTargetType;
   targetIds: string[];
   purgeMode: 'EMPTY_ONLY' | 'CASCADE_ERASE';
@@ -67,6 +72,7 @@ export interface AdminErasureBatchPreview {
   totals: Record<string, number>;
   warnings: AdminLifecycleWarning[];
   blockers: AdminLifecycleBlocker[];
+  globalBlockers: AdminLifecycleBlocker[];
   canExecute: boolean;
   confirmationText: string;
   catalogVersion: number;
@@ -103,6 +109,9 @@ const impactLabels: Record<string, string> = {
   enrollmentHistory: 'Enrollment history',
   lifecycleEvents: 'Lifecycle events',
   classRecords: 'Class records',
+  classRecordParticipants: 'Class-record participants',
+  legacyGradeEvidence: 'Legacy grade evidence',
+  gradeRevisions: 'Period grade revisions',
   draftParticipants: 'Draft class-record participants',
   finalizedParticipants: 'Finalized class-record participants',
   scores: 'Scores and grades',
@@ -114,6 +123,91 @@ const impactLabels: Record<string, string> = {
 
 function uniqueByCode<T extends { code: string }>(items: T[]) {
   return [...new Map(items.map((item) => [item.code, item])).values()];
+}
+
+interface SafeAdminErasureFailure {
+  operationId: string;
+  code: string;
+  databaseCode?: string;
+  constraint?: string;
+  table?: string;
+}
+
+const safeFailureCodePattern = /^[A-Z0-9_]{1,80}$/;
+const safeDatabaseIdentifierPattern = /^[A-Za-z0-9_.-]{1,160}$/;
+
+function safeString(value: unknown, pattern: RegExp): string | undefined {
+  return typeof value === 'string' && pattern.test(value) ? value : undefined;
+}
+
+function nestedDatabaseDetails(error: unknown) {
+  const details: Pick<
+    SafeAdminErasureFailure,
+    'databaseCode' | 'constraint' | 'table'
+  > = {};
+  const visited = new Set<unknown>();
+  let current: unknown = error;
+
+  for (let depth = 0; depth < 6 && current; depth += 1) {
+    if (visited.has(current) || typeof current !== 'object') break;
+    visited.add(current);
+    const candidate = current as Record<string, unknown>;
+    details.databaseCode ??= safeString(candidate.code, safeFailureCodePattern);
+    details.constraint ??= safeString(
+      candidate.constraint,
+      safeDatabaseIdentifierPattern,
+    );
+    details.table ??= safeString(
+      candidate.table,
+      safeDatabaseIdentifierPattern,
+    );
+    current =
+      candidate.cause ?? candidate.originalError ?? candidate.driverError;
+  }
+
+  return details;
+}
+
+export function normalizeAdminErasureFailure(
+  error: unknown,
+  operationId: string,
+) {
+  const response = error instanceof HttpException ? error.getResponse() : null;
+  const responseCode =
+    response && typeof response === 'object'
+      ? safeString(
+          (response as Record<string, unknown>).code,
+          safeFailureCodePattern,
+        )
+      : undefined;
+  const code =
+    responseCode ??
+    (error instanceof ForbiddenException
+      ? 'ERASURE_FORBIDDEN'
+      : 'ERASURE_EXECUTION_FAILED');
+  const databaseDetails = nestedDatabaseDetails(error);
+  const summary: SafeAdminErasureFailure = {
+    operationId,
+    code,
+    ...databaseDetails,
+  };
+  const record = {
+    failureCode: code,
+    failureMessage: JSON.stringify(summary),
+  };
+
+  if (error instanceof HttpException) {
+    return { record, exception: error };
+  }
+
+  return {
+    record,
+    exception: new InternalServerErrorException({
+      operationId,
+      code,
+      message: 'Permanent deletion failed. Use the operation ID for support.',
+    }),
+  };
 }
 
 export function assertAdminErasureExecution(
@@ -180,6 +274,40 @@ export class AdminErasureService {
 
   private async inspectSchema(db: ErasureDb) {
     const result = await db.execute<SchemaReferenceRow>(sql`
+      WITH RECURSIVE roots AS (
+        SELECT relation.oid
+        FROM pg_class relation
+        JOIN pg_namespace relation_namespace
+          ON relation_namespace.oid = relation.relnamespace
+        WHERE relation_namespace.nspname = 'public'
+          AND relation.relname IN ('classes', 'sections', 'users')
+      ), cascade_reachable AS (
+        SELECT roots.oid AS table_oid,
+               ARRAY[roots.oid] AS visited,
+               0 AS depth
+        FROM roots
+        UNION ALL
+        SELECT constraint_row.conrelid AS table_oid,
+               cascade_reachable.visited || constraint_row.conrelid,
+               cascade_reachable.depth + 1
+        FROM cascade_reachable
+        JOIN pg_constraint constraint_row
+          ON constraint_row.confrelid = cascade_reachable.table_oid
+         AND constraint_row.contype = 'f'
+         AND constraint_row.confdeltype = 'c'
+        JOIN pg_class cascade_child ON cascade_child.oid = constraint_row.conrelid
+        JOIN pg_namespace cascade_child_namespace
+          ON cascade_child_namespace.oid = cascade_child.relnamespace
+        WHERE cascade_child_namespace.nspname = 'public'
+          AND NOT constraint_row.conrelid = ANY(cascade_reachable.visited)
+          AND cascade_reachable.depth < 20
+      ), reachable_relationships AS (
+        SELECT DISTINCT constraint_row.oid
+        FROM cascade_reachable
+        JOIN pg_constraint constraint_row
+          ON constraint_row.confrelid = cascade_reachable.table_oid
+         AND constraint_row.contype = 'f'
+      )
       SELECT src.relname AS "table",
              source_column.attname AS "column",
              target.relname AS "targetTable",
@@ -192,6 +320,8 @@ export class AdminErasureService {
              END AS "onDelete",
              pg_get_constraintdef(constraint_row.oid) AS definition
       FROM pg_constraint constraint_row
+      JOIN reachable_relationships
+        ON reachable_relationships.oid = constraint_row.oid
       JOIN pg_class src ON src.oid = constraint_row.conrelid
       JOIN pg_namespace source_namespace ON source_namespace.oid = src.relnamespace
       JOIN pg_class target ON target.oid = constraint_row.confrelid
@@ -202,7 +332,6 @@ export class AdminErasureService {
        AND source_column.attnum = source_key.attnum
       WHERE constraint_row.contype = 'f'
         AND source_namespace.nspname = 'public'
-        AND target.relname IN ('classes', 'sections', 'users')
       ORDER BY src.relname, source_column.attname, target.relname
     `);
     const references = [...result.rows];
@@ -274,7 +403,8 @@ export class AdminErasureService {
       targetIds,
     );
     const targets: AdminErasureTargetPreview[] = [];
-    const blockers: AdminLifecycleBlocker[] = [];
+    const globalBlockers: AdminLifecycleBlocker[] = [];
+    const targetBlockers: AdminLifecycleBlocker[] = [];
     const warnings: AdminLifecycleWarning[] = [];
     const totals: Record<string, number> = {};
 
@@ -282,14 +412,14 @@ export class AdminErasureService {
       dto.purgeMode === 'CASCADE_ERASE' &&
       !this.configService.get<boolean>('adminLifecycle.cascadeEraseEnabled')
     ) {
-      blockers.push({
+      globalBlockers.push({
         code: 'CAPABILITY_UNAVAILABLE',
         message: 'Cascade erasure is not enabled for this environment.',
         resolvable: false,
       });
     }
     if (schema.unclassified.length > 0) {
-      blockers.push({
+      globalBlockers.push({
         code: 'UNCLASSIFIED_DEPENDENCY',
         message: `A new database dependency must be reviewed before deletion: ${schema.unclassified
           .map((entry) => `${entry.table}.${entry.column}`)
@@ -298,7 +428,7 @@ export class AdminErasureService {
       });
     }
     if (dto.targetType === 'USER' && targetIds.includes(actorId)) {
-      blockers.push({
+      globalBlockers.push({
         code: 'SELF_ACCOUNT_ERASURE_FORBIDDEN',
         message:
           'You cannot permanently delete your own administrator account.',
@@ -315,7 +445,7 @@ export class AdminErasureService {
           typeof response === 'object' && response
             ? (response as { code?: string; message?: string })
             : {};
-        blockers.push({
+        globalBlockers.push({
           code: detail.code ?? 'LAST_ADMIN_ERASURE_FORBIDDEN',
           message:
             detail.message ??
@@ -352,6 +482,8 @@ export class AdminErasureService {
         const targetStorage = storageRows.filter(
           (row) => row.targetId === targetId,
         );
+        const blockers = uniqueByCode(prepared.manifest.blockers);
+        const targetWarnings = uniqueByCode(prepared.manifest.warnings);
         targets.push({
           id: targetId,
           displayName: prepared.snapshot.targetName,
@@ -366,11 +498,19 @@ export class AdminErasureService {
             (sum, row) => sum + Number(row.sizeBytes ?? 0),
             0,
           ),
+          warnings: targetWarnings,
+          blockers,
+          canExecute: blockers.length === 0,
         });
-        blockers.push(...prepared.manifest.blockers);
-        warnings.push(...prepared.manifest.warnings);
+        targetBlockers.push(...blockers);
+        warnings.push(...targetWarnings);
       } catch (error: unknown) {
         if (!(error instanceof NotFoundException)) throw error;
+        const missingBlocker: AdminLifecycleBlocker = {
+          code: 'ERASURE_TARGET_NOT_FOUND',
+          message: `Target ${targetId} no longer exists.`,
+          resolvable: false,
+        };
         targets.push({
           id: targetId,
           displayName: 'Missing target',
@@ -378,12 +518,11 @@ export class AdminErasureService {
           impactGroups: [],
           storageObjectCount: 0,
           storageBytes: 0,
+          warnings: [],
+          blockers: [missingBlocker],
+          canExecute: false,
         });
-        blockers.push({
-          code: 'ERASURE_TARGET_NOT_FOUND',
-          message: `Target ${targetId} no longer exists.`,
-          resolvable: false,
-        });
+        targetBlockers.push(missingBlocker);
       }
     }
 
@@ -395,7 +534,7 @@ export class AdminErasureService {
       targetIds.length,
     );
     const unsigned = {
-      schemaVersion: 2 as const,
+      schemaVersion: 3 as const,
       targetType: dto.targetType,
       targetIds,
       purgeMode: dto.purgeMode,
@@ -407,12 +546,19 @@ export class AdminErasureService {
       manifestExpiresAt,
     };
     const manifestHash = hashAdminLifecycleRequest(unsigned);
-    const uniqueBlockers = uniqueByCode(blockers);
+    const uniqueGlobalBlockers = uniqueByCode(globalBlockers);
+    const uniqueBlockers = uniqueByCode([
+      ...uniqueGlobalBlockers,
+      ...targetBlockers,
+    ]);
     return {
       ...unsigned,
       warnings: uniqueByCode(warnings),
       blockers: uniqueBlockers,
-      canExecute: uniqueBlockers.length === 0,
+      globalBlockers: uniqueGlobalBlockers,
+      canExecute:
+        uniqueGlobalBlockers.length === 0 &&
+        targets.every((target) => target.canExecute),
       manifestHash,
     };
   }
@@ -574,6 +720,33 @@ export class AdminErasureService {
             targetIds.map((id) => sql`${id}::uuid`),
             sql`, `,
           )})
+             OR class_record_id IN (
+               SELECT id FROM class_records
+               WHERE class_id IN (${sql.join(
+                 targetIds.map((id) => sql`${id}::uuid`),
+                 sql`, `,
+               )})
+             )
+        `);
+        await db.execute(sql`
+          DELETE FROM academic_legacy_grade_evidence
+          WHERE class_record_id IN (
+            SELECT id FROM class_records
+            WHERE class_id IN (${sql.join(
+              targetIds.map((id) => sql`${id}::uuid`),
+              sql`, `,
+            )})
+          )
+        `);
+        await db.execute(sql`
+          DELETE FROM class_record_participants
+          WHERE class_record_id IN (
+            SELECT id FROM class_records
+            WHERE class_id IN (${sql.join(
+              targetIds.map((id) => sql`${id}::uuid`),
+              sql`, `,
+            )})
+          )
         `);
       } else {
         await db.execute(sql`
@@ -581,6 +754,39 @@ export class AdminErasureService {
           WHERE class_id IN (
             SELECT id FROM classes
             WHERE section_id IN (${sql.join(
+              targetIds.map((id) => sql`${id}::uuid`),
+              sql`, `,
+            )})
+          )
+             OR class_record_id IN (
+               SELECT class_records.id
+               FROM class_records
+               JOIN classes ON classes.id = class_records.class_id
+               WHERE classes.section_id IN (${sql.join(
+                 targetIds.map((id) => sql`${id}::uuid`),
+                 sql`, `,
+               )})
+             )
+        `);
+        await db.execute(sql`
+          DELETE FROM academic_legacy_grade_evidence
+          WHERE class_record_id IN (
+            SELECT class_records.id
+            FROM class_records
+            JOIN classes ON classes.id = class_records.class_id
+            WHERE classes.section_id IN (${sql.join(
+              targetIds.map((id) => sql`${id}::uuid`),
+              sql`, `,
+            )})
+          )
+        `);
+        await db.execute(sql`
+          DELETE FROM class_record_participants
+          WHERE class_record_id IN (
+            SELECT class_records.id
+            FROM class_records
+            JOIN classes ON classes.id = class_records.class_id
+            WHERE classes.section_id IN (${sql.join(
               targetIds.map((id) => sql`${id}::uuid`),
               sql`, `,
             )})
@@ -796,22 +1002,16 @@ export class AdminErasureService {
       );
       return result;
     } catch (error: unknown) {
+      const failure = normalizeAdminErasureFailure(error, operationId);
       await this.db
         .update(adminErasureOperations)
         .set({
           status: 'failed',
-          failureCode:
-            error instanceof ForbiddenException
-              ? 'ERASURE_FORBIDDEN'
-              : 'ERASURE_EXECUTION_FAILED',
-          failureMessage:
-            error instanceof Error
-              ? error.message.slice(0, 1000)
-              : 'Unknown failure',
+          ...failure.record,
           updatedAt: new Date(),
         })
         .where(eq(adminErasureOperations.id, operationId));
-      throw error;
+      throw failure.exception;
     }
   }
 

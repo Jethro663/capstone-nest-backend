@@ -99,8 +99,14 @@ export interface AdminLifecycleExecutionResult {
   auditLogId?: string;
 }
 
+export interface AdminArchiveNotificationRetirement {
+  userIds: string[];
+  classIds: string[];
+  sectionIds: string[];
+}
+
 export interface AdminErasureBatchContract {
-  schemaVersion: 2;
+  schemaVersion: 3;
   targetIds: string[];
   purgeMode: 'EMPTY_ONLY' | 'CASCADE_ERASE';
   confirmation: string;

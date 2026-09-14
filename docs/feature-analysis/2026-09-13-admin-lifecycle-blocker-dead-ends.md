@@ -1,248 +1,281 @@
-# Admin Permanent Deletion, Bulk Lifecycle, and Class Roster Isolation Analysis
+# Admin Archive Purge and Teacher Notification Isolation Analysis
 
 **Revised:** 2026-09-14
 
-**Repository baseline:** `developement` at `ad043f8bf62cca3f4f2d14faeb66876ffea23c69`, equal to `origin/developement` when inspected.
+**Repository baseline:** `developement` at `7c5df592956b012f3119217691f4863a8db9aec8`, equal to `origin/developement` when inspected.
 
-**Scope:** the reported class, section, user, bulk-delete, enrollment, and class-record behaviors across the admin and teacher web surfaces. The shared mobile class-record/enrollment consumers were inspected for contract blast radius.
+**Scope:** archived class and section batch purge, the reported batch-then-single purge failure, archived-context notifications visible to teachers, and multi-select purge for deleted users in the admin web UI.
 
-**Method:** targeted static source, schema, contract, and test analysis plus the exact UI and browser error text supplied by the user. No application code, configuration, dependency, database data, deployment, external system, or Git history was changed.
+**Method:** analysis only. The inspection covered current source, focused tests, exact-SHA CI, an authenticated read-only production preview, Railway deployment/configuration/runtime logs, and read-only PostgreSQL catalog/data queries. The production execute action was not invoked because it would permanently delete school data. No application code, schema, configuration, database data, deployment, or Git history was changed during analysis.
 
 ## Evidence vocabulary
 
-- **Confirmed** — directly supported by the current source, schema, tests, or exact user-observed text.
-- **Inferred** — a strongly supported consequence that was not reproduced against live data.
-- **Unverified** — requires the failing database rows, an authenticated runtime reproduction, institutional policy, or deployment evidence.
-- Effects are classified as **direct**, **transitive**, **operational**, **dormant**, or **uncertain**.
+- **Confirmed** — directly supported by current source, tests, CI, deployment metadata, or configuration.
+- **Inferred** — a strongly supported explanation that depends on the missing HTTP response or production target state.
+- **Unverified** — requires an authenticated reproduction, the exact response body/status, an operation receipt, or a production-schema/data check.
+- Effects are classified as **direct**, **transitive**, **operational**, or **uncertain**.
 
 ## 1. Executive verdict
 
-There are three active problems, not one:
+There are three distinct defects. The purge failure now has an exact production-data culprit and a matching source defect.
 
-| Problem | Finding | Severity | Recommended ownership |
-|---|---|---:|---|
-| Admin cannot permanently delete a used user, class, or section | This is an intentional retained-evidence policy, not a broken button. Letting an admin delete “regardless of history” is a new destructive-erasure feature with a much larger data and compliance boundary. The current service cannot safely do it by adding an override. | Critical policy decision | Admin lifecycle + schema/data-retention owners |
-| “33 selected” reviews only the first class/section | Confirmed implementation gap. Both pages read `selected[0]`, open one dialog, remove only that ID after success, and never advance. The old backend bulk-purge paths also reject and direct callers back to reviewed lifecycle purge. | High usability defect | Admin lifecycle web + backend batch contract |
-| Adding a learner returns 409 while the learner appears in the class record | Confirmed status-contract bug. Candidate discovery considers only active enrollment, but enrollment creation treats a historical `completed`/`dropped` row as an active duplicate. Both admin and teacher pages call this same method. | High correctness defect | Classes service + enrollment lifecycle |
-| Former learners appear beside active learners in Class Record | Historical inclusion is intentional and tested so scores and final grades remain visible. The defect is the default presentation: the grade grid starts at “All learners” and has no active/removed filter. | Medium-high workflow defect | Shared class-record UI, with API compatibility preserved |
+| Reported problem | Verdict | Primary culprit | Confidence |
+|---|---|---|---|
+| Multiple archived classes/sections cannot be purged; afterward a single purge also errors | Preview succeeds, but execution reaches a transitive `RESTRICT` edge that the live-schema review never inspects and the deletion catalog never clears. The repeated 3-class batch contained Mathematics 7, whose four class records have eight `academic_legacy_grade_evidence` rows; the repeated 3-section batch contained Grade 7 - Section B, whose linked class records have twelve such rows. Other targets in those batches had zero legacy-evidence rows. Selecting the evidence-bearing target by itself therefore repeats the same failure; no dialog poisoning is involved. | `inspectSchema()` checks only FKs pointing directly to `classes`, `sections`, or `users`, while class/section deletion cascades through `class_records`. `applyCatalogDeletion()` clears only grade revisions by `class_id` and does not clear restrictive `academic_legacy_grade_evidence.class_record_id`, `academic_period_grade_revisions.class_record_id`, or `class_record_participants.class_record_id` descendants. | **Confirmed** from production logs, catalog, target counts, and source |
+| Archived classes and sections still show in teacher notifications | Archiving deliberately includes the class teacher, replacement teacher, section adviser, and linked-class teachers in `affectedUserIds`. The lifecycle executor then creates an `academic_lifecycle_changed` notification for every affected user except the acting admin. Notification list and unread-count queries filter only by user/read state, never by archived class/section context. Production currently has 12 unread teacher archive-event notifications plus 9 teacher notifications attached to inactive classes (discussion comments and grade-finalization requests; 7 unread). | Lifecycle recipient construction plus the absence of a durable hidden/retired state shared by notification list and unread count. | **Confirmed** from production counts and source |
+| Deleted users have no multiple-purge selection | The Deleted users tab intentionally returns no bulk actions, hides the bulk bar, replaces checkboxes with `Individual`, and routes purge through each profile. The backend batch contract already accepts `USER` and 1–50 UUIDs. | Admin users list UI omission, not a missing backend batch primitive. | **Confirmed** |
 
-The groupmate’s Tagalog statement translates to: **“I can now archive historical classes, sections, and users, but permanent deletion is still just as rigid.”** That description is accurate. Historical class/section retirement is implemented in the current baseline; permanent deletion remains deliberately limited to empty archived records. **Confirmed.**
+### What is not the culprit
 
-### Root causes
+- `CASCADE_ERASE` is not being ignored. `buildAdminLifecycleManifest()` removes `RETAINED_EVIDENCE` for a cascade request and replaces it with `DATA_WILL_BE_ERASED`. **Confirmed** in `backend/src/modules/admin-lifecycle/admin-lifecycle.manifest.ts:195-230`.
+- The production cascade capability is not disabled. The read-only Railway check returned `ADMIN_CASCADE_ERASE_ENABLED=true`. **Confirmed** on 2026-09-14.
+- The class/section pages are not still reviewing only `selected[0]` for purge. Both pass all selected targets into `AdminErasureBatchDialog`; only non-purge lifecycle actions still begin with the first selected row. **Confirmed** in the current baseline.
+- A failed batch does not permanently reuse its dialog state after closing. Closing clears `erasureTargets`; reopening mounts a fresh dialog and creates a new idempotency key. **Confirmed** from the parent pages and dialog state lifecycle.
+- The generic write-barrier trigger is not the purge culprit. Its DELETE branch only takes the shared reset lock and rejects writes while a school reset is active; it has no row-count-dependent behavior. **Confirmed** from the deployed PostgreSQL trigger definition.
 
-1. **Retention policy:** `planPurgeLifecycle` blocks on any enumerated retained evidence and supplies no deletion ceremony for a blocked target. This is working as designed.
-2. **Missing batch owner:** the class and section pages use a single-target dialog as a manual queue entry, but no queue state or batch lifecycle manifest exists.
-3. **Enrollment status mismatch:** the masterlist and candidate queries filter `status = 'enrolled'`; the transactional duplicate and section-membership reads do not.
-4. **Evidence/view conflation:** class-record APIs intentionally return period participants and historical scorers, while the everyday grid defaults to showing every returned row.
+### Confirmed incident sequence and culprit
 
-### Can the admin be made more flexible by tomorrow?
+The production operation ledger and removed deployment logs establish the sequence without performing another delete:
 
-**Yes for workflow flexibility; no for safely erasing official history with a simple bypass.** The defensible next-day scope is:
+| UTC time | Target/count | Result | Evidence |
+|---|---:|---|---|
+| 08:42–08:43 | Class ×29 | Failed | Both requests reached `DELETE FROM classes WHERE id IN (...)` and rolled back. |
+| 08:44 | Class ×1 | Completed | Proves the endpoint and general single-target path worked. |
+| 08:45–08:47 | Class ×3 | Failed repeatedly | The same IDs were ESP 10, Mathematics 7, and Science 7. Only Mathematics 7 has class records and restrictive legacy evidence: 4 records / 8 evidence rows. |
+| 08:49 | Section ×3 | Failed | Only Grade 7 - Section B has restrictive legacy evidence beneath linked class records: 3 records / 12 evidence rows. |
 
-1. Fix historical-row reenrollment and add regression tests.
-2. Default live class-record views to currently enrolled learners, with an explicit Historical/removed view.
-3. Make multi-selection a real reviewed queue or batch preview, so all selected records are processed and per-target failures remain visible.
-4. Continue deleting only evidence-free archived records until a separately approved destructive-erasure design exists.
+The database dependency graph exposes the exact missing transitive edges. `classes -> class_records` is cascaded, but `class_records` is referenced with `RESTRICT`/`NO ACTION` by `academic_legacy_grade_evidence`, `academic_period_grade_revisions`, and `class_record_participants`. The production failing targets contain rows on the first edge. The service's preflight query stops at direct references to the three erasure roots, so it incorrectly reports the batch executable. The final parent delete then asks PostgreSQL to cascade into class records and fails on the unhandled restricted evidence.
 
-If tomorrow’s goal is to clear demonstration/test data rather than erase individual official records, the existing governed **Reset School Data** workflow is the safer product boundary. It coordinates a whole-school reset; it must not be exposed as an ordinary per-record delete shortcut in a production school environment.
+The current error receipt/logging records only Drizzle's outer `Failed query` message and drops the nested PostgreSQL constraint cause. That does not prevent the dependency/data correlation above, but it is a separate confirmed observability defect that made the incident harder to diagnose.
 
 ## 2. Feature anatomy
 
-### 2.1 Permanent-delete flow
+### 2.1 Class and section purge flow
 
 ```text
-Admin class / section / user page
-            |
-            v
- AdminLifecycleDialog
-            |
-            v
- POST /admin/maintenance/purge/preview
-            |
-            v
- evidence inventory -> RETAINED_EVIDENCE?
-        | yes                    | no
-        v                        v
- keep archived              password + exact confirmations
- no execute CTA             execute re-previews then DELETE
+Archived list selection (1–50)
+        |
+        v
+AdminErasureBatchDialog
+        |
+        +--> POST /admin/maintenance/purge/batch/preview
+        |       inspect schema + prepare every target
+        |       aggregate impacts, warnings, blockers
+        |
+        +--> one combined manifest + exact confirmation
+        |
+        +--> POST /admin/maintenance/purge/batch/execute
+                Maintenance Access + scope
+                lock and re-preview every target
+                one academic transaction
+                all targets deleted or all rolled back
+                durable operation/items/audit receipt
 ```
 
-The purge planner counts core enrollment and academic evidence, blocks if any category is non-zero, and returns no warnings, effects, or confirmations for a blocked target. Eligible targets receive irreversible-action warnings and two confirmations. Execution is protected by a fresh preview and manifest checks before `PurgeLifecycleService.apply` reaches a physical `DELETE`. **Confirmed** in `purge-lifecycle.service.ts:64-136,139-193,401-438`.
+Classes and sections cap selection at 50 and send the complete selection to the shared dialog. A row-level purge sends a one-item array to the same component and same pair of endpoints. **Confirmed** in:
 
-The reported messages for `lessons`, `linkedClasses`, `classRecords`, `enrollmentHistory`, `lifecycleEvents`, `scores`, and `attempts` therefore mean the record is behaving as a retained historical anchor. They are not acknowledgements the administrator forgot to check. **Confirmed.**
+- `next-frontend/app/(dashboard)/dashboard/admin/classes/page.tsx:243-263,291-298,612-624,819-845`
+- `next-frontend/app/(dashboard)/dashboard/admin/sections/page.tsx:169-185,208-215,456-466,711-738`
 
-### 2.2 What “delete it anyway” would actually do
+The backend DTO accepts unique UUIDv4 IDs with a 1–50 bound for `CLASS`, `SECTION`, or `USER`. Preview uses a repeatable-read, read-only transaction. Execute requires Maintenance Access plus `cascade_academic_erasure` for classes/sections or `cascade_account_erasure` for users. **Confirmed** in `admin-lifecycle.dto.ts:55-69,139-147,219-225` and `admin-lifecycle.service.ts:305-347`.
 
-The current database mixes three foreign-key policies:
+### 2.2 Why preview approves the failing target
 
-- **Cascade:** deleting a class automatically removes enrollments, lessons and their blocks/completions, assessments and attempts/responses, class records and ordinary scores, modules, uploaded-file rows, announcements, discussion data, JA data, AI/LXP data, RAG/index data, preferences, schedules, and performance rows.
-- **Restrict:** official academic projections such as `academic_period_grade_revisions`, `class_record_participants`, legacy grade evidence, annual grades, remediation, back-subject, and completion/outcome rows prevent some class/user deletes.
-- **Set null:** lifecycle events and selected actor/teacher references preserve snapshots while removing the live identity link.
-
-Consequently, removing the application blocker does **not** produce a reliable administrator override. Depending on the exact dependency mix, PostgreSQL will either reject the delete because of `RESTRICT` rows or cascade through a much larger subtree than the preview currently reports. **Confirmed schema behavior; exact live target outcome unverified.**
-
-The evidence inventory is a policy inventory, not a complete cascade inventory. For example, class purge counts enrollments, events, class records, scores, attempts, assessments, and lessons, but it does not enumerate every announcement, discussion, JA, LXP, AI, RAG, uploaded-file, preference, or performance dependency. User purge also does not inventory all `RESTRICT`-protected annual-grade and academic-outcome tables. **Confirmed.** A new destructive-erasure capability must therefore start with a complete dependency manifest rather than reinterpret the current `RETAINED_EVIDENCE` flag.
-
-### 2.3 Bulk class and section flow
+`AdminErasureService.inspectSchema()` deliberately hashes and classifies only foreign keys whose immediate target is `classes`, `sections`, or `users`. That misses restrictive references to a cascaded descendant:
 
 ```text
-Select N rows
-    |
-    v
-openBulkConfirmation()
-    |
-    +--> reads selected[0]
-    +--> toast says review begins with first
-    +--> opens one AdminLifecycleDialog
-             |
-             v
-       on success: remove only current ID
-       no next-target state / no batch receipt
+classes / sections
+        | CASCADE
+        v
+class_records
+        | RESTRICT / NO ACTION
+        +--> academic_legacy_grade_evidence
+        +--> academic_period_grade_revisions
+        +--> class_record_participants
 ```
 
-This precisely matches “33 selected. Review begins with ESP 10; failed or unreviewed classes stay selected.” The copy describes the implementation rather than a transient failure. **Confirmed** in class page lines 279-287 and 795-805, and section page lines 198-206 and 672-692 plus its completion handler.
+The current catalog has only `academic_period_grade_revisions.class_id -> classes`. Its physical-delete preparation deletes that direct revision relationship and then deletes the parent class/section. It has no reviewed rules or delete statements for the three `class_record_id -> class_records` relationships. **Confirmed** in `admin-erasure.catalog.ts`, `admin-erasure.service.ts:180-217,562-628`, and the production FK catalog.
 
-The backend’s legacy `/classes/bulk/lifecycle` and `/sections/bulk/lifecycle` services loop over every ID and collect per-target failures, but their `purge` branch calls legacy permanent-delete methods that now always reject in favor of the reviewed maintenance flow. The current class/section pages import the bulk types but do not call these services from `openBulkConfirmation`. **Confirmed.**
+The preview's evidence collector counts class records, items, scores, assessments, attempts, and lessons, but not legacy-grade evidence or grade revisions beneath each class record. Mathematics 7 therefore appeared executable even though its 8 legacy-evidence rows made the eventual parent delete impossible. **Confirmed** in `purge-lifecycle.service.ts:138-193` and production target counts.
 
-### 2.4 Enrollment 409 flow
+There is also a secondary target-attribution defect. `prepare()` loops through targets and builds target-specific impact cards, but it pushes lifecycle blockers into one global array and deduplicates by `blocker.code`:
+
+```ts
+function uniqueByCode<T extends { code: string }>(items: T[]) {
+  return [...new Map(items.map((item) => [item.code, item])).values()];
+}
+```
+
+Most blocker objects do not carry `targetId`, and the dialog renders blockers in a separate global list. The target cards show impacts, not target decisions or blocker ownership. If 1 of 33 records is ineligible, the administrator can learn that the 33-record batch is blocked without learning which row to remove. If several targets share a blocker code, only one message survives. **Confirmed** in `admin-erasure.service.ts:263-417` and `AdminErasureBatchDialog.tsx:229-283`.
+
+That secondary defect can hide which selected target is active, missing, or otherwise ineligible. It is not the cause of this production failure because the authenticated 29-class preview returned `canExecute=true`; the transitive catalog gap is the execution culprit.
+
+### 2.3 Failure, retry, and single-item behavior
+
+Execution re-previews after locking all selected targets and deletes them in one `academicTransaction`. Any target deletion error rolls the database work back for every selected target, then marks the durable operation failed outside the rolled-back work. **Confirmed** in `admin-erasure.service.ts:631-815` and the real-PostgreSQL rollback test.
+
+Idempotency is scoped to the generated key. Reusing a failed key yields `ERASURE_PREVIOUSLY_FAILED`; a successful key replays the stored result. The dialog rotates its key on open/selection change and again after a 409. Therefore a closed bulk dialog should not make a newly opened single purge fail through idempotency reuse. **Confirmed** in `admin-erasure.service.ts:457-540` and `AdminErasureBatchDialog.tsx:63-160`.
+
+The controller limit of three batch-execute requests per minute can still amplify repeated retries, but the operation ledger proves the reported attempts reached the database-delete branch rather than stopping at the rate limit.
+
+### 2.4 Teacher notification flow
 
 ```text
-Admin or teacher Add Students page
-            |
-            v
-masterlist: active enrollments only
-historical same-class row => learner appears eligible
-            |
-            v
-POST /classes/:classId/enrollments
-            |
-            v
-duplicate check: any status, same student + class
-historical row found => 409 "already enrolled"
+Archive class/section plan
+        |
+        +--> affected learners
+        +--> class teacher / replacement teacher
+        +--> section adviser / every linked-class teacher
+                         |
+                         v
+AdminLifecycleService.execute()
+        |
+        v
+academic_lifecycle_changed notification
+metadata: action + targetType + targetId
+        |
+        v
+teacher notification list and unread count
+filter: userId (+ isRead) only
 ```
 
-The contradiction is direct:
+The teacher visibility is produced in the backend, not merely by a stale frontend list:
 
-- Masterlist section and class membership reads require `enrollments.status = 'enrolled'` (`classes.service.ts:2814-2824,2848-2887`).
-- The transaction’s same-class duplicate read omits status (`classes.service.ts:3127-3140`).
-- Its section-membership read also omits status (`classes.service.ts:3142-3147`). If it promotes a section-only historical row, the update changes only `classId` and `enrolledAt`, not `status`, so the row can remain `dropped` or `completed` (`classes.service.ts:3154-3160`).
-- The schema has `unique(studentId, classId)`, so inserting a second same-class row is not an available compatibility fix (`base.schema.ts:422-446`).
-- Admin and teacher web pages both fan out `classService.enrollStudent` calls with `Promise.all`; mobile also consumes the same POST contract. **Confirmed.**
+- Class lifecycle includes the active students, source class-record teacher, and replacement-class teacher in `affectedUserIds`. **Confirmed** at `class-lifecycle.service.ts:315-336`.
+- Section lifecycle explicitly adds the section adviser and each linked-class teacher. **Confirmed** at `section-lifecycle.service.ts:270-296`.
+- Execution maps every affected user except the acting admin to a generic `Academic membership updated` notification with lifecycle target metadata. **Confirmed** at `admin-lifecycle.service.ts:596-626`.
+- `findByUser()` filters only `userId` and optional `isRead`; `getUnreadCount()` filters only `userId` plus unread. Archived context is never considered. **Confirmed** at `notifications.service.ts:120-166`.
 
-The most likely failing state is a `completed` or `dropped` row for the same student and class, left by a prior lifecycle operation. **Inferred.** The exact status behind the supplied production 409 is **unverified** because no live database row was queried.
+This supports both possible readings of the report:
 
-### 2.5 Why former learners appear in Class Record
+1. If the teacher is seeing the archive action itself, that notification was deliberately generated for them.
+2. If the teacher is seeing older class-scoped notifications after the class/section was archived, the inbox and unread-count queries have no retirement policy to hide or classify those rows.
 
-The class-record roster is explicitly an evidence register, not a current-enrollment list. It unions:
+Notification rows have a generic `referenceId` and JSON metadata but no visibility state. Production evidence identifies the concrete legacy shapes that matter now: lifecycle rows use `action/targetType/targetId`, while discussion and grade-finalization rows use `metadata.classId`. A reliable and recoverable fix is therefore an explicit `hiddenAt` state, populated for known archived teacher contexts and excluded consistently from list and unread-count queries. New archive execution should retire the exact teacher/adviser context and should not create another staff archive-event row. Lifecycle operation and audit records remain authoritative and visible. **Confirmed evidence and selected design.**
 
-- stored period participants;
-- every class enrollment, without a status filter;
-- learners with score rows; and
-- learners with final-grade rows.
+### 2.5 Deleted-user list flow
 
-It separately returns `currentlyEnrolled` using `status = 'enrolled'` (`class-record-roster.service.ts:47-99`). The spreadsheet starts with active enrollments, then appends non-active learners who have period-participant, score, or final-grade evidence and labels them `isRemoved: true` / `enrollmentState: 'removed'` (`class-record.service.ts:590-669`). A service test explicitly expects the removed learner and preserved final grade to remain. **Confirmed.**
+The list already has `selectedUserIds`, self-exclusion, and ordinary bulk lifecycle actions. It deliberately disables the mechanism for deleted accounts:
 
-The shared web grid initializes its filter to `all`; its choices cover scoring and eligibility conditions but not active versus removed enrollment, even though it renders “Removed from current class” on those rows (`TeacherClassRecordGradeGrid.tsx:60-94,127-142,337-350`). Thus the data model already contains the seam needed for a cleaner default view; deleting or suppressing history at the API layer is unnecessary and would break roster confirmation, finalized-period review, exports, and mobile. **Confirmed.**
+- `getBulkActions("deleted")` returns `[]`.
+- The bulk bar renders only when `tab !== "deleted"`.
+- Deleted rows show `Individual` instead of checkboxes.
+- The trash action navigates to the individual user profile.
+- The profile uses `AdminErasureBatchDialog` with `targetType="USER"` and one ID.
 
-## 3. Cascade map
+**Confirmed** in `users/page.tsx:140-177,282-320,600-712,810-831` and `users/[id]/page.tsx:728-745`.
 
-| ID | Provider | Interface | Consumer | Effect class | Risk | Confidence | Evidence | Disposition |
-|---|---|---|---|---|---|---|---|---|
-| E01 | Admin class/section/user pages | Permanent-delete action | `AdminLifecycleDialog` | direct | High | Confirmed | Page lifecycle dialog wiring | Keep as reviewed eligibility/destructive entry point |
-| E02 | Purge planner | `RETAINED_EVIDENCE` blocker | Dialog and execute guard | direct | Critical if bypassed | Confirmed | `purge-lifecycle.service.ts:64-136` | Keep for ordinary purge |
-| E03 | Purge evidence collector | Core evidence counts | Planner | transitive | High; incomplete as a physical dependency manifest | Confirmed | `purge-lifecycle.service.ts:139-352` | Expand only for a new erasure or capability-preflight contract |
-| E04 | Purge apply | `DELETE users/classes/sections` | PostgreSQL FK actions | direct | Critical | Confirmed | `purge-lifecycle.service.ts:401-438` | Never call on a blocked manifest |
-| E05 | Class FK graph | Cascade-linked content, enrollment, assessment, class-record, AI/LXP/JA/RAG/discussion rows | Class delete | transitive | Critical data loss | Confirmed | Schema-wide `classes.id` reference saturation search | New erasure manifest must enumerate all groups |
-| E06 | Academic grading schema | `RESTRICT` class/user references | PostgreSQL | dormant until delete | High; bypass may still fail | Confirmed | `academic-grading.schema.ts:41-64,76-132,164-464` | Preserve or explicitly migrate/anonymize under approved erasure policy |
-| E07 | Section FK graph | Classes and enrollment rows cascade from section | Section delete | transitive | Critical; section deletion inherits every class subtree | Confirmed | `base.schema.ts:285-300,422-445` | Treat as aggregate erasure, never a shallow delete |
-| E08 | Lifecycle events | IDs become null; snapshots remain | Audit/history readers | transitive | Medium identity/traceability semantics | Confirmed | `admin-lifecycle.schema.ts:105-168` | Define tombstone and snapshot policy before erasure |
-| E09 | Class bulk UI | `selectedClasses[0]` | Single lifecycle dialog | direct | High usability failure | Confirmed | `classes/page.tsx:279-287` | Replace with queue state or batch preview |
-| E10 | Class completion handler | Removes current target only | Remaining selection | operational | Medium | Confirmed | `classes/page.tsx:795-805` | Advance automatically or consume a batch result |
-| E11 | Section bulk UI | `selectedSections[0]` | Single lifecycle dialog | direct | High usability failure | Confirmed | `sections/page.tsx:198-206` | Same shared batch abstraction as classes |
-| E12 | Legacy bulk endpoints | Per-ID loop and failure list | Unused class/section service clients | dormant | Medium; purge branch cannot succeed | Confirmed | `classes.service.ts:1734-1827`; `sections.service.ts:1464-1557` | Do not wire directly; supersede with reviewed batch lifecycle contract |
-| E13 | Admin/teacher add pages | `POST /classes/:id/enrollments` | `ClassesService.enrollStudent` | direct | High | Confirmed | Both pages call the same web service; controller is shared by Admin/Teacher | Fix once in backend and keep clients compatible |
-| E14 | Masterlist | Active-only enrollment eligibility | Add Students pages and mobile | direct | High when paired with E15 | Confirmed | `classes.service.ts:2814-2887` | Keep active-only meaning |
-| E15 | Enroll transaction | Status-blind duplicate and section lookups | Same-class historical row | direct | High; false 409 or inactive promotion | Confirmed | `classes.service.ts:3127-3160` | Make transition status-aware and atomic |
-| E16 | Enrollment schema | Unique `(studentId, classId)` | Reenrollment write strategy | transitive | High | Confirmed | `base.schema.ts:440-446` | Reactivate/update existing row or redesign history schema; do not blind-insert |
-| E17 | Enrollment lifecycle | Completed/dropped rows plus lifecycle event snapshots | Academic history | transitive | High if overwritten without event | Confirmed | Enrollment status enum and lifecycle event schema | Reactivate with a new audited transition and preserve prior event history |
-| E18 | Class enrollment capture | Inserts period participants and resets roster confirmation | Current/future class records | transitive | Medium | Confirmed | `class-record.service.ts:331-417` | On reactivation, explicitly reconcile current/future eligibility; avoid stale `onConflictDoNothing` state |
-| E19 | Roster service | Participants + all membership + scores + finals | Web/mobile eligibility confirmation | direct | High if filtered server-side | Confirmed | `class-record-roster.service.ts:47-99` | Preserve complete evidence register |
-| E20 | Spreadsheet service | Active rows plus removed evidence-bearing rows | Web/mobile gradebooks and exports | direct | High if removed | Confirmed | `class-record.service.ts:590-669`; service tests | Preserve response contract and labels |
-| E21 | Web grade grid | Default filter `all` | Admin and teacher class record | operational | Medium-high | Confirmed | `TeacherClassRecordGradeGrid.tsx:60-142` | Default live drafts to active; add active/historical filter |
-| E22 | Mobile workbook | Same roster/spreadsheet contract | Mobile teacher class record | transitive | Medium parity risk | Confirmed | `mobile/src/components/academic/AcademicWorkbook.tsx` | Keep API additive; mirror or consciously defer presentation change |
-| E23 | Existing historical retirement | `HISTORICAL_RETIREMENT` plans and tests | Class/section archive | operational | Low for current complaint | Confirmed | Current services, pages, and planner tests | Treat prior archive blocker as resolved at this baseline |
-| E24 | System Reset | Preview/execute whole-school data reset | Admin maintenance | adjacent alternative | Critical operational scope | Confirmed | Existing reset service/UI/e2e contract | Use only for authorized demo/test reset, not individual-record convenience |
+The correct seam is to reuse the governed erasure dialog from the list with a `USER` target array. Adding `purge` to the ordinary `BulkUserLifecycleAction` (`suspend | reactivate | archive`) would be the wrong boundary because it would bypass the reviewed manifest, exact confirmation, Maintenance Access scope, idempotency, atomicity, and audit receipt.
 
-## 4. Isolation and disassembly simulations
+## 3. Dependency and cascade map
 
-### 4.1 Proposed cuts
+| Edge | Provider | Interface/state | Consumer/effect | Effect | Risk | Confidence | Evidence | Disposition |
+|---|---|---|---|---|---:|---|---|---|
+| E1 | Classes admin page | `selectedClassIds`, `erasureTargets` | Shared erasure dialog receives 1–50 class IDs | Direct | Medium | Confirmed | `classes/page.tsx:243-263,291-298,819-845` | Keep; add failure attribution tests |
+| E2 | Sections admin page | `selectedSectionIds`, `erasureTargets` | Shared erasure dialog receives 1–50 section IDs | Direct | Medium | Confirmed | `sections/page.tsx:169-185,208-215,711-738` | Keep; add failure attribution tests |
+| E3 | Shared erasure dialog | preview/execute request and local key | Backend batch endpoints | Direct | High | Confirmed | `AdminErasureBatchDialog.tsx:63-160` | Keep governed flow; improve error contract/rendering |
+| E4 | Batch DTO/controller | 1–50 unique IDs; 30 preview/min; 3 execute/min | Lifecycle service | Operational | High | Confirmed | `admin-lifecycle.dto.ts:139-147`; controller `:138-159` | Keep bound; expose 429 clearly and test retry transition |
+| E5 | Erasure schema inspection | only FKs directly targeting `classes`, `sections`, `users` | Transitive restricted descendants are absent from schema hash/preflight | Direct | Critical | Confirmed | `admin-erasure.service.ts:180-217`; production FK catalog | Traverse CASCADE-reachable tables and classify every restrictive edge |
+| E6 | Erasure delete catalog | clears only grade revisions by direct `class_id` before parent delete | Legacy evidence, revisions, or participants can restrict cascaded class-record deletion | Transitive | Critical | Confirmed | `admin-erasure.catalog.ts:61-94`; service `:562-628`; production target counts | Catalog and explicitly delete class-record descendants before parent deletion |
+| E6a | Erasure preview evidence | omits legacy-grade evidence and grade revisions | Approved impact is incomplete for affected targets | Direct | High | Confirmed | `purge-lifecycle.service.ts:138-193` | Count and display the missing evidence groups |
+| E6b | `uniqueByCode()` | blocker code only | Duplicate target failures collapse | Transitive | High | Confirmed | `admin-erasure.service.ts:115-117,410-415` | Preserve target attribution for target-scoped blockers |
+| E7 | Maintenance Access | active session and erasure scope | All execute requests | Operational | High | Confirmed | `admin-lifecycle.service.ts:316-347` | Keep; surface exact gate and refresh action |
+| E8 | Erasure execute | manifest, locks, idempotency, transaction | Atomic DB deletion and durable receipt | Direct | Critical | Confirmed | `admin-erasure.service.ts:457-815` | Keep atomicity; never silently skip blocked rows |
+| E9 | Class/section lifecycle planner | `affectedUserIds` includes teaching staff | Notification recipient set | Direct | High | Confirmed | class `:315-336`; section `:270-296` | Separate learner recipients from staff context-retirement targets |
+| E10 | Lifecycle executor | `academic_lifecycle_changed` with target metadata | Teacher notification rows | Direct | High | Confirmed | `admin-lifecycle.service.ts:596-626` | Apply explicit audience/event policy |
+| E11 | Notification service | user/read filters only | List, pagination, unread badge | Transitive | High | Confirmed | `notifications.service.ts:120-166`; production has 21 matching teacher rows | Add recoverable `hiddenAt`; retire exact teacher contexts; filter list and count identically |
+| E12 | Users admin list | deleted-tab bulk disabled | No multi-user purge UI | Direct | High | Confirmed | `users/page.tsx:140-177,600-712` | Add up-to-50 deleted-user selection and governed dialog |
+| E13 | Generic purge contract | `targetType=USER`, `targetIds[1..50]` | Existing backend erasure service | Direct | Medium | Confirmed | DTO `:55-69,139-147`; profile `:728-745` | Reuse; do not create a bypass endpoint |
+| E14 | Notification schema | generic UUID reference + JSON metadata; no visibility state | Known legacy archive/class metadata keeps rows visible | Transitive | High | Confirmed | `announcements-notifications.schema.ts:87-117`; production classification query | Add `hiddenAt`; backfill only confirmed lifecycle and `classId` shapes |
 
-| Proposed cut | Immediate result | Persisted/delayed effect | Edge impact | Verdict |
-|---|---|---|---|---|
-| Remove E02 or add `force=true` | Blocked buttons become callable | E06 can reject; E05/E07 can silently cascade-delete more data than previewed | E02-E08 | **Reject** |
-| Change every academic `RESTRICT` FK to `CASCADE` | More deletes succeed | Official grade, remediation, outcome, and identity evidence can disappear transitively | E05-E08, E19-E20 | **Reject** |
-| Wire pages directly to E12 | All IDs are submitted | Every purge fails through the legacy redirect guard; loses reviewed manifest/password semantics | E09-E12 | **Reject** |
-| Loop single-target execute calls with `Promise.all` | Appears fast | Racy password/manifest handling, weak cancellation and partial-result UX, avoidable load spike | E01-E12 | **Reject** |
-| Filter historical learners out of E19/E20 | Daily grid looks clean | Eligibility confirmation, finalized review, exports, and mobile lose official evidence | E18-E22 | **Reject** |
-| Add active/historical presentation filtering while preserving E19/E20 | Daily roster starts clean | Historical rows remain available on demand and in finalized evidence | E19-E22 | **Recommended** |
-| Make E15 status-aware and reactivate the unique row with an audited transition | Eligible historical learner can rejoin | Prior lifecycle events stay intact; current enrollment becomes consistent | E14-E18 | **Recommended** |
-| Add one batch preview + execute contract | All selections are reviewed together | Per-target results, idempotency, stale re-preview, and audit can be governed centrally | E01-E12 | **Recommended** |
-| Create a separate destructive-erasure operation | Admin can erase retained history only under a new explicit policy | Requires complete cascades, exports/backups, external cleanup, tombstones, and compliance approval | E02-E08, E19-E24 | **Conditionally feasible; not a one-line or one-day bypass** |
+## 4. Isolation and change plan
 
-### 4.2 Required seams
+### 4.1 Safe seams
 
-1. **Enrollment transition seam:** classify `active duplicate`, `historical same-class row`, `active section-only row`, `historical section-only row`, and `wrong-section row` inside one transaction. Only the first is a 409.
-2. **Current-view seam:** treat `currentlyEnrolled` / `enrollmentState` as presentation dimensions without changing the evidence-bearing API contract.
-3. **Batch lifecycle seam:** introduce a batch manifest containing target manifests, totals, eligible/blocked sets, one expiry/hash, one idempotency key, and per-target execution results.
-4. **Policy seam:** keep ordinary purge as “empty archived record only.” If leadership explicitly approves official-history erasure, give it a different action, permissions, copy, audit type, and tests.
-5. **Cascade ownership seam:** a destructive erasure owner must enumerate database rows plus uploaded objects, embeddings/indexes, queued jobs, cached projections, notifications, and immutable/tombstone audit policy. Database cascade alone is insufficient.
+1. **Purge dependency seam:** extend the reviewed catalog and schema traversal, then explicitly delete only the named restricted class-record descendants inside the existing atomic transaction.
+2. **Users-list seam:** connect existing selection state to the existing governed `USER` batch endpoint.
+3. **Notification audience seam:** retain learner notices, exclude staff from new archive-event recipients, and pass explicit staff/context IDs for retirement.
+4. **Notification visibility seam:** add `hiddenAt`, retire known teacher-context rows in the archive transaction, and exclude hidden rows from list and unread count.
+5. **Audit seam:** retain lifecycle and erasure operation receipts regardless of notification visibility.
 
-### 4.3 Ordered implementation plan
+### 4.2 Resolved implementation decisions
 
-| Priority | Change boundary | Acceptance evidence | Rollback |
-|---|---|---|---|
-| P0 — Reproduce enrollment states | Add fixtures for active, completed, and dropped same-class rows; active and historical section-only rows; admin/teacher calls; concurrent requests. | Current bug test proves masterlist says eligible while POST returns 409 for the historical row. | Tests only. |
-| P0 — Correct reenrollment | In the transaction, 409 only for `status='enrolled'`. Reactivate the unique historical same-class row to `enrolled`, refresh `enrolledAt`, and append an explicit lifecycle/audit transition. Never promote a non-active section row. Reconcile current/future participant eligibility and roster confirmation. | Same behavior for admin, teacher, and mobile; no unique violation; history event retained; wrong section still fails; active duplicate remains 409. | Feature flag the reactivation branch or revert code; existing history remains. |
-| P0 — Separate current and historical display | Add `currently_enrolled` and `historical` filters locally or additively. Default a live draft/current class workspace to current learners; retain “All evidence” for finalized/historical periods and exports. Show a count such as “24 current · 9 historical.” | Removed learners are absent from the default daily grid but visible with one explicit action; finalized grades and roster confirmation still include them. | Restore default `all`; API/data unchanged. |
-| P1 — Real batch review | Replace `selected[0]` with batch preview state. Aggregate all target names and evidence counts; show `eligible`, `retained`, and `needs input` groups. | Selecting 33 reviews all 33; closing leaves all selected; success removes every succeeded ID; blocked/failed IDs remain selected with reasons. | Fall back to single-target dialog without changing lifecycle authority. |
-| P1 — Batch execution | Re-preview each target under one batch operation/idempotency key. Require Maintenance Access, current password, total-aware exact confirmation, and return per-target receipts. Process in bounded sequence or chunks, not uncontrolled `Promise.all`. | Stale, duplicate-submit, partial-failure, expiry, password, and authorization tests; no target executes without a fresh safe manifest. | Disable batch execute; single-target execute remains authoritative. |
-| P2 — Policy decision for official-history erasure | Record whether the school legally and operationally permits erasing official history, which roles may do it, retention windows, backup/export requirements, and recovery expectations. | Written decision and approved data map. | Keep current retention floor. |
-| P3 — Destructive erasure, only if approved | Build a separate preview/export/execute/receipt workflow from a complete dependency graph. Do not reuse `force=true`. Include object/index/queue cleanup and non-PII audit tombstones. | Restore rehearsal, cascade checksums, FK tests, external cleanup tests, concurrency/idempotency, and an authenticated acceptance run in a non-production clone before production enablement. | Kill switch plus restoration from the required pre-operation backup/export. |
+1. Keep batch execution strictly atomic and retain the signed preview, step-up session, exact confirmation, idempotency, audit, and cleanup invariants.
+2. Treat explicit cascade erasure as authorization to delete the previewed class-record descendants, but do not weaken their database constraints or make ordinary class-record deletion cascade implicitly.
+3. Keep actionable learner membership notices. Do not generate archive-event notifications for teachers/advisers; hide their older notifications for the exact archived class/section context while retaining operation/audit evidence.
+4. Use a recoverable `hiddenAt` notification state rather than deleting delivery rows or inventing a frontend-only filter.
+5. Reuse the existing `USER` batch erasure contract for the Deleted users list; do not add purge to ordinary bulk lifecycle actions.
 
-### 4.4 Tomorrow-safe behavior specification
+### 4.3 Ordered implementation cuts
 
-- **Add learner:** “Already enrolled” only means an active same-class membership. A historical membership becomes a reviewed reactivation, not a duplicate insert.
-- **Open current Class Record:** show current learners first/by default. Provide “Historical/removed learners (N)” without hiding or deleting their evidence.
-- **Purge selected:** review every selection in one batch. Execute every evidence-free archived item; leave retained/failed items selected with exact reasons.
-- **Retained official history:** offer “Keep archived” and “View evidence.” Do not imply a missing checkbox can unlock deletion.
-- **Authorized demo reset:** route to the governed Reset School Data workflow, with its own preview and confirmation, instead of teaching administrators that official-record safeguards are optional.
+1. **Close the transitive erasure gap.** Traverse CASCADE-reachable FK parents during schema inspection; add reviewed rules for legacy evidence, grade revisions, and participants by `class_record_id`; delete them before the parent class/section. Extend preview evidence counts and catalog version.
+2. **Make failures attributable and safe.** Preserve `targetId` on target-scoped blockers and persist a sanitized nested PostgreSQL code/constraint/table summary with the durable failed operation while leaving SQL parameters and PII out of the response.
+3. **Add the deleted-user batch entry point.** Show checkboxes and the bulk bar on Deleted, cap selection at 50, exclude the acting admin, open `AdminErasureBatchDialog` with `targetType="USER"`, and clear/refetch the selection only after completion.
+4. **Separate notification audience from lifecycle impact.** Return learner notification recipients separately from staff context-retirement IDs and archived class/section IDs. Do not create staff archive-event notifications.
+5. **Retire archived teacher context consistently.** Add nullable `hiddenAt`; hide known lifecycle `targetType/targetId` and producer `metadata.classId` rows for affected staff; backfill the confirmed production shapes; filter both list and unread count by `hiddenAt IS NULL`.
 
-## 5. Improvements
+### 4.4 Compatibility, cleanup, and rollback
 
-### Required decoupling
+- Additive optional target-attribution fields preserve current web/mobile consumers while the shared web/mobile contract types remain compatible.
+- Existing lifecycle notifications carry `targetType/targetId`; confirmed discussion and finalization rows carry `metadata.classId`. Unknown legacy rows remain visible rather than being broadly hidden.
+- User batch purge must continue to enforce self-erasure and last-admin boundaries on the complete target set.
+- A failed atomic batch must leave all database targets present and a failed operation receipt available for diagnosis.
+- UI changes can roll back independently because they reuse existing endpoints. Notification-policy rollout is reversible through nullable `hiddenAt`; lifecycle/audit receipts are not hidden or deleted.
 
-Separate these concepts, which are currently presented too close together:
+### 4.5 Validation matrix
 
-- **Current membership** from **historical participation evidence**.
-- **Multi-selection** from **single-target review state**.
-- **Empty-record purge** from **official-history erasure**.
-- **Policy evidence inventory** from **complete physical dependency inventory**.
+| Scenario | Required proof |
+|---|---|
+| 33 eligible archived classes | One preview lists all 33; one execute deletes all; receipt has 33 items |
+| Evidence-bearing class among eligible targets | Preview includes legacy evidence; explicit descendant cleanup completes; all selected parents delete atomically |
+| One ineligible target among eligible targets | UI names the exact row and reason; execute remains disabled; eligible rows are untouched |
+| Failed batch followed by eligible single purge | Close batch, open single, obtain fresh preview/key, and succeed without page reload |
+| 403 / 409 / 429 branches | Correct remediation is shown; no generic “permanent deletion failed” dead end |
+| Multi-section execute | Two or more sections delete atomically with a durable receipt |
+| Multi-user execute | Mixed deleted roles work; self and last-admin sets block with target-aware explanations |
+| Archive class/section | Learners with membership changes may be notified; teachers/advisers receive no archive-event row; operation audit remains present |
+| Old archived-context notification | Notification list, pagination total, unread count, and live-state reconciliation agree |
 
-### Optional evidence-backed improvements
+## 5. Required improvements
 
-1. Return a machine-readable enrollment conflict code and current status so clients can say “Reactivate prior membership” instead of a generic 409.
-2. Replace raw evidence keys with labels, counts, school year, and direct “View evidence” links.
-3. Add a batch progress/receipt view with succeeded, retained, failed, and not-run groups; keep unsuccessful IDs selected.
-4. Remember a teacher’s active/historical display preference per workspace, while defaulting new current workspaces to active.
-5. Add telemetry for false-409 status, batch completion, and retained-evidence outcomes without logging grade contents or passwords.
+1. **P0 — Classify and clear transitive class-record restrictions.** This is the confirmed execution culprit; cover both class and section batches against real PostgreSQL.
+2. **P0 — Expand the live schema hash to CASCADE-reachable dependencies.** Future restrictive descendant edges must fail closed in preview rather than surface as a 5xx parent delete.
+3. **P1 — Add governed multiple purge to Deleted users.** Reuse the batch erasure contract; do not add purge to ordinary bulk lifecycle.
+4. **P1 — Define and enforce archive-notification policy at the backend.** Keep list, total, unread count, and any live updates consistent.
+5. **P2 — Add structured operational evidence.** Persist a safe nested PostgreSQL code/constraint/table summary with the operation ID, target type/count, and failure code without target names, SQL parameters, tokens, passwords, or confirmation text.
 
-## 6. Uncertainty and coverage boundary
+Optional improvements, after the required work:
 
-- **Unverified:** the exact `enrollments.status`, class ID, section membership, and participant rows behind the supplied production 409.
-- **Unverified:** whether “all archived students” refers to the eligibility roster, grade grid, export, or another class detail list; all inspected class-record consumers can surface historical participants, but with different inclusion rules.
-- **Unverified:** the deployed `nexora-lms.com` frontend/backend SHA and whether its database constraints exactly match the local schema at this baseline.
-- **Unverified:** the school’s legal/records-retention authority to erase official grades, attempts, lifecycle events, and annual outcomes.
-- **Unverified:** external consumers outside this repository and external objects/indexes attached to each specific target.
-- **Scope boundary:** inspected admin class/section/user purge entry points, shared lifecycle dialog/service, purge planning and apply, legacy bulk services, admin/teacher add-student pages, shared enrollment controller/service, enrollment and academic FK schemas, class-record roster/spreadsheet/UI/tests, mobile contract consumers, historical-retirement presence, and the adjacent System Reset entry point. Authenticated live reproduction, production database reads, data mutation, deployment, and implementation were excluded.
+- Add a downloadable pre-execution impact manifest for large batches.
+- Add a safe “copy diagnostic receipt” action that omits credentials and sensitive row content.
+- Show the shared three-execute-per-minute budget before the admin retries.
+- Add filters for Archived-context and Administrative lifecycle notifications instead of silently deleting history.
 
-After a final repository-wide search for the reported messages, class/section/user foreign-key references, enrollment POST consumers, bulk lifecycle owners, and class-record consumers, no additional dependency was found within the inspected scope.
+## 6. Verification and uncertainty
+
+### Current evidence
+
+- Focused backend tests: **23/23 passed** across `admin-erasure.service.spec.ts`, `purge-lifecycle.service.spec.ts`, and `notifications.service.spec.ts`.
+- Shared erasure dialog test: **1/1 passed**, but it covers only a happy-path two-class batch.
+- Real-PostgreSQL integration includes a successful atomic 33-class purge, rollback when one of three class deletions fails, a single deleted-user purge, and section schema-blocker/repair preview. Its 33-class fixture has no class records or legacy-grade evidence, so it did not exercise the production failure graph. It also does not cover multi-section execute or multi-user execute.
+- Exact baseline CI run `34829461403` is successful. This proves the checked-in/disposable test paths, not the reported authenticated production target data.
+- Railway backend deployment `c48ac76f-bb8e-4348-9d70-da20e95ca8ba` reports `SUCCESS` with a running instance, and cascade erasure is enabled. The prior deployment logs and operation ledger contain the reported failed parent deletes and exact selected IDs.
+
+### Remaining uncertainty
+
+- **Confirmed in the completed local implementation:** all 32 migrations applied to a disposable PostgreSQL database and the 31-test integration rehearsal passed. It covers evidence-bearing two-class and two-section deletion, unrelated-evidence survival, atomic rollback, an unclassified transitive restriction, safe failure receipts, and a two-user batch.
+- **Unverified until deployment:** production execution of the corrected code. Production acceptance will use non-destructive preview and receipt/log checks; no school record will be permanently deleted solely for verification.
+- **Chosen policy from the report wording:** remove archived class/section context from the Teacher notification surface while preserving targeted learner membership notices. If the institution later wants teachers to retain an archive history feed, that should be a separately labeled audit/history surface, not the unread notification inbox.
+
+### Implementation verification addendum — 2026-09-14
+
+- **Confirmed locally:** 89 focused backend tests, 9 focused web tests, the administrator contract gate, backend and frontend production builds, web and mobile typechecks, migration integrity, and `git diff --check` passed.
+- **Confirmed locally:** notification retirement is reversible through `hidden_at`; inbox, pagination total, unread count, and mark-all-read share the visible-row predicate; archive execution retires staff context before creating learner-only notices.
+- **Confirmed locally:** no purge bypass was introduced. Deleted-user multi-select reuses the governed `USER` batch preview/execute flow, preserves the 1–50 target bound, clears selection on tab changes, and disables selection while stale rows are refreshing.
+- **Still deployment-bound:** exact pushed-SHA CI, Railway migration/deployment success, and authenticated non-destructive production previews. Those checks cannot be treated as confirmed until the release commit is deployed.
+
+### Coverage boundary
+
+Inspected: admin classes, sections, users list/profile, shared erasure dialog and service, lifecycle DTO/controller/manifest/prepare/execute paths, direct and transitive production FK catalog, failed operation ledger and target dependency counts, maintenance gates, class/section recipient construction, teacher notification schema/list/unread paths and production aggregate counts, focused unit/integration tests, exact-SHA CI status, authenticated production preview, and read-only Railway deployment/configuration/log evidence.
+
+Excluded as non-blocking for this analysis: mobile admin UI, AI service, unrelated academic feature screens, and destructive production execution. No additional decision-changing dependency was found within the inspected scope.

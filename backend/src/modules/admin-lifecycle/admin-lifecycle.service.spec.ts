@@ -137,6 +137,10 @@ function setup(
     retryCleanup: jest.fn(),
     getOperation: jest.fn().mockResolvedValue({ targetType: 'CLASS' }),
   };
+  const notifications = {
+    createBulkDeduped: jest.fn().mockResolvedValue([]),
+    hideArchivedTeacherContext: jest.fn().mockResolvedValue(undefined),
+  };
   const service = new AdminLifecycleService(
     database,
     { get: jest.fn().mockReturnValue(enabled) } as any,
@@ -145,7 +149,7 @@ function setup(
     sectionLifecycle,
     {} as any,
     audit as any,
-    { createBulkDeduped: jest.fn().mockResolvedValue([]) } as any,
+    notifications as any,
     maintenance as any,
     adminErasure as any,
   );
@@ -175,6 +179,7 @@ function setup(
     maintenance,
     maintenanceContext,
     adminErasure,
+    notifications,
   };
 }
 
@@ -212,7 +217,7 @@ describe('AdminLifecycleService execution', () => {
   });
 
   it('binds historical mode to the request hash and audit evidence', async () => {
-    const { service, classLifecycle, audit } = setup();
+    const { service, classLifecycle, audit, notifications } = setup();
     const preview = {
       classId: targetId,
       lifecycleMode: 'HISTORICAL_RETIREMENT' as const,
@@ -249,6 +254,19 @@ describe('AdminLifecycleService execution', () => {
       manifest,
       plan: { affectedUserIds: [] },
     });
+    const learnerId = '00000000-0000-4000-8000-000000000471';
+    const teacherId = '00000000-0000-4000-8000-000000000472';
+    classLifecycle.apply.mockResolvedValueOnce({
+      changed: [],
+      preserved: ['Academic evidence'],
+      affectedUserIds: [learnerId, teacherId],
+      notificationUserIds: [learnerId],
+      notificationRetirement: {
+        userIds: [teacherId],
+        classIds: [targetId],
+        sectionIds: [],
+      },
+    });
     const dto = {
       ...preview,
       manifestHash: manifest.manifestHash,
@@ -274,6 +292,14 @@ describe('AdminLifecycleService execution', () => {
         }),
       }),
     );
+    expect(notifications.hideArchivedTeacherContext).toHaveBeenCalledWith({
+      userIds: [teacherId],
+      classIds: [targetId],
+      sectionIds: [],
+    });
+    expect(notifications.createBulkDeduped).toHaveBeenCalledWith([
+      expect.objectContaining({ userId: learnerId }),
+    ]);
   });
 
   it('rejects a historical class execution when the re-preview resolves a different lifecycle mode', async () => {

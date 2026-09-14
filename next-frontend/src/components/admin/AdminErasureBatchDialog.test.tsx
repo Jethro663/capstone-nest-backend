@@ -14,7 +14,7 @@ beforeAll(() => {
 describe("AdminErasureBatchDialog", () => {
   it("reviews and executes every selected target in one password-free request", async () => {
     const preview = jest.fn().mockResolvedValue({
-      schemaVersion: 2,
+      schemaVersion: 3,
       targetType: "CLASS",
       targetIds: ["one", "two"],
       purgeMode: "CASCADE_ERASE",
@@ -28,6 +28,9 @@ describe("AdminErasureBatchDialog", () => {
           ],
           storageObjectCount: 0,
           storageBytes: 0,
+          warnings: [],
+          blockers: [],
+          canExecute: true,
         },
         {
           id: "two",
@@ -36,11 +39,15 @@ describe("AdminErasureBatchDialog", () => {
           impactGroups: [],
           storageObjectCount: 0,
           storageBytes: 0,
+          warnings: [],
+          blockers: [],
+          canExecute: true,
         },
       ],
       totals: { lessons: 3 },
       warnings: [{ code: "DATA_WILL_BE_ERASED", message: "Academic evidence will be erased." }],
       blockers: [],
+      globalBlockers: [],
       canExecute: true,
       confirmationText: "ERASE 2 CLASSES",
       catalogVersion: 1,
@@ -89,5 +96,94 @@ describe("AdminErasureBatchDialog", () => {
       purgeMode: "CASCADE_ERASE",
       confirmation: "ERASE 2 CLASSES",
     });
+  });
+
+  it("shows same-code blockers on each responsible target without a global duplicate", async () => {
+    const preview = jest.fn().mockResolvedValue({
+      schemaVersion: 3,
+      targetType: "CLASS",
+      targetIds: ["one", "two"],
+      purgeMode: "CASCADE_ERASE",
+      targets: [
+        {
+          id: "one",
+          displayName: "Math 10",
+          lifecycleState: "ACTIVE",
+          impactGroups: [],
+          storageObjectCount: 0,
+          storageBytes: 0,
+          warnings: [],
+          blockers: [
+            {
+              code: "TARGET_NOT_ARCHIVED",
+              message: "Archive Math 10 first.",
+              resolvable: false,
+            },
+          ],
+          canExecute: false,
+        },
+        {
+          id: "two",
+          displayName: "ESP 10",
+          lifecycleState: "ACTIVE",
+          impactGroups: [],
+          storageObjectCount: 0,
+          storageBytes: 0,
+          warnings: [],
+          blockers: [
+            {
+              code: "TARGET_NOT_ARCHIVED",
+              message: "Archive ESP 10 first.",
+              resolvable: false,
+            },
+          ],
+          canExecute: false,
+        },
+      ],
+      totals: {},
+      warnings: [],
+      blockers: [
+        {
+          code: "TARGET_NOT_ARCHIVED",
+          message: "Archive Math 10 first.",
+          resolvable: false,
+        },
+      ],
+      globalBlockers: [],
+      canExecute: false,
+      confirmationText: "ERASE 2 CLASSES",
+      catalogVersion: 2,
+      databaseSchemaHash: "b".repeat(64),
+      manifestHash: "a".repeat(64),
+      manifestExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
+
+    render(
+      <AdminErasureBatchDialog
+        open
+        onOpenChange={jest.fn()}
+        targetType="CLASS"
+        targetIds={["one", "two"]}
+        targetLabel="2 archived classes"
+        preview={preview}
+        execute={jest.fn()}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /review deletion impact/i }),
+    );
+
+    expect(
+      await screen.findByText("Archive Math 10 first."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Archive ESP 10 first.")).toBeInTheDocument();
+    expect(
+      screen.getAllByText("This record cannot be deleted yet"),
+    ).toHaveLength(2);
+    expect(screen.queryByText("Cannot continue yet")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /permanently delete/i }),
+    ).not.toBeInTheDocument();
   });
 });

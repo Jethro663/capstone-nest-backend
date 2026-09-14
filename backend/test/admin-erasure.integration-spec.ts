@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { sql } from 'drizzle-orm';
+import { HttpException } from '@nestjs/common';
 import * as schema from '../src/drizzle/schema';
 import { PurgeLifecycleService } from '../src/modules/admin-lifecycle/purge-lifecycle.service';
 import { AdminErasureService } from '../src/modules/admin-lifecycle/admin-erasure.service';
@@ -107,6 +108,34 @@ async function seedArchivedClass(
   return { classId, sectionId };
 }
 
+async function seedRestrictedClassRecordEvidence(classId: string) {
+  const classRecordId = randomUUID();
+  await pool.query(
+    `INSERT INTO class_records(id,class_id,teacher_id,grading_period,status)
+     VALUES($1,$2,$3,'Q1','finalized')`,
+    [classRecordId, classId, actorId],
+  );
+  await pool.query(
+    `INSERT INTO class_record_participants(class_record_id,student_id,source)
+     VALUES($1,$2,'erasure-fixture')`,
+    [classRecordId, actorId],
+  );
+  await pool.query(
+    `INSERT INTO academic_legacy_grade_evidence(
+       source_final_grade_id,class_record_id,student_id,school_year,period,source_snapshot
+     ) VALUES($1,$2,$3,'2025-2026','Q1','{}'::jsonb)`,
+    [randomUUID(), classRecordId, actorId],
+  );
+  await pool.query(
+    `INSERT INTO academic_period_grade_revisions(
+       class_record_id,class_id,student_id,school_year,subject_code,grade_level,
+       period,revision,grade,evidence
+     ) VALUES($1,$2,$3,'2025-2026','ERASE-EVIDENCE','10','Q1',1,85,'{}'::jsonb)`,
+    [classRecordId, classId, actorId],
+  );
+  return classRecordId;
+}
+
 describe('admin cascade erasure on real PostgreSQL', () => {
   beforeEach(async () => {
     await pool.query(
@@ -182,6 +211,143 @@ describe('admin cascade erasure on real PostgreSQL', () => {
     });
   });
 
+  it('deletes an evidence-bearing class inside a multi-class batch without touching unrelated evidence', async () => {
+    const evidenceTarget = await seedArchivedClass(41);
+    const emptyTarget = await seedArchivedClass(42);
+    const unrelatedTarget = await seedArchivedClass(43);
+    await seedRestrictedClassRecordEvidence(evidenceTarget.classId);
+    const unrelatedRecordId = await seedRestrictedClassRecordEvidence(
+      unrelatedTarget.classId,
+    );
+    const targetIds = [evidenceTarget.classId, emptyTarget.classId];
+    const preview = await erasure.prepare(
+      { targetType: 'CLASS', targetIds, purgeMode: 'CASCADE_ERASE' },
+      actorId,
+    );
+
+    expect(preview.canExecute).toBe(true);
+    expect(preview.totals.legacyGradeEvidence).toBe(1);
+    expect(preview.totals.gradeRevisions).toBe(1);
+    expect(preview.totals.classRecordParticipants).toBe(1);
+
+    const result = await erasure.execute(
+      {
+        targetType: 'CLASS',
+        targetIds,
+        purgeMode: 'CASCADE_ERASE',
+        manifestHash: preview.manifestHash,
+        manifestExpiresAt: preview.manifestExpiresAt,
+        reasonCode: 'OTHER',
+        notes: 'Evidence-bearing multi-class erasure regression.',
+        confirmation: preview.confirmationText,
+        idempotencyKey: randomUUID(),
+      },
+      actorId,
+      actorSnapshot,
+    );
+
+    expect(result.deletedCount).toBe(2);
+    expect(
+      (
+        await pool.query(
+          'SELECT count(*)::int AS count FROM classes WHERE id=ANY($1::uuid[])',
+          [targetIds],
+        )
+      ).rows[0].count,
+    ).toBe(0);
+    expect(
+      (
+        await pool.query(
+          'SELECT count(*)::int AS count FROM class_records WHERE id=$1',
+          [unrelatedRecordId],
+        )
+      ).rows[0].count,
+    ).toBe(1);
+  });
+
+  it('deletes an evidence-bearing section inside a multi-section batch atomically', async () => {
+    const evidenceTarget = await seedArchivedClass(51);
+    const emptyTarget = await seedArchivedClass(52);
+    await seedRestrictedClassRecordEvidence(evidenceTarget.classId);
+    const targetIds = [evidenceTarget.sectionId, emptyTarget.sectionId];
+    const preview = await erasure.prepare(
+      { targetType: 'SECTION', targetIds, purgeMode: 'CASCADE_ERASE' },
+      actorId,
+    );
+
+    expect(preview.canExecute).toBe(true);
+    expect(preview.totals.legacyGradeEvidence).toBe(1);
+    expect(preview.totals.gradeRevisions).toBe(1);
+    expect(preview.totals.classRecordParticipants).toBe(1);
+
+    const result = await erasure.execute(
+      {
+        targetType: 'SECTION',
+        targetIds,
+        purgeMode: 'CASCADE_ERASE',
+        manifestHash: preview.manifestHash,
+        manifestExpiresAt: preview.manifestExpiresAt,
+        reasonCode: 'OTHER',
+        notes: 'Evidence-bearing multi-section erasure regression.',
+        confirmation: preview.confirmationText,
+        idempotencyKey: randomUUID(),
+      },
+      actorId,
+      actorSnapshot,
+    );
+
+    expect(result.deletedCount).toBe(2);
+    expect(
+      (
+        await pool.query(
+          'SELECT count(*)::int AS count FROM sections WHERE id=ANY($1::uuid[])',
+          [targetIds],
+        )
+      ).rows[0].count,
+    ).toBe(0);
+  });
+
+  it('fails closed for an unreviewed restriction below a cascade-reachable table', async () => {
+    const target = await seedArchivedClass(61);
+    const classRecordId = await seedRestrictedClassRecordEvidence(
+      target.classId,
+    );
+    await pool.query(
+      `CREATE TABLE erasure_unknown_descendant (
+         id uuid PRIMARY KEY,
+         class_record_id uuid NOT NULL REFERENCES class_records(id) ON DELETE RESTRICT
+       )`,
+    );
+    await pool.query(
+      `INSERT INTO erasure_unknown_descendant(id, class_record_id)
+       VALUES($1, $2)`,
+      [randomUUID(), classRecordId],
+    );
+
+    try {
+      const preview = await erasure.prepare(
+        {
+          targetType: 'CLASS',
+          targetIds: [target.classId],
+          purgeMode: 'CASCADE_ERASE',
+        },
+        actorId,
+      );
+
+      expect(preview.canExecute).toBe(false);
+      expect(preview.globalBlockers).toEqual([
+        expect.objectContaining({
+          code: 'UNCLASSIFIED_DEPENDENCY',
+          message: expect.stringContaining(
+            'erasure_unknown_descendant.class_record_id',
+          ),
+        }),
+      ]);
+    } finally {
+      await pool.query('DROP TABLE IF EXISTS erasure_unknown_descendant');
+    }
+  });
+
   it('rolls back every target when one class deletion fails', async () => {
     const seeded = await Promise.all(
       Array.from({ length: 3 }, (_, index) => seedArchivedClass(index + 101)),
@@ -224,8 +390,37 @@ describe('admin cascade erasure on real PostgreSQL', () => {
       } catch (error: unknown) {
         failure = error;
       }
-      expect(failure).toBeInstanceOf(Error);
-      expect((failure as Error & { cause?: Error }).cause?.message).toContain(
+      expect(failure).toBeInstanceOf(HttpException);
+      const response = (failure as HttpException).getResponse() as Record<
+        string,
+        unknown
+      >;
+      expect(response).toMatchObject({
+        code: 'ERASURE_EXECUTION_FAILED',
+        message: 'Permanent deletion failed. Use the operation ID for support.',
+      });
+      expect(response).not.toHaveProperty('databaseCode');
+      expect(response).not.toHaveProperty('constraint');
+      expect(response).not.toHaveProperty('table');
+      expect(response.operationId).toEqual(expect.any(String));
+      expect(JSON.stringify(response)).not.toContain('fixture delete failure');
+      expect(JSON.stringify(response)).not.toContain('DELETE FROM');
+
+      const failedOperation = await pool.query(
+        `SELECT failure_code AS "failureCode", failure_message AS "failureMessage"
+         FROM admin_erasure_operations
+         WHERE id = $1::uuid`,
+        [response.operationId],
+      );
+      expect(failedOperation.rows[0].failureCode).toBe(
+        'ERASURE_EXECUTION_FAILED',
+      );
+      expect(JSON.parse(failedOperation.rows[0].failureMessage)).toMatchObject({
+        operationId: response.operationId,
+        code: 'ERASURE_EXECUTION_FAILED',
+        databaseCode: 'P0001',
+      });
+      expect(failedOperation.rows[0].failureMessage).not.toContain(
         'fixture delete failure',
       );
     } finally {
@@ -292,6 +487,55 @@ describe('admin cascade erasure on real PostgreSQL', () => {
       await pool.query('SELECT teacher_id FROM classes WHERE id=$1', [classId])
     ).rows[0];
     expect(retainedClass).toEqual({ teacher_id: null });
+  });
+
+  it('erases two reviewed deleted user accounts in one atomic batch', async () => {
+    const targetIds = [randomUUID(), randomUUID()];
+    await pool.query(
+      `INSERT INTO users(id,email,password,first_name,last_name,account_status)
+       VALUES
+         ($1,$2,'fixture','Archived','One','DELETED'),
+         ($3,$4,'fixture','Archived','Two','DELETED')`,
+      [
+        targetIds[0],
+        `archived-${targetIds[0]}@example.test`,
+        targetIds[1],
+        `archived-${targetIds[1]}@example.test`,
+      ],
+    );
+    const preview = await erasure.prepare(
+      { targetType: 'USER', targetIds, purgeMode: 'CASCADE_ERASE' },
+      actorId,
+    );
+
+    expect(preview.canExecute).toBe(true);
+    expect(preview.confirmationText).toBe('ERASE 2 USERS');
+
+    const result = await erasure.execute(
+      {
+        targetType: 'USER',
+        targetIds,
+        purgeMode: 'CASCADE_ERASE',
+        manifestHash: preview.manifestHash,
+        manifestExpiresAt: preview.manifestExpiresAt,
+        reasonCode: 'OTHER',
+        notes: 'Multi-account erasure rehearsal.',
+        confirmation: preview.confirmationText,
+        idempotencyKey: randomUUID(),
+      },
+      actorId,
+      actorSnapshot,
+    );
+
+    expect(result.deletedCount).toBe(2);
+    expect(
+      (
+        await pool.query(
+          'SELECT count(*)::int AS count FROM users WHERE id=ANY($1::uuid[])',
+          [targetIds],
+        )
+      ).rows[0].count,
+    ).toBe(0);
   });
 
   it('repairs the legacy gradebook teacher constraint before reviewing cascade erasure', async () => {

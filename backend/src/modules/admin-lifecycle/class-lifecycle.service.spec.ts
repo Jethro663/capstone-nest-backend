@@ -85,12 +85,13 @@ describe('class lifecycle planning', () => {
   });
 
   it('allows completion and preserves historical evidence', () => {
+    const learnerId = '00000000-0000-4000-8000-000000000106';
     const result = planClassLifecycle(
       snapshot({
         activeEnrollments: [
           {
             id: '00000000-0000-4000-8000-000000000105',
-            studentId: '00000000-0000-4000-8000-000000000106',
+            studentId: learnerId,
             sectionId: '00000000-0000-4000-8000-000000000103',
             classId: sourceClassId,
             status: 'enrolled',
@@ -115,6 +116,12 @@ describe('class lifecycle planning', () => {
 
     expect(result.blockers).toEqual([]);
     expect(result.preserved).toContain('4 class record score(s)');
+    expect(result.notificationUserIds).toEqual([learnerId]);
+    expect(result.notificationRetirement).toEqual({
+      userIds: ['00000000-0000-4000-8000-000000000104'],
+      classIds: [sourceClassId],
+      sectionIds: [],
+    });
   });
 
   it('blocks an incompatible replacement class', () => {

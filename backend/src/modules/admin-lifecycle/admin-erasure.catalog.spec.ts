@@ -18,6 +18,27 @@ describe('admin erasure dependency catalog', () => {
           action: 'DELETE',
         }),
         expect.objectContaining({
+          table: 'academic_legacy_grade_evidence',
+          column: 'class_record_id',
+          targetTable: 'class_records',
+          action: 'DELETE',
+          selector: 'CLASS_RECORD_DESCENDANT',
+        }),
+        expect.objectContaining({
+          table: 'academic_period_grade_revisions',
+          column: 'class_record_id',
+          targetTable: 'class_records',
+          action: 'DELETE',
+          selector: 'CLASS_RECORD_DESCENDANT',
+        }),
+        expect.objectContaining({
+          table: 'class_record_participants',
+          column: 'class_record_id',
+          targetTable: 'class_records',
+          action: 'DELETE',
+          selector: 'CLASS_RECORD_DESCENDANT',
+        }),
+        expect.objectContaining({
           table: 'announcements',
           column: 'author_id',
           targetTable: 'users',

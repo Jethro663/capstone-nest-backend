@@ -170,7 +170,7 @@ export type AdminPurgeTargetType = "CLASS" | "SECTION" | "USER";
 export type AdminPurgeMode = "EMPTY_ONLY" | "CASCADE_ERASE";
 
 export interface AdminErasureBatchPreview {
-  schemaVersion: 2;
+  schemaVersion: 3;
   targetType: AdminPurgeTargetType;
   targetIds: string[];
   purgeMode: AdminPurgeMode;
@@ -186,10 +186,14 @@ export interface AdminErasureBatchPreview {
     }>;
     storageObjectCount: number;
     storageBytes: number | null;
+    warnings: Array<{ code: string; message: string }>;
+    blockers: AdminLifecycleBlocker[];
+    canExecute: boolean;
   }>;
   totals: Record<string, number>;
   warnings: Array<{ code: string; message: string }>;
   blockers: AdminLifecycleBlocker[];
+  globalBlockers: AdminLifecycleBlocker[];
   canExecute: boolean;
   confirmationText: string;
   catalogVersion: number;

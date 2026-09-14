@@ -2,6 +2,9 @@ export interface LifecycleEvidenceCounts {
   enrollmentHistory: number;
   lifecycleEvents: number;
   classRecords: number;
+  classRecordParticipants: number;
+  legacyGradeEvidence: number;
+  gradeRevisions: number;
   draftParticipants: number;
   finalizedParticipants: number;
   scores: number;
@@ -17,6 +20,9 @@ const RETAINED_CATEGORIES: Array<keyof LifecycleEvidenceCounts> = [
   'enrollmentHistory',
   'lifecycleEvents',
   'classRecords',
+  'classRecordParticipants',
+  'legacyGradeEvidence',
+  'gradeRevisions',
   'finalizedParticipants',
   'scores',
   'attempts',
@@ -33,6 +39,9 @@ export function classifyLifecycleEvidence(
     enrollmentHistory: input.enrollmentHistory ?? 0,
     lifecycleEvents: input.lifecycleEvents ?? 0,
     classRecords: input.classRecords ?? 0,
+    classRecordParticipants: input.classRecordParticipants ?? 0,
+    legacyGradeEvidence: input.legacyGradeEvidence ?? 0,
+    gradeRevisions: input.gradeRevisions ?? 0,
     draftParticipants: input.draftParticipants ?? 0,
     finalizedParticipants: input.finalizedParticipants ?? 0,
     scores: input.scores ?? 0,

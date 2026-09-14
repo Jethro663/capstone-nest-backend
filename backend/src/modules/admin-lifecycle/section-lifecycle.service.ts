@@ -17,6 +17,7 @@ import type {
   AdminLifecycleEffect,
   AdminLifecycleManifest,
   AdminLifecycleWarning,
+  AdminArchiveNotificationRetirement,
 } from './admin-lifecycle.types';
 import {
   StudentLifecycleService,
@@ -61,6 +62,8 @@ export interface SectionLifecycleSnapshot {
 
 export interface SectionLifecyclePlan extends LearnerPlanSummary {
   resolvedStudentIds: string[];
+  notificationUserIds: string[];
+  notificationRetirement: AdminArchiveNotificationRetirement;
 }
 
 export interface SectionLifecyclePrepared {
@@ -87,6 +90,7 @@ export function planSectionLifecycle(
   const preserved: string[] = [];
   const confirmations = new Set<string>(['PRESERVE_ACADEMIC_HISTORY']);
   const affectedUserIds = new Set<string>();
+  const staffRetirementUserIds = new Set<string>();
   const historicalRetirement = dto.lifecycleMode === 'HISTORICAL_RETIREMENT';
   const studentResolutions = dto.studentResolutions ?? [];
   const outcomeByStudent = new Map(
@@ -258,7 +262,10 @@ export function planSectionLifecycle(
     learnerPlan.requiredConfirmations.forEach((value) =>
       confirmations.add(value),
     );
-    learnerPlan.affectedUserIds.forEach((value) => affectedUserIds.add(value));
+    learnerPlan.affectedUserIds.forEach((value) => {
+      affectedUserIds.add(value);
+      staffRetirementUserIds.add(value);
+    });
   }
 
   for (const linkedClass of snapshot.linkedClasses) {
@@ -280,10 +287,15 @@ export function planSectionLifecycle(
   preserved.push(
     'Section adviser, class teachers, and all historical academic evidence',
   );
-  if (snapshot.section.adviserId)
+  if (snapshot.section.adviserId) {
     affectedUserIds.add(snapshot.section.adviserId);
+    staffRetirementUserIds.add(snapshot.section.adviserId);
+  }
   snapshot.linkedClasses.forEach((entry) => {
-    if (entry.teacherId) affectedUserIds.add(entry.teacherId);
+    if (entry.teacherId) {
+      affectedUserIds.add(entry.teacherId);
+      staffRetirementUserIds.add(entry.teacherId);
+    }
   });
 
   const choiceOnly = historicalRetirement && blockers.length > 0;
@@ -299,6 +311,16 @@ export function planSectionLifecycle(
       : snapshot.activeStudentIds.filter((studentId) =>
           outcomeByStudent.has(studentId),
         ),
+    notificationUserIds: choiceOnly
+      ? []
+      : snapshot.activeStudentIds.filter((studentId) =>
+          outcomeByStudent.has(studentId),
+        ),
+    notificationRetirement: {
+      userIds: [...staffRetirementUserIds],
+      classIds: snapshot.linkedClasses.map((entry) => entry.id),
+      sectionIds: [snapshot.section.id],
+    },
   };
 }
 
@@ -603,6 +625,8 @@ export class SectionLifecycleService {
       changed,
       preserved: prepared.plan.preserved,
       affectedUserIds: prepared.plan.affectedUserIds,
+      notificationUserIds: prepared.plan.notificationUserIds,
+      notificationRetirement: prepared.plan.notificationRetirement,
     };
   }
 }

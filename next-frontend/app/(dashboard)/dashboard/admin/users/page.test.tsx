@@ -5,6 +5,7 @@ import UserManagementPage from "./page";
 import { userService } from "@/services/user-service";
 
 const pushMock = jest.fn();
+const erasureDialogMock = jest.fn();
 
 jest.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -26,6 +27,28 @@ jest.mock("@/services/user-service", () => ({
     softDelete: jest.fn(),
     exportUser: jest.fn(),
     bulkLifecycle: jest.fn(),
+  },
+}));
+
+jest.mock("@/services/admin-lifecycle-service", () => ({
+  adminLifecycleService: {
+    previewPurgeBatch: jest.fn(),
+    executePurgeBatch: jest.fn(),
+  },
+}));
+
+jest.mock("@/components/admin/AdminErasureBatchDialog", () => ({
+  AdminErasureBatchDialog: (props: {
+    open: boolean;
+    targetType: string;
+    targetIds: string[];
+  }) => {
+    erasureDialogMock(props);
+    return props.open ? (
+      <div data-testid="user-erasure-dialog">
+        {props.targetType}:{props.targetIds.join(",")}
+      </div>
+    ) : null;
   },
 }));
 
@@ -75,6 +98,21 @@ function buildResponse(query?: {
             createdAt: "2026-03-27T00:00:00.000Z",
             updatedAt: "2026-03-27T00:00:00.000Z",
           },
+          ...(status === "DELETED"
+            ? [
+                {
+                  id: "teacher-deleted",
+                  firstName: "Deleted",
+                  lastName: "Teacher",
+                  email: "deleted-teacher@example.com",
+                  roles: ["teacher"],
+                  status,
+                  isEmailVerified: true,
+                  createdAt: "2026-03-27T00:00:00.000Z",
+                  updatedAt: "2026-03-27T00:00:00.000Z",
+                },
+              ]
+            : []),
         ];
 
   return {
@@ -97,6 +135,7 @@ describe("UserManagementPage", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     pushMock.mockReset();
+    erasureDialogMock.mockClear();
     mockedUserService.getAll.mockImplementation(async (query) =>
       buildResponse(query),
     );
@@ -110,6 +149,87 @@ describe("UserManagementPage", () => {
         failed: [],
       },
     });
+  });
+
+  it("opens one governed purge review for multiple selected deleted users", async () => {
+    render(<UserManagementPage />);
+    await screen.findByRole("heading", { name: "Users" });
+
+    const deletedTab = screen.getByRole("tab", { name: /deleted/i });
+    fireEvent.mouseDown(deletedTab);
+    fireEvent.click(deletedTab);
+    await waitFor(() =>
+      expect(mockedUserService.getAll).toHaveBeenLastCalledWith({
+        status: "DELETED",
+        role: undefined,
+        limit: 100,
+        includeStatusCounts: true,
+      }),
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /select all visible/i }),
+    );
+    expect(screen.getByText("2 selected")).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /review selected accounts for permanent deletion/i,
+      }),
+    );
+
+    expect(await screen.findByTestId("user-erasure-dialog")).toHaveTextContent(
+      "USER:student-deleted,teacher-deleted",
+    );
+    expect(mockedUserService.bulkLifecycle).not.toHaveBeenCalled();
+  });
+
+  it("caps a deleted-account batch review at 50 non-self records", async () => {
+    mockedUserService.getAll.mockImplementation(async (query) => {
+      if (query?.status !== "DELETED") return buildResponse(query);
+      const base = buildResponse(query);
+      const deletedUsers = Array.from({ length: 51 }, (_, index) => ({
+        id: `deleted-${index + 1}`,
+        firstName: "Archived",
+        lastName: `User ${index + 1}`,
+        email: `archived-${index + 1}@example.com`,
+        roles: ["student"],
+        status: "DELETED",
+        isEmailVerified: true,
+        createdAt: "2026-03-27T00:00:00.000Z",
+        updatedAt: "2026-03-27T00:00:00.000Z",
+      }));
+      return {
+        ...base,
+        users: [base.users[0], ...deletedUsers],
+        total: 52,
+      } as Awaited<ReturnType<typeof userService.getAll>>;
+    });
+
+    render(<UserManagementPage />);
+    await screen.findByRole("heading", { name: "Users" });
+
+    const deletedTab = screen.getByRole("tab", { name: /deleted/i });
+    fireEvent.mouseDown(deletedTab);
+    fireEvent.click(deletedTab);
+    await screen.findByText("archived-51@example.com");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /select all visible/i }),
+    );
+    expect(screen.getByText("50 selected")).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /review selected accounts for permanent deletion/i,
+      }),
+    );
+
+    const openCall = [...erasureDialogMock.mock.calls]
+      .reverse()
+      .map(([props]) => props)
+      .find((props) => props.open === true);
+    expect(openCall?.targetIds).toHaveLength(50);
+    expect(openCall?.targetIds).toContain("deleted-50");
+    expect(openCall?.targetIds).not.toContain("deleted-51");
   });
 
   it("keeps the page shell mounted while tab changes refresh only the table region", async () => {
@@ -134,6 +254,9 @@ describe("UserManagementPage", () => {
 
     expect(screen.getByRole("heading", { name: "Users" })).toBeInTheDocument();
     expect(screen.getByText("Refreshing users...")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /select all visible/i }),
+    ).toBeDisabled();
 
     resolvePending(buildResponse({ status: "PENDING" }));
 
