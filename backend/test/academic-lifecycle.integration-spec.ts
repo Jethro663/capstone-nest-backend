@@ -1887,7 +1887,7 @@ describe('academic lifecycle PostgreSQL integration', () => {
   const schoolSizedTest =
     process.env.ACADEMIC_LARGE_FIXTURE === '1' ? it : it.skip;
   schoolSizedTest(
-    'checks a school-sized matrix and identifies one stale annual among 9600 learning-area results',
+    'checks a school-sized matrix and excludes one stale annual while other verified results remain',
     async () => {
       const [actor] = await database.db
         .insert(users)
@@ -2048,14 +2048,17 @@ describe('academic lifecycle PostgreSQL integration', () => {
         .update(subjectAnnualGrades)
         .set({ sourceFingerprint: 'intentionally-stale-scale-fixture' })
         .where(eq(subjectAnnualGrades.id, annualRows[5999].id));
-      const blocked = await readiness.getReadiness();
-      expect(blocked.transitionBlocked).toBe(true);
-      expect(blocked.blockers).toEqual([
-        expect.objectContaining({
-          code: 'missing_current_annual',
-          studentId: annualRows[5999].studentId,
-        }),
-      ]);
+      const afterStaleAnnual = await readiness.getReadiness();
+      const affectedOutcome = afterStaleAnnual.studentOutcomes.find(
+        (outcome) => outcome.studentId === annualRows[5999].studentId,
+      );
+      expect(afterStaleAnnual.transitionBlocked).toBe(false);
+      expect(afterStaleAnnual.blockers).toEqual([]);
+      expect(afterStaleAnnual.studentsToPromote).toBe(1200);
+      expect(affectedOutcome?.annualGradeIds).toHaveLength(7);
+      expect(affectedOutcome?.annualGradeIds).not.toContain(
+        annualRows[5999].id,
+      );
       console.info(
         JSON.stringify({
           academicScale: {
