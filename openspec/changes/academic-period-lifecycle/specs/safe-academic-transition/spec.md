@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Transition evaluates the expected matrix atomically
-Transition SHALL acquire the shared academic lock before rebuilding expected classes, students, periods, annual results, and remediation. It SHALL require the last policy period, expected state version, immediate next year, and no target conflicts. It SHALL never auto-finalize drafts and SHALL reset the next year to its first period.
+Transition SHALL acquire the shared academic lock before rebuilding expected classes, students, periods, annual results, and remediation. It SHALL require the last policy period, expected state version, immediate next year, and no target conflicts. Every required period record SHALL remain finalized. Each active learner SHALL have at least one verified current annual subject result, without an exact annual-result count threshold. It SHALL never auto-finalize drafts and SHALL reset the next year to its first period.
 
 #### Scenario: Only existing records are finalized
 - **WHEN** one required period or learning area has no record

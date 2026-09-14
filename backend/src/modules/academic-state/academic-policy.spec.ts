@@ -176,23 +176,23 @@ describe('academic policy', () => {
     ).toBe('graduated');
     expect(
       classifyAnnualOutcome(modern(), '10', [{ finalGrade: 70 }]).outcome,
-    ).toBe('pending_remediation');
+    ).toBe('retained');
     expect(
       classifyAnnualOutcome(modern(), '10', [
         { finalGrade: 70, remedialClassMark: 70 },
       ]).outcome,
     ).toBe('pending_completion');
   });
-  it('requires SRC for one/two failures and retains for three original failures', () => {
+  it('retains unresolved finalized failures when SRC evidence is absent', () => {
     expect(
       classifyAnnualOutcome(modern(), '8', [{ finalGrade: 74 }]).outcome,
-    ).toBe('pending_remediation');
+    ).toBe('retained');
     expect(
       classifyAnnualOutcome(modern(), '8', [
         { finalGrade: 74 },
         { finalGrade: 73 },
       ]).outcome,
-    ).toBe('pending_remediation');
+    ).toBe('retained');
     expect(
       classifyAnnualOutcome(modern(), '8', [
         { finalGrade: 74 },

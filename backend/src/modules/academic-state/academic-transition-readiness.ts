@@ -444,6 +444,7 @@ export function evaluateTransitionReadiness(input: TransitionEvidence) {
       finalGrade: number;
       remedialClassMark?: number;
     }> = [];
+    const annualEvidenceBlockers: TransitionBlocker[] = [];
     for (const [subjectCode, cls] of expected) {
       const ctx = {
         studentId,
@@ -469,7 +470,7 @@ export function evaluateTransitionReadiness(input: TransitionEvidence) {
         sources.get(key) ?? [],
         selections.get(key) ?? [],
       );
-      blockers.push(
+      annualEvidenceBlockers.push(
         ...selected.blockers.map((b) => ({
           ...ctx,
           code: b.code,
@@ -502,7 +503,7 @@ export function evaluateTransitionReadiness(input: TransitionEvidence) {
         annual.officialGrade !==
           calculateAnnualGrade(policy, selected.components).officialGrade
       ) {
-        blockers.push({
+        annualEvidenceBlockers.push({
           ...ctx,
           code: 'missing_current_annual',
           message:
@@ -521,6 +522,7 @@ export function evaluateTransitionReadiness(input: TransitionEvidence) {
         remedialClassMark: src?.remedialClassMark,
       });
     }
+    if (!subjectResults.length) blockers.push(...annualEvidenceBlockers);
     if (blockers.length !== before) {
       missingStudents.add(studentId);
       continue;
@@ -529,16 +531,13 @@ export function evaluateTransitionReadiness(input: TransitionEvidence) {
     const backSubjects = (obligations.get(studentId) ?? []).filter(
       (b) => b.status !== 'cleared',
     );
-    if (
-      result.outcome === 'pending_remediation' ||
-      result.outcome === 'incomplete'
-    ) {
+    if (result.outcome === 'incomplete') {
       blockers.push({
         studentId,
         sectionId: section?.id,
         code: result.outcome,
         message:
-          'Record evidenced SRC results for each of the one or two failed learning areas.',
+          'At least one current annual subject result is required before transition.',
       });
       missingStudents.add(studentId);
       continue;
@@ -613,7 +612,7 @@ export function evaluateTransitionReadiness(input: TransitionEvidence) {
     transitionBlocked: blockers.length > 0,
     message: blockers.length
       ? `${blockers.length} academic readiness issue(s) require resolution before transition.`
-      : 'All expected period records, annual grades, and student outcomes are ready.',
+      : 'Good to go. Required period records are finalized and every active learner has at least one current annual subject result.',
     blockers,
     studentOutcomes,
   };

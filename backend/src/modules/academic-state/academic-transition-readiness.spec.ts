@@ -83,6 +83,75 @@ function completeEvidence(): TransitionEvidence {
   };
 }
 
+function addFinalizedSubjectWithoutAnnual(
+  input: TransitionEvidence,
+  subject: { id: string; code: string; name: string },
+) {
+  const components = input.policy.periods.map(({ key }) => ({
+    period: key,
+    grade: 80,
+    sourceType: 'period_revision' as const,
+    sourceId: `${subject.id}-grade-${key}`,
+    classId: subject.id,
+  }));
+  input.classes.push({
+    id: subject.id,
+    sectionId: 'section',
+    subjectCode: subject.code,
+    subjectGradeLevel: '7',
+    subjectName: subject.name,
+    teacherId: 'teacher',
+    isActive: true,
+  });
+  input.records.push(
+    ...input.policy.periods.map(({ key }) => ({
+      id: `${subject.id}-record-${key}`,
+      classId: subject.id,
+      gradingPeriod: key,
+      status: 'finalized',
+      revision: 1,
+      rosterConfirmedAt: new Date(),
+    })),
+  );
+  input.participants.push(
+    ...input.policy.periods.map(({ key }) => ({
+      classRecordId: `${subject.id}-record-${key}`,
+      studentId: 'student',
+      eligibility: 'eligible',
+    })),
+  );
+  input.revisions.push(
+    ...components.map((component) => ({
+      id: component.sourceId,
+      classRecordId: `${subject.id}-record-${component.period}`,
+      classId: subject.id,
+      studentId: 'student',
+      subjectCode: subject.code,
+      gradeLevel: '7',
+      period: component.period,
+      grade: component.grade,
+      revision: 1,
+      trusted: true,
+    })),
+  );
+}
+
+function setOnlyAnnualGrade(input: TransitionEvidence, grade: number) {
+  const components = input.annuals[0].components.map((component) => ({
+    ...component,
+    grade,
+  }));
+  input.revisions.forEach((revision) => (revision.grade = grade));
+  input.annuals[0] = {
+    ...input.annuals[0],
+    officialGrade: grade,
+    components,
+    sourceFingerprint: createHash('sha256')
+      .update(JSON.stringify({ policy: input.policy, components }))
+      .digest('hex'),
+  };
+}
+
 describe('expected academic transition matrix', () => {
   it('uses every policy period and a current annual snapshot', () => {
     const result = evaluateTransitionReadiness(completeEvidence());
@@ -143,6 +212,24 @@ describe('expected academic transition matrix', () => {
     input.enrollments = [];
     expect(evaluateTransitionReadiness(input).transitionBlocked).toBe(false);
   });
+  it('blocks an active learner with zero current annual subject results', () => {
+    const input = completeEvidence();
+    input.annuals = [];
+
+    const result = evaluateTransitionReadiness(input);
+
+    expect(result.transitionBlocked).toBe(true);
+    expect(result.studentOutcomes).toHaveLength(0);
+    expect(result.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'missing_current_annual',
+          studentId: 'student',
+          subjectCode: 'MATH',
+        }),
+      ]),
+    );
+  });
   it('blocks a section student with no expected learning areas', () => {
     const input = completeEvidence();
     input.classes = [];
@@ -158,7 +245,27 @@ describe('expected academic transition matrix', () => {
       evaluateTransitionReadiness(input).blockers.map((b) => b.code),
     ).toContain('not_final_period');
   });
-  it('does not use a single high annual grade to hide another missing subject', () => {
+  it('accepts one current annual result after every required period record is finalized', () => {
+    const input = completeEvidence();
+    addFinalizedSubjectWithoutAnnual(input, {
+      id: 'science',
+      code: 'SCIENCE',
+      name: 'Science',
+    });
+
+    const result = evaluateTransitionReadiness(input);
+
+    expect(result.transitionBlocked).toBe(false);
+    expect(result.expectedAnnualGrades).toBe(2);
+    expect(result.studentOutcomes[0]).toMatchObject({
+      outcome: 'promoted',
+      annualGradeIds: ['annual'],
+    });
+    expect(result.message).toBe(
+      'Good to go. Required period records are finalized and every active learner has at least one current annual subject result.',
+    );
+  });
+  it('still blocks a missing required period record when another annual result is valid', () => {
     const input = completeEvidence();
     input.classes.push({
       ...input.classes[0],
@@ -168,12 +275,26 @@ describe('expected academic transition matrix', () => {
     expect(evaluateTransitionReadiness(input).blockers).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          code: 'missing_period_grade',
-          studentId: 'student',
-          subjectCode: 'SCIENCE',
+          code: 'missing_period_record',
+          classId: 'science',
         }),
       ]),
     );
+  });
+  it('retains a learner with a finalized failing annual result and no SRC', () => {
+    const input = completeEvidence();
+    setOnlyAnnualGrade(input, 70);
+
+    const result = evaluateTransitionReadiness(input);
+
+    expect(result.transitionBlocked).toBe(false);
+    expect(result.studentsToRetain).toBe(1);
+    expect(result.studentOutcomes[0]).toMatchObject({
+      outcome: 'retained',
+      targetGradeLevel: '7',
+      annualGradeIds: ['annual'],
+      remediationResultIds: [],
+    });
   });
   it('blocks conflicting same-period transfer evidence instead of trusting an old annual', () => {
     const input = completeEvidence();

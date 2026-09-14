@@ -150,6 +150,19 @@ describe("Year transition settings", () => {
     consoleError.mockRestore();
   });
 
+  it("explains the current annual-result requirement without a fixed count", async () => {
+    render(<Page />);
+
+    expect(
+      await screen.findByText(
+        "4 of 12 required period records finalized · At least one current, finalized annual subject result per active learner",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("3 annual subject results required", { exact: false }),
+    ).not.toBeInTheDocument();
+  });
+
   it("preserves destination mapping, password, and exact confirmation safeguards", async () => {
     const readyPreview = {
       ...blockedPreview,

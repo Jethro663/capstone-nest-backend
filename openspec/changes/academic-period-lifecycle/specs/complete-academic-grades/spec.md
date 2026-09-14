@@ -23,8 +23,16 @@ Finalization SHALL append evidence-backed period revisions. Annual grades SHALL 
 - **THEN** annual results become invalid immediately and prior issued versions remain auditable.
 
 ### Requirement: Remediation determines outcomes
-One or two failed annual learning areas SHALL require evidenced SRC results. Legacy failed SRC leads to retention; modern failed SRC creates conditional promotion/back-subject obligations. Three or more original failures lead to retention. Grade 10 SHALL NOT be marked complete with unresolved deficiencies.
+A current finalized failed annual learning area without evidenced SRC SHALL produce retention rather than block transition. When SRC evidence exists, legacy failed SRC leads to retention and modern failed SRC creates conditional promotion/back-subject obligations. Three or more original failures lead to retention. Grade 10 SHALL NOT be marked complete with unresolved deficiencies.
+
+#### Scenario: Finalized failure without SRC
+- **WHEN** an active learner has at least one current finalized annual result, that result is below the passing grade, and no SRC result exists
+- **THEN** the official year outcome is retained and missing SRC does not block transition.
 
 #### Scenario: Modern failed SRC
 - **WHEN** a Grade 8 learner still fails one learning area after documented SRC
 - **THEN** the outcome is conditional promotion and its obligation survives transition with one active back subject allowed per period.
+
+#### Scenario: Partial current annual set
+- **WHEN** every required period record is finalized and an active learner has at least one verified current annual result while another assigned subject has no current annual snapshot
+- **THEN** readiness uses the verified non-zero result set without enforcing an exact annual-result count.

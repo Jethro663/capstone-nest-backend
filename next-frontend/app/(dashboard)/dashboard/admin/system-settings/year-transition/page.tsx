@@ -262,9 +262,10 @@ export default function YearTransitionSettingsPage() {
                 >
                   <p className="font-medium">{readiness.message}</p>
                   <p className="mt-1 text-sm">
-                    {readiness.finalizedPeriodRecords} of {readiness.expectedPeriodRecords}{" "}
-                    required period records finalized · {readiness.expectedAnnualGrades}{" "}
-                    annual subject results required
+                    {readiness.finalizedPeriodRecords} of{" "}
+                    {readiness.expectedPeriodRecords} required period records
+                    finalized · At least one current, finalized annual subject
+                    result per active learner
                   </p>
                 </div>
 

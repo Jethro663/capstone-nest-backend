@@ -76,11 +76,11 @@ Append annual revisions with all period components, raw average, official grade,
 
 ## Remediation and year outcomes
 
-Failing one or two learning areas produces `pending_remediation`, not immediate retention. Admin records an evidenced SRC result for each failed annual snapshot, with RCM 0–100, source/reference, and reason. Preserve original annual grade; store `(FG + RCM) / 2` and its official rounded RFG separately. A changed annual source invalidates its remediation decision.
+Year-transition readiness requires at least one current, verified annual subject result per active learner rather than an exact subject-result count. A finalized failing result without SRC produces `retained`. Admin may record an evidenced SRC result before transition, with RCM 0–100, source/reference, and reason; when present, preserve the original annual grade and store `(FG + RCM) / 2` plus its official rounded RFG separately. A changed annual source invalidates its remediation decision.
 
 - All required subjects pass, including accepted RFGs: promote Grades 7–9, complete Grade 10 (`graduated` is retained as the existing storage identifier; UI says JHS completed).
 - Three or more original failing learning areas: retain.
-- One/two failures without completed SRC evidence: block transition for that student.
+- One/two finalized failures without completed SRC evidence: retain.
 - Legacy year, failed SRC: retain.
 - DO 015 year, failed SRC: conditionally promote Grades 7–9 with persistent back-subject obligations. For Grade 10, do not set `graduatedAt` while deficiencies remain; preserve a pending-completion status/obligation.
 

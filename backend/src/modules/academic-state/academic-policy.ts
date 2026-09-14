@@ -278,7 +278,7 @@ export function classifyAnnualOutcome(
     };
   if (failed.some((i) => subjects[i].remedialClassMark == null))
     return {
-      outcome: 'pending_remediation',
+      outcome: 'retained',
       targetGradeLevel: sameGrade,
       deficientSubjectIndexes: failed,
     };
