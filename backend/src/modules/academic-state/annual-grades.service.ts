@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import {
   BadRequestException,
   ForbiddenException,
@@ -17,6 +16,7 @@ import {
   academicBackSubjectEvents,
   classRecordParticipants,
   classRecords,
+  classes,
   academicAnnualSourceSelections,
   academicExternalPeriodGrades,
   academicPeriodGradeRevisions,
@@ -43,6 +43,8 @@ import {
 import { selectAnnualSources } from './annual-grade-sources';
 import type { AnnualSource } from './annual-grade-sources';
 import { toClassRecordAccountState } from '../class-record/class-record-account-state';
+import { AnnualTransmutationPolicyService } from './annual-transmutation-policy.service';
+import { annualGradeFingerprint } from './annual-transmutation';
 
 interface SubjectIdentity {
   schoolYear: string;
@@ -56,6 +58,7 @@ export class AnnualGradesService {
     private readonly databaseService: DatabaseService,
     private readonly academicPolicyService: AcademicPolicyService,
     private readonly auditService: AuditService,
+    private readonly annualTransmutationPolicyService: AnnualTransmutationPolicyService,
   ) {}
   private get db() {
     return this.databaseService.db;
@@ -133,9 +136,42 @@ export class AnnualGradesService {
     return { sources, selections, annuals };
   }
 
+  private sameComponents(
+    left: Array<{
+      period: string;
+      grade: number;
+      sourceId: string;
+      sourceType: string;
+      classId: string | null;
+    }>,
+    right: Array<{
+      period: string;
+      grade: number;
+      sourceId: string;
+      sourceType: string;
+      classId: string | null;
+    }>,
+  ) {
+    return (
+      left.length === right.length &&
+      left.every((component, index) => {
+        const candidate = right[index];
+        return (
+          component.period === candidate.period &&
+          component.grade === candidate.grade &&
+          component.sourceId === candidate.sourceId &&
+          component.sourceType === candidate.sourceType &&
+          component.classId === candidate.classId
+        );
+      })
+    );
+  }
+
   @AcademicMutation()
   async refreshForClass(classId: string, actorId: string) {
-    const { identity, policy } = await this.classIdentity(classId);
+    const { identity, policy: basePolicy } = await this.classIdentity(classId);
+    const policy =
+      await this.annualTransmutationPolicyService.snapshotForPolicy(basePolicy);
     const { sources, selections, annuals } = await this.loadSources(identity);
     const studentIds = [
       ...new Set([...sources, ...annuals].map((source) => source.studentId)),
@@ -144,6 +180,17 @@ export class AnnualGradesService {
       studentId: string;
       annualGradeId: string | null;
       blockers: ReturnType<typeof selectAnnualSources>['blockers'];
+      status: 'blocked' | 'unchanged' | 'updated';
+    }> = [];
+    const invalidations = {
+      blocked: [] as string[],
+      policy: [] as string[],
+      sources: [] as string[],
+    };
+    const pending: Array<{
+      studentId: string;
+      resultIndex: number;
+      values: typeof subjectAnnualGrades.$inferInsert;
     }> = [];
     for (const studentId of studentIds) {
       const selected = selectAnnualSources(
@@ -155,36 +202,43 @@ export class AnnualGradesService {
         (row) => row.studentId === studentId && row.isCurrent,
       );
       if (selected.blockers.length) {
-        if (current)
-          await this.invalidateAnnualIds(
-            [current.id],
-            'Required period sources changed',
-            actorId,
-          );
+        if (current) invalidations.blocked.push(current.id);
         results.push({
           studentId,
           annualGradeId: null,
           blockers: selected.blockers,
+          status: 'blocked',
         });
         continue;
       }
-      const fingerprint = createHash('sha256')
-        .update(JSON.stringify({ policy, components: selected.components }))
-        .digest('hex');
+      const fingerprint = annualGradeFingerprint(policy, selected.components);
       if (current?.sourceFingerprint === fingerprint) {
-        results.push({ studentId, annualGradeId: current.id, blockers: [] });
+        results.push({
+          studentId,
+          annualGradeId: current.id,
+          blockers: [],
+          status: 'unchanged',
+        });
         continue;
       }
       if (current)
-        await this.invalidateAnnualIds(
-          [current.id],
-          'Superseded by newly finalized period sources',
-          actorId,
-        );
+        invalidations[
+          this.sameComponents(current.components, selected.components)
+            ? 'policy'
+            : 'sources'
+        ].push(current.id);
       const calculation = calculateAnnualGrade(policy, selected.components);
-      const [created] = await this.db
-        .insert(subjectAnnualGrades)
-        .values({
+      const resultIndex =
+        results.push({
+          studentId,
+          annualGradeId: null,
+          blockers: [],
+          status: 'updated',
+        }) - 1;
+      pending.push({
+        studentId,
+        resultIndex,
+        values: {
           ...identity,
           studentId,
           components: selected.components,
@@ -196,23 +250,98 @@ export class AnnualGradesService {
           officialGrade: calculation.officialGrade,
           remarks: calculation.remarks,
           computedBy: actorId,
-        })
-        .returning();
-      await this.auditService.log({
+        },
+      });
+    }
+    await this.invalidateAnnualIds(
+      invalidations.blocked,
+      'Required period sources changed',
+      actorId,
+    );
+    await this.invalidateAnnualIds(
+      invalidations.policy,
+      'Superseded by an active annual transmutation table change',
+      actorId,
+    );
+    await this.invalidateAnnualIds(
+      invalidations.sources,
+      'Superseded by newly finalized period sources',
+      actorId,
+    );
+    const createdRows: Array<typeof subjectAnnualGrades.$inferSelect> = [];
+    for (let index = 0; index < pending.length; index += 400) {
+      createdRows.push(
+        ...(await this.db
+          .insert(subjectAnnualGrades)
+          .values(pending.slice(index, index + 400).map((row) => row.values))
+          .returning()),
+      );
+    }
+    const createdByStudent = new Map(
+      createdRows.map((row) => [row.studentId, row]),
+    );
+    for (const row of pending) {
+      results[row.resultIndex].annualGradeId =
+        createdByStudent.get(row.studentId)?.id ?? null;
+    }
+    await this.auditService.logBulk(
+      createdRows.map((created) => ({
         actorId,
         action: 'academic.annual_grade.computed',
         targetType: 'subject_annual_grade',
         targetId: created.id,
         metadata: {
           ...identity,
-          studentId,
-          sourceFingerprint: fingerprint,
+          studentId: created.studentId,
+          sourceFingerprint: created.sourceFingerprint,
           officialGrade: created.officialGrade,
         },
-      });
-      results.push({ studentId, annualGradeId: created.id, blockers: [] });
-    }
+      })),
+    );
     return results;
+  }
+
+  @AcademicMutation()
+  async refreshActiveSchoolYear(actorId: string) {
+    const startedAt = Date.now();
+    const current = await this.academicPolicyService.currentState();
+    const classRows = await this.db.query.classes.findMany({
+      columns: {
+        id: true,
+        subjectCode: true,
+        subjectGradeLevel: true,
+        sectionId: true,
+      },
+      where: eq(classes.schoolYear, current.schoolYear),
+      with: { section: { columns: { gradeLevel: true } } },
+    });
+    const identities = new Set<string>();
+    const selectedClasses = classRows.filter((row) => {
+      const gradeLevel = row.subjectGradeLevel ?? row.section?.gradeLevel;
+      if (!gradeLevel) return false;
+      const key = `${normalizeSubjectCode(row.subjectCode)}:${gradeLevel}`;
+      if (identities.has(key)) return false;
+      identities.add(key);
+      return true;
+    });
+    const results: Array<{
+      studentId: string;
+      annualGradeId: string | null;
+      blockers: ReturnType<typeof selectAnnualSources>['blockers'];
+      status: 'blocked' | 'unchanged' | 'updated';
+    }> = [];
+    for (const row of selectedClasses) {
+      results.push(...(await this.refreshForClass(row.id, actorId)));
+    }
+    return {
+      schoolYear: current.schoolYear,
+      classesScanned: selectedClasses.length,
+      gradesUpdated: results.filter((row) => row.status === 'updated').length,
+      gradesUnchanged: results.filter((row) => row.status === 'unchanged')
+        .length,
+      gradesBlocked: results.filter((row) => row.status === 'blocked').length,
+      durationMs: Date.now() - startedAt,
+    };
   }
 
   private async invalidateAnnualIds(
@@ -336,6 +465,15 @@ export class AnnualGradesService {
         'Closed school-year grades cannot be changed through the active-year repair workflow',
       );
     return state;
+  }
+
+  @AcademicMutation()
+  async refreshSummary(classId: string, actorId: string, roles: string[]) {
+    await this.getSummary(classId, actorId, roles);
+    const { identity } = await this.classIdentity(classId);
+    await this.assertOpenYear(identity.schoolYear);
+    await this.refreshForClass(classId, actorId);
+    return this.getSummary(classId, actorId, roles);
   }
   private async assertClassParticipant(classId: string, studentId: string) {
     const membership = await this.db.query.enrollments.findFirst({

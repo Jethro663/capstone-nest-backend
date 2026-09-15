@@ -243,6 +243,14 @@ export interface TransmutationTableRecord {
   bands: TransmutationBand[];
   createdAt?: string;
   updatedAt?: string;
+  annualRefresh?: {
+    schoolYear: string;
+    classesScanned: number;
+    gradesUpdated: number;
+    gradesUnchanged: number;
+    gradesBlocked: number;
+    durationMs: number;
+  };
 }
 
 export interface TransmutationPreviewResult {

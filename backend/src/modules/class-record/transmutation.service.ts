@@ -7,10 +7,20 @@ import {
 import { eq, desc } from 'drizzle-orm';
 
 import { DatabaseService } from '../../database/database.service';
+import { AcademicMutation } from '../../database/academic-transaction';
 import {
   transmutationTables,
   TransmutationBand,
 } from '../../drizzle/schema/transmutation.schema';
+import { AuditService } from '../audit/audit.service';
+import { AnnualGradesService } from '../academic-state/annual-grades.service';
+import {
+  DEFAULT_DEPED_TRANSMUTATION_BANDS,
+  SYSTEM_DEFAULT_TRANSMUTATION_TITLE,
+  validateAnnualTransmutationBands,
+} from '../academic-state/annual-transmutation';
+
+export { DEFAULT_DEPED_TRANSMUTATION_BANDS };
 
 export interface TransmutationPreviewResult {
   title: string;
@@ -21,56 +31,16 @@ export interface TransmutationPreviewResult {
   bands: TransmutationBand[];
 }
 
-export const DEFAULT_DEPED_TRANSMUTATION_BANDS: TransmutationBand[] = [
-  { minInitialGrade: 100, maxInitialGrade: 100, transmutedGrade: 100 },
-  { minInitialGrade: 98.4, maxInitialGrade: 99.99, transmutedGrade: 99 },
-  { minInitialGrade: 96.8, maxInitialGrade: 98.39, transmutedGrade: 98 },
-  { minInitialGrade: 95.2, maxInitialGrade: 96.79, transmutedGrade: 97 },
-  { minInitialGrade: 93.6, maxInitialGrade: 95.19, transmutedGrade: 96 },
-  { minInitialGrade: 92, maxInitialGrade: 93.59, transmutedGrade: 95 },
-  { minInitialGrade: 90.4, maxInitialGrade: 91.99, transmutedGrade: 94 },
-  { minInitialGrade: 88.8, maxInitialGrade: 90.3, transmutedGrade: 93 },
-  { minInitialGrade: 87.2, maxInitialGrade: 88.79, transmutedGrade: 92 },
-  { minInitialGrade: 85.6, maxInitialGrade: 87.19, transmutedGrade: 91 },
-  { minInitialGrade: 84, maxInitialGrade: 85.59, transmutedGrade: 90 },
-  { minInitialGrade: 82.4, maxInitialGrade: 83.99, transmutedGrade: 89 },
-  { minInitialGrade: 80.8, maxInitialGrade: 82.39, transmutedGrade: 88 },
-  { minInitialGrade: 79.2, maxInitialGrade: 80.79, transmutedGrade: 87 },
-  { minInitialGrade: 77.6, maxInitialGrade: 79.19, transmutedGrade: 86 },
-  { minInitialGrade: 76, maxInitialGrade: 77.59, transmutedGrade: 85 },
-  { minInitialGrade: 74.4, maxInitialGrade: 75.99, transmutedGrade: 84 },
-  { minInitialGrade: 72.8, maxInitialGrade: 74.39, transmutedGrade: 83 },
-  { minInitialGrade: 71.2, maxInitialGrade: 72.79, transmutedGrade: 82 },
-  { minInitialGrade: 69.6, maxInitialGrade: 71.19, transmutedGrade: 81 },
-  { minInitialGrade: 68, maxInitialGrade: 69.59, transmutedGrade: 80 },
-  { minInitialGrade: 66.4, maxInitialGrade: 67.99, transmutedGrade: 79 },
-  { minInitialGrade: 64.8, maxInitialGrade: 66.39, transmutedGrade: 78 },
-  { minInitialGrade: 63.2, maxInitialGrade: 64.79, transmutedGrade: 77 },
-  { minInitialGrade: 61.6, maxInitialGrade: 63.19, transmutedGrade: 76 },
-  { minInitialGrade: 60, maxInitialGrade: 61.59, transmutedGrade: 75 },
-  { minInitialGrade: 56, maxInitialGrade: 59.99, transmutedGrade: 74 },
-  { minInitialGrade: 52, maxInitialGrade: 55.99, transmutedGrade: 73 },
-  { minInitialGrade: 48, maxInitialGrade: 51.99, transmutedGrade: 72 },
-  { minInitialGrade: 44, maxInitialGrade: 47.99, transmutedGrade: 71 },
-  { minInitialGrade: 40, maxInitialGrade: 43.99, transmutedGrade: 70 },
-  { minInitialGrade: 36, maxInitialGrade: 39.99, transmutedGrade: 69 },
-  { minInitialGrade: 32, maxInitialGrade: 35.99, transmutedGrade: 68 },
-  { minInitialGrade: 28, maxInitialGrade: 31.99, transmutedGrade: 67 },
-  { minInitialGrade: 24, maxInitialGrade: 27.99, transmutedGrade: 66 },
-  { minInitialGrade: 20, maxInitialGrade: 23.99, transmutedGrade: 65 },
-  { minInitialGrade: 16, maxInitialGrade: 19.99, transmutedGrade: 64 },
-  { minInitialGrade: 12, maxInitialGrade: 15.99, transmutedGrade: 63 },
-  { minInitialGrade: 8, maxInitialGrade: 11.99, transmutedGrade: 62 },
-  { minInitialGrade: 4, maxInitialGrade: 7.99, transmutedGrade: 61 },
-  { minInitialGrade: 0, maxInitialGrade: 3.99, transmutedGrade: 60 },
-];
-
 @Injectable()
 export class TransmutationService {
   private readonly logger = new Logger(TransmutationService.name);
   private cachedActiveBands: TransmutationBand[] | null = null;
 
-  constructor(private readonly databaseService: DatabaseService) {}
+  constructor(
+    private readonly databaseService: DatabaseService,
+    private readonly annualGradesService: AnnualGradesService,
+    private readonly auditService: AuditService,
+  ) {}
 
   private get db() {
     return this.databaseService.db;
@@ -134,7 +104,7 @@ export class TransmutationService {
 
     return {
       id: 'system-default',
-      title: 'DepEd Order No. 8 s. 2015 Transmutation Table (System Default)',
+      title: SYSTEM_DEFAULT_TRANSMUTATION_TITLE,
       description:
         'Official default Department of Education K to 12 grading transmutation table.',
       isSystemDefault: true,
@@ -259,17 +229,16 @@ export class TransmutationService {
       (a, b) => b.minInitialGrade - a.minInitialGrade,
     );
 
-    // Validate coverage
-    const hasTop = sortedBands.some((b) => b.maxInitialGrade >= 99);
-    const hasBottom = sortedBands.some(
-      (b) => b.minInitialGrade <= 0 || b.minInitialGrade <= 25,
-    );
-    const isValid = hasTop && hasBottom && sortedBands.length >= 10;
-
+    let isValid = true;
     let validationMessage = 'Valid Transmutation Table structure detected.';
-    if (!isValid) {
+    try {
+      validateAnnualTransmutationBands(sortedBands);
+    } catch (error) {
+      isValid = false;
       validationMessage =
-        'Warning: Table ranges may be incomplete or missing upper/lower thresholds.';
+        error instanceof Error
+          ? error.message
+          : 'Transmutation table ranges are invalid.';
     }
 
     const title = filename
@@ -359,17 +328,23 @@ export class TransmutationService {
   /**
    * Applies confirmed transmutation table system-wide
    */
+  @AcademicMutation()
   async applyTable(
     title: string,
     description: string | undefined,
     bands: TransmutationBand[],
-    userId?: string,
+    userId: string,
   ) {
-    if (!bands || bands.length === 0) {
+    let validatedBands: TransmutationBand[];
+    try {
+      validatedBands = validateAnnualTransmutationBands(bands ?? []);
+    } catch (error) {
       throw new BadRequestException(
-        'Cannot apply an empty transmutation table.',
+        error instanceof Error ? error.message : 'Invalid transmutation table',
       );
     }
+
+    const previous = await this.getActiveTableRecord();
 
     // Deactivate all active tables
     await this.db
@@ -385,8 +360,8 @@ export class TransmutationService {
         description: description || 'Uploaded and activated by Administrator',
         isSystemDefault: false,
         isActive: true,
-        bands,
-        updatedBy: userId || null,
+        bands: validatedBands,
+        updatedBy: userId,
         createdAt: new Date(),
         updatedAt: new Date(),
       })
@@ -396,14 +371,24 @@ export class TransmutationService {
     this.logger.log(
       `Activated new transmutation table: ${inserted.title} (${inserted.id}) system-wide`,
     );
+    const annualRefresh =
+      await this.annualGradesService.refreshActiveSchoolYear(userId);
+    await this.auditService.log({
+      actorId: userId,
+      action: 'academic.transmutation_table.activated',
+      targetType: 'transmutation_table',
+      targetId: inserted.id,
+      metadata: { previousTableId: previous.id, annualRefresh },
+    });
 
-    return inserted;
+    return { ...inserted, annualRefresh };
   }
 
   /**
    * Activates an existing table by ID
    */
-  async activateTableById(id: string, userId?: string) {
+  @AcademicMutation()
+  async activateTableById(id: string, userId: string) {
     const existing = await this.db
       .select()
       .from(transmutationTables)
@@ -415,6 +400,15 @@ export class TransmutationService {
         `Transmutation table with ID ${id} not found.`,
       );
     }
+    try {
+      validateAnnualTransmutationBands(existing[0].bands);
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'Invalid transmutation table',
+      );
+    }
+
+    const previous = await this.getActiveTableRecord();
 
     await this.db
       .update(transmutationTables)
@@ -423,11 +417,20 @@ export class TransmutationService {
 
     const [updated] = await this.db
       .update(transmutationTables)
-      .set({ isActive: true, updatedBy: userId || null, updatedAt: new Date() })
+      .set({ isActive: true, updatedBy: userId, updatedAt: new Date() })
       .where(eq(transmutationTables.id, id))
       .returning();
 
     this.clearCache();
-    return updated;
+    const annualRefresh =
+      await this.annualGradesService.refreshActiveSchoolYear(userId);
+    await this.auditService.log({
+      actorId: userId,
+      action: 'academic.transmutation_table.activated',
+      targetType: 'transmutation_table',
+      targetId: updated.id,
+      metadata: { previousTableId: previous.id, annualRefresh },
+    });
+    return { ...updated, annualRefresh };
   }
 }

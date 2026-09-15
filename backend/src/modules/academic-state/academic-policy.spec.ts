@@ -146,6 +146,43 @@ describe('academic policy', () => {
       remarks: 'Passed',
     });
   });
+  it('transmutes the rounded annual average through its captured active table', () => {
+    const policy = {
+      ...getDefaultAcademicPolicy('2027-2028'),
+      annualTransmutation: {
+        tableId: 'active-table-1',
+        title: 'TRANSMUTATION TABLE NEW',
+        updatedAt: '2026-09-14T13:45:07.682Z',
+        bands: [
+          {
+            minInitialGrade: 88,
+            maxInitialGrade: 100,
+            transmutedGrade: 90,
+          },
+          {
+            minInitialGrade: 0,
+            maxInitialGrade: 87.99,
+            transmutedGrade: 89,
+          },
+        ],
+      },
+    };
+
+    expect(
+      calculateAnnualGrade(policy, [
+        { period: 'Q1', grade: 98 },
+        { period: 'Q2', grade: 96 },
+        { period: 'Q3', grade: 85 },
+        { period: 'Q4', grade: 70 },
+      ]),
+    ).toMatchObject({
+      sum: 349,
+      divisor: 4,
+      rawAverage: 87.25,
+      officialGrade: 89,
+      remarks: 'Passed',
+    });
+  });
   it('rejects fractional official period grades', () => {
     expect(() =>
       calculateAnnualGrade(modern(), [

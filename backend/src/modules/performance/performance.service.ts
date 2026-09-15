@@ -3,6 +3,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
   Optional,
 } from '@nestjs/common';
@@ -36,6 +37,18 @@ import { ClassRecordService } from '../class-record/class-record.service';
 import { boundPercentage } from '../academic-state/academic-score';
 
 const PERFORMANCE_RISK_THRESHOLD = 74;
+export const PERFORMANCE_ANALYSIS_PUBLIC_ERROR =
+  'Performance analysis could not be completed. Please try again.';
+
+export function studentConceptMasteryConflictSet() {
+  return {
+    evidenceCount: sql`GREATEST(evidence_count, excluded.evidence_count)`,
+    errorCount: sql`GREATEST(error_count, excluded.error_count)`,
+    masteryScore: sql`LEAST(mastery_score, excluded.mastery_score)`,
+    lastSeenAt: sql`NOW()`,
+    updatedAt: sql`NOW()`,
+  };
+}
 
 type ClassPerformanceRow = {
   studentId: string;
@@ -126,6 +139,8 @@ type LearningGapRow = {
 
 @Injectable()
 export class PerformanceService {
+  private readonly logger = new Logger(PerformanceService.name);
+
   constructor(
     private readonly databaseService: DatabaseService,
     private readonly eventEmitter: EventEmitter2,
@@ -1470,13 +1485,7 @@ export class PerformanceService {
             studentConceptMastery.classId,
             studentConceptMastery.conceptKey,
           ],
-          set: {
-            evidenceCount: sql`GREATEST(${studentConceptMastery.evidenceCount}, EXCLUDED.${studentConceptMastery.evidenceCount})`,
-            errorCount: sql`GREATEST(${studentConceptMastery.errorCount}, EXCLUDED.${studentConceptMastery.errorCount})`,
-            masteryScore: sql`LEAST(${studentConceptMastery.masteryScore}, EXCLUDED.${studentConceptMastery.masteryScore})`,
-            lastSeenAt: sql`NOW()`,
-            updatedAt: sql`NOW()`,
-          },
+          set: studentConceptMasteryConflictSet(),
         });
     }
 
@@ -1606,15 +1615,17 @@ export class PerformanceService {
         })
         .where(eq(aiGenerationJobs.id, jobId));
     } catch (error) {
+      const errorDetail =
+        error instanceof Error ? error.message : String(error);
+      this.logger.error(
+        `Performance analysis job failed job=${jobId} class=${classId} student=${studentId ?? 'all'}: ${errorDetail.slice(0, 1000)}`,
+      );
       await this.db
         .update(aiGenerationJobs)
         .set({
           status: 'failed',
           updatedAt: new Date(),
-          errorMessage:
-            error instanceof Error
-              ? error.message
-              : 'Performance analysis failed',
+          errorMessage: PERFORMANCE_ANALYSIS_PUBLIC_ERROR,
         })
         .where(eq(aiGenerationJobs.id, jobId));
     }
@@ -1719,7 +1730,10 @@ export class PerformanceService {
           : job.status === 'completed'
             ? 'Analysis ready'
             : 'Analyzing performance evidence',
-      errorMessage: job.errorMessage,
+      errorMessage:
+        job.status === 'failed'
+          ? PERFORMANCE_ANALYSIS_PUBLIC_ERROR
+          : job.errorMessage,
       outputId: output?.id ?? null,
       updatedAt: job.updatedAt,
     };

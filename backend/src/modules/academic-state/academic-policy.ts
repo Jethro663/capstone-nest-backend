@@ -8,6 +8,15 @@ export interface GradeBand {
   minInitialGrade: number;
   transmutedGrade: number;
 }
+export interface AnnualTransmutationBand extends GradeBand {
+  maxInitialGrade: number;
+}
+export interface AnnualTransmutationSnapshot {
+  tableId: string;
+  title: string;
+  updatedAt: string;
+  bands: AnnualTransmutationBand[];
+}
 export interface AcademicPolicy {
   id: 'deped-2015-v1' | 'deped-2026-q4-v2' | 'deped-2027-q4-v2';
   schoolYear: string;
@@ -19,6 +28,9 @@ export interface AcademicPolicy {
   examComponents: Array<{ key: 'ST1' | 'ST2' | 'TE'; weight: number }>;
   transmutationBands: GradeBand[];
 }
+export type AnnualGradePolicySnapshot = AcademicPolicy & {
+  annualTransmutation?: AnnualTransmutationSnapshot;
+};
 export interface SubjectWeights {
   writtenWork: number;
   performanceTask: number;
@@ -195,7 +207,7 @@ export interface PeriodContribution {
   grade: number;
 }
 export function calculateAnnualGrade(
-  policy: AcademicPolicy,
+  policy: AnnualGradePolicySnapshot,
   components: readonly PeriodContribution[],
 ) {
   const expected = policy.periods.map((p) => p.key);
@@ -219,7 +231,21 @@ export function calculateAnnualGrade(
     0,
   );
   const divisor = expected.length;
-  const officialGrade = roundOfficialGrade(sum / divisor);
+  const roundedAverage = roundOfficialGrade(sum / divisor);
+  const annualBands = policy.annualTransmutation?.bands ?? [];
+  const matches = annualBands.filter(
+    (band) =>
+      roundedAverage >= band.minInitialGrade &&
+      roundedAverage <= band.maxInitialGrade,
+  );
+  if (annualBands.length > 0 && matches.length !== 1)
+    throw new Error(
+      'Annual transmutation table must cover the rounded average exactly once',
+    );
+  const officialGrade = matches[0]?.transmutedGrade ?? roundedAverage;
+  assertGrade(officialGrade);
+  if (!Number.isInteger(officialGrade))
+    throw new Error('Official annual grade must be a whole number');
   return {
     sum,
     divisor,

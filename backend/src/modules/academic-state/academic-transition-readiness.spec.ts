@@ -4,6 +4,7 @@ import {
   evaluateTransitionReadiness,
   TransitionEvidence,
 } from './academic-transition-readiness';
+import { annualGradeFingerprint } from './annual-transmutation';
 
 function completeEvidence(): TransitionEvidence {
   const policy = getDefaultAcademicPolicy('2026-2027');
@@ -162,6 +163,30 @@ describe('expected academic transition matrix', () => {
       targetGradeLevel: '8',
       annualGradeIds: ['annual'],
     });
+  });
+  it('requires the annual grade and fingerprint to match the captured active table', () => {
+    const input = completeEvidence();
+    input.policy = {
+      ...input.policy,
+      annualTransmutation: {
+        tableId: 'active-table-1',
+        title: 'Active annual table',
+        updatedAt: '2026-09-15T00:00:00.000Z',
+        bands: Array.from({ length: 101 }, (_, grade) => ({
+          minInitialGrade: grade,
+          maxInitialGrade: grade,
+          transmutedGrade: grade === 80 ? 88 : grade,
+        })),
+      },
+    };
+
+    expect(evaluateTransitionReadiness(input).transitionBlocked).toBe(true);
+    input.annuals[0].officialGrade = 88;
+    input.annuals[0].sourceFingerprint = annualGradeFingerprint(
+      input.policy,
+      input.annuals[0].components,
+    );
+    expect(evaluateTransitionReadiness(input).transitionBlocked).toBe(false);
   });
   it('finds absent periods even when every existing record is finalized', () => {
     const input = completeEvidence();

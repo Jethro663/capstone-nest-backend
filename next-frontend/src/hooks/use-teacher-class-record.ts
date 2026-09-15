@@ -259,7 +259,7 @@ export function useTeacherClassRecord(
   const loadAnnual = useCallback(async () => {
     if (!classId) return;
     try {
-      const result = await classRecordService.annualSummary(classId);
+      const result = await classRecordService.refreshAnnualSummary(classId);
       if (loadedClass.current === classId) setAnnualSummary(result.data);
     } catch (error) {
       fail(error, "Annual evidence could not be loaded.");

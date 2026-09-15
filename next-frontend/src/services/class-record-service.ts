@@ -59,6 +59,13 @@ export const classRecordService = {
       )
     ).data;
   },
+  async refreshAnnualSummary(classId: string) {
+    return (
+      await api.post<{ success: boolean; data: AnnualSummary }>(
+        `/class-record/by-class/${classId}/annual-summary/refresh`,
+      )
+    ).data;
+  },
   /** POST /class-record — Teacher, Admin */
   async generate(
     dto: CreateClassRecordDto,

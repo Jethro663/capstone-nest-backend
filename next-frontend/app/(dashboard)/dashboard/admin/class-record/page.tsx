@@ -134,7 +134,7 @@ export default function AdminClassRecordTransmutationPage() {
 
       setStatusMessage({
         type: "success",
-        text: `Successfully applied "${previewData.title}" as the default for newly initialized legacy school-year policies. Frozen policies and existing evidence remain unchanged.`,
+        text: `Applied "${previewData.title}" for ${res.data.annualRefresh?.schoolYear ?? "the active school year"}: ${res.data.annualRefresh?.gradesUpdated ?? 0} annual grade(s) updated, ${res.data.annualRefresh?.gradesUnchanged ?? 0} unchanged, and ${res.data.annualRefresh?.gradesBlocked ?? 0} incomplete. Quarterly evidence and closed-year records remain unchanged.`,
       });
 
       setPreviewOpen(false);
@@ -154,6 +154,12 @@ export default function AdminClassRecordTransmutationPage() {
   };
 
   const handleReactivateTable = async (id: string, title: string) => {
+    if (
+      !window.confirm(
+        `Activate "${title}"? Current annual grades in the active school year will be versioned and recalculated. Quarterly evidence and closed-year records will not change.`,
+      )
+    )
+      return;
     setApplying(true);
     try {
       const res = await classRecordService.activateTransmutationTable(id);
@@ -161,7 +167,7 @@ export default function AdminClassRecordTransmutationPage() {
 
       setStatusMessage({
         type: "success",
-        text: `Successfully reactivated "${title}" system-wide!`,
+        text: `Reactivated "${title}" for ${res.data.annualRefresh?.schoolYear ?? "the active school year"}: ${res.data.annualRefresh?.gradesUpdated ?? 0} annual grade(s) updated, ${res.data.annualRefresh?.gradesUnchanged ?? 0} unchanged, and ${res.data.annualRefresh?.gradesBlocked ?? 0} incomplete.`,
       });
       await fetchData();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -187,7 +193,7 @@ export default function AdminClassRecordTransmutationPage() {
     <AdminPageShell
       badge="Academic Grading Standard"
       title="Class Record Transmutation Settings"
-      description="Manage transmutation defaults for legacy school-year policies. Each academic year freezes its policy; modern term policies use their prescribed calculation."
+      description="Manage the active table applied after the four official quarter grades are averaged and rounded. Active-year annual records are versioned when this table changes."
       actions={
         <Button
           variant="outline"
@@ -325,9 +331,9 @@ export default function AdminClassRecordTransmutationPage() {
                   <span>Adaptive Calculation Sync</span>
                 </div>
                 <p className="text-xs text-emerald-800 leading-relaxed">
-                  Activating a table changes the default for future legacy
-                  policy initialization. It does not alter frozen school-year
-                  policies, raw scores, or finalized revisions.
+                  Activating a table recalculates current annual grades for the
+                  active school year. It does not alter quarterly grades, raw
+                  scores, finalized revisions, or closed-year history.
                 </p>
               </div>
             </div>
@@ -597,7 +603,7 @@ export default function AdminClassRecordTransmutationPage() {
             </Button>
             <Button
               onClick={handleConfirmAndApply}
-              disabled={applying || !previewData}
+              disabled={applying || !previewData?.isValid}
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-2 rounded-xl"
             >
               {applying ? (

@@ -29,6 +29,7 @@ import {
 } from './DTO/confirm-period-roster.dto';
 import { ClassRecordRosterService } from './class-record-roster.service';
 import { AnnualGradesService } from '../academic-state/annual-grades.service';
+import type { TransmutationBand } from '../../drizzle/schema/transmutation.schema';
 
 @Controller('class-record')
 @UseGuards(RolesGuard)
@@ -75,7 +76,8 @@ export class ClassRecordController {
   @Post('transmutation/apply')
   @Roles(RoleName.Admin)
   async applyTransmutationTable(
-    @Body() body: { title: string; description?: string; bands: any[] },
+    @Body()
+    body: { title: string; description?: string; bands: TransmutationBand[] },
     @CurrentUser() user: { userId: string },
   ) {
     const data = await this.transmutationService.applyTable(
@@ -300,6 +302,23 @@ export class ClassRecordController {
       success: true,
       message: 'Official annual grades and source evidence',
       data: await this.annualGradesService.getSummary(
+        classId,
+        user.userId,
+        user.roles,
+      ),
+    };
+  }
+
+  @Post('by-class/:classId/annual-summary/refresh')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  async refreshAnnualSummary(
+    @Param('classId', ParseUUIDPipe) classId: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    return {
+      success: true,
+      message: 'Official annual grades reconciled with the active policy',
+      data: await this.annualGradesService.refreshSummary(
         classId,
         user.userId,
         user.roles,

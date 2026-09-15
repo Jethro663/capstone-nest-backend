@@ -18,6 +18,7 @@ import { classRecords } from './class-record.schema';
 import type {
   AcademicOutcome,
   AcademicPolicy,
+  AnnualGradePolicySnapshot,
   PeriodKey,
 } from '../../modules/academic-state/academic-policy';
 
@@ -248,7 +249,7 @@ export const subjectAnnualGrades = pgTable(
     components: jsonb('components')
       .$type<AnnualComponentEvidence[]>()
       .notNull(),
-    policy: jsonb('policy').$type<AcademicPolicy>().notNull(),
+    policy: jsonb('policy').$type<AnnualGradePolicySnapshot>().notNull(),
     sourceFingerprint: text('source_fingerprint').notNull(),
     sum: integer('sum').notNull(),
     divisor: integer('divisor').notNull(),

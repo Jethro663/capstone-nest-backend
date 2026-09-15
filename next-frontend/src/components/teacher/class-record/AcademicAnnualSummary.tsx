@@ -201,9 +201,16 @@ export function AcademicAnnualSummary({
                         </span>
                         <small>
                           {person.current.sum} ÷ {person.current.divisor} ={" "}
-                          {Number(person.current.rawAverage).toFixed(3)} before
-                          official rounding
+                          {Number(person.current.rawAverage).toFixed(3)} →{" "}
+                          {Math.floor(Number(person.current.rawAverage) + 0.5)}{" "}
+                          rounded → {person.current.officialGrade} official
                         </small>
+                        {person.current.policy.annualTransmutation && (
+                          <small>
+                            Active table:{" "}
+                            {person.current.policy.annualTransmutation.title}
+                          </small>
+                        )}
                       </>
                     ) : (
                       <span>Incomplete annual grade</span>

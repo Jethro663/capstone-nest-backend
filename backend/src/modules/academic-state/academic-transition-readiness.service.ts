@@ -3,7 +3,6 @@ import { and, eq, inArray, or } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import {
   academicAnnualSourceSelections,
-  academicSystemStates,
   academicBackSubjects,
   academicExternalPeriodGrades,
   academicPeriodGradeRevisions,
@@ -18,12 +17,14 @@ import {
 } from '../../drizzle/schema';
 import { AcademicPolicyService } from './academic-policy.service';
 import { evaluateTransitionReadiness } from './academic-transition-readiness';
+import { AnnualTransmutationPolicyService } from './annual-transmutation-policy.service';
 
 @Injectable()
 export class AcademicTransitionReadinessService {
   constructor(
     private readonly databaseService: DatabaseService,
     private readonly policyService: AcademicPolicyService,
+    private readonly annualTransmutationPolicyService: AnnualTransmutationPolicyService,
   ) {}
 
   async getReadiness(schoolYear?: string, sectionIds?: string[]) {
@@ -31,7 +32,11 @@ export class AcademicTransitionReadinessService {
       const db = this.databaseService.db;
       const current = await this.policyService.currentState();
       const year = schoolYear ?? current.schoolYear;
-      const policy = await this.policyService.forYear(year);
+      const basePolicy = await this.policyService.forYear(year);
+      const policy =
+        await this.annualTransmutationPolicyService.snapshotForPolicy(
+          basePolicy,
+        );
       const sectionRows = await db.query.sections.findMany({
         where: and(
           eq(sections.schoolYear, year),

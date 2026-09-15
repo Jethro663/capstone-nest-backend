@@ -18,6 +18,14 @@ export interface ClassRecord {
   categories?: ClassRecordCategory[];
   createdAt?: string;
   updatedAt?: string;
+  annualRefresh?: {
+    schoolYear: string;
+    classesScanned: number;
+    gradesUpdated: number;
+    gradesUnchanged: number;
+    gradesBlocked: number;
+    durationMs: number;
+  };
 }
 
 export interface ClassRecordCategory {

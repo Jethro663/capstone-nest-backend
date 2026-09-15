@@ -23,6 +23,7 @@ import {
   roles,
   userRoles,
   users,
+  transmutationTables,
 } from '../src/drizzle/schema';
 import { AnnualGradesService } from '../src/modules/academic-state/annual-grades.service';
 import { AuditService } from '../src/modules/audit/audit.service';
@@ -35,15 +36,18 @@ import { ClassRecordService } from '../src/modules/class-record/class-record.ser
 import { ClassRecordComputationService } from '../src/modules/class-record/class-record-computation.service';
 import { ClassRecordReadinessService } from '../src/modules/class-record/class-record-readiness.service';
 import { ClassRecordRosterService } from '../src/modules/class-record/class-record-roster.service';
+import { TransmutationService } from '../src/modules/class-record/transmutation.service';
 import { AssessmentAccessService } from '../src/modules/assessments/assessment-access.service';
 import { AssessmentsService } from '../src/modules/assessments/assessments.service';
 import { AssessmentType } from '../src/modules/assessments/DTO/assessment.dto';
 import { AcademicPeriodService } from '../src/modules/academic-state/academic-period.service';
 import { ClassesService } from '../src/modules/classes/classes.service';
 import * as bcrypt from 'bcrypt';
-import { randomUUID, createHash } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { AcademicStateService } from '../src/modules/academic-state/academic-state.service';
 import { AcademicTransitionReadinessService } from '../src/modules/academic-state/academic-transition-readiness.service';
+import { AnnualTransmutationPolicyService } from '../src/modules/academic-state/annual-transmutation-policy.service';
+import { annualGradeFingerprint } from '../src/modules/academic-state/annual-transmutation';
 import { NotificationsService } from '../src/modules/notifications/notifications.service';
 import { AcademicAuditService } from '../src/modules/academic-state/academic-audit.service';
 import { AcademicRepairService } from '../src/modules/academic-state/academic-repair.service';
@@ -104,6 +108,15 @@ describe('academic lifecycle PostgreSQL integration', () => {
       id: ACADEMIC_STATE_ID,
       schoolYear: '2026-2027',
       quarter: 'Q1',
+    });
+    await database.db.insert(transmutationTables).values({
+      title: 'Academic integration identity table',
+      isActive: true,
+      bands: Array.from({ length: 101 }, (_, grade) => ({
+        minInitialGrade: grade,
+        maxInitialGrade: grade,
+        transmutedGrade: grade,
+      })),
     });
   });
 
@@ -244,7 +257,7 @@ describe('academic lifecycle PostgreSQL integration', () => {
       database,
       new AcademicPolicyService(database),
       new AuditService(database),
-      new EventEmitter2(),
+      new AnnualTransmutationPolicyService(database),
     );
     const addRevision = async (index: number, grade: number) => {
       const [revision] = await database.db
@@ -298,7 +311,11 @@ describe('academic lifecycle PostgreSQL integration', () => {
     for (let i = 0; i < 4; i++) await f.addRevision(i, mark);
     await f.service.refreshForClass(f.cls.id, f.actor.id);
     const policy = new AcademicPolicyService(database);
-    const readiness = new AcademicTransitionReadinessService(database, policy);
+    const readiness = new AcademicTransitionReadinessService(
+      database,
+      policy,
+      new AnnualTransmutationPolicyService(database),
+    );
     const gateway = { emitToUser: jest.fn() };
     const audit = new AuditService(database);
     const stateService = new AcademicStateService(
@@ -971,6 +988,86 @@ describe('academic lifecycle PostgreSQL integration', () => {
         (row) => row.id,
       ),
     ).toEqual([rows[0].id]);
+  });
+
+  it('versions active-year annual grades when the active transmutation table changes', async () => {
+    const f = await seedAnnualFixture();
+    for (const [index, grade] of [98, 96, 85, 70].entries())
+      await f.addRevision(index, grade);
+    await f.service.refreshForClass(f.cls.id, f.actor.id);
+    expect(
+      (
+        await database.db.query.subjectAnnualGrades.findFirst({
+          where: eq(subjectAnnualGrades.isCurrent, true),
+        })
+      )?.officialGrade,
+    ).toBe(87);
+
+    const transmutation = new TransmutationService(
+      database,
+      f.service,
+      new AuditService(database),
+    );
+    const activated = await transmutation.applyTable(
+      'Active annual regression table',
+      'Maps rounded annual grade 87 to 89',
+      Array.from({ length: 101 }, (_, grade) => ({
+        minInitialGrade: grade,
+        maxInitialGrade: grade,
+        transmutedGrade: grade === 87 ? 89 : grade,
+      })),
+      f.actor.id,
+    );
+
+    expect(activated.annualRefresh).toMatchObject({ gradesUpdated: 1 });
+    const history = await database.db.query.subjectAnnualGrades.findMany();
+    expect(history).toHaveLength(2);
+    expect(history.find((row) => row.isCurrent)?.officialGrade).toBe(89);
+    expect(history.find((row) => !row.isCurrent)).toMatchObject({
+      officialGrade: 87,
+      invalidationReason:
+        'Superseded by an active annual transmutation table change',
+    });
+    expect(
+      await database.db.query.academicPeriodGradeRevisions.findMany(),
+    ).toHaveLength(4);
+  });
+
+  it('rolls back the table switch when active-year annual refresh fails', async () => {
+    const f = await seedAnnualFixture();
+    const transmutation = new TransmutationService(
+      database,
+      f.service,
+      new AuditService(database),
+    );
+    const previous = await transmutation.getActiveTableRecord();
+    jest
+      .spyOn(f.service, 'refreshActiveSchoolYear')
+      .mockRejectedValueOnce(new Error('deliberate annual refresh failure'));
+
+    await expect(
+      transmutation.applyTable(
+        'Must roll back',
+        undefined,
+        Array.from({ length: 101 }, (_, grade) => ({
+          minInitialGrade: grade,
+          maxInitialGrade: grade,
+          transmutedGrade: grade,
+        })),
+        f.actor.id,
+      ),
+    ).rejects.toThrow('deliberate annual refresh failure');
+
+    const activeRows = await database.db.query.transmutationTables.findMany({
+      where: eq(transmutationTables.isActive, true),
+    });
+    expect(activeRows).toHaveLength(1);
+    expect(activeRows[0].id).toBe(previous.id);
+    expect(
+      await database.db.query.transmutationTables.findFirst({
+        where: eq(transmutationTables.title, 'Must roll back'),
+      }),
+    ).toBeUndefined();
   });
 
   it('invalidates annual results on reopen while retaining immutable evidence', async () => {
@@ -1900,6 +1997,9 @@ describe('academic lifecycle PostgreSQL integration', () => {
         .returning();
       const policyService = new AcademicPolicyService(database);
       const policy = await policyService.forYear('2026-2027');
+      const annualPolicy = await new AnnualTransmutationPolicyService(
+        database,
+      ).snapshotForPolicy(policy);
       await database.db.update(academicSystemStates).set({ quarter: 'Q4' });
       const sectionRows: any[] = [],
         classRows: any[] = [],
@@ -2006,10 +2106,11 @@ describe('academic lifecycle PostgreSQL integration', () => {
               gradeLevel: '8',
               studentId: student.id,
               components,
-              policy,
-              sourceFingerprint: createHash('sha256')
-                .update(JSON.stringify({ policy, components }))
-                .digest('hex'),
+              policy: annualPolicy,
+              sourceFingerprint: annualGradeFingerprint(
+                annualPolicy,
+                components,
+              ),
               sum: 320,
               divisor: 4,
               rawAverage: '80',
@@ -2036,6 +2137,7 @@ describe('academic lifecycle PostgreSQL integration', () => {
       const readiness = new AcademicTransitionReadinessService(
         database,
         policyService,
+        new AnnualTransmutationPolicyService(database),
       );
       const started = performance.now();
       const ready = await readiness.getReadiness();
@@ -2059,6 +2161,50 @@ describe('academic lifecycle PostgreSQL integration', () => {
       expect(affectedOutcome?.annualGradeIds).not.toContain(
         annualRows[5999].id,
       );
+      const annualService = new AnnualGradesService(
+        database,
+        policyService,
+        new AuditService(database),
+        new AnnualTransmutationPolicyService(database),
+      );
+      const transmutation = new TransmutationService(
+        database,
+        annualService,
+        new AuditService(database),
+      );
+      const activationStarted = performance.now();
+      const activated = await transmutation.applyTable(
+        'Scale annual table',
+        'Scale verification table',
+        Array.from({ length: 101 }, (_, grade) => ({
+          minInitialGrade: grade,
+          maxInitialGrade: grade,
+          transmutedGrade: grade === 80 ? 81 : grade,
+        })),
+        actor.id,
+      );
+      const activationElapsed = Math.round(
+        performance.now() - activationStarted,
+      );
+      expect(activated.annualRefresh).toMatchObject({
+        classesScanned: 8,
+        gradesUpdated: 9600,
+        gradesBlocked: 0,
+      });
+      const annualCounts = await database.db.execute(sql`
+        SELECT
+          count(*)::int AS total,
+          count(*) FILTER (WHERE is_current)::int AS current,
+          count(*) FILTER (
+            WHERE is_current AND official_grade = 81
+          )::int AS current_transmuted
+        FROM subject_annual_grades
+      `);
+      expect(annualCounts.rows[0]).toMatchObject({
+        total: 19200,
+        current: 9600,
+        current_transmuted: 9600,
+      });
       console.info(
         JSON.stringify({
           academicScale: {
@@ -2068,10 +2214,11 @@ describe('academic lifecycle PostgreSQL integration', () => {
             periodGrades: 38400,
             annualGrades: 9600,
             readinessMilliseconds: elapsed,
+            annualActivationMilliseconds: activationElapsed,
           },
         }),
       );
     },
-    120000,
+    180000,
   );
 });

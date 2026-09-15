@@ -17,6 +17,16 @@ export interface AcademicPolicy {
     minInitialGrade: number;
     transmutedGrade: number;
   }>;
+  annualTransmutation?: {
+    tableId: string;
+    title: string;
+    updatedAt: string;
+    bands: Array<{
+      minInitialGrade: number;
+      maxInitialGrade: number;
+      transmutedGrade: number;
+    }>;
+  };
 }
 export interface AcademicCapabilities {
   schoolYear: string;

@@ -2,7 +2,11 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ForbiddenException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { sql } from 'drizzle-orm';
-import { PerformanceService } from './performance.service';
+import { PgDialect } from 'drizzle-orm/pg-core';
+import {
+  PerformanceService,
+  studentConceptMasteryConflictSet,
+} from './performance.service';
 import { DatabaseService } from '../../database/database.service';
 import { PerformanceStatusChangedEvent } from '../../common/events';
 import { AuditService } from '../audit/audit.service';
@@ -33,6 +37,7 @@ function buildMockDb() {
       generatedGuidedAssessmentAttempts: { findMany: jest.fn() },
       performanceSnapshots: { findFirst: jest.fn(), findMany: jest.fn() },
       performanceLogs: { findMany: jest.fn() },
+      aiGenerationJobs: { findFirst: jest.fn() },
       enrollments: { findMany: jest.fn() },
       users: { findFirst: jest.fn() },
     },
@@ -122,6 +127,49 @@ describe('PerformanceService', () => {
     }).compile();
 
     service = module.get<PerformanceService>(PerformanceService);
+  });
+
+  it('uses PostgreSQL-valid unqualified columns in concept mastery upserts', () => {
+    const dialect = new PgDialect();
+    const set = studentConceptMasteryConflictSet();
+    const compiled = dialect.sqlToQuery(sql`
+      UPDATE student_concept_mastery SET
+        evidence_count = ${set.evidenceCount},
+        error_count = ${set.errorCount},
+        mastery_score = ${set.masteryScore}
+    `).sql;
+
+    expect(compiled).toContain(
+      'GREATEST(evidence_count, excluded.evidence_count)',
+    );
+    expect(compiled).toContain('GREATEST(error_count, excluded.error_count)');
+    expect(compiled).toContain('LEAST(mastery_score, excluded.mastery_score)');
+    expect(compiled).not.toContain('"student_concept_mastery".');
+  });
+
+  it('never returns stored SQL details for a failed analysis job', async () => {
+    db.query.aiGenerationJobs.findFirst.mockResolvedValue({
+      id: 'job-1',
+      classId: 'class-1',
+      teacherId: 'teacher-1',
+      jobType: 'performance_diagnostics',
+      status: 'failed',
+      errorMessage: 'Failed query: insert into student_concept_mastery',
+      updatedAt: new Date('2026-09-15T00:00:00Z'),
+    });
+    db.query.aiGenerationOutputs.findMany.mockResolvedValue([]);
+    db.query.aiGenerationOutputs.findFirst = jest.fn().mockResolvedValue(null);
+
+    const result = await service.getPerformanceAnalysisJobStatus(
+      'job-1',
+      'teacher-1',
+      ['teacher'],
+    );
+
+    expect(result.errorMessage).toBe(
+      'Performance analysis could not be completed. Please try again.',
+    );
+    expect(result.errorMessage).not.toContain('insert into');
   });
 
   it('recomputeStudent should aggregate both sources and mark at-risk below 74', async () => {

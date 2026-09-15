@@ -1,12 +1,12 @@
-import { createHash } from 'node:crypto';
 import type * as schema from '../../drizzle/schema';
 import {
-  AcademicPolicy,
+  AnnualGradePolicySnapshot,
   PeriodKey,
   calculateAnnualGrade,
   classifyAnnualOutcome,
   normalizeSubjectCode,
 } from './academic-policy';
+import { annualGradeFingerprint } from './annual-transmutation';
 import { AnnualSource, selectAnnualSources } from './annual-grade-sources';
 
 type Selected<
@@ -14,7 +14,7 @@ type Selected<
   K extends keyof T['$inferSelect'],
 > = Pick<T['$inferSelect'], K>;
 export interface TransitionEvidence {
-  policy: AcademicPolicy;
+  policy: AnnualGradePolicySnapshot;
   activePeriod: PeriodKey;
   sections: Selected<
     typeof schema.sections,
@@ -480,9 +480,7 @@ export function evaluateTransitionReadiness(input: TransitionEvidence) {
       );
       const snapshots = annuals.get(key) ?? [];
       if (selected.blockers.length) continue;
-      const fingerprint = createHash('sha256')
-        .update(JSON.stringify({ policy, components: selected.components }))
-        .digest('hex');
+      const fingerprint = annualGradeFingerprint(policy, selected.components);
       const annual = snapshots.length === 1 ? snapshots[0] : undefined;
       const componentsMatch =
         annual?.components.length === selected.components.length &&
