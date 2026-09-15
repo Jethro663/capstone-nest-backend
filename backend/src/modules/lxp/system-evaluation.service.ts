@@ -24,6 +24,10 @@ import {
 
 type UserContext = { userId: string; roles: string[] };
 type AudienceRole = 'student' | 'teacher';
+type SystemEvaluationDb = Pick<
+  DatabaseService['db'],
+  'insert' | 'query' | 'select' | 'update'
+>;
 
 @Injectable()
 export class SystemEvaluationService {
@@ -84,19 +88,22 @@ export class SystemEvaluationService {
     }
   }
 
-  private async resolveRespondents(input: {
-    audienceRole: AudienceRole;
-    classId?: string | null;
-  }) {
+  private async resolveRespondents(
+    input: {
+      audienceRole: AudienceRole;
+      classId?: string | null;
+    },
+    db: SystemEvaluationDb = this.db,
+  ) {
     if (input.classId) {
       if (input.audienceRole === 'teacher') {
-        const cls = await this.db.query.classes.findFirst({
+        const cls = await db.query.classes.findFirst({
           where: eq(classes.id, input.classId),
           columns: { teacherId: true },
         });
         return cls?.teacherId ? [cls.teacherId] : [];
       }
-      const rows = await this.db.query.enrollments.findMany({
+      const rows = await db.query.enrollments.findMany({
         where: and(
           eq(enrollments.classId, input.classId),
           eq(enrollments.status, 'enrolled'),
@@ -106,7 +113,7 @@ export class SystemEvaluationService {
       return rows.map((row) => row.studentId);
     }
 
-    const rows = await this.db
+    const rows = await db
       .select({ userId: users.id })
       .from(users)
       .innerJoin(userRoles, eq(users.id, userRoles.userId))
@@ -117,21 +124,27 @@ export class SystemEvaluationService {
     return rows.map((row) => row.userId);
   }
 
-  private async createAssignments(campaign: {
-    id: string;
-    audienceRole: AudienceRole;
-    classId?: string | null;
-  }) {
+  private async createAssignments(
+    campaign: {
+      id: string;
+      audienceRole: AudienceRole;
+      classId?: string | null;
+    },
+    db: SystemEvaluationDb = this.db,
+  ) {
     const respondentIds = [
       ...new Set(
-        await this.resolveRespondents({
-          audienceRole: campaign.audienceRole,
-          classId: campaign.classId,
-        }),
+        await this.resolveRespondents(
+          {
+            audienceRole: campaign.audienceRole,
+            classId: campaign.classId,
+          },
+          db,
+        ),
       ),
     ];
     if (respondentIds.length === 0) return 0;
-    await this.db
+    await db
       .insert(systemEvaluationAssignments)
       .values(
         respondentIds.map((respondentId) => ({
@@ -189,37 +202,42 @@ export class SystemEvaluationService {
       await this.assertTeacherClassAccess(dto.classId, user);
     }
 
-    const [created] = await this.db
-      .insert(systemEvaluationCampaigns)
-      .values({
-        createdBy: user.userId,
-        formType: dto.formType,
-        targetModule: definition.targetModule,
-        audienceRole: dto.audienceRole,
-        classId: dto.classId ?? null,
-        title: dto.title.trim(),
-        startsAt: start,
-        endsAt: end,
-        status,
-        updatedAt: new Date(),
-      })
-      .returning();
-    const assignmentCount =
-      status === 'active' ? await this.createAssignments(created) : 0;
-    await this.auditService.log({
-      actorId: user.userId,
-      action: 'lxp.system_evaluation_campaign.created',
-      targetType: 'system_evaluation_campaign',
-      targetId: created.id,
-      metadata: {
-        formType: created.formType,
-        audienceRole: created.audienceRole,
-        classId: created.classId,
-        status: created.status,
-        assignmentCount,
-      },
+    return this.db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(systemEvaluationCampaigns)
+        .values({
+          createdBy: user.userId,
+          formType: dto.formType,
+          targetModule: definition.targetModule,
+          audienceRole: dto.audienceRole,
+          classId: dto.classId ?? null,
+          title: dto.title.trim(),
+          startsAt: start,
+          endsAt: end,
+          status,
+          updatedAt: new Date(),
+        })
+        .returning();
+      const assignmentCount =
+        status === 'active' ? await this.createAssignments(created, tx) : 0;
+      await this.auditService.log(
+        {
+          actorId: user.userId,
+          action: 'lxp.system_evaluation_campaign.created',
+          targetType: 'system_evaluation_campaign',
+          targetId: created.id,
+          metadata: {
+            formType: created.formType,
+            audienceRole: created.audienceRole,
+            classId: created.classId,
+            status: created.status,
+            assignmentCount,
+          },
+        },
+        tx,
+      );
+      return { ...created, assignmentCount };
     });
-    return { ...created, assignmentCount };
   }
 
   async listCampaigns(
@@ -333,20 +351,25 @@ export class SystemEvaluationService {
       throw new NotFoundException('System evaluation campaign not found.');
     }
     await this.assertCampaignAccess(campaign, user);
-    const [updated] = await this.db
-      .update(systemEvaluationCampaigns)
-      .set({ status: dto.status, updatedAt: new Date() })
-      .where(eq(systemEvaluationCampaigns.id, campaignId))
-      .returning();
-    const assignmentCount =
-      dto.status === 'active' ? await this.createAssignments(updated) : 0;
-    await this.auditService.log({
-      actorId: user.userId,
-      action: 'lxp.system_evaluation_campaign.status_updated',
-      targetType: 'system_evaluation_campaign',
-      targetId: campaignId,
-      metadata: { status: dto.status, assignmentCount },
+    return this.db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(systemEvaluationCampaigns)
+        .set({ status: dto.status, updatedAt: new Date() })
+        .where(eq(systemEvaluationCampaigns.id, campaignId))
+        .returning();
+      const assignmentCount =
+        dto.status === 'active' ? await this.createAssignments(updated, tx) : 0;
+      await this.auditService.log(
+        {
+          actorId: user.userId,
+          action: 'lxp.system_evaluation_campaign.status_updated',
+          targetType: 'system_evaluation_campaign',
+          targetId: campaignId,
+          metadata: { status: dto.status, assignmentCount },
+        },
+        tx,
+      );
+      return { ...updated, assignmentCount };
     });
-    return { ...updated, assignmentCount };
   }
 }

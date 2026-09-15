@@ -8,6 +8,9 @@ import {
   Star,
 } from "lucide-react";
 import { lxpService } from "@/services/lxp-service";
+import { classService } from "@/services/class-service";
+import { getApiErrorMessage } from "@/lib/api-error";
+import type { ClassItem } from "@/types/class";
 import type {
   CreateSystemEvaluationCampaignPayload,
   SystemEvaluationCampaign,
@@ -96,6 +99,22 @@ export function SystemEvaluationsPage({
   >(null);
   const [loading, setLoading] = useState(true);
   const [campaignSubmitting, setCampaignSubmitting] = useState(false);
+  const [campaignDateError, setCampaignDateError] = useState<string | null>(
+    null,
+  );
+  const [campaignTitleError, setCampaignTitleError] = useState<string | null>(
+    null,
+  );
+  const [campaignStartError, setCampaignStartError] = useState<string | null>(
+    null,
+  );
+  const [campaignEndError, setCampaignEndError] = useState<string | null>(null);
+  const [campaignClassError, setCampaignClassError] = useState<string | null>(
+    null,
+  );
+  const [campaignScope, setCampaignScope] = useState<"role" | "class">("role");
+  const [availableClasses, setAvailableClasses] = useState<ClassItem[]>([]);
+  const [classLoadError, setClassLoadError] = useState<string | null>(null);
   const [campaignForm, setCampaignForm] = useState({
     formType: "system" as SystemEvaluationFormType,
     audienceRole: "student" as SystemEvaluationAudienceRole,
@@ -150,13 +169,59 @@ export function SystemEvaluationsPage({
     void fetchCampaigns();
   }, [fetchCampaigns]);
 
+  useEffect(() => {
+    if (!isAdmin) return;
+    let active = true;
+    setClassLoadError(null);
+    void classService
+      .getAll({ isActive: "true", limit: 100 })
+      .then((response) => {
+        if (active) setAvailableClasses(response.data?.data ?? []);
+      })
+      .catch((error) => {
+        if (!active) return;
+        setAvailableClasses([]);
+        setClassLoadError(
+          getApiErrorMessage(error, "Active classes could not be loaded."),
+        );
+      });
+    return () => {
+      active = false;
+    };
+  }, [isAdmin]);
+
   const handleCreateCampaign = async () => {
+    setCampaignDateError(null);
+    setCampaignTitleError(null);
+    setCampaignStartError(null);
+    setCampaignEndError(null);
+    setCampaignClassError(null);
+    const titleMissing = !campaignForm.title.trim();
+    const startMissing = !campaignForm.startsAt;
+    const endMissing = !campaignForm.endsAt;
+    if (titleMissing || startMissing || endMissing) {
+      if (titleMissing) setCampaignTitleError("Enter a campaign title.");
+      if (startMissing) setCampaignStartError("Choose a start time.");
+      if (endMissing) setCampaignEndError("Choose an end time.");
+      return;
+    }
+    if (campaignForm.title.trim().length > 160) {
+      setCampaignTitleError("Campaign title must be 160 characters or fewer.");
+      return;
+    }
+    if (campaignScope === "class" && !campaignForm.classId) {
+      setCampaignClassError("Select a class for class-scoped delivery.");
+      return;
+    }
+
+    const start = new Date(campaignForm.startsAt);
+    const end = new Date(campaignForm.endsAt);
     if (
-      !campaignForm.title.trim() ||
-      !campaignForm.startsAt ||
-      !campaignForm.endsAt
+      Number.isNaN(start.getTime()) ||
+      Number.isNaN(end.getTime()) ||
+      end <= start
     ) {
-      toast.error("Campaign title and dates are required");
+      setCampaignDateError("End time must be after start time.");
       return;
     }
 
@@ -164,27 +229,36 @@ export function SystemEvaluationsPage({
       formType: campaignForm.formType,
       audienceRole: campaignForm.audienceRole,
       title: campaignForm.title.trim(),
-      startsAt: new Date(campaignForm.startsAt).toISOString(),
-      endsAt: new Date(campaignForm.endsAt).toISOString(),
+      startsAt: start.toISOString(),
+      endsAt: end.toISOString(),
       status: "active",
     };
-    if (campaignForm.classId.trim()) {
-      payload.classId = campaignForm.classId.trim();
+    if (campaignScope === "class") {
+      payload.classId = campaignForm.classId;
     }
 
     try {
       setCampaignSubmitting(true);
-      await lxpService.createSystemEvaluationCampaign(payload);
-      toast.success("Evaluation campaign created");
+      const response = await lxpService.createSystemEvaluationCampaign(payload);
+      const assignmentCount = Number(
+        (response.data as { assignmentCount?: unknown } | null)
+          ?.assignmentCount ?? 0,
+      );
+      toast.success(
+        `Evaluation campaign created with ${assignmentCount} assignment${assignmentCount === 1 ? "" : "s"}.`,
+      );
       setCampaignForm((current) => ({ ...current, title: "", classId: "" }));
+      setCampaignScope("role");
       if (campaignPage === 1)
         await Promise.all([fetchCampaigns(), fetchEvaluations()]);
       else {
         setCampaignPage(1);
         await fetchEvaluations();
       }
-    } catch {
-      toast.error("Failed to create evaluation campaign");
+    } catch (error) {
+      toast.error(
+        getApiErrorMessage(error, "Failed to create evaluation campaign"),
+      );
     } finally {
       setCampaignSubmitting(false);
     }
@@ -287,44 +361,120 @@ export function SystemEvaluationsPage({
               <input
                 aria-label="Campaign title"
                 value={campaignForm.title}
-                onChange={(event) =>
+                maxLength={160}
+                aria-invalid={Boolean(campaignTitleError)}
+                onChange={(event) => {
+                  setCampaignTitleError(null);
                   setCampaignForm((current) => ({
                     ...current,
                     title: event.target.value,
-                  }))
-                }
+                  }));
+                }}
                 className="admin-input w-full text-sm"
               />
+              <span className="block text-xs font-medium text-[var(--admin-text-muted)]">
+                {campaignForm.title.length}/160
+              </span>
+              {campaignTitleError ? (
+                <span
+                  className="text-xs font-medium text-destructive"
+                  role="alert"
+                >
+                  {campaignTitleError}
+                </span>
+              ) : null}
             </label>
             <label className="space-y-1 text-sm font-semibold text-[var(--admin-text-strong)]">
-              <span>Class ID optional</span>
-              <input
-                aria-label="Class ID optional"
-                value={campaignForm.classId}
-                onChange={(event) =>
-                  setCampaignForm((current) => ({
-                    ...current,
-                    classId: event.target.value,
-                  }))
-                }
-                className="admin-input w-full text-sm"
-                placeholder="Leave blank for role-wide"
-              />
+              <span>Campaign scope</span>
+              <select
+                aria-label="Campaign scope"
+                value={campaignScope}
+                onChange={(event) => {
+                  const nextScope = event.target.value as "role" | "class";
+                  setCampaignScope(nextScope);
+                  setCampaignClassError(null);
+                  if (nextScope === "role") {
+                    setCampaignForm((current) => ({
+                      ...current,
+                      classId: "",
+                    }));
+                  }
+                }}
+                className="admin-select w-full text-sm"
+              >
+                <option value="role">Role-wide</option>
+                <option value="class">Specific class</option>
+              </select>
             </label>
+            {campaignScope === "class" ? (
+              <label className="space-y-1 text-sm font-semibold text-[var(--admin-text-strong)]">
+                <span>Class</span>
+                <select
+                  aria-label="Class"
+                  value={campaignForm.classId}
+                  aria-invalid={Boolean(campaignClassError)}
+                  onChange={(event) => {
+                    setCampaignClassError(null);
+                    setCampaignForm((current) => ({
+                      ...current,
+                      classId: event.target.value,
+                    }));
+                  }}
+                  className="admin-select w-full text-sm"
+                  disabled={Boolean(classLoadError)}
+                >
+                  <option value="">Select an active class</option>
+                  {availableClasses.map((classItem) => (
+                    <option key={classItem.id} value={classItem.id}>
+                      {classItem.subjectCode} ·{" "}
+                      {classItem.section?.name ?? "No section"} ·{" "}
+                      {classItem.schoolYear}
+                    </option>
+                  ))}
+                </select>
+                {classLoadError ? (
+                  <span
+                    className="text-xs font-medium text-destructive"
+                    role="alert"
+                  >
+                    {classLoadError}
+                  </span>
+                ) : null}
+                {campaignClassError ? (
+                  <span
+                    className="text-xs font-medium text-destructive"
+                    role="alert"
+                  >
+                    {campaignClassError}
+                  </span>
+                ) : null}
+              </label>
+            ) : null}
             <label className="space-y-1 text-sm font-semibold text-[var(--admin-text-strong)]">
               <span>Starts at</span>
               <input
                 aria-label="Starts at"
                 type="datetime-local"
                 value={campaignForm.startsAt}
-                onChange={(event) =>
+                onChange={(event) => {
+                  setCampaignDateError(null);
+                  setCampaignStartError(null);
                   setCampaignForm((current) => ({
                     ...current,
                     startsAt: event.target.value,
-                  }))
-                }
+                  }));
+                }}
                 className="admin-input w-full text-sm"
+                aria-invalid={Boolean(campaignStartError)}
               />
+              {campaignStartError ? (
+                <span
+                  className="text-xs font-medium text-destructive"
+                  role="alert"
+                >
+                  {campaignStartError}
+                </span>
+              ) : null}
             </label>
             <label className="space-y-1 text-sm font-semibold text-[var(--admin-text-strong)]">
               <span>Ends at</span>
@@ -332,14 +482,33 @@ export function SystemEvaluationsPage({
                 aria-label="Ends at"
                 type="datetime-local"
                 value={campaignForm.endsAt}
-                onChange={(event) =>
+                onChange={(event) => {
+                  setCampaignDateError(null);
+                  setCampaignEndError(null);
                   setCampaignForm((current) => ({
                     ...current,
                     endsAt: event.target.value,
-                  }))
-                }
+                  }));
+                }}
                 className="admin-input w-full text-sm"
+                aria-invalid={Boolean(campaignDateError || campaignEndError)}
               />
+              {campaignEndError ? (
+                <span
+                  className="text-xs font-medium text-destructive"
+                  role="alert"
+                >
+                  {campaignEndError}
+                </span>
+              ) : null}
+              {campaignDateError ? (
+                <span
+                  className="text-xs font-medium text-destructive"
+                  role="alert"
+                >
+                  {campaignDateError}
+                </span>
+              ) : null}
             </label>
           </div>
           <div className="mt-4 flex flex-wrap items-center gap-3">

@@ -1814,6 +1814,9 @@ describe('LxpService', () => {
   });
 
   it('creates class-scoped active student campaigns for a teacher-owned class', async () => {
+    mockDb.transaction.mockImplementation(
+      async (handler: (tx: typeof mockDb) => unknown) => handler(mockDb),
+    );
     mockDb.query.classes.findFirst.mockResolvedValue({
       id: 'class-1',
       teacherId: 'teacher-1',
@@ -1880,6 +1883,7 @@ describe('LxpService', () => {
         },
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(mockDb.transaction).not.toHaveBeenCalled();
   });
 
   it('resolving an intervention writes audit metadata and notifies the student', async () => {
