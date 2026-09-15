@@ -22,7 +22,9 @@ import {
   generatedGuidedAssessmentAttempts,
   classes,
   enrollments,
+  interventionAssignments,
   interventionCases,
+  jaSessions,
   performanceLogs,
   performanceSnapshots,
   studentConceptMastery,
@@ -35,6 +37,7 @@ import { CreatePerformanceAnalysisJobDto } from './DTO/create-performance-analys
 import { PerformanceSnapshotReadService } from './performance-snapshot-read.service';
 import { ClassRecordService } from '../class-record/class-record.service';
 import { boundPercentage } from '../academic-state/academic-score';
+import { calculateJaReplayScore } from '../ja/ja-review-state';
 
 const PERFORMANCE_RISK_THRESHOLD = 74;
 export const PERFORMANCE_ANALYSIS_PUBLIC_ERROR =
@@ -42,9 +45,9 @@ export const PERFORMANCE_ANALYSIS_PUBLIC_ERROR =
 
 export function studentConceptMasteryConflictSet() {
   return {
-    evidenceCount: sql`GREATEST(evidence_count, excluded.evidence_count)`,
-    errorCount: sql`GREATEST(error_count, excluded.error_count)`,
-    masteryScore: sql`LEAST(mastery_score, excluded.mastery_score)`,
+    evidenceCount: sql`GREATEST(${studentConceptMastery.evidenceCount}, ${sql.raw('excluded."evidence_count"')})`,
+    errorCount: sql`GREATEST(${studentConceptMastery.errorCount}, ${sql.raw('excluded."error_count"')})`,
+    masteryScore: sql`LEAST(${studentConceptMastery.masteryScore}, ${sql.raw('excluded."mastery_score"')})`,
     lastSeenAt: sql`NOW()`,
     updatedAt: sql`NOW()`,
   };
@@ -951,6 +954,51 @@ export class PerformanceService {
           })
         : [];
 
+    const retryAssignments =
+      caseIds.length > 0
+        ? await this.db.query.interventionAssignments.findMany({
+            where: and(
+              inArray(interventionAssignments.caseId, caseIds),
+              eq(interventionAssignments.assignmentType, 'assessment_retry'),
+            ),
+            columns: {
+              id: true,
+              caseId: true,
+              assessmentId: true,
+              assignmentType: true,
+            },
+          })
+        : [];
+
+    const completedReplaySessions =
+      studentIds.length > 0
+        ? await this.db.query.jaSessions.findMany({
+            where: and(
+              eq(jaSessions.classId, classId),
+              inArray(jaSessions.studentId, studentIds),
+              eq(jaSessions.mode, 'review'),
+              eq(jaSessions.status, 'completed'),
+            ),
+            columns: {
+              id: true,
+              studentId: true,
+              completedAt: true,
+              sourceSnapshotJson: true,
+            },
+            with: {
+              items: {
+                columns: { id: true },
+                with: {
+                  responses: {
+                    columns: { isCorrect: true },
+                  },
+                },
+              },
+            },
+            orderBy: [desc(jaSessions.completedAt)],
+          })
+        : [];
+
     const officialByStudent = new Map<string, typeof officialAttempts>();
     for (const attempt of officialAttempts) {
       const bucket = officialByStudent.get(attempt.studentId) ?? [];
@@ -963,6 +1011,23 @@ export class PerformanceService {
       const bucket = guidedByCase.get(attempt.caseId) ?? [];
       bucket.push(attempt);
       guidedByCase.set(attempt.caseId, bucket);
+    }
+
+    const retryAssignmentsByCase = new Map<string, typeof retryAssignments>();
+    for (const assignment of retryAssignments) {
+      const bucket = retryAssignmentsByCase.get(assignment.caseId) ?? [];
+      bucket.push(assignment);
+      retryAssignmentsByCase.set(assignment.caseId, bucket);
+    }
+
+    const replaySessionsByStudent = new Map<
+      string,
+      typeof completedReplaySessions
+    >();
+    for (const session of completedReplaySessions) {
+      const bucket = replaySessionsByStudent.get(session.studentId) ?? [];
+      bucket.push(session);
+      replaySessionsByStudent.set(session.studentId, bucket);
     }
 
     const buildOfficialAverage = (
@@ -1003,36 +1068,69 @@ export class PerformanceService {
       };
     };
 
-    const buildGuidedAverage = (
+    const buildAfterAiAverage = (
       caseRow: (typeof cases)[number],
       sourceAssessmentId?: string,
     ) => {
-      const matchingAttempts = (guidedByCase.get(caseRow.id) ?? []).filter(
-        (attempt) => {
-          if (!sourceAssessmentId) return true;
-          return (
-            attempt.guidedAssessment?.sourceAssessmentId === sourceAssessmentId
-          );
-        },
+      type AfterAiEvidence = {
+        id: string;
+        assignmentId: string;
+        score: number;
+        sourceAssessmentId: string | null;
+        submittedAt: Date | null;
+      };
+
+      const evidence: AfterAiEvidence[] = (guidedByCase.get(caseRow.id) ?? [])
+        .map((attempt) => ({
+          id: attempt.id,
+          assignmentId:
+            attempt.assignmentId ?? attempt.guidedAssessmentId ?? attempt.id,
+          score: this.toPercentage(attempt.score) ?? -1,
+          sourceAssessmentId:
+            attempt.guidedAssessment?.sourceAssessmentId ?? null,
+          submittedAt: attempt.submittedAt,
+        }))
+        .filter((attempt) => attempt.score >= 0);
+
+      const openedAtMs = new Date(caseRow.openedAt).getTime();
+      for (const assignment of retryAssignmentsByCase.get(caseRow.id) ?? []) {
+        if (!assignment.assessmentId) continue;
+        for (const session of replaySessionsByStudent.get(caseRow.studentId) ??
+          []) {
+          if (!session.completedAt) continue;
+          if (new Date(session.completedAt).getTime() < openedAtMs) continue;
+          const snapshot = (session.sourceSnapshotJson ?? {}) as Record<
+            string,
+            unknown
+          >;
+          if (snapshot.assessmentId !== assignment.assessmentId) continue;
+          const score = calculateJaReplayScore(session.items);
+          if (score === null) continue;
+          evidence.push({
+            id: session.id,
+            assignmentId: assignment.id,
+            score,
+            sourceAssessmentId: assignment.assessmentId,
+            submittedAt: session.completedAt,
+          });
+        }
+      }
+
+      const matchingEvidence = evidence.filter(
+        (attempt) =>
+          !sourceAssessmentId ||
+          attempt.sourceAssessmentId === sourceAssessmentId,
       );
-      const bestPerAssignment = new Map<
-        string,
-        (typeof guidedAttempts)[number]
-      >();
-      for (const attempt of matchingAttempts) {
-        const key =
-          attempt.assignmentId ?? attempt.guidedAssessmentId ?? attempt.id;
+      const bestPerAssignment = new Map<string, AfterAiEvidence>();
+      for (const attempt of matchingEvidence) {
+        const key = attempt.assignmentId ?? attempt.id;
         const current = bestPerAssignment.get(key);
-        const attemptScore = this.toPercentage(attempt.score) ?? -1;
-        const currentScore = this.toPercentage(current?.score) ?? -1;
-        if (!current || attemptScore > currentScore) {
+        if (!current || attempt.score > current.score) {
           bestPerAssignment.set(key, attempt);
         }
       }
       const attempts = [...bestPerAssignment.values()];
-      const scores = attempts
-        .map((attempt) => this.toPercentage(attempt.score))
-        .filter((score): score is number => score !== null);
+      const scores = attempts.map((attempt) => attempt.score);
 
       return {
         score: this.averageScoreValues(scores),
@@ -1053,7 +1151,7 @@ export class PerformanceService {
         caseRow,
         filter.assessmentId ?? undefined,
       );
-      const after = buildGuidedAverage(
+      const after = buildAfterAiAverage(
         caseRow,
         filter.assessmentId ?? undefined,
       );

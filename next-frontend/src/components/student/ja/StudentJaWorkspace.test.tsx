@@ -808,19 +808,19 @@ describe('StudentJaWorkspace refactored shell', () => {
       }),
     );
     expect(await screen.findByText(/Question 1 of 2/i)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Submit Answers/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Submit & Finish Replay/i })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('radio', { name: 'A' }));
-    expect(screen.queryByRole('button', { name: /Submit Answers/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Submit & Finish Replay/i })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /^Next$/i }));
-    const submitButton = await screen.findByRole('button', { name: /Submit Answers/i });
+    const submitButton = await screen.findByRole('button', { name: /Submit & Finish Replay/i });
     expect(submitButton).toBeDisabled();
 
     fireEvent.click(await screen.findByRole('radio', { name: 'D' }));
-    expect(screen.getByRole('button', { name: /Submit Answers/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /Submit & Finish Replay/i })).toBeEnabled();
 
-    fireEvent.click(screen.getByRole('button', { name: /Submit Answers/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Submit & Finish Replay/i }));
 
     await waitFor(() => {
       expect(mockedJaService.submitReviewResponse).toHaveBeenCalledTimes(2);
@@ -832,6 +832,10 @@ describe('StudentJaWorkspace refactored shell', () => {
     expect(mockedJaService.submitReviewResponse).toHaveBeenCalledWith('review-1', {
       itemId: 'item-2',
       answer: { selectedOptionId: 'd' },
+    });
+    await waitFor(() => {
+      expect(mockedJaService.completeReviewSession).toHaveBeenCalledWith('review-1');
+      expect(mockedJaService.getHub).toHaveBeenCalledTimes(3);
     });
   });
 

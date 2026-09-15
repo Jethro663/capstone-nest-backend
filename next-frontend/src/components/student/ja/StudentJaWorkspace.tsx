@@ -969,6 +969,7 @@ export default function StudentJaWorkspace({
     if (aiUnavailable) return;
     if (!currentSession || !activeItem) return;
     setBusy(true);
+    let responsesSaved = false;
     try {
       const unansweredItems = currentSession.items.filter(
         (item) => !item.response,
@@ -991,9 +992,25 @@ export default function StudentJaWorkspace({
           answer: payload,
         });
       }
+      responsesSaved = true;
+      await jaService.completeReviewSession(currentSession.session.id);
       await loadReviewSession(currentSession.session.id);
+      await refreshHub(selectedClassId);
+      setActivityPage(1);
+      setActivityHistoryRevision((current) => current + 1);
+      toast.success("Replay submitted and marked taken.");
     } catch (error: unknown) {
-      toast.error(getApiErrorMessage(error, "Failed to save answer."));
+      if (responsesSaved) {
+        await loadReviewSession(currentSession.session.id);
+      }
+      toast.error(
+        getApiErrorMessage(
+          error,
+          responsesSaved
+            ? "Answers were saved, but the replay could not be completed. Use Complete Session to retry."
+            : "Failed to save replay answers.",
+        ),
+      );
     } finally {
       setBusy(false);
     }
@@ -1481,7 +1498,7 @@ export default function StudentJaWorkspace({
                                 busy || aiUnavailable || !allSessionItemsReady
                               }
                             >
-                              Submit Answers
+                              Submit & Finish Replay
                             </Button>
                           )
                         }
@@ -1661,7 +1678,7 @@ export default function StudentJaWorkspace({
                                 }
                                 className="student-button-solid ja-primary-action"
                               >
-                                Submit Answers
+                                Submit & Finish Replay
                               </Button>
                             ) : null}
 

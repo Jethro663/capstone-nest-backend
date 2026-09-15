@@ -2,12 +2,13 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ForbiddenException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { sql } from 'drizzle-orm';
-import { PgDialect } from 'drizzle-orm/pg-core';
+import { drizzle } from 'drizzle-orm/pg-proxy';
 import {
   PerformanceService,
   studentConceptMasteryConflictSet,
 } from './performance.service';
 import { DatabaseService } from '../../database/database.service';
+import { studentConceptMastery } from '../../drizzle/schema';
 import { PerformanceStatusChangedEvent } from '../../common/events';
 import { AuditService } from '../audit/audit.service';
 import { PerformanceSnapshotReadService } from './performance-snapshot-read.service';
@@ -35,6 +36,7 @@ function buildMockDb() {
       interventionCases: { findFirst: jest.fn(), findMany: jest.fn() },
       interventionAssignments: { findMany: jest.fn() },
       generatedGuidedAssessmentAttempts: { findMany: jest.fn() },
+      jaSessions: { findMany: jest.fn() },
       performanceSnapshots: { findFirst: jest.fn(), findMany: jest.fn() },
       performanceLogs: { findMany: jest.fn() },
       aiGenerationJobs: { findFirst: jest.fn() },
@@ -129,22 +131,37 @@ describe('PerformanceService', () => {
     service = module.get<PerformanceService>(PerformanceService);
   });
 
-  it('uses PostgreSQL-valid unqualified columns in concept mastery upserts', () => {
-    const dialect = new PgDialect();
-    const set = studentConceptMasteryConflictSet();
-    const compiled = dialect.sqlToQuery(sql`
-      UPDATE student_concept_mastery SET
-        evidence_count = ${set.evidenceCount},
-        error_count = ${set.errorCount},
-        mastery_score = ${set.masteryScore}
-    `).sql;
+  it('qualifies target and excluded columns in the complete concept mastery upsert', () => {
+    const proxy = drizzle(() => Promise.resolve({ rows: [] }));
+    const compiled = proxy
+      .insert(studentConceptMastery)
+      .values({
+        studentId: '00000000-0000-4000-8000-000000000001',
+        classId: '00000000-0000-4000-8000-000000000002',
+        conceptKey: 'fractions',
+        evidenceCount: 4,
+        errorCount: 1,
+        masteryScore: '75',
+      })
+      .onConflictDoUpdate({
+        target: [
+          studentConceptMastery.studentId,
+          studentConceptMastery.classId,
+          studentConceptMastery.conceptKey,
+        ],
+        set: studentConceptMasteryConflictSet(),
+      })
+      .toSQL().sql;
 
     expect(compiled).toContain(
-      'GREATEST(evidence_count, excluded.evidence_count)',
+      'GREATEST("student_concept_mastery"."evidence_count", excluded."evidence_count")',
     );
-    expect(compiled).toContain('GREATEST(error_count, excluded.error_count)');
-    expect(compiled).toContain('LEAST(mastery_score, excluded.mastery_score)');
-    expect(compiled).not.toContain('"student_concept_mastery".');
+    expect(compiled).toContain(
+      'GREATEST("student_concept_mastery"."error_count", excluded."error_count")',
+    );
+    expect(compiled).toContain(
+      'LEAST("student_concept_mastery"."mastery_score", excluded."mastery_score")',
+    );
   });
 
   it('never returns stored SQL details for a failed analysis job', async () => {
@@ -595,7 +612,7 @@ describe('PerformanceService', () => {
     ).rejects.toThrow(ForbiddenException);
   });
 
-  it('getInterventionQuizComparison should compare pre-intervention assessment averages with AI quiz averages', async () => {
+  it('getInterventionQuizComparison should combine guided and JA retry assessment evidence', async () => {
     db.query.classes.findFirst.mockResolvedValue({
       id: 'class-1',
       teacherId: 'teacher-1',
@@ -684,6 +701,29 @@ describe('PerformanceService', () => {
         },
       },
     ]);
+    db.query.interventionAssignments.findMany.mockResolvedValue([
+      {
+        id: 'assignment-retry-1',
+        caseId: 'case-1',
+        assessmentId: 'assessment-1',
+        assignmentType: 'assessment_retry',
+      },
+    ]);
+    db.query.jaSessions.findMany.mockResolvedValue([
+      {
+        id: 'review-session-1',
+        studentId: 'student-1',
+        completedAt: new Date('2026-05-05T09:00:00Z'),
+        sourceSnapshotJson: { assessmentId: 'assessment-1' },
+        items: [
+          { responses: [{ isCorrect: true }] },
+          { responses: [{ isCorrect: true }] },
+          { responses: [{ isCorrect: true }] },
+          { responses: [{ isCorrect: true }] },
+          { responses: [{ isCorrect: false }] },
+        ],
+      },
+    ]);
 
     const result = await service.getInterventionQuizComparison(
       'class-1',
@@ -719,7 +759,7 @@ describe('PerformanceService', () => {
       beforeSampleSize: 2,
       afterAttemptId: null,
       afterScorePercent: 80,
-      afterSampleSize: 2,
+      afterSampleSize: 3,
       deltaScorePercent: 21,
       trend: 'improved',
     });
@@ -732,10 +772,10 @@ describe('PerformanceService', () => {
       beforeAttemptId: 'attempt-before-1',
       beforeScorePercent: 54,
       beforeSampleSize: 1,
-      afterAttemptId: 'guided-attempt-1',
-      afterScorePercent: 78,
-      afterSampleSize: 1,
-      deltaScorePercent: 24,
+      afterAttemptId: null,
+      afterScorePercent: 79,
+      afterSampleSize: 2,
+      deltaScorePercent: 25,
       trend: 'improved',
     });
   });

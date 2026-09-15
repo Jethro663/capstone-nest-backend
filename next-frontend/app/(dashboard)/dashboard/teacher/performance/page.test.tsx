@@ -192,6 +192,17 @@ describe('TeacherPerformancePage', () => {
     } as Awaited<ReturnType<typeof performanceService.recomputeClass>>);
   });
 
+  it('labels combined guided and replay evidence as the After AI Plan', async () => {
+    render(<TeacherPerformancePage />);
+
+    expect(
+      await screen.findByRole('columnheader', { name: 'After AI Plan' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('columnheader', { name: 'After AI Plan Avg' }),
+    ).toBeInTheDocument();
+  });
+
   it('shows the AI outage rail and disables AI analysis while keeping refresh available', async () => {
     mockedHealthService.getReadiness.mockResolvedValueOnce({
       ready: true,

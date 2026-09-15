@@ -46,6 +46,7 @@ import {
   SubmitJaPracticeResponseDto,
 } from './dto/ja-practice.dto';
 import { boundPercentage } from '../academic-state/academic-score';
+import { buildJaReviewAttemptStats } from './ja-review-state';
 
 type UserContext = {
   id: string;
@@ -1052,6 +1053,16 @@ export class JaService {
             startedAt: true,
             completedAt: true,
           },
+          with: {
+            items: {
+              columns: { id: true },
+              with: {
+                responses: {
+                  columns: { isCorrect: true },
+                },
+              },
+            },
+          },
           orderBy: [desc(jaSessions.updatedAt)],
           limit: 60,
         }),
@@ -1077,35 +1088,12 @@ export class JaService {
     const avgScore = Number(masteryRows[0]?.avgScore ?? 0);
     const masteryPercent = Math.max(0, Math.min(100, Math.round(avgScore)));
     const progress = practice.progress;
-    const reviewAttemptStats = new Map<
-      string,
-      { count: number; activeReviewSessionId: string | null }
-    >();
-
-    reviewSessions.forEach((session) => {
-      const sourceSnapshot = (session.sourceSnapshotJson ?? {}) as Record<
-        string,
-        unknown
-      >;
-      const attemptId =
-        typeof sourceSnapshot.attemptId === 'string'
-          ? sourceSnapshot.attemptId
-          : null;
-      if (!attemptId) return;
-
-      const current = reviewAttemptStats.get(attemptId) ?? {
-        count: 0,
-        activeReviewSessionId: null,
-      };
-      current.count += 1;
-      if (session.status === 'active') {
-        current.activeReviewSessionId = session.id;
-      }
-      reviewAttemptStats.set(attemptId, current);
-    });
+    const reviewAttemptStats = buildJaReviewAttemptStats(reviewSessions);
 
     const eligibleAttemptsWithReviewState = eligibleAttempts.map((attempt) => {
-      const stats = reviewAttemptStats.get(attempt.attemptId);
+      const stats =
+        reviewAttemptStats.get(attempt.attemptId) ??
+        reviewAttemptStats.get(attempt.assessmentId);
       const reviewSessionCount = stats?.count ?? 0;
       const activeReviewSessionId = stats?.activeReviewSessionId ?? null;
 
@@ -1122,6 +1110,9 @@ export class JaService {
           !activeReviewSessionId &&
           reviewSessionCount >= JA_REVIEW_MAX_ATTEMPTS,
         activeReviewSessionId,
+        isReplayCompleted: Boolean(stats?.completedReviewSessionId),
+        replayScore: stats?.replayScore ?? null,
+        replayCount: reviewSessionCount,
       };
     });
 
@@ -1164,10 +1155,12 @@ export class JaService {
       },
       review: {
         eligibleAttempts: eligibleAttemptsWithReviewState,
-        sessions: reviewSessions.map(({ sourceSnapshotJson, ...session }) => ({
-          ...session,
-          sourceSnapshot: sourceSnapshotJson ?? null,
-        })),
+        sessions: reviewSessions.map(
+          ({ sourceSnapshotJson, items: _items, ...session }) => ({
+            ...session,
+            sourceSnapshot: sourceSnapshotJson ?? null,
+          }),
+        ),
       },
     };
   }

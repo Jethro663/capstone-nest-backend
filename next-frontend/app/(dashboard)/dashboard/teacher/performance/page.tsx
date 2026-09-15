@@ -1225,7 +1225,7 @@ export default function TeacherPerformancePage() {
                           <TableHead>Assessment Avg</TableHead>
                           <TableHead>Class Record Avg</TableHead>
                           <TableHead>Before Assessments</TableHead>
-                          <TableHead>After AI Quizzes</TableHead>
+                          <TableHead>After AI Plan</TableHead>
                           <TableHead>Delta</TableHead>
                           <TableHead>Overall Avg</TableHead>
                           <TableHead>Status</TableHead>
@@ -1304,13 +1304,13 @@ export default function TeacherPerformancePage() {
 
               <TeacherSectionCard
                 title="Intervention Progress Comparison"
-                description="Compare each learner's assessment average before intervention against completed AI remedial quiz averages."
+                description="Compare each learner's assessment average before intervention against completed AI-plan assessment averages."
                 className="teacher-figma-stagger"
               >
                 {(interventionComparisons?.comparisons.length ?? 0) === 0 ? (
                   <TeacherEmptyState
-                    title="No intervention quiz data yet"
-                    description="Before averages appear after class assessments, and after averages appear once students submit AI remedial quizzes."
+                    title="No AI-plan assessment data yet"
+                    description="Before averages appear after class assessments, and after averages appear once students finish AI-plan assessments."
                   />
                 ) : (
                   <div className="space-y-3">
@@ -1343,7 +1343,7 @@ export default function TeacherPerformancePage() {
                         Unchanged: {filteredComparisonCounts.unchanged}
                       </Badge>
                       <Badge variant="secondary">
-                        Awaiting AI Quiz: {filteredComparisonCounts.awaiting}
+                        Awaiting AI Plan: {filteredComparisonCounts.awaiting}
                       </Badge>
                     </div>
                     <div className="teacher-table-shell">
@@ -1353,7 +1353,7 @@ export default function TeacherPerformancePage() {
                             <TableHead>Student</TableHead>
                             <TableHead>Focus</TableHead>
                             <TableHead>Before Avg</TableHead>
-                            <TableHead>After AI Avg</TableHead>
+                            <TableHead>After AI Plan Avg</TableHead>
                             <TableHead>Delta</TableHead>
                             <TableHead>Trend</TableHead>
                           </TableRow>
@@ -1392,8 +1392,8 @@ export default function TeacherPerformancePage() {
                                 <TableCell className="text-[var(--teacher-text-strong)]">
                                   {toPercent(entry.afterScorePercent)}
                                   <div className="text-[10px] text-[var(--teacher-text-muted)]">
-                                    {entry.afterSampleSize} AI quiz
-                                    {entry.afterSampleSize === 1 ? "" : "zes"}
+                                    {entry.afterSampleSize} AI-plan assessment
+                                    {entry.afterSampleSize === 1 ? "" : "s"}
                                   </div>
                                 </TableCell>
                                 <TableCell className="text-[var(--teacher-text-strong)]">
