@@ -420,6 +420,13 @@ export function StudentHomeView({
           onAction={() => navigation.navigate("StudentCalendar")}
         />
         <View style={styles.dayCard}>
+          <View style={styles.followUpRail}>
+            <View style={styles.followUpRailIcon}>
+              <MaterialCommunityIcons name="clock-outline" size={18} color="#FFFFFF" />
+            </View>
+            <Text style={styles.followUpRailTitle}>Today&apos;s schedule</Text>
+            <Text style={styles.followUpRailMeta}>{agenda.today.length || "Clear"}</Text>
+          </View>
           {agenda.today.length > 0 ? (
             agenda.today.map((entry, index) => (
               <Pressable
@@ -489,8 +496,16 @@ export function StudentHomeView({
         style={styles.sectionDivider}
       />
       <View style={styles.section}>
-        <SectionHeading eyebrow="Small steps" title="After that" />
-        <View style={styles.moveStack}>
+        <SectionHeading eyebrow="Keep momentum" title="After that" />
+        <View style={styles.momentumCard}>
+          <View style={styles.followUpRail}>
+            <View style={styles.followUpRailIcon}>
+              <MaterialCommunityIcons name="arrow-right-circle-outline" size={18} color="#FFFFFF" />
+            </View>
+            <Text style={styles.followUpRailTitle}>Two small next moves</Text>
+            <MaterialCommunityIcons name="chevron-down" size={18} color="#D7E0EB" />
+          </View>
+          <View style={styles.moveStack}>
           {secondaryLesson ? (
             <MoveTile
               icon="play-circle-outline"
@@ -549,6 +564,7 @@ export function StudentHomeView({
               onPress={() => navigation.navigate("Assessments")}
             />
           )}
+          </View>
         </View>
       </View>
 
@@ -559,7 +575,7 @@ export function StudentHomeView({
       <View style={styles.section}>
         <SectionHeading
           eyebrow="From school"
-          title="Latest update"
+          title="School bulletin"
           actionLabel="See calendar"
           onAction={() => navigation.navigate("StudentCalendar")}
         />
@@ -571,27 +587,36 @@ export function StudentHomeView({
             pressed ? styles.pressed : null,
           ]}
         >
-          <View style={styles.updateIcon}>
+          <View style={styles.followUpRail}>
+            <View style={styles.followUpRailIcon}>
+              <MaterialCommunityIcons name="bullhorn-outline" size={18} color="#FFFFFF" />
+            </View>
+            <Text style={styles.followUpRailTitle}>Latest from GABHS</Text>
+            <Text style={styles.followUpRailMeta}>Open</Text>
+          </View>
+          <View style={styles.updateBody}>
+            <View style={styles.updateIcon}>
+              <MaterialCommunityIcons
+                name={latestUpdate ? "calendar-star" : "bell-check-outline"}
+                size={22}
+                color={theme.purple}
+              />
+            </View>
+            <View style={styles.moveCopy}>
+              <Text style={styles.updateTitle}>
+                {latestUpdate?.title ?? "No new updates"}
+              </Text>
+              <Text style={styles.moveSubtitle}>
+                {latestUpdate?.subtitle ??
+                  "School events and dates will appear here."}
+              </Text>
+            </View>
             <MaterialCommunityIcons
-              name={latestUpdate ? "calendar-star" : "bell-check-outline"}
-              size={22}
-              color={theme.purple}
+              name="chevron-right"
+              size={21}
+              color={theme.dim}
             />
           </View>
-          <View style={styles.moveCopy}>
-            <Text style={styles.updateTitle}>
-              {latestUpdate?.title ?? "No new updates"}
-            </Text>
-            <Text style={styles.moveSubtitle}>
-              {latestUpdate?.subtitle ??
-                "School events and dates will appear here."}
-            </Text>
-          </View>
-          <MaterialCommunityIcons
-            name="chevron-right"
-            size={21}
-            color={theme.dim}
-          />
         </Pressable>
       </View>
 
@@ -780,10 +805,39 @@ const styles = StyleSheet.create({
   priorityActionText: { color: theme.redText, fontSize: 12, fontWeight: "900" },
   dayCard: {
     overflow: "hidden",
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: theme.border,
+    borderColor: theme.border2,
     backgroundColor: theme.surface,
+  },
+  followUpRail: {
+    minHeight: 58,
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: theme.deepNavy,
+  },
+  followUpRailIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.redText,
+  },
+  followUpRailTitle: {
+    flex: 1,
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+  },
+  followUpRailMeta: {
+    color: "#D7E0EB",
+    fontSize: 10,
+    fontWeight: "800",
   },
   scheduleRow: {
     minHeight: 76,
@@ -839,14 +893,21 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: theme.amberSoft,
   },
-  moveStack: { gap: 9 },
-  moveTile: {
-    minHeight: 96,
-    borderRadius: 17,
+  momentumCard: {
+    overflow: "hidden",
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: theme.border,
+    borderColor: theme.border2,
     backgroundColor: theme.surface,
-    padding: 13,
+  },
+  moveStack: { backgroundColor: theme.surface },
+  moveTile: {
+    minHeight: 88,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+    backgroundColor: theme.surface,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
@@ -880,12 +941,16 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   updateCard: {
-    minHeight: 82,
-    borderRadius: 17,
+    overflow: "hidden",
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: theme.border,
+    borderColor: theme.border2,
     backgroundColor: theme.surface,
-    padding: 13,
+  },
+  updateBody: {
+    minHeight: 86,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,

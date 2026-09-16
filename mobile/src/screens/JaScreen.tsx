@@ -21,7 +21,7 @@ import type { JaAskLessonContextSummary, JaAskMessage, JaMode, JaPracticeSession
 import type { GuidedAssessmentAttemptSummary, LxpCheckpoint, LxpOverviewResponse, LxpPathSummary } from "../types/lxp";
 import type { JaPanel, LxpMobileTab } from "../navigation/types";
 import { studentDarkTheme, stripRichText } from "../theme/studentDark";
-import { RoleHeaderNavigationButton } from "../components/navigation/RoleNavigationDrawer";
+import { RoleHeaderNavigationButton, RoleMenuButton } from "../components/navigation/RoleNavigationDrawer";
 
 type Props = {
   navigation: {
@@ -36,6 +36,7 @@ type Props = {
       lxpTab?: LxpMobileTab;
     };
   };
+  preferBackNavigation?: boolean;
 };
 
 type VisibleJaPanel = "ask" | "review" | "lxp";
@@ -164,7 +165,7 @@ function SectionLabel({ title, meta }: { title: string; meta?: string }) {
   );
 }
 
-export function JaScreen({ navigation, route }: Props) {
+export function JaScreen({ navigation, route, preferBackNavigation = false }: Props) {
   const [panel, setPanel] = useState<VisibleJaPanel>(normalizePanel(route?.params?.panel));
   const [selectedClassId, setSelectedClassId] = useState<string | undefined>(route?.params?.classId);
   const [classPickerOpen, setClassPickerOpen] = useState(false);
@@ -568,6 +569,14 @@ export function JaScreen({ navigation, route }: Props) {
     return (
       <>
         <JaChatWorkspace
+          leadingAction={
+            <RoleHeaderNavigationButton
+              color={dark.redText}
+              onBackPress={navigation.goBack}
+              preferBack={preferBackNavigation}
+            />
+          }
+          navigationAction={preferBackNavigation ? <RoleMenuButton color={dark.redText} /> : undefined}
           classLabel={selectedClassText}
           entryState={askEntryState}
           lessonSelection={lessonSelection}
@@ -620,7 +629,7 @@ export function JaScreen({ navigation, route }: Props) {
     >
       <View style={{ backgroundColor: dark.header, borderBottomWidth: 1, borderBottomColor: dark.border }}>
         <View style={{ paddingHorizontal: 16, paddingTop: 13, paddingBottom: 10, flexDirection: "row", alignItems: "center", gap: 10 }}>
-          <RoleHeaderNavigationButton color={dark.redText} onBackPress={navigation.goBack} />
+          <RoleHeaderNavigationButton color={dark.redText} onBackPress={navigation.goBack} preferBack={preferBackNavigation} />
           <View style={{ flex: 1 }}>
             <Text style={{ color: dark.muted, fontSize: 9, fontWeight: "900", textTransform: "uppercase", letterSpacing: 1 }}>JA Hub</Text>
             <Text style={{ color: dark.text, fontSize: 14, fontWeight: "800" }}>{panel === "review" ? "Replay" : "Learner's Path"}</Text>

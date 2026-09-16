@@ -13,17 +13,20 @@ import {
   TeacherActionButton,
   TeacherChip,
   TeacherEmpty,
-  TeacherPanel,
   TeacherRow,
   TeacherScreen,
   TeacherSearch,
-  TeacherStats,
+  TeacherSelectMenu,
   teacherTheme,
 } from "../components/teacher/TeacherMobilePrimitives";
+import {
+  TeacherContextStrip,
+  TeacherFlatSection,
+  TeacherSegmentedTabs,
+} from "../components/teacher/TeacherWorkspacePrimitives";
 
 type Props = TeacherDrawerScreenProps<"TeacherLibrary">;
 type LibraryTab = "files" | "modules";
-type ScopeFilter = "all" | "private" | "general";
 
 export function TeacherLibraryScreen({ navigation }: Props) {
   const { user } = useAuth();
@@ -34,11 +37,8 @@ export function TeacherLibraryScreen({ navigation }: Props) {
   const [activeTab, setActiveTab] = useState<LibraryTab>("files");
   const [search, setSearch] = useState("");
   const [selectedClassId, setSelectedClassId] = useState<string>("all");
-  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>("all");
   const [uploading, setUploading] = useState(false);
   const [deletingFile, setDeletingFile] = useState<{ id: string; name: string } | null>(null);
-  const [importingFile, setImportingFile] = useState<{ id: string; name: string } | null>(null);
-  const [targetClassId, setTargetClassId] = useState<string>("");
   const [selectedFolderId, setSelectedFolderId] = useState<string>("all");
   const [newFolderName, setNewFolderName] = useState("");
 
@@ -142,7 +142,7 @@ export function TeacherLibraryScreen({ navigation }: Props) {
   return (
     <TeacherScreen
       title="Nexora Library"
-      subtitle="Raw document assets & cross-class content modules with 1:1 web parity."
+      subtitle="Manage source files or reusable class content."
       icon="folder-open-outline"
       onBackPress={() => navigation.goBack()}
       refreshing={classesQuery.isRefetching || moduleQueries.some((query) => query.isRefetching)}
@@ -150,36 +150,35 @@ export function TeacherLibraryScreen({ navigation }: Props) {
         void Promise.all([classesQuery.refetch(), filesQuery.refetch(), foldersQuery.refetch(), storageQuery.refetch(), ...moduleQueries.map((query) => query.refetch())]);
       }}
     >
-      <TeacherStats
+      <TeacherSegmentedTabs
+        accessibilityLabel="Library views"
+        activeKey={activeTab}
+        onSelect={setActiveTab}
         items={[
-          { label: "Modules", value: moduleRecords.length, tone: "red" },
-          { label: "Classes", value: classesQuery.data?.length ?? 0, tone: "blue" },
-          { label: "Files", value: storageQuery.data?.totalFiles ?? filesQuery.data?.length ?? 0, tone: "green" },
-          { label: "Storage", value: `${storageQuery.data?.totalMB ?? 0} MB`, tone: "amber" },
+          { key: "files", label: "Files", count: storageQuery.data?.totalFiles ?? filesQuery.data?.length ?? 0 },
+          { key: "modules", label: "Modules", count: moduleRecords.length },
         ]}
       />
 
-      <View style={{ marginHorizontal: 16, marginTop: 8, flexDirection: "row", gap: 8 }}>
-        <TeacherChip label="Raw Asset Files" active={activeTab === "files"} onPress={() => setActiveTab("files")} />
-        <TeacherChip label="Class Modules" active={activeTab === "modules"} onPress={() => setActiveTab("modules")} />
-      </View>
-
       <TeacherSearch value={search} onChangeText={setSearch} placeholder="Search library resources or modules..." />
-
-      <View style={{ marginHorizontal: 16, marginTop: 10, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-        <TeacherChip label="All classes" active={selectedClassId === "all"} onPress={() => setSelectedClassId("all")} />
-        {(classesQuery.data ?? []).slice(0, 6).map((entry) => (
-          <TeacherChip
-            key={entry.id}
-            label={entry.subjectCode}
-            active={selectedClassId === entry.id}
-            onPress={() => setSelectedClassId(entry.id)}
-          />
-        ))}
-      </View>
+      <TeacherSelectMenu
+        label="Class scope"
+        selectedValue={selectedClassId}
+        options={[
+          { value: "all", label: "All assigned classes" },
+          ...(classesQuery.data ?? []).map((entry) => ({ value: entry.id, label: `${entry.subjectCode} · ${entry.subjectName}` })),
+        ]}
+        onSelect={setSelectedClassId}
+      />
+      <TeacherContextStrip
+        title={activeTab === "files" ? "Source files" : "Reusable modules"}
+        subtitle={selectedClass ? `${selectedClass.subjectCode} · ${selectedClass.subjectName}` : "Across assigned classes"}
+        status={activeTab === "files" ? `${storageQuery.data?.totalMB ?? 0} MB` : `${moduleRecords.length} modules`}
+        icon={activeTab === "files" ? "file-document-multiple-outline" : "view-module-outline"}
+      />
 
       {activeTab === "files" ? (
-        <TeacherPanel title="Folders and storage" subtitle="Filter the complete library, create folders, and review authoritative storage totals.">
+        <TeacherFlatSection title="Folders" subtitle="Filter the source library or create a private folder.">
           <View style={{ paddingHorizontal: 14, paddingBottom: 12, flexDirection: "row", flexWrap: "wrap", gap: 7 }}>
             <TeacherChip label="All folders" active={selectedFolderId === "all"} onPress={() => setSelectedFolderId("all")} />
             {(foldersQuery.data ?? []).map((folder) => <TeacherChip key={folder.id} label={folder.name} active={selectedFolderId === folder.id} onPress={() => setSelectedFolderId(folder.id)} />)}
@@ -188,46 +187,40 @@ export function TeacherLibraryScreen({ navigation }: Props) {
             <TextInput accessibilityLabel="New folder name" value={newFolderName} onChangeText={setNewFolderName} placeholder="New folder name" placeholderTextColor={teacherTheme.muted} style={{ flex: 1, borderWidth: 1, borderColor: teacherTheme.border, borderRadius: 10, color: teacherTheme.text, paddingHorizontal: 11, paddingVertical: 9 }} />
             <TeacherActionButton label="Create" icon="folder-plus-outline" tone="blue" disabled={!newFolderName.trim() || createFolderMutation.isPending} onPress={() => void createFolderMutation.mutateAsync(newFolderName.trim()).catch((error) => Alert.alert("Unable to create folder", toAppError(error).message))} />
           </View>
-        </TeacherPanel>
+        </TeacherFlatSection>
       ) : null}
 
-      <TeacherPanel
-        title="Library actions"
-        subtitle={
-          selectedClass
-            ? `Focused class: ${selectedClass.subjectCode} | ${selectedClass.subjectName}`
-            : "Upload assets or pick a class chip to unlock class-specific actions."
-        }
-      >
-        <View style={{ paddingHorizontal: 14, paddingBottom: 14, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+      <View style={{ paddingHorizontal: 16, paddingTop: 12, flexDirection: "row", justifyContent: "flex-end" }}>
+        {activeTab === "files" ? (
           <TeacherActionButton
-            label={uploading ? "Uploading..." : "Upload File Asset"}
+            label={uploading ? "Uploading..." : "Upload file"}
             icon="upload-outline"
             tone="green"
             disabled={uploading}
             onPress={() => void handleUploadFile()}
           />
+        ) : (
           <TeacherActionButton
-            label="Create module"
+            label="New module"
             icon="plus-box-outline"
-            tone="blue"
+            tone="green"
             disabled={!selectedClass}
             onPress={() => {
               if (!selectedClass) return;
               navigation.navigate("TeacherCreateModule", { classId: selectedClass.id });
             }}
           />
-        </View>
-      </TeacherPanel>
+        )}
+      </View>
 
       {activeTab === "modules" ? (
-        <TeacherPanel title="Module library" subtitle="Tap a module to open its teacher module workspace.">
+        <TeacherFlatSection title="Modules" subtitle="Reusable class content with current lifecycle state.">
           {filteredModules.length ? (
             filteredModules.map((module) => (
               <TeacherRow
                 key={module.id}
                 title={module.title}
-                subtitle={`${module.classLabel} | ${module.sections?.length ?? 0} sections`}
+                subtitle={`${module.classLabel} · ${module.sections?.length ?? 0} sections · ${module.sections?.reduce((total, section) => total + section.items.filter((item) => item.itemType === "lesson").length, 0) ?? 0} lessons · ${module.isVisible === false ? "Hidden" : "Visible"}`}
                 onPress={() => navigation.navigate("TeacherModuleDetail", { classId: module.classId, moduleId: module.id, source: "library" })}
                 right={
                   <View
@@ -250,9 +243,9 @@ export function TeacherLibraryScreen({ navigation }: Props) {
           ) : (
             <TeacherEmpty title="No modules found" subtitle="No modules match the current class filter or search." icon="folder-search-outline" />
           )}
-        </TeacherPanel>
+        </TeacherFlatSection>
       ) : (
-        <TeacherPanel title="Raw Asset Library" subtitle="Document resources, curriculum banks, and uploaded files.">
+        <TeacherFlatSection title="Files" subtitle="Document sources with type, size, date, scope, and indexing evidence.">
           {filesQuery.data?.length ? (
             filesQuery.data.map((file) => {
               const name = file.originalName || file.filename || "Uploaded File";
@@ -262,7 +255,7 @@ export function TeacherLibraryScreen({ navigation }: Props) {
                 <TeacherRow
                   key={file.id}
                   title={name}
-                  subtitle={[file.mimeType || "Document", sizeLabel, dateLabel].filter(Boolean).join(" · ")}
+                  subtitle={[file.mimeType || "Document", sizeLabel, dateLabel, file.scope || "private", file.indexStatus ? `Index ${file.indexStatus}` : ""].filter(Boolean).join(" · ")}
                   right={
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                       <TeacherActionButton
@@ -287,7 +280,7 @@ export function TeacherLibraryScreen({ navigation }: Props) {
           ) : (
             <TeacherEmpty title="Nexora File Asset Bank" subtitle="Tap 'Upload File Asset' above to upload PDFs, PPTs, or Docs directly to your Nexora Library." icon="cloud-upload-outline" />
           )}
-        </TeacherPanel>
+        </TeacherFlatSection>
       )}
 
       {/* Delete Confirm Modal */}

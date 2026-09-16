@@ -12,12 +12,16 @@ import { boundAcademicPercentage } from "../lib/academicScore";
 import {
   TeacherChip,
   TeacherEmpty,
-  TeacherPanel,
   TeacherRow,
   TeacherScreen,
-  TeacherStats,
+  TeacherSelectMenu,
   teacherTheme,
 } from "../components/teacher/TeacherMobilePrimitives";
+import {
+  TeacherFlatSection,
+  TeacherSegmentedTabs,
+  TeacherSummaryStrip,
+} from "../components/teacher/TeacherWorkspacePrimitives";
 
 type Props = TeacherDrawerScreenProps<"TeacherPerformance">;
 
@@ -87,6 +91,7 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
   const [selectedClassId, setSelectedClassId] = useState<string>("");
   const [selectedComparisonFilterId, setSelectedComparisonFilterId] =
     useState<string>("all");
+  const [viewMode, setViewMode] = useState<"overview" | "at_risk" | "compare">("overview");
 
   useEffect(() => {
     if (!selectedClassId && classesQuery.data?.length) {
@@ -182,7 +187,7 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
   return (
     <TeacherScreen
       title="Performance"
-      subtitle="Class-level performance metrics and at-risk students from teacher analytics endpoints."
+      subtitle="Inspect current standing, at-risk learners, or intervention comparisons."
       icon="chart-line"
       onBackPress={() => navigation.goBack()}
       refreshing={
@@ -200,52 +205,37 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
         ]);
       }}
     >
-      <TeacherStats
+      <TeacherSelectMenu
+        label="Class"
+        selectedValue={selectedClassId}
+        options={(classesQuery.data ?? []).map((entry) => ({ value: entry.id, label: `${entry.subjectCode} · ${entry.subjectName}` }))}
+        onSelect={setSelectedClassId}
+      />
+      <TeacherSegmentedTabs
+        accessibilityLabel="Performance views"
+        activeKey={viewMode}
         items={[
-          {
-            label: "Avg score",
-            value:
-              typeof summaryQuery.data?.averageBlendedScore === "number"
-                ? boundAcademicPercentage(
-                    summaryQuery.data.averageBlendedScore,
-                  ).toFixed(1)
-                : "N/A",
-            tone: "blue",
-          },
-          { label: "At-risk", value: atRiskStudents.length, tone: "amber" },
-          {
-            label: "Improved",
-            value: comparisonQuery.data?.improvedCount ?? 0,
-            tone: "green",
-          },
-          {
-            label: "Students",
-            value: summaryQuery.data?.totalStudents ?? "N/A",
-            tone: "red",
-          },
+          { key: "overview", label: "Overview" },
+          { key: "at_risk", label: "At risk", count: atRiskStudents.length },
+          { key: "compare", label: "Compare", count: comparisonRows.length },
         ]}
+        onSelect={setViewMode}
       />
 
-      <View
-        style={{
-          marginHorizontal: 16,
-          marginTop: 10,
-          flexDirection: "row",
-          flexWrap: "wrap",
-          gap: 8,
-        }}
-      >
-        {(classesQuery.data ?? []).map((classItem) => (
-          <TeacherChip
-            key={classItem.id}
-            label={classItem.subjectCode}
-            active={selectedClassId === classItem.id}
-            onPress={() => setSelectedClassId(classItem.id)}
-          />
-        ))}
-      </View>
-
-      <TeacherPanel
+      {viewMode === "overview" ? (
+      <>
+      <TeacherSummaryStrip
+        items={[
+          {
+            label: "Average",
+            value: typeof summaryQuery.data?.averageBlendedScore === "number" ? `${boundAcademicPercentage(summaryQuery.data.averageBlendedScore).toFixed(1)}%` : "N/A",
+            tone: "blue",
+          },
+          { label: "At risk", value: atRiskStudents.length, tone: "amber" },
+          { label: "Students", value: summaryQuery.data?.totalStudents ?? "N/A", tone: "red" },
+        ]}
+      />
+      <TeacherFlatSection
         title="Class summary"
         subtitle={
           selectedClass
@@ -269,9 +259,12 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
               : "Not available"
           }
         />
-      </TeacherPanel>
+      </TeacherFlatSection>
+      </>
+      ) : null}
 
-      <TeacherPanel
+      {viewMode === "at_risk" ? (
+      <TeacherFlatSection
         title="At-risk learners"
         subtitle="Students below threshold for the selected class."
       >
@@ -326,9 +319,11 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
             icon="check-circle-outline"
           />
         )}
-      </TeacherPanel>
+      </TeacherFlatSection>
+      ) : null}
 
-      <TeacherPanel
+      {viewMode === "compare" ? (
+      <TeacherFlatSection
         title="Intervention progress comparison"
         subtitle="Before uses class assessment averages; after uses completed AI remedial quiz averages."
       >
@@ -352,7 +347,7 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
                 />
               ))}
             </View>
-            <TeacherStats
+            <TeacherSummaryStrip
               items={[
                 {
                   label: "Improved",
@@ -428,9 +423,10 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
             icon="chart-timeline-variant"
           />
         )}
-      </TeacherPanel>
+      </TeacherFlatSection>
+      ) : null}
 
-      <TeacherPanel
+      <TeacherFlatSection
         title="Performance actions"
         subtitle="Jump to adjacent teacher tabs without leaving this context."
       >
@@ -452,7 +448,7 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
             onPress={() => navigation.navigate("TeacherReports")}
           />
         </View>
-      </TeacherPanel>
+      </TeacherFlatSection>
     </TeacherScreen>
   );
 }

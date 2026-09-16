@@ -17,12 +17,16 @@ import {
   TeacherActionButton,
   TeacherChip,
   TeacherEmpty,
-  TeacherPanel,
   TeacherRow,
   TeacherScreen,
   TeacherSearch,
-  TeacherStats,
+  TeacherSelectMenu,
 } from "../components/teacher/TeacherMobilePrimitives";
+import {
+  TeacherFlatSection,
+  TeacherSegmentedTabs,
+  TeacherSummaryStrip,
+} from "../components/teacher/TeacherWorkspacePrimitives";
 
 type Props = TeacherDrawerScreenProps<"TeacherReports">;
 type ReportType = "enrollment" | "performance" | "assessment" | "intervention" | "usage";
@@ -116,6 +120,7 @@ export function TeacherReportsScreen({ navigation }: Props) {
   const classesQuery = useTeacherClasses(teacherId);
   const [selectedClassId, setSelectedClassId] = useState<string>("all");
   const [selectedReport, setSelectedReport] = useState<ReportType>("enrollment");
+  const [viewMode, setViewMode] = useState<"types" | "results">("types");
   const [search, setSearch] = useState("");
 
   const query = useMemo<TeacherReportQuery>(
@@ -213,7 +218,7 @@ export function TeacherReportsScreen({ navigation }: Props) {
   return (
     <TeacherScreen
       title="Reports"
-      subtitle="Interactive teacher report workspace with class filtering and live endpoint snapshots used on web."
+      subtitle="Choose a report, then inspect or export its authoritative rows."
       icon="chart-box-outline"
       onBackPress={() => navigation.goBack()}
       refreshing={isRefreshing}
@@ -228,37 +233,37 @@ export function TeacherReportsScreen({ navigation }: Props) {
         ]);
       }}
     >
-      <TeacherStats
-        items={[
-          { label: "Enrollment", value: reportMeta[0]?.value ?? 0, tone: "red" },
-          { label: "Performance", value: reportMeta[1]?.value ?? 0, tone: "blue" },
-          { label: "Assessments", value: reportMeta[2]?.value ?? 0, tone: "green" },
-          { label: "Rows shown", value: visibleRows.length, tone: "amber" },
+      <TeacherSelectMenu
+        label="Class filter"
+        selectedValue={selectedClassId}
+        options={[
+          { value: "all", label: "All assigned classes" },
+          ...(classesQuery.data ?? []).map((entry) => ({ value: entry.id, label: `${entry.subjectCode} · ${entry.subjectName}` })),
         ]}
+        onSelect={setSelectedClassId}
+      />
+      <TeacherSegmentedTabs
+        accessibilityLabel="Report workspace"
+        activeKey={viewMode}
+        items={[
+          { key: "types", label: "Report types" },
+          { key: "results", label: "Results", count: visibleRows.length },
+        ]}
+        onSelect={setViewMode}
       />
 
-      <View style={{ marginHorizontal: 16, marginTop: 10, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-        <TeacherChip label="All classes" active={selectedClassId === "all"} onPress={() => setSelectedClassId("all")} />
-        {(classesQuery.data ?? []).slice(0, 6).map((entry) => (
-          <TeacherChip
-            key={entry.id}
-            label={entry.subjectCode}
-            active={selectedClassId === entry.id}
-            onPress={() => setSelectedClassId(entry.id)}
-          />
-        ))}
-      </View>
-
-      <TeacherSearch value={search} onChangeText={setSearch} placeholder="Search report rows" />
-
-      <TeacherPanel title="Report types" subtitle="Switch report stream without leaving the teacher workspace.">
+      {viewMode === "types" ? (
+      <TeacherFlatSection title="Report types" subtitle="Select the endpoint-backed dataset you need.">
         <View style={{ paddingHorizontal: 14, paddingBottom: 14, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
           {reportMeta.map((entry) => (
             <TeacherChip
               key={entry.key}
               label={`${entry.label} (${entry.value})`}
               active={selectedReport === entry.key}
-              onPress={() => setSelectedReport(entry.key)}
+              onPress={() => {
+                setSelectedReport(entry.key);
+                setViewMode("results");
+              }}
             />
           ))}
         </View>
@@ -282,11 +287,19 @@ export function TeacherReportsScreen({ navigation }: Props) {
             onPress={() => navigation.navigate("TeacherInterventions")}
           />
         </View>
-      </TeacherPanel>
-
-      <TeacherPanel
+      </TeacherFlatSection>
+      ) : (
+      <>
+      <TeacherSearch value={search} onChangeText={setSearch} placeholder="Search report rows" />
+      <TeacherSummaryStrip
+        items={[
+          { label: "Rows shown", value: visibleRows.length, tone: "blue" },
+          { label: "Dataset", value: reportMeta.find((entry) => entry.key === selectedReport)?.value ?? 0, tone: "red" },
+        ]}
+      />
+      <TeacherFlatSection
         title={`${reportMeta.find((entry) => entry.key === selectedReport)?.label || "Report"} snapshot`}
-        subtitle="Top records from the selected teacher report endpoint."
+        subtitle="Current records from the selected teacher report endpoint."
         action={
           <TeacherActionButton
             label="Official CSV"
@@ -307,7 +320,9 @@ export function TeacherReportsScreen({ navigation }: Props) {
             icon="chart-line-variant"
           />
         )}
-      </TeacherPanel>
+      </TeacherFlatSection>
+      </>
+      )}
     </TeacherScreen>
   );
 }

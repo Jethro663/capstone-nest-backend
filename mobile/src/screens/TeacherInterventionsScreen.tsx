@@ -22,13 +22,18 @@ import {
   TeacherActionButton,
   TeacherChip,
   TeacherEmpty,
-  TeacherPanel,
   TeacherRow,
   TeacherScreen,
   TeacherSearch,
-  TeacherStats,
+  TeacherSelectMenu,
   teacherTheme,
 } from "../components/teacher/TeacherMobilePrimitives";
+import {
+  TeacherActionSheet,
+  TeacherFlatSection,
+  TeacherSegmentedTabs,
+  TeacherSummaryStrip,
+} from "../components/teacher/TeacherWorkspacePrimitives";
 
 type Props = TeacherDrawerScreenProps<"TeacherInterventions">;
 type WorkspaceView = "queue" | "overview" | "history";
@@ -212,6 +217,7 @@ export function TeacherInterventionsScreen({ navigation, route }: Props) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [sortMode, setSortMode] = useState<SortMode>("newest");
+  const [filtersVisible, setFiltersVisible] = useState(false);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [selectedHistoryRow, setSelectedHistoryRow] =
     useState<TeacherInterventionHistoryRow | null>(null);
@@ -312,7 +318,6 @@ export function TeacherInterventionsScreen({ navigation, route }: Props) {
   const shownLeaderboardRows = leaderboardExpanded
     ? leaderboardRows
     : leaderboardRows.slice(0, 5);
-  const topXp = report?.leaderboard?.[0]?.xpTotal ?? 0;
   const isRefreshing =
     classesQuery.isRefetching ||
     queueQuery.isRefetching ||
@@ -395,87 +400,62 @@ export function TeacherInterventionsScreen({ navigation, route }: Props) {
       refreshing={isRefreshing}
       onRefresh={() => void refreshAll()}
     >
-      <TeacherStats
+      <TeacherSelectMenu
+        label="Class"
+        selectedValue={selectedClassId}
+        options={(classesQuery.data ?? []).map((classItem) => ({
+          value: classItem.id,
+          label: `${classItem.subjectCode} · ${classItem.subjectName}`,
+        }))}
+        onSelect={(classId) => {
+          setSelectedClassId(classId);
+          setSelectedCaseId(null);
+          setSelectedHistoryRow(null);
+        }}
+      />
+      <TeacherSegmentedTabs
+        accessibilityLabel="Intervention views"
+        activeKey={workspaceView}
         items={[
+          { key: "queue", label: "Priority", count: visibleQueue.length },
+          { key: "overview", label: "Active", count: report?.summary.activeCases ?? 0 },
+          { key: "history", label: "History", count: visibleHistory.length },
+        ]}
+        onSelect={setWorkspaceView}
+      />
+      <TeacherSummaryStrip
+        items={[
+          { label: "Pending", value: pendingQuery.data?.pendingCount ?? 0, tone: "amber" },
+          { label: "Completed", value: report?.summary.completedCases ?? 0, tone: "green" },
           {
-            label: "Pending",
-            value: pendingQuery.data?.pendingCount ?? 0,
-            tone: "amber",
-          },
-          {
-            label: "Active",
-            value: report?.summary.activeCases ?? 0,
-            tone: "red",
-          },
-          {
-            label: "Completed",
-            value: report?.summary.completedCases ?? 0,
-            tone: "green",
-          },
-          {
-            label: "Avg Delta",
-            value:
-              report?.summary.averageDelta != null
-                ? `${report.summary.averageDelta.toFixed(2)}%`
-                : "--",
+            label: "Avg delta",
+            value: report?.summary.averageDelta != null ? `${report.summary.averageDelta.toFixed(1)}%` : "--",
             tone: "blue",
           },
-          { label: "Top XP", value: topXp, tone: "purple" },
         ]}
       />
-
-      <View
-        style={{
-          marginHorizontal: 16,
-          marginTop: 10,
-          flexDirection: "row",
-          flexWrap: "wrap",
-          gap: 8,
-        }}
-      >
-        {(classesQuery.data ?? []).map((classItem) => (
-          <TeacherChip
-            key={classItem.id}
-            label={classItem.subjectCode}
-            active={selectedClassId === classItem.id}
-            onPress={() => {
-              setSelectedClassId(classItem.id);
-              setSelectedCaseId(null);
-              setSelectedHistoryRow(null);
-            }}
-          />
-        ))}
-      </View>
 
       <TeacherSearch
         value={search}
         onChangeText={setSearch}
         placeholder="Search student, email, status, or source"
       />
-
-      <TeacherPanel
-        title="Filters"
-        subtitle="These controls stay active while a case workspace is open."
+      <View style={{ marginHorizontal: 16, marginTop: 8, alignItems: "flex-start" }}>
+        <TeacherActionButton
+          label={`Filter · ${statusFilter === "all" ? "All status" : statusFilter} · ${sortMode}`}
+          icon="tune-variant"
+          tone="neutral"
+          onPress={() => setFiltersVisible(true)}
+        />
+      </View>
+      <TeacherActionSheet
+        visible={filtersVisible}
+        title="Filter interventions"
+        subtitle="Choose a status and sort order."
+        onClose={() => setFiltersVisible(false)}
       >
-        <View style={{ paddingHorizontal: 14, paddingBottom: 14, gap: 10 }}>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {(["queue", "overview", "history"] as WorkspaceView[]).map(
-              (view) => (
-                <TeacherChip
-                  key={view}
-                  label={
-                    view === "queue"
-                      ? "Queue"
-                      : view === "overview"
-                        ? "Leaderboard & Outcomes"
-                        : "History"
-                  }
-                  active={workspaceView === view}
-                  onPress={() => setWorkspaceView(view)}
-                />
-              ),
-            )}
-          </View>
+        <View style={{ paddingBottom: 14, gap: 12 }}>
+          <Text style={{ color: teacherTheme.text, fontSize: 12, fontWeight: "900" }}>Status</Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
             {(
               [
@@ -494,6 +474,7 @@ export function TeacherInterventionsScreen({ navigation, route }: Props) {
               />
             ))}
           </View>
+          <Text style={{ color: teacherTheme.text, fontSize: 12, fontWeight: "900" }}>Sort</Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
             {(["newest", "risk", "progress"] as SortMode[]).map((sort) => (
               <TeacherChip
@@ -511,10 +492,10 @@ export function TeacherInterventionsScreen({ navigation, route }: Props) {
             ))}
           </View>
         </View>
-      </TeacherPanel>
+      </TeacherActionSheet>
 
       {selectedCaseId ? (
-        <TeacherPanel
+        <TeacherFlatSection
           title="Open case workspace"
           subtitle="Filters above remain clickable; this workspace does not use a blocking overlay."
           action={
@@ -537,11 +518,11 @@ export function TeacherInterventionsScreen({ navigation, route }: Props) {
               void refreshAll();
             }}
           />
-        </TeacherPanel>
+        </TeacherFlatSection>
       ) : null}
 
       {selectedHistoryRow ? (
-        <TeacherPanel
+        <TeacherFlatSection
           title="Learners Path Detail"
           subtitle={`${personName(selectedHistoryRow.student)} | ${selectedHistoryRow.status}`}
           action={
@@ -587,11 +568,11 @@ export function TeacherInterventionsScreen({ navigation, route }: Props) {
               icon="playlist-remove"
             />
           )}
-        </TeacherPanel>
+        </TeacherFlatSection>
       ) : null}
 
       {workspaceView === "queue" ? (
-        <TeacherPanel
+        <TeacherFlatSection
           title="Priority Intervention Queue"
           subtitle={`${visibleQueue.length} active queue row(s) shown.`}
         >
@@ -662,12 +643,12 @@ export function TeacherInterventionsScreen({ navigation, route }: Props) {
               icon="account-check-outline"
             />
           )}
-        </TeacherPanel>
+        </TeacherFlatSection>
       ) : null}
 
       {workspaceView === "overview" ? (
         <>
-          <TeacherPanel
+          <TeacherFlatSection
             title="Leaderboard"
             subtitle={`Sorted by ${leaderboardScope}.`}
           >
@@ -720,9 +701,9 @@ export function TeacherInterventionsScreen({ navigation, route }: Props) {
                 />
               </View>
             ) : null}
-          </TeacherPanel>
+          </TeacherFlatSection>
 
-          <TeacherPanel
+          <TeacherFlatSection
             title="Intervention Outcomes"
             subtitle={`${visibleOutcomes.length} outcome row(s) shown.`}
           >
@@ -741,12 +722,12 @@ export function TeacherInterventionsScreen({ navigation, route }: Props) {
                 icon="chart-line"
               />
             )}
-          </TeacherPanel>
+          </TeacherFlatSection>
         </>
       ) : null}
 
       {workspaceView === "history" ? (
-        <TeacherPanel
+        <TeacherFlatSection
           title="Intervention History"
           subtitle={`Below ${historyQuery.data?.scoreThreshold ?? 60}% can regenerate. ${visibleHistory.length} row(s) shown.`}
         >
@@ -804,7 +785,7 @@ export function TeacherInterventionsScreen({ navigation, route }: Props) {
               icon="history"
             />
           )}
-        </TeacherPanel>
+        </TeacherFlatSection>
       ) : null}
     </TeacherScreen>
   );

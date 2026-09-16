@@ -69,13 +69,15 @@ export function RoleMenuButton({ color = theme.redText }: { color?: string }) {
 export function RoleHeaderNavigationButton({
   color = theme.redText,
   onBackPress,
+  preferBack = false,
 }: {
   color?: string;
   onBackPress?: () => void;
+  preferBack?: boolean;
 }) {
   const drawer = useRoleDrawer();
 
-  if (drawer) return <RoleMenuButton color={color} />;
+  if (drawer && !preferBack) return <RoleMenuButton color={color} />;
   if (!onBackPress) return null;
 
   return (
@@ -162,7 +164,9 @@ function RoleNavigationDrawer({
       "Log out?",
       role === "admin"
         ? "You will need to sign in again to continue administration."
-        : "You will need to sign in again to continue learning.",
+        : role === "teacher"
+          ? "You will need to sign in again to continue teaching."
+          : "You will need to sign in again to continue learning.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -336,9 +340,9 @@ function RoleNavigationDrawer({
             ))}
           </ScrollView>
 
-          {(role === "admin" || role === "student") && onLogout ? (
+          {onLogout ? (
             <View
-              testID="student-drawer-footer"
+              testID={`${role}-drawer-footer`}
               style={{
                 padding: 12,
                 borderTopWidth: 1,

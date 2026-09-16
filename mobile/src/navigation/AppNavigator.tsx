@@ -252,11 +252,20 @@ function JaRouteScreen(props: BottomTabScreenProps<MainTabParamList, "JA">) {
 function ChatbotRouteScreen(
   props: NativeStackScreenProps<RootStackParamList, "Chatbot">,
 ) {
+  const { logout } = useAuth();
   return (
-    <JaScreen
-      navigation={props.navigation as never}
-      route={{ params: { panel: "ask", classId: props.route.params?.classId } }}
-    />
+    <RoleDrawerProvider
+      role="student"
+      activeRouteName="JA"
+      onNavigate={navigateFromRoleDrawer}
+      onLogout={logout}
+    >
+      <JaScreen
+        navigation={props.navigation as never}
+        route={{ params: { panel: "ask", classId: props.route.params?.classId } }}
+        preferBackNavigation
+      />
+    </RoleDrawerProvider>
   );
 }
 
@@ -766,12 +775,14 @@ function StudentNavigator() {
 }
 
 function TeacherDrawerNavigator() {
+  const { logout } = useAuth();
   const [activeRouteName, setActiveRouteName] = useState("Home");
   return (
     <RoleDrawerProvider
       role="teacher"
       activeRouteName={activeRouteName}
       onNavigate={navigateFromTeacherDrawer}
+      onLogout={logout}
     >
       <Tab.Navigator
         backBehavior="history"

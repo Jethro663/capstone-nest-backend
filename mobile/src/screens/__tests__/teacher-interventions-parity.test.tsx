@@ -52,6 +52,28 @@ jest.mock("../../components/teacher/TeacherMobilePrimitives", () => {
       ReactRuntime.createElement(Pressable, { onPress, disabled: !onPress }, ReactRuntime.createElement(Text, null, title), subtitle ? ReactRuntime.createElement(Text, null, subtitle) : null, right),
     TeacherSearch: ({ value, onChangeText, placeholder }: any) =>
       ReactRuntime.createElement(TextInput, { value, onChangeText, placeholder }),
+    TeacherSelectMenu: ({ options, onSelect }: any) =>
+      ReactRuntime.createElement("TeacherSelectMenu", null, options.map((option: any) => ReactRuntime.createElement(Pressable, { key: option.value, onPress: () => onSelect(option.value) }, ReactRuntime.createElement(Text, null, option.label)))),
+  };
+});
+
+jest.mock("../../components/teacher/TeacherWorkspacePrimitives", () => {
+  const ReactRuntime = require("react");
+  const component = (name: string) => (props: Record<string, unknown>) =>
+    ReactRuntime.createElement(name, props, props.children);
+  const Text = component("Text");
+  const Pressable = component("Pressable");
+
+  return {
+    TeacherSegmentedTabs: ({ items, activeKey, onSelect }: any) =>
+      ReactRuntime.createElement("TeacherSegmentedTabs", null, items.map((item: any) => ReactRuntime.createElement(Pressable, { key: item.key, onPress: () => onSelect(item.key), active: item.key === activeKey }, ReactRuntime.createElement(Text, null, item.label)))),
+    TeacherSummaryStrip: ({ items }: any) =>
+      ReactRuntime.createElement("TeacherSummaryStrip", null, items.map((item: any) => ReactRuntime.createElement(Text, { key: item.label }, `${item.label}:${item.value}`))),
+    TeacherActionSheet: ({ visible, title, children }: any) => visible
+      ? ReactRuntime.createElement("TeacherActionSheet", null, ReactRuntime.createElement(Text, null, title), children)
+      : null,
+    TeacherFlatSection: ({ title, subtitle, action, children }: any) =>
+      ReactRuntime.createElement("TeacherFlatSection", null, ReactRuntime.createElement(Text, null, title), subtitle ? ReactRuntime.createElement(Text, null, subtitle) : null, action, children),
   };
 });
 

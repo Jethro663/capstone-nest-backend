@@ -14,7 +14,7 @@ describe("role drawer integration", () => {
       .replace(/\s+/g, " ") ?? "";
 
   it("mounts the drawer for every role while keeping the existing tab navigators", () => {
-    expect(appNavigator.match(/<RoleDrawerProvider/g)).toHaveLength(3);
+    expect(appNavigator.match(/<RoleDrawerProvider/g)).toHaveLength(4);
     expect(appNavigator.match(/<Tab\.Navigator/g)).toHaveLength(3);
     expect(appNavigator.match(/tabBar=\{\(\) => null\}/g)).toHaveLength(3);
   });
@@ -177,7 +177,23 @@ describe("role drawer integration", () => {
 
   it("lets the shared JA surface show Back when it is opened as a stack route", () => {
     const source = readSource("../../screens/JaScreen.tsx");
+    const chat = readSource("../../components/ja/JaChatWorkspace.tsx");
+    const navigator = readSource("../AppNavigator.tsx");
     expect(source).toContain("RoleHeaderNavigationButton");
     expect(source).toContain("onBackPress={navigation.goBack}");
+    expect(source).toContain("leadingAction=");
+    expect(chat).toContain("leadingAction");
+    expect(navigator).toContain('role="student"');
+    expect(navigator).toMatch(/function ChatbotRouteScreen[\s\S]*RoleDrawerProvider/);
+  });
+
+  it("passes logout authority into the teacher drawer provider", () => {
+    const source = readSource("../AppNavigator.tsx");
+    const teacherDrawer = source.slice(
+      source.indexOf("function TeacherDrawerNavigator"),
+      source.indexOf("function TeacherNavigator"),
+    );
+    expect(teacherDrawer).toContain("const { logout } = useAuth()");
+    expect(teacherDrawer).toContain("onLogout={logout}");
   });
 });

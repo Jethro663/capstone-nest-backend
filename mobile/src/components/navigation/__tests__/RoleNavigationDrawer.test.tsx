@@ -264,7 +264,7 @@ describe("RoleDrawerProvider", () => {
     expect(onBackPress).not.toHaveBeenCalled();
   });
 
-  it("puts Profile beside a confirmed Log out action only in the student drawer", async () => {
+  it("puts Profile beside a confirmed Log out action in student and teacher drawers", async () => {
     const { Alert } = require("react-native") as {
       Alert: { alert: jest.Mock };
     };
@@ -325,6 +325,7 @@ describe("RoleDrawerProvider", () => {
           role="teacher"
           activeRouteName="Home"
           onNavigate={jest.fn()}
+          onLogout={mockLogout}
         >
           <RoleMenuButton />
         </RoleDrawerProvider>,
@@ -336,7 +337,10 @@ describe("RoleDrawerProvider", () => {
         .props.onPress(),
     );
     expect(
-      teacherRenderer!.root.findAllByProps({ accessibilityLabel: "Log out" }),
-    ).toHaveLength(0);
+      teacherRenderer!.root.findByProps({ testID: "teacher-drawer-footer" }),
+    ).toBeTruthy();
+    expect(
+      teacherRenderer!.root.findByProps({ accessibilityLabel: "Log out" }),
+    ).toBeTruthy();
   });
 });

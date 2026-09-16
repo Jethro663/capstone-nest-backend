@@ -8,7 +8,9 @@ import {
   TeacherFlatSection,
   TeacherInlineNotice,
   TeacherQuickActionRail,
+  TeacherSegmentedTabs,
   TeacherStepTabs,
+  TeacherSummaryStrip,
   TeacherWorkspaceSwitcher,
 } from "../TeacherWorkspacePrimitives";
 
@@ -139,5 +141,50 @@ describe("teacher workspace primitives", () => {
     expect(renderer!.root.findByProps({ testID: "teacher-bottom-action-bar" }).props.style.paddingBottom).toBe(18);
     act(() => primary.props.onPress());
     expect(onPrimary).toHaveBeenCalledTimes(1);
+  });
+
+  it("switches accessible workspace tabs and renders one flat summary strip", () => {
+    const onSelect = jest.fn();
+    let renderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        <>
+          <TeacherSegmentedTabs
+            accessibilityLabel="Assessment sections"
+            activeKey="overview"
+            items={[
+              { key: "overview", label: "Overview" },
+              { key: "submissions", label: "Submissions", count: 2 },
+            ]}
+            onSelect={onSelect}
+          />
+          <TeacherSummaryStrip
+            items={[
+              { label: "Average", value: "84%", tone: "blue" },
+              { label: "Pass rate", value: "73%", tone: "green" },
+            ]}
+          />
+        </>,
+      );
+    });
+
+    const tabs = renderer!.root.find(
+      (node) =>
+        node.props?.accessibilityLabel === "Assessment sections" &&
+        node.props?.accessibilityRole === "tablist",
+    );
+    expect(tabs.props.accessibilityRole).toBe("tablist");
+    const submissions = renderer!.root.findByProps({
+      accessibilityLabel: "Submissions, 2",
+    });
+    expect(submissions.props.accessibilityState).toEqual({ selected: false });
+    expect(submissions.props.style.minHeight).toBeGreaterThanOrEqual(44);
+    act(() => submissions.props.onPress());
+    expect(onSelect).toHaveBeenCalledWith("submissions");
+
+    expect(flattenText(renderer!.toJSON())).toContain("Average");
+    expect(renderer!.root.findAll(
+      (node) => node.type === "View" && node.props?.testID === "teacher-summary-strip",
+    )).toHaveLength(1);
   });
 });

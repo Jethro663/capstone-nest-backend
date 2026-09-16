@@ -77,7 +77,8 @@ describe("Direction A administrator shell", () => {
     const navigator = read("../AppNavigator.tsx");
     expect(home).toContain('accessibilityLabel="Open notifications"');
     expect(home).toContain('navigate("Notifications")');
-    expect(drawer).toContain('role === "admin" || role === "student"');
+    expect(drawer).toContain("{onLogout ? (");
+    expect(drawer).toContain('testID={`${role}-drawer-footer`}');
     expect(navigator).toContain('role="admin"');
     expect(navigator).toContain("onLogout={logout}");
   });

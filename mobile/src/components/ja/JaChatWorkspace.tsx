@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { FlatList, Image, Pressable, Text, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -23,6 +23,8 @@ type Props = {
   onOpenPrompts: () => void;
   onRefresh: () => void;
   onDismissError: () => void;
+  leadingAction?: ReactNode;
+  navigationAction?: ReactNode;
 };
 
 const theme = studentDarkTheme;
@@ -62,6 +64,8 @@ export function JaChatWorkspace({
   onOpenPrompts,
   onRefresh,
   onDismissError,
+  leadingAction,
+  navigationAction,
 }: Props) {
   const insets = useSafeAreaInsets();
   const listRef = useRef<FlatList<JaAskMessage> | null>(null);
@@ -143,6 +147,7 @@ export function JaChatWorkspace({
           borderBottomColor: theme.border,
         }}
       >
+        {leadingAction}
         <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: theme.red, alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
           {avatarSource ? (
             <Image source={avatarSource} style={{ width: 34, height: 34 }} resizeMode="contain" />
@@ -158,6 +163,7 @@ export function JaChatWorkspace({
             {classLabel}
           </Text>
         </View>
+        {navigationAction}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Open JA tools"

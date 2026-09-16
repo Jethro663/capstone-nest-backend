@@ -130,6 +130,28 @@ jest.mock("../../components/teacher/TeacherMobilePrimitives", () => {
   };
 });
 
+jest.mock("../../components/teacher/TeacherWorkspacePrimitives", () => {
+  const ReactRuntime = require("react");
+  const component = (name: string) => (props: Record<string, unknown>) =>
+    ReactRuntime.createElement(name, props, props.children);
+  const Text = component("Text");
+  const Pressable = component("Pressable");
+
+  return {
+    TeacherContextStrip: ({ title, subtitle, status }: any) =>
+      ReactRuntime.createElement("TeacherContextStrip", null, ReactRuntime.createElement(Text, null, title), subtitle ? ReactRuntime.createElement(Text, null, subtitle) : null, status ? ReactRuntime.createElement(Text, null, status) : null),
+    TeacherSegmentedTabs: ({ items, activeKey, onSelect }: any) =>
+      ReactRuntime.createElement("TeacherSegmentedTabs", null, items.map((item: any) => ReactRuntime.createElement(Pressable, { key: item.key, accessibilityLabel: item.label, onPress: () => onSelect(item.key), active: item.key === activeKey }, ReactRuntime.createElement(Text, null, item.label)))),
+    TeacherActionSheet: ({ visible, title, children }: any) => visible
+      ? ReactRuntime.createElement("TeacherActionSheet", null, ReactRuntime.createElement(Text, null, title), children)
+      : null,
+    TeacherFlatSection: ({ title, subtitle, action, children }: any) =>
+      ReactRuntime.createElement("TeacherFlatSection", null, ReactRuntime.createElement(Text, null, title), subtitle ? ReactRuntime.createElement(Text, null, subtitle) : null, action, children),
+    TeacherSummaryStrip: ({ items }: any) =>
+      ReactRuntime.createElement("TeacherSummaryStrip", null, items.map((item: any) => ReactRuntime.createElement(Text, { key: item.label }, `${item.label}:${item.value}`))),
+  };
+});
+
 jest.mock("../../api/config", () => ({
   API_BASE_URL: "http://localhost:3000/api",
 }));
@@ -322,9 +344,13 @@ describe("teacher mobile screens", () => {
       );
     });
 
-    const text = flattenText(renderer.toJSON());
+    let text = flattenText(renderer.toJSON());
     expect(text).toContain("Quarter Quiz");
     expect(text).toContain("Submissions");
+    act(() => {
+      renderer.root.findByProps({ accessibilityLabel: "Submissions" }).props.onPress();
+    });
+    text = flattenText(renderer.toJSON());
     expect(text).toContain("Student One");
   });
 

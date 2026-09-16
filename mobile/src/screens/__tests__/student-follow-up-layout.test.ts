@@ -17,6 +17,11 @@ describe("student mobile follow-up layout contracts", () => {
     expect(source).toContain("styles.priorityBody");
     expect(source).toContain("styles.sectionDivider");
     expect(source).toContain("styles.moveStack");
+    expect(source).toContain('eyebrow="Keep momentum"');
+    expect(source).toContain('title="School bulletin"');
+    expect(source).toContain("styles.followUpRail");
+    expect(source).toContain("styles.momentumCard");
+    expect(source).toContain("styles.updateBody");
     expect(source).not.toContain("styles.moveGrid");
     expect(source).toMatch(/moveTile:\s*\{[^}]*flexDirection:\s*"row"/);
     expect(source).toMatch(/moveCopy:\s*\{[^}]*flex:\s*1[^}]*minWidth:\s*0/);
@@ -48,12 +53,14 @@ describe("student mobile follow-up layout contracts", () => {
     );
     expect(source).toMatch(/hero:\s*\{[^}]*paddingHorizontal:\s*18/);
     expect(source).toContain("styles.heroPressTarget");
-    expect(source).toContain("styles.actionSurface");
-    expect(source).toContain("styles.primaryActionSurface");
+    expect(source).not.toContain("styles.actionSurface");
+    expect(source).not.toContain("styles.primaryActionSurface");
     expect(source).toContain("styles.secondaryActionRow");
-    expect(source.indexOf("styles.primaryActionSurface")).toBeLessThan(
+    expect(source.indexOf("styles.primaryButton")).toBeLessThan(
       source.indexOf("styles.secondaryActionRow"),
     );
+    expect(source).toContain("styles.actionIconSlot");
+    expect(source).toContain("styles.actionTrailingSlot");
     expect(source).toContain('accessibilityLabel="View tasks"');
     expect(source).toContain('accessibilityLabel="View schedule"');
     expect(source).toContain(">Tasks</Text>");

@@ -1,12 +1,12 @@
 {
   "platform": "android",
-  "versionCode": 44,
-  "minSupportedVersionCode": 44,
-  "nativeVersion": "0.1.43",
-  "otaRuntimeVersion": "0.1.43",
+  "versionCode": 45,
+  "minSupportedVersionCode": 45,
+  "nativeVersion": "0.1.44",
+  "otaRuntimeVersion": "0.1.44",
   "apkDownloadUrl": "https://next-frontend-v2-production.up.railway.app/downloads/nexora-student-mobile-release.apk",
   "requiresFullApk": true,
-  "releaseNotes": "Adds scored exemptions to class records, letting teachers and admins enter a credited score with a required reason while preserving audit evidence across web and mobile.",
-  "apkSha256": "f91b2b4bb972d2ac478061d8694215de10f8b83e9d9089683462b725d29ce7d5",
-  "apkSizeBytes": 41082671
+  "releaseNotes": "Redesigns student and teacher mobile workspaces with responsive class actions, guided tabs, clearer submissions, stronger navigation, and compact teacher controls.",
+  "apkSha256": "2d0f8532ddf3323b5ec9a88357492a96939d3004947be77f1e6770d2c325d06f",
+  "apkSizeBytes": 41086479
 }

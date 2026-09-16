@@ -14,19 +14,31 @@ import { toAppError } from "../api/http";
 import type { RootStackParamList } from "../navigation/types";
 import {
   TeacherActionButton,
+  TeacherChip,
   TeacherEmpty,
-  TeacherPanel,
   TeacherRow,
   TeacherScreen,
-  TeacherStats,
+  TeacherSearch,
+  TeacherSelectMenu,
   stripRichText,
   teacherTheme as theme,
 } from "../components/teacher/TeacherMobilePrimitives";
+import {
+  TeacherActionSheet,
+  TeacherContextStrip,
+  TeacherFlatSection,
+  TeacherSegmentedTabs,
+  TeacherSummaryStrip,
+} from "../components/teacher/TeacherWorkspacePrimitives";
 
 type Props = NativeStackScreenProps<
   RootStackParamList,
   "TeacherAssessmentDetail"
 >;
+
+type AssessmentTab = "overview" | "submissions" | "analytics";
+type SubmissionFilter = "all" | "turned_in" | "missing" | "not_started" | "returned";
+type SubmissionSort = "recent" | "name" | "status";
 
 function formatDate(value?: string | null) {
   if (!value) return "No due date";
@@ -146,20 +158,109 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
   const { assessmentId, classId } = route.params;
   const assessmentQuery = useAssessmentDetail(assessmentId);
   const submissionsQuery = useTeacherAssessmentSubmissions(assessmentId);
-  const statsQuery = useQuery({ queryKey: ["teacher-assessment-stats", assessmentId], queryFn: () => assessmentsApi.getStats(assessmentId) });
-  const analyticsQuery = useQuery({ queryKey: ["teacher-assessment-question-analytics", assessmentId], queryFn: () => assessmentsApi.getQuestionAnalytics(assessmentId) });
+  const statsQuery = useQuery({
+    queryKey: ["teacher-assessment-stats", assessmentId],
+    queryFn: () => assessmentsApi.getStats(assessmentId),
+  });
+  const analyticsQuery = useQuery({
+    queryKey: ["teacher-assessment-question-analytics", assessmentId],
+    queryFn: () => assessmentsApi.getQuestionAnalytics(assessmentId),
+  });
   const updateMutation = useTeacherAssessmentUpdateMutation(assessmentId);
+  const deleteMutation = useTeacherDeleteAssessmentMutation(assessmentId);
+  const [activeTab, setActiveTab] = useState<AssessmentTab>("overview");
+  const [submissionFilter, setSubmissionFilter] =
+    useState<SubmissionFilter>("all");
+  const [submissionSort, setSubmissionSort] =
+    useState<SubmissionSort>("recent");
+  const [submissionSearch, setSubmissionSearch] = useState("");
+  const [manageVisible, setManageVisible] = useState(false);
   const [releasingGrades, setReleasingGrades] = useState(false);
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
+
   const assessment = assessmentQuery.data;
   const submissions = submissionsQuery.data;
+  const dueTimestamp = assessment?.dueDate
+    ? new Date(assessment.dueDate).getTime()
+    : Number.NaN;
+  const dueHasPassed =
+    Number.isFinite(dueTimestamp) && dueTimestamp < Date.now();
+  const submissionBucket = (status: string): SubmissionFilter => {
+    if (status === "returned") return "returned";
+    if (status === "turned_in") return "turned_in";
+    return dueHasPassed ? "missing" : "not_started";
+  };
 
-  const turnedIn = submissions?.summary.turnedIn ?? 0;
-  const returned = submissions?.summary.returned ?? 0;
+  const visibleSubmissions = useMemo(() => {
+    const query = submissionSearch.trim().toLowerCase();
+    return (submissions?.submissions ?? [])
+      .filter((submission) => {
+        if (
+          submissionFilter !== "all" &&
+          submissionBucket(submission.status) !== submissionFilter
+        ) {
+          return false;
+        }
+        return (
+          !query ||
+          (submission.studentName + " " + (submission.studentEmail ?? ""))
+            .toLowerCase()
+            .includes(query)
+        );
+      })
+      .slice()
+      .sort((left, right) => {
+        if (submissionSort === "name") {
+          return left.studentName.localeCompare(right.studentName);
+        }
+        if (submissionSort === "status") {
+          return submissionBucket(left.status).localeCompare(
+            submissionBucket(right.status),
+          );
+        }
+        return (
+          new Date(right.latestAttemptSubmittedAt || 0).getTime() -
+          new Date(left.latestAttemptSubmittedAt || 0).getTime()
+        );
+      });
+  }, [
+    dueHasPassed,
+    submissionFilter,
+    submissionSearch,
+    submissionSort,
+    submissions?.submissions,
+  ]);
+
+  const submissionRows = submissions?.submissions ?? [];
+  const submissionCounts: Record<SubmissionFilter, number> = {
+    all: submissionRows.length,
+    turned_in: submissionRows.filter(
+      (entry) => submissionBucket(entry.status) === "turned_in",
+    ).length,
+    missing: submissionRows.filter(
+      (entry) => submissionBucket(entry.status) === "missing",
+    ).length,
+    not_started: submissionRows.filter(
+      (entry) => submissionBucket(entry.status) === "not_started",
+    ).length,
+    returned: submissionRows.filter(
+      (entry) => submissionBucket(entry.status) === "returned",
+    ).length,
+  };
+
+  const openEditor = () => {
+    if (!assessment) return;
+    navigation.navigate("TeacherAssessmentEditor", {
+      assessmentId: assessment.id,
+      classId: assessment.classId || classId,
+    });
+  };
 
   const handleBatchReleaseGrades = async () => {
     if (!submissions?.submissions || releasingGrades) return;
     const unreturnedSubmissions = submissions.submissions.filter(
-      (s) => s.latestAttemptId && !s.latestAttemptReturnedAt,
+      (submission) =>
+        submission.latestAttemptId && !submission.latestAttemptReturnedAt,
     );
     if (!unreturnedSubmissions.length) {
       Alert.alert(
@@ -170,14 +271,20 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
     }
     try {
       setReleasingGrades(true);
-      await assessmentsApi.bulkReturnGrades({ attemptIds: unreturnedSubmissions.flatMap((submission) => submission.latestAttemptId ? [submission.latestAttemptId] : []) });
+      await assessmentsApi.bulkReturnGrades({
+        attemptIds: unreturnedSubmissions.flatMap((submission) =>
+          submission.latestAttemptId ? [submission.latestAttemptId] : [],
+        ),
+      });
       await submissionsQuery.refetch();
       Alert.alert(
         "Success",
-        `Released grades for ${unreturnedSubmissions.length} student submission(s).`,
+        "Released grades for " +
+          unreturnedSubmissions.length +
+          " student submission(s).",
       );
-    } catch (err) {
-      Alert.alert("Unable to release grades", toAppError(err).message);
+    } catch (error) {
+      Alert.alert("Unable to release grades", toAppError(error).message);
     } finally {
       setReleasingGrades(false);
     }
@@ -187,7 +294,8 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
     if (!assessment) return;
     if (
       !assessment.academicCapabilities?.canPrepare ||
-      (!assessment.isPublished && !assessment.academicCapabilities?.canRelease)
+      (!assessment.isPublished &&
+        !assessment.academicCapabilities?.canRelease)
     ) {
       Alert.alert(
         "Academic period restriction",
@@ -222,9 +330,6 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
     }
   };
 
-  const deleteMutation = useTeacherDeleteAssessmentMutation(assessmentId);
-  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
-
   const handleDeleteConfirm = async () => {
     try {
       await deleteMutation.mutateAsync();
@@ -254,30 +359,29 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
     }
   };
 
-  const latestSubmissions = useMemo(
-    () =>
-      submissions?.submissions
-        .slice()
-        .sort(
-          (left, right) =>
-            new Date(right.latestAttemptSubmittedAt || 0).getTime() -
-            new Date(left.latestAttemptSubmittedAt || 0).getTime(),
-        ) ?? [],
-    [submissions?.submissions],
-  );
+  const filterItems: Array<[SubmissionFilter, string]> = [
+    ["all", "All"],
+    ["turned_in", "Turned in"],
+    ...(assessment?.dueDate
+      ? ([["missing", "Missing"]] as Array<[SubmissionFilter, string]>)
+      : []),
+    ["not_started", "Not turned in"],
+    ["returned", "Returned"],
+  ];
 
   return (
     <TeacherScreen
-      title={assessment?.title || "Assessment detail"}
-      subtitle={
-        assessment?.description
-          ? stripRichText(assessment.description)
-          : "Review submissions and return grades from the current mobile shell."
-      }
+      title="Assessment"
+      subtitle="Review learner work, evidence, and lifecycle controls."
       icon="clipboard-check-outline"
       showBackButton
       onBackPress={() => navigation.goBack()}
-      refreshing={assessmentQuery.isRefetching || submissionsQuery.isRefetching}
+      refreshing={
+        assessmentQuery.isRefetching ||
+        submissionsQuery.isRefetching ||
+        statsQuery.isRefetching ||
+        analyticsQuery.isRefetching
+      }
       onRefresh={() => {
         void Promise.all([
           assessmentQuery.refetch(),
@@ -289,206 +393,202 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
     >
       {assessment ? (
         <>
-          <TeacherStats
+          <TeacherContextStrip
+            title={assessment.title}
+            subtitle={
+              assessment.type.replace(/_/g, " ") +
+              " · Due " +
+              formatDate(assessment.dueDate)
+            }
+            status={assessment.isPublished ? "Published" : "Draft"}
+            icon="clipboard-check-outline"
+          />
+          <View style={{ paddingHorizontal: 16, paddingTop: 12, flexDirection: "row", gap: 8 }}>
+            <TeacherActionButton label="Preview" icon="eye-outline" tone="neutral" onPress={openEditor} />
+            <TeacherActionButton label="Manage assessment" icon="tune-variant" tone="red" onPress={() => setManageVisible(true)} />
+          </View>
+          <TeacherSegmentedTabs
+            accessibilityLabel="Assessment sections"
+            activeKey={activeTab}
+            onSelect={setActiveTab}
             items={[
-              {
-                label: "Questions",
-                value: assessment.questions?.length ?? 0,
-                tone: "red",
-              },
-              { label: "Turned In", value: turnedIn, tone: "amber" },
-              { label: "Returned", value: returned, tone: "green" },
-              {
-                label: "Due",
-                value: formatDate(assessment.dueDate),
-                tone: "blue",
-              },
+              { key: "overview", label: "Overview" },
+              { key: "submissions", label: "Submissions", count: submissions?.summary.total ?? 0 },
+              { key: "analytics", label: "Analytics" },
             ]}
           />
 
-          <TeacherPanel
-            title="Assessment controls"
-            subtitle={assessment.academicCapabilities?.canPrepare ? "Edit content in the assessment editor. Review submissions below." : assessment.academicCapabilities?.readOnlyReason || "Academic settings must be loaded before editing."}
-          >
-            <View
-              style={{
-                paddingHorizontal: 14,
-                paddingBottom: 14,
-                flexDirection: "row",
-                flexWrap: "wrap",
-                gap: 8,
-              }}
+          {activeTab === "overview" ? (
+            <TeacherFlatSection
+              title="Overview"
+              subtitle={
+                assessment.description
+                  ? stripRichText(assessment.description)
+                  : "Core assessment details visible to this class."
+              }
             >
+              <TeacherRow title="Status" subtitle={assessment.isPublished ? "Published and visible to students." : "Draft only; students cannot open it yet."} />
+              <TeacherRow title="Assessment type" subtitle={assessment.type.replace(/_/g, " ")} />
+              <TeacherRow title="Due date" subtitle={formatDate(assessment.dueDate)} />
+              <TeacherRow title="Passing score" subtitle={assessment.passingScore != null ? assessment.passingScore + "%" : "Not set"} />
+              <TeacherRow title="Questions" subtitle={(assessment.questions?.length ?? 0) + " question" + ((assessment.questions?.length ?? 0) === 1 ? "" : "s")} />
+            </TeacherFlatSection>
+          ) : null}
+
+          {activeTab === "submissions" ? (
+            <>
+              <TeacherSearch value={submissionSearch} onChangeText={setSubmissionSearch} placeholder="Search learner name or email" />
+              <View style={{ marginHorizontal: 16, marginTop: 10, flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                {filterItems.map(([key, label]) => (
+                  <TeacherChip key={key} label={label + " " + submissionCounts[key]} active={submissionFilter === key} onPress={() => setSubmissionFilter(key)} />
+                ))}
+              </View>
+              <TeacherSelectMenu
+                label="Sort submissions"
+                selectedValue={submissionSort}
+                options={[
+                  { value: "recent", label: "Recent activity" },
+                  { value: "name", label: "Learner name" },
+                  { value: "status", label: "Submission status" },
+                ]}
+                onSelect={(value) => setSubmissionSort(value as SubmissionSort)}
+              />
+              <TeacherFlatSection
+                title="Submissions"
+                subtitle={visibleSubmissions.length + " learner" + (visibleSubmissions.length === 1 ? "" : "s") + " match the current view."}
+              >
+                {visibleSubmissions.length ? (
+                  visibleSubmissions.map((submission) => {
+                    const displayStatus = submissionBucket(submission.status);
+                    const canOpen =
+                      Boolean(submission.latestAttemptId) &&
+                      (submission.status === "turned_in" ||
+                        submission.status === "returned");
+                    return (
+                      <TeacherRow
+                        key={[submission.studentId, submission.latestAttemptId || submission.studentEmail || submission.studentName].join("-")}
+                        title={submission.studentName}
+                        subtitle={
+                          displayStatus.replace(/_/g, " ") +
+                          (submission.latestAttemptSubmittedAt
+                            ? " · " + formatDate(submission.latestAttemptSubmittedAt)
+                            : " · No submitted attempt")
+                        }
+                        onPress={
+                          canOpen
+                            ? () =>
+                                navigation.navigate("TeacherAssessmentAttemptResult", {
+                                  attemptId: submission.latestAttemptId as string,
+                                  assessmentId,
+                                  classId,
+                                })
+                            : undefined
+                        }
+                        right={
+                          <View style={{ alignItems: "flex-end" }}>
+                            <Text style={{ fontSize: 11, fontWeight: "800", color: displayStatus === "returned" ? theme.green : displayStatus === "turned_in" ? theme.amber : theme.muted }}>
+                              {displayStatus.replace(/_/g, " ")}
+                            </Text>
+                            <Text style={{ marginTop: 3, fontSize: 10, color: theme.muted }}>
+                              {submission.directScore ?? submission.latestAttemptScore ?? "--"}
+                            </Text>
+                          </View>
+                        }
+                      />
+                    );
+                  })
+                ) : (
+                  <TeacherEmpty title="No learners match this view" subtitle="Change the status filter or search to review another group." icon="account-search-outline" />
+                )}
+              </TeacherFlatSection>
+            </>
+          ) : null}
+
+          {activeTab === "analytics" ? (
+            <>
+              <TeacherSummaryStrip
+                items={[
+                  { label: "Completion", value: (statsQuery.data?.completionRate ?? 0) + "%", tone: "blue" },
+                  { label: "Average", value: (statsQuery.data?.averageScore ?? 0) + "%", tone: "red" },
+                  { label: "Pass rate", value: (statsQuery.data?.passRate ?? 0) + "%", tone: "green" },
+                ]}
+              />
+              <TeacherFlatSection
+                title="Question analytics"
+                subtitle={(analyticsQuery.data?.uniqueSubmitterCount ?? analyticsQuery.data?.totalResponses ?? 0) + " learners represented in current server evidence."}
+              >
+                {statsQuery.isError || analyticsQuery.isError ? (
+                  <TeacherRow title="Analytics unavailable" subtitle={toAppError(statsQuery.error || analyticsQuery.error).message} />
+                ) : analyticsQuery.data?.questions.length ? (
+                  analyticsQuery.data.questions.map((question, index) => (
+                    <TeacherRow
+                      key={question.questionId}
+                      title={"Q" + (index + 1) + ": " + stripRichText(question.content)}
+                      subtitle={question.correctPercent + "% correct · " + question.correctCount + "/" + question.totalResponses + " responses · " + question.averagePoints + "/" + question.points + " average points"}
+                    />
+                  ))
+                ) : (
+                  <TeacherEmpty title="No question evidence yet" subtitle="Analytics will appear after learners submit attempts." icon="chart-box-outline" />
+                )}
+              </TeacherFlatSection>
+            </>
+          ) : null}
+
+          <TeacherActionSheet
+            visible={manageVisible}
+            title="Manage assessment"
+            subtitle={assessment.academicCapabilities?.readOnlyReason || "Lifecycle actions use the existing academic rules."}
+            onClose={() => setManageVisible(false)}
+          >
+            <View style={{ paddingBottom: 18, gap: 8 }}>
               <TeacherActionButton
-                label={assessment.academicCapabilities?.canPrepare ? "Edit assessment" : "Review assessment and restrictions"}
+                label={assessment.academicCapabilities?.canPrepare ? "Edit details and questions" : "Review restrictions"}
                 icon="pencil-outline"
                 tone="blue"
-                onPress={() =>
-                  navigation.navigate("TeacherAssessmentEditor", {
-                    assessmentId: assessment.id,
-                    classId: assessment.classId || classId,
-                  })
-                }
+                onPress={() => {
+                  setManageVisible(false);
+                  openEditor();
+                }}
               />
               <TeacherActionButton
-                label={
-                  assessment.isPublished
-                    ? "Move to draft"
-                    : "Publish assessment"
-                }
+                label={assessment.isPublished ? "Move to draft" : "Publish assessment"}
                 icon={assessment.isPublished ? "file-hidden" : "publish"}
                 tone={assessment.isPublished ? "amber" : "green"}
                 onPress={() => void togglePublished()}
-                disabled={
-                  updateMutation.isPending ||
-                  !assessment.academicCapabilities?.canPrepare ||
-                  (!assessment.isPublished &&
-                    !assessment.academicCapabilities?.canRelease)
-                }
+                disabled={updateMutation.isPending || !assessment.academicCapabilities?.canPrepare || (!assessment.isPublished && !assessment.academicCapabilities?.canRelease)}
               />
               <TeacherActionButton
                 label={releasingGrades ? "Releasing..." : "Release grades"}
                 icon="send-outline"
                 tone="green"
                 onPress={() => void handleBatchReleaseGrades()}
-                disabled={
-                  releasingGrades || !assessment.academicCapabilities?.canGrade
-                }
+                disabled={releasingGrades || !assessment.academicCapabilities?.canGrade}
               />
+              {assessment.teacherAttachmentFile ? (
+                <TeacherActionButton
+                  label="Open teacher attachment"
+                  icon="paperclip"
+                  tone="blue"
+                  onPress={() => void assessmentsApi.openTeacherAttachment(assessment.id, assessment.teacherAttachmentFile?.originalName || "teacher-attachment")}
+                />
+              ) : null}
               <TeacherActionButton
                 label="Delete assessment"
                 icon="trash-can-outline"
                 tone="red"
-                onPress={() => setShowDeleteConfirmModal(true)}
+                onPress={() => {
+                  setManageVisible(false);
+                  setShowDeleteConfirmModal(true);
+                }}
                 disabled={deleteMutation.isPending}
               />
-              {assessment.teacherAttachmentFile ? (
-                <TeacherActionButton
-                  label="Teacher attachment"
-                  icon="paperclip"
-                  tone="blue"
-                  onPress={() =>
-                    void assessmentsApi.openTeacherAttachment(
-                      assessment.id,
-                      assessment.teacherAttachmentFile?.originalName ||
-                        "teacher-attachment",
-                    )
-                  }
-                />
-              ) : null}
             </View>
-          </TeacherPanel>
-
-          <TeacherPanel
-            title="Overview"
-            subtitle="Core assessment details students are also reacting to on their mobile side."
-          >
-            <TeacherRow
-              title="Status"
-              subtitle={
-                assessment.isPublished
-                  ? "Published and visible to students."
-                  : "Draft only; students cannot open it yet."
-              }
-            />
-            <TeacherRow
-              title="Assessment type"
-              subtitle={assessment.type.replace(/_/g, " ")}
-            />
-            <TeacherRow
-              title="Due date"
-              subtitle={formatDate(assessment.dueDate)}
-            />
-            <TeacherRow
-              title="Passing score"
-              subtitle={
-                assessment.passingScore != null
-                  ? `${assessment.passingScore}%`
-                  : "Not set"
-              }
-            />
-          </TeacherPanel>
-
-          <TeacherPanel title="Statistics and question analytics" subtitle="Live server summaries for all attempts, including ongoing and returned work.">
-            {statsQuery.isError || analyticsQuery.isError ? (
-              <TeacherRow title="Analytics unavailable" subtitle={toAppError(statsQuery.error || analyticsQuery.error).message} />
-            ) : (
-              <>
-                <TeacherRow title="Attempt completion" subtitle={`${statsQuery.data?.submittedAttempts ?? 0}/${statsQuery.data?.totalAttempts ?? 0} submitted · ${statsQuery.data?.completionRate ?? 0}% of ${statsQuery.data?.totalEnrolled ?? 0} enrolled`} />
-                <TeacherRow title="Score distribution" subtitle={`${statsQuery.data?.averageScore ?? 0}% average · ${statsQuery.data?.lowestScore ?? 0}-${statsQuery.data?.highestScore ?? 0}% range · ${statsQuery.data?.passRate ?? 0}% pass`} />
-                <TeacherRow title="Response coverage" subtitle={`${analyticsQuery.data?.uniqueSubmitterCount ?? analyticsQuery.data?.totalResponses ?? 0} learners · ${analyticsQuery.data?.questions.length ?? 0} questions analyzed`} />
-                {(analyticsQuery.data?.questions ?? []).map((question, index) => (
-                  <TeacherRow key={question.questionId} title={`Q${index + 1}: ${stripRichText(question.content)}`} subtitle={`${question.correctPercent}% correct · ${question.correctCount}/${question.totalResponses} correct · ${question.averagePoints}/${question.points} average points`} />
-                ))}
-              </>
-            )}
-          </TeacherPanel>
-
-          <TeacherPanel
-            title="Submissions"
-            subtitle="Open an attempt to review answers, give feedback, and return or unreturn grades."
-          >
-            {latestSubmissions.length ? (
-              latestSubmissions.map((submission) => (
-                <TeacherRow
-                  key={`${submission.studentId}-${submission.latestAttemptId || submission.studentEmail || submission.studentName}`}
-                  title={submission.studentName}
-                  subtitle={`${submission.status.replace(/_/g, " ")}${submission.latestAttemptSubmittedAt ? ` · ${formatDate(submission.latestAttemptSubmittedAt)}` : ""}`}
-                  onPress={
-                    submission.latestAttemptId
-                      ? () =>
-                          navigation.navigate(
-                            "TeacherAssessmentAttemptResult",
-                            {
-                              attemptId: submission.latestAttemptId!,
-                              assessmentId,
-                              classId,
-                            },
-                          )
-                      : undefined
-                  }
-                  right={
-                    <View style={{ alignItems: "flex-end" }}>
-                      <Text
-                        style={{
-                          fontSize: 12,
-                          fontWeight: "700",
-                          color:
-                            submission.status === "returned"
-                              ? theme.green
-                              : submission.status === "turned_in"
-                                ? theme.amber
-                                : theme.muted,
-                        }}
-                      >
-                        {submission.status.replace(/_/g, " ")}
-                      </Text>
-                      <Text style={{ fontSize: 10, color: theme.muted }}>
-                        {submission.directScore ??
-                          submission.latestAttemptScore ??
-                          "--"}
-                      </Text>
-                    </View>
-                  }
-                />
-              ))
-            ) : (
-              <TeacherEmpty
-                title="No submissions yet"
-                subtitle="Students have not started or turned in attempts for this assessment yet."
-                icon="file-document-outline"
-              />
-            )}
-          </TeacherPanel>
+          </TeacherActionSheet>
         </>
       ) : (
-        <TeacherPanel
+        <TeacherFlatSection
           title="Assessment unavailable"
-          subtitle={
-            assessmentQuery.error
-              ? toAppError(assessmentQuery.error).message
-              : "Loading assessment"
-          }
+          subtitle={assessmentQuery.error ? toAppError(assessmentQuery.error).message : "Loading assessment"}
         />
       )}
 

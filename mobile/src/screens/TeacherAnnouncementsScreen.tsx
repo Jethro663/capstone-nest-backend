@@ -12,11 +12,15 @@ import {
   TeacherActionButton,
   TeacherChip,
   TeacherEmpty,
-  TeacherPanel,
   TeacherScreen,
   TeacherSearch,
-  TeacherStats,
+  TeacherSelectMenu,
 } from "../components/teacher/TeacherMobilePrimitives";
+import {
+  TeacherContextStrip,
+  TeacherFlatSection,
+  TeacherSegmentedTabs,
+} from "../components/teacher/TeacherWorkspacePrimitives";
 
 type Props = TeacherDrawerScreenProps<"TeacherAnnouncements">;
 type FeedFilter = "all" | "pinned" | "scheduled";
@@ -26,6 +30,7 @@ export function TeacherAnnouncementsScreen({ navigation }: Props) {
   const teacherId = user?.userId || user?.id;
   const classesQuery = useTeacherClasses(teacherId);
   const [selectedClassId, setSelectedClassId] = useState<string>("all");
+  const [viewMode, setViewMode] = useState<"feed" | "compose">("feed");
   const [feedFilter, setFeedFilter] = useState<FeedFilter>("all");
   const [search, setSearch] = useState("");
   const effectiveClassId = selectedClassId !== "all" ? selectedClassId : classesQuery.data?.[0]?.id;
@@ -95,7 +100,7 @@ export function TeacherAnnouncementsScreen({ navigation }: Props) {
   return (
     <TeacherScreen
       title="Announcements"
-      subtitle="Create, schedule, pin, and edit class announcements with rich formatting."
+      subtitle="Read class communication or open the focused composer."
       icon="bullhorn-outline"
       onBackPress={() => navigation.goBack()}
       refreshing={classesQuery.isRefetching || announcementsQuery.isRefetching}
@@ -103,75 +108,38 @@ export function TeacherAnnouncementsScreen({ navigation }: Props) {
         void Promise.all([classesQuery.refetch(), announcementsQuery.refetch()]);
       }}
     >
-      <TeacherStats
+      <TeacherSelectMenu
+        label="Class"
+        selectedValue={effectiveClassId ?? ""}
+        options={(classesQuery.data ?? []).map((entry) => ({ value: entry.id, label: `${entry.subjectCode} · ${entry.subjectName}` }))}
+        onSelect={setSelectedClassId}
+      />
+      <TeacherContextStrip
+        title={currentClass ? currentClass.subjectName : "Select a class"}
+        subtitle={currentClass ? currentClass.subjectCode : "Announcement audience"}
+        status={`${announcements.length} posts`}
+        icon="bullhorn-outline"
+      />
+      <TeacherSegmentedTabs
+        accessibilityLabel="Announcement modes"
+        activeKey={viewMode}
         items={[
-          { label: "Classes", value: classesQuery.data?.length ?? 0, tone: "red" },
-          { label: "Posts", value: announcements.length, tone: "blue" },
-          { label: "Pinned", value: announcements.filter((entry) => entry.isPinned).length, tone: "amber" },
-          { label: "Shown", value: filteredAnnouncements.length, tone: "green" },
+          { key: "feed", label: "Feed", count: filteredAnnouncements.length },
+          { key: "compose", label: "Compose" },
         ]}
+        onSelect={(mode) => {
+          setViewMode(mode);
+          if (mode === "compose") {
+            setEditingAnnouncement(null);
+            setShowEditorModal(true);
+          }
+        }}
       />
 
-      <View style={{ marginHorizontal: 16, marginTop: 10, flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-        {(classesQuery.data ?? []).map((entry) => (
-          <TeacherChip
-            key={entry.id}
-            label={entry.subjectCode}
-            active={effectiveClassId === entry.id}
-            onPress={() => {
-              setSelectedClassId(entry.id);
-            }}
-          />
-        ))}
-      </View>
-
+      {viewMode === "feed" ? (
+        <>
       <TeacherSearch value={search} onChangeText={setSearch} placeholder="Search announcement feed" />
-
-      <TeacherPanel
-        title="Class Announcement Composer"
-        subtitle={currentClass ? `Target class: ${currentClass.subjectCode} - ${currentClass.subjectName}` : "Select a class to post announcements."}
-        action={
-          <TeacherActionButton
-            label="Create Announcement"
-            icon="plus"
-            tone="green"
-            disabled={!effectiveClassId}
-            onPress={() => {
-              setEditingAnnouncement(null);
-              setShowEditorModal(true);
-            }}
-          />
-        }
-      >
-        <View style={{ paddingHorizontal: 14, paddingBottom: 14, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          <TeacherActionButton
-            label="New Post with Rich Text"
-            icon="square-edit-outline"
-            tone="green"
-            disabled={!effectiveClassId}
-            onPress={() => {
-              setEditingAnnouncement(null);
-              setShowEditorModal(true);
-            }}
-          />
-          {currentClass ? (
-            <TeacherActionButton
-              label="Open Class View"
-              icon="book-open-variant"
-              tone="blue"
-              onPress={() => {
-                navigation.navigate("TeacherClassDetail", {
-                  classId: currentClass.id,
-                  initialTab: "announcements",
-                  source: "announcements",
-                });
-              }}
-            />
-          ) : null}
-        </View>
-      </TeacherPanel>
-
-      <TeacherPanel title="Announcement Feed" subtitle="Tap an announcement to read it. Use Edit or Delete for announcements you own.">
+      <TeacherFlatSection title="Announcement feed" subtitle="Pinned, scheduled, and posted communication for this class.">
         <View style={{ paddingHorizontal: 14, paddingBottom: 10, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
           {(["all", "pinned", "scheduled"] as FeedFilter[]).map((entry) => (
             <TeacherChip
@@ -206,7 +174,35 @@ export function TeacherAnnouncementsScreen({ navigation }: Props) {
         ) : (
           <TeacherEmpty title="No announcements yet" subtitle="Create the first announcement for this class using the composer button above." icon="bullhorn-outline" />
         )}
-      </TeacherPanel>
+      </TeacherFlatSection>
+        </>
+      ) : (
+        <TeacherFlatSection
+          title="Compose announcement"
+          subtitle="Audience, rich message, pinning, scheduling, attachments, review, and publish remain in the existing editor."
+          action={
+            <TeacherActionButton
+              label="Open composer"
+              icon="square-edit-outline"
+              tone="green"
+              disabled={!effectiveClassId}
+              onPress={() => {
+                setEditingAnnouncement(null);
+                setShowEditorModal(true);
+              }}
+            />
+          }
+        >
+          {currentClass ? (
+            <TeacherActionButton
+              label="Open class announcements"
+              icon="book-open-variant"
+              tone="blue"
+              onPress={() => navigation.navigate("TeacherClassDetail", { classId: currentClass.id, initialTab: "announcements", source: "announcements" })}
+            />
+          ) : null}
+        </TeacherFlatSection>
+      )}
 
       <TeacherAnnouncementEditorModal
         visible={showEditorModal}

@@ -10,12 +10,15 @@ import type { TeacherEvaluationType } from "../types/teacher";
 import {
   TeacherChip,
   TeacherEmpty,
-  TeacherPanel,
   TeacherRow,
   TeacherScreen,
-  TeacherStats,
   teacherTheme as theme,
 } from "../components/teacher/TeacherMobilePrimitives";
+import {
+  TeacherFlatSection,
+  TeacherSegmentedTabs,
+  TeacherSummaryStrip,
+} from "../components/teacher/TeacherWorkspacePrimitives";
 
 type Props = TeacherDrawerScreenProps<"TeacherEvaluations">;
 type GradingFilter = "all" | "Q1" | "Q2" | "Q3" | "Q4";
@@ -34,7 +37,7 @@ const formatDate = (value: string | null | undefined) => {
 
 export function TeacherEvaluationsScreen({ navigation }: Props) {
   const queryClient = useQueryClient();
-  const [viewMode, setViewMode] = useState<"forms" | "analytics">("forms");
+  const [viewMode, setViewMode] = useState<"to_answer" | "feedback">("to_answer");
   const [evaluationType, setEvaluationType] = useState<TeacherEvaluationType>("teacher_class");
   const [selectedClassId, setSelectedClassId] = useState("all");
   const [gradingPeriod, setGradingPeriod] = useState<GradingFilter>("all");
@@ -91,21 +94,26 @@ export function TeacherEvaluationsScreen({ navigation }: Props) {
       refreshing={summaryQuery.isRefetching || inboxQuery.isRefetching}
       onRefresh={() => void Promise.all([summaryQuery.refetch(), inboxQuery.refetch()])}
     >
-      <View style={{ marginHorizontal: 16, marginTop: 10, flexDirection: "row", gap: 8 }}>
-        <TeacherChip label={`Forms (${pendingForms.length} Pending)`} active={viewMode === "forms"} onPress={() => setViewMode("forms")} />
-        <TeacherChip label="Class Analytics" active={viewMode === "analytics"} onPress={() => setViewMode("analytics")} />
-      </View>
+      <TeacherSegmentedTabs
+        accessibilityLabel="Evaluation views"
+        activeKey={viewMode}
+        items={[
+          { key: "to_answer", label: "To answer", count: pendingForms.length },
+          { key: "feedback", label: "Feedback", count: summaryQuery.data?.overview.responseCount ?? 0 },
+        ]}
+        onSelect={setViewMode}
+      />
 
-      {viewMode === "forms" ? (
+      {viewMode === "to_answer" ? (
         <>
-          <TeacherStats
+          <TeacherSummaryStrip
             items={[
               { label: "Pending", value: pendingForms.length, tone: "amber" },
               { label: "Submitted", value: submittedForms.length, tone: "green" },
-              { label: "Total Forms", value: inboxItems.length, tone: "blue" },
+              { label: "Total", value: inboxItems.length, tone: "blue" },
             ]}
           />
-          <TeacherPanel title="Evaluation Forms to Answer" subtitle="These forms are assigned to your teacher account.">
+          <TeacherFlatSection title="Assigned evaluations" subtitle="Answer pending forms first; submitted forms stay visible as a record.">
             {inboxQuery.isError ? (
               <TeacherEmpty title="Unable to load evaluation forms" subtitle={toAppError(inboxQuery.error).message} icon="alert-circle-outline" />
             ) : inboxItems.length ? (
@@ -127,11 +135,11 @@ export function TeacherEvaluationsScreen({ navigation }: Props) {
             ) : (
               <TeacherEmpty title="No evaluation forms" subtitle="There are no assigned forms for your account." icon="checkbox-marked-circle-outline" />
             )}
-          </TeacherPanel>
+          </TeacherFlatSection>
         </>
       ) : (
         <>
-          <TeacherStats
+          <TeacherSummaryStrip
             items={[
               { label: "Responses", value: summaryQuery.data?.overview.responseCount ?? 0, tone: "red" },
               { label: "Overall avg", value: summaryQuery.data ? summaryQuery.data.overview.averageOverall.toFixed(2) : "N/A", tone: "blue" },
@@ -156,7 +164,7 @@ export function TeacherEvaluationsScreen({ navigation }: Props) {
             ))}
           </View>
 
-          <TeacherPanel title={summaryQuery.data?.tabTitle ?? "Evaluation summary"} subtitle={summaryQuery.data?.tabDescription ?? "Evaluation results for the selected filters."}>
+          <TeacherFlatSection title={summaryQuery.data?.tabTitle ?? "Evaluation summary"} subtitle={summaryQuery.data?.tabDescription ?? "Evaluation results for the selected filters."}>
             {summaryQuery.isError ? (
               <TeacherEmpty title="Unable to load analytics" subtitle={toAppError(summaryQuery.error).message} icon="alert-circle-outline" />
             ) : categoryAverages.length ? (
@@ -166,10 +174,10 @@ export function TeacherEvaluationsScreen({ navigation }: Props) {
             ) : (
               <TeacherEmpty title="No evaluation summaries" subtitle="No evaluation submissions match these filters." icon="clipboard-alert-outline" />
             )}
-          </TeacherPanel>
+          </TeacherFlatSection>
 
           {trends.length ? (
-            <TeacherPanel title="Response coverage" subtitle="Submitted responses compared with eligible learners.">
+            <TeacherFlatSection title="Response coverage" subtitle="Submitted responses compared with eligible learners.">
               {trends.map((entry) => (
                 <TeacherRow
                   key={`${entry.classId}-${entry.gradingPeriod}`}
@@ -177,15 +185,15 @@ export function TeacherEvaluationsScreen({ navigation }: Props) {
                   subtitle={`${entry.responseCount} of ${entry.eligibleCount} eligible learners responded`}
                 />
               ))}
-            </TeacherPanel>
+            </TeacherFlatSection>
           ) : null}
 
           {summaryComments.length ? (
-            <TeacherPanel title="Anonymous comments" subtitle="Learner feedback returned by the current contract.">
+            <TeacherFlatSection title="Anonymous comments" subtitle="Learner feedback returned by the current contract.">
               {summaryComments.map((entry) => (
                 <TeacherRow key={entry.id} title={entry.comment} subtitle={`${entry.classLabel} · ${entry.gradingPeriod} · ${formatDate(entry.submittedAt)}`} />
               ))}
-            </TeacherPanel>
+            </TeacherFlatSection>
           ) : null}
         </>
       )}

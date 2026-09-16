@@ -2562,7 +2562,7 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).toContain("Up next");
     expect(renderedText).toContain("Your day");
     expect(renderedText).toContain("After that");
-    expect(renderedText).toContain("Latest update");
+    expect(renderedText).toContain("School bulletin");
     expect(
       testRenderer!.root.findAll(
         (node) =>
