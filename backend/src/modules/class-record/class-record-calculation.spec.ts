@@ -16,7 +16,9 @@ function item(id: string, score: string | null, status = 'recorded') {
               studentId: 's',
               score,
               status,
-              reason: status === 'excused' ? 'Approved accommodation' : null,
+              reason: status.startsWith('excused')
+                ? 'Approved accommodation'
+                : null,
             },
           ],
   };
@@ -67,6 +69,30 @@ describe('complete class record calculation', () => {
     );
     expect(result.initialGrade).toBe(80);
     expect(result.categoryBreakdown[0].totalHPS).toBe(100);
+  });
+  it('counts a manually scored excused item while retaining its reason', () => {
+    const result = calculateStudentRecord(
+      's',
+      legacy,
+      [category],
+      [item('a', '80', 'excused_with_score')],
+    );
+    expect(result.blockers).toEqual([]);
+    expect(result.initialGrade).toBe(80);
+    expect(result.categoryBreakdown[0]).toMatchObject({
+      totalRaw: 80,
+      totalHPS: 100,
+    });
+
+    const unjustified = item('a', '80', 'excused_with_score');
+    unjustified.scores[0].reason = null;
+    expect(
+      calculateStudentRecord('s', legacy, [category], [unjustified]).blockers,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'invalid_exemption' }),
+      ]),
+    );
   });
   it('blocks an entirely excused required category and unjustified exemptions', () => {
     expect(

@@ -135,6 +135,7 @@ function createState(): TeacherClassRecordState {
     loadAnnual: jest.fn(),
     confirmRoster: jest.fn(),
     excuseScore: jest.fn(),
+    excuseScoreWithManualScore: jest.fn(),
     restoreAssessmentEvidence: jest.fn().mockResolvedValue(true),
     generateQuarter: jest.fn(),
     finalizeQuarter: jest.fn(),
@@ -158,7 +159,9 @@ it("renders all three examination components and separates zero, missing and exe
     screen.getByRole("button", { name: "Ana Santos, ST2: Missing" }),
   ).toBeEnabled();
   expect(
-    screen.getByRole("button", { name: "Ana Santos, TE: Excused" }),
+    screen.getByRole("button", {
+      name: "Ana Santos, TE: Excused. Reason: Medical evidence",
+    }),
   ).toBeEnabled();
   expect(
     screen.getByRole("button", { name: "Finalize Term 1" }),
@@ -196,7 +199,9 @@ it("restores an exempt linked result with evidence instead of overwriting it thr
   const state = createState();
   render(<TeacherClassRecordWorkbook state={state} />);
   fireEvent.click(
-    screen.getByRole("button", { name: "Ana Santos, TE: Excused" }),
+    screen.getByRole("button", {
+      name: "Ana Santos, TE: Excused. Reason: Medical evidence",
+    }),
   );
   fireEvent.change(screen.getByLabelText("Score status"), {
     target: { value: "recorded" },
@@ -215,6 +220,58 @@ it("restores an exempt linked result with evidence instead of overwriting it thr
     ),
   );
   expect(state.syncItem).not.toHaveBeenCalled();
+});
+it("records a manual score and reason for an excused linked assessment", async () => {
+  const state = createState();
+  const excuseScoreWithManualScore = jest.fn().mockResolvedValue(true);
+  (
+    state as TeacherClassRecordState & {
+      excuseScoreWithManualScore: typeof excuseScoreWithManualScore;
+    }
+  ).excuseScoreWithManualScore = excuseScoreWithManualScore;
+
+  render(<TeacherClassRecordWorkbook state={state} />);
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: "Ana Santos, TE: Excused. Reason: Medical evidence",
+    }),
+  );
+  fireEvent.change(screen.getByLabelText("Score status"), {
+    target: { value: "excused_with_score" },
+  });
+  fireEvent.change(screen.getByLabelText("Manual credited score"), {
+    target: { value: "18" },
+  });
+  fireEvent.change(screen.getByLabelText("Exemption reason"), {
+    target: { value: "Winner of the Division Science Fair" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Save score evidence" }));
+
+  await waitFor(() =>
+    expect(excuseScoreWithManualScore).toHaveBeenCalledWith(
+      "TE",
+      "ana",
+      18,
+      "Winner of the Division Science Fair",
+    ),
+  );
+  expect(state.restoreAssessmentEvidence).not.toHaveBeenCalled();
+  expect(state.syncItem).not.toHaveBeenCalled();
+});
+it("labels a manually scored exemption without hiding its credited score", () => {
+  const state = createState();
+  const result = state.spreadsheet!.students[0].categories[0];
+  result.scores[2] = 18;
+  result.scoreStatuses![2] = "excused_with_score" as never;
+  result.scoreReasons![2] = "Winner of the Division Science Fair";
+
+  render(<TeacherClassRecordWorkbook state={state} />);
+
+  expect(
+    screen.getByRole("button", {
+      name: "Ana Santos, TE: Excused · 18/20. Reason: Winner of the Division Science Fair",
+    }),
+  ).toHaveAttribute("data-score-status", "excused_with_score");
 });
 it("requires a reason before reopening and disables writes when evidence is stale", async () => {
   const state = createState();
@@ -303,7 +360,9 @@ it("presents readable workbook metadata, policy-aware navigation and semantic gr
     screen.getByRole("button", { name: "Ana Santos, ST2: Missing" }),
   ).toHaveAttribute("data-score-status", "missing");
   expect(
-    screen.getByRole("button", { name: "Ana Santos, TE: Excused" }),
+    screen.getByRole("button", {
+      name: "Ana Santos, TE: Excused. Reason: Medical evidence",
+    }),
   ).toHaveAttribute("data-score-status", "excused");
 
   const learnerCell = screen.getByRole("rowheader", {

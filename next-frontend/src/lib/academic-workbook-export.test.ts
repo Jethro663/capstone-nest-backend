@@ -30,6 +30,7 @@ it("exports explicit zero, missing and excused evidence separately without inven
           { id: "zero", title: "Zero" },
           { id: "missing", title: "Missing" },
           { id: "excused", title: "Excused" },
+          { id: "excused-scored", title: "Excused with score", hps: 20 },
         ],
       },
     ],
@@ -43,9 +44,19 @@ it("exports explicit zero, missing and excused evidence separately without inven
         categories: [
           {
             categoryId: "ww",
-            scores: [0, null, null],
-            scoreStatuses: ["recorded", "missing", "excused"],
-            scoreReasons: [null, null, "Verified exemption"],
+            scores: [0, null, null, 18],
+            scoreStatuses: [
+              "recorded",
+              "missing",
+              "excused",
+              "excused_with_score",
+            ],
+            scoreReasons: [
+              null,
+              null,
+              "Verified exemption",
+              "Winner of the Division Science Fair",
+            ],
             total: null,
             ps: null,
             ws: null,
@@ -98,7 +109,12 @@ it("exports explicit zero, missing and excused evidence separately without inven
   ]);
   expect(rows.annual[0].slice(0, 2)).toEqual(["Learner", "Account state"]);
   expect(rows.annual[1].slice(0, 2)).toEqual(["Cruz, Ana", "Archived account"]);
-  expect(rows.period[1].slice(3, 6)).toEqual([0, null, "EXCUSED"]);
+  expect(rows.period[1].slice(3, 7)).toEqual([
+    0,
+    null,
+    "EXCUSED",
+    "18 (EXCUSED)",
+  ]);
   expect(rows.annual[1].slice(2, 9)).toEqual([
     75,
     null,
@@ -117,6 +133,18 @@ it("exports explicit zero, missing and excused evidence separately without inven
     "excused",
     "Verified exemption",
     null,
+    "Written Works",
+    20,
+    null,
+  ]);
+  expect(rows.evidence[4]).toEqual([
+    "Cruz, Ana",
+    "Archived account",
+    "Excused with score",
+    18,
+    "excused_with_score",
+    "Winner of the Division Science Fair",
+    20,
     "Written Works",
     20,
     null,

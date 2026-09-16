@@ -383,15 +383,19 @@ export function TeacherClassRecordGradeGrid({
                           const status =
                             values?.scoreStatuses?.[index] ??
                             (score == null ? "missing" : "recorded");
+                          const scoreReason =
+                            values?.scoreReasons?.[index] ?? "";
                           const unavailable =
                             !item.hps || student.eligibility !== "eligible";
                           const display = unavailable
                             ? "Unavailable"
                             : status === "excused"
                               ? "Excused"
-                              : bonusPoints > 0
-                                ? `${effectiveScore ?? score} (+${bonusPoints})`
-                                : (score ?? "Missing");
+                              : status === "excused_with_score"
+                                ? `Excused · ${score}/${item.hps}`
+                                : bonusPoints > 0
+                                  ? `${effectiveScore ?? score} (+${bonusPoints})`
+                                  : (score ?? "Missing");
                           const visualStatus = unavailable
                             ? "unavailable"
                             : status;
@@ -420,7 +424,8 @@ export function TeacherClassRecordGradeGrid({
                                   !item.hps ||
                                   state.spreadsheetStatus !== "ready"
                                 }
-                                aria-label={`${student.firstName} ${student.lastName}, ${item.title}: ${display}`}
+                                aria-label={`${student.firstName} ${student.lastName}, ${item.title}: ${display}${scoreReason ? `. Reason: ${scoreReason}` : ""}`}
+                                title={scoreReason || undefined}
                                 onFocus={() =>
                                   setActiveCell({
                                     studentId: student.studentId,
@@ -433,7 +438,7 @@ export function TeacherClassRecordGradeGrid({
                                     student,
                                     score,
                                     status,
-                                    reason: values?.scoreReasons?.[index] ?? "",
+                                    reason: scoreReason,
                                     bonusPoints,
                                     bonusReason,
                                   })

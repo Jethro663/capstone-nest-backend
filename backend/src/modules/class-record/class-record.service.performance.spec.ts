@@ -16,12 +16,16 @@ function buildMockDb() {
   return {
     query: {
       classRecordItems: { findFirst: jest.fn() },
-      classRecordScores: { findMany: jest.fn().mockResolvedValue([]) },
+      classRecordScores: {
+        findFirst: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       classes: { findFirst: jest.fn(), findMany: jest.fn() },
       classRecords: { findMany: jest.fn() },
       sections: { findFirst: jest.fn() },
     },
     insert: jest.fn(),
+    delete: jest.fn(),
   };
 }
 
@@ -91,7 +95,12 @@ describe('ClassRecordService performance events', () => {
           useValue: { invalidateRecordSources: jest.fn() },
         },
         { provide: ClassRecordComputationService, useValue: {} },
-        { provide: ClassRecordSyncService, useValue: {} },
+        {
+          provide: ClassRecordSyncService,
+          useValue: {
+            syncFromAssessment: jest.fn().mockResolvedValue({ synced: 1 }),
+          },
+        },
         { provide: EventEmitter2, useValue: eventEmitter },
         { provide: AuditService, useValue: { log: jest.fn() } },
       ],
@@ -127,6 +136,131 @@ describe('ClassRecordService performance events', () => {
         triggerSource: 'manual_single',
       }),
     );
+  });
+
+  it('records a reasoned manual score for an excused learner and emits recompute', async () => {
+    db.query.classRecordItems.findFirst.mockResolvedValue({
+      id: 'item-1',
+      maxScore: '20',
+      assessmentId: 'assessment-1',
+      classRecord: {
+        id: 'record-1',
+        gradingPeriod: 'Q1',
+        status: 'draft',
+        teacherId: 'teacher-1',
+        classId: 'class-1',
+      },
+    });
+    const upsert = mockScoreUpsertReturning(db, [{ id: 'score-1' }]);
+
+    await service.recordScore(
+      'item-1',
+      {
+        studentId: 'student-1',
+        status: 'excused_with_score',
+        score: 18,
+        reason: 'Winner of the Division Science Fair',
+      } as never,
+      'teacher-1',
+      ['teacher'],
+    );
+
+    expect(upsert.values).toHaveBeenCalledWith([
+      expect.objectContaining({
+        studentId: 'student-1',
+        status: 'excused_with_score',
+        score: '18',
+        bonusPoints: '0',
+        bonusReason: null,
+        reason: 'Winner of the Division Science Fair',
+        sourceAttemptId: null,
+      }),
+    ]);
+    expect(eventEmitter.emit).toHaveBeenCalledWith(
+      ClassRecordScoresUpdatedEvent.eventName,
+      expect.objectContaining({
+        classId: 'class-1',
+        studentIds: ['student-1'],
+        triggerSource: 'manual_single',
+      }),
+    );
+  });
+
+  it('rejects invalid manually scored exemptions with specific evidence errors', async () => {
+    db.query.classRecordItems.findFirst.mockResolvedValue({
+      id: 'item-1',
+      maxScore: '20',
+      classRecord: {
+        id: 'record-1',
+        gradingPeriod: 'Q1',
+        status: 'draft',
+        teacherId: 'teacher-1',
+        classId: 'class-1',
+      },
+    });
+
+    await expect(
+      service.recordScore(
+        'item-1',
+        {
+          studentId: 'student-1',
+          status: 'excused_with_score',
+          score: 18,
+        } as never,
+        'teacher-1',
+        ['teacher'],
+      ),
+    ).rejects.toThrow('Excused scores require a reason');
+    await expect(
+      service.recordScore(
+        'item-1',
+        {
+          studentId: 'student-1',
+          status: 'excused_with_score',
+          score: 18,
+          bonusPoints: 1,
+          bonusReason: 'Extra credit',
+          reason: 'Winner of the Division Science Fair',
+        } as never,
+        'teacher-1',
+        ['teacher'],
+      ),
+    ).rejects.toThrow(
+      'Excused scores with manual credit cannot include bonus points',
+    );
+  });
+
+  it('restores linked assessment evidence from a manually scored exemption', async () => {
+    db.query.classRecordItems.findFirst.mockResolvedValue({
+      id: 'item-1',
+      maxScore: '20',
+      assessmentId: 'assessment-1',
+      classRecord: {
+        id: 'record-1',
+        gradingPeriod: 'Q1',
+        status: 'draft',
+        teacherId: 'teacher-1',
+        classId: 'class-1',
+      },
+    });
+    db.query.classRecordScores.findFirst.mockResolvedValue({
+      id: 'score-1',
+      status: 'excused_with_score',
+      score: '18',
+      reason: 'Winner of the Division Science Fair',
+    });
+    const where = jest.fn().mockResolvedValue(undefined);
+    db.delete.mockReturnValue({ where });
+
+    await service.restoreAssessmentEvidence(
+      'item-1',
+      'student-1',
+      'Restore verified quiz submission',
+      'teacher-1',
+      ['teacher'],
+    );
+
+    expect(where).toHaveBeenCalled();
   });
 
   it('bulkRecordScores should emit class-record.scores.updated for bulk scores', async () => {

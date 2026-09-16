@@ -44,13 +44,17 @@ export class GradeInvariantAuditService {
         )::int AS "outOfRangeAttempts",
         (SELECT count(*) FROM class_record_scores score
           JOIN class_record_items item ON item.id = score.gradebook_item_id
-          WHERE (score.status = 'recorded' AND (
+          WHERE score.status NOT IN ('recorded', 'excused', 'excused_with_score')
+            OR (score.status = 'recorded' AND (
               score.score IS NULL OR score.score < 0 OR score.score > item.max_score OR
               score.bonus_points < 0 OR
               (score.bonus_points > 0 AND nullif(trim(score.bonus_reason), '') IS NULL)
             )) OR (score.status = 'excused' AND (
               score.score IS NOT NULL OR score.bonus_points <> 0 OR
               nullif(trim(score.reason), '') IS NULL
+            )) OR (score.status = 'excused_with_score' AND (
+              score.score IS NULL OR score.score < 0 OR score.score > item.max_score OR
+              score.bonus_points <> 0 OR nullif(trim(score.reason), '') IS NULL
             ))
         )::int AS "invalidClassRecordScores",
         (SELECT count(*) FROM class_record_final_grades

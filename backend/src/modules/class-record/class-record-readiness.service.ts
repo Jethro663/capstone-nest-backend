@@ -12,6 +12,7 @@ import { getSubjectWeights } from '../academic-state/academic-policy';
 import { calculateStudentRecord } from './class-record-calculation';
 import type { GradeBlocker } from './class-record-calculation';
 import { buildAcademicScoreContract } from '../academic-state/academic-score';
+import { isExcusedScoreStatus } from '../../common/contracts/class-record-score-status';
 
 @Injectable()
 export class ClassRecordReadinessService {
@@ -180,7 +181,7 @@ export class ClassRecordReadinessService {
           const score = item.scores.find(
             (score) => score.studentId === attempt.studentId,
           );
-          if (score?.status === 'excused') continue;
+          if (isExcusedScoreStatus(score?.status)) continue;
           const contract = buildAcademicScoreContract(attempt);
           const expectedScore = contract.scoreBreakdown
             ? (contract.scoreBreakdown.basePoints /

@@ -55,11 +55,14 @@ function buildCategoryColumns(
         (entry) => entry.categoryId === category.id,
       );
       const score = categoryScores?.scores?.[itemIndex];
-      return categoryScores?.scoreStatuses?.[itemIndex] === "excused"
+      const status = categoryScores?.scoreStatuses?.[itemIndex];
+      return status === "excused"
         ? "Excused"
-        : typeof score === "number"
-          ? formatNumber(score, 1)
-          : "Missing";
+        : status === "excused_with_score" && typeof score === "number"
+          ? `Excused · ${formatNumber(score, 1)}/${item.hps ?? "--"}`
+          : typeof score === "number"
+            ? formatNumber(score, 1)
+            : "Missing";
     },
   }));
 

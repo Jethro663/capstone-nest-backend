@@ -8,6 +8,10 @@ import type { GradingPeriod } from "@/utils/constants";
 
 export type ClassRecordStatus = "draft" | "finalized" | "locked";
 export type AccountState = "active" | "archived";
+export type ClassRecordScoreStatus =
+  | "recorded"
+  | "excused"
+  | "excused_with_score";
 
 export interface ClassRecord {
   id: string;
@@ -52,7 +56,7 @@ export interface ClassRecordScore {
   score: number | null;
   bonusPoints?: number;
   bonusReason?: string | null;
-  status?: "recorded" | "excused";
+  status?: ClassRecordScoreStatus;
   reason?: string | null;
 }
 
@@ -79,7 +83,7 @@ export interface RecordScoreDto {
   score?: number | null;
   bonusPoints?: number;
   bonusReason?: string;
-  status?: "recorded" | "excused";
+  status?: ClassRecordScoreStatus;
   reason?: string;
 }
 
@@ -122,7 +126,7 @@ export interface SpreadsheetStudentRow {
     bonusReasons?: (string | null)[];
     effectiveScores?: (number | null)[];
     scorePercents?: (number | null)[];
-    scoreStatuses?: ("recorded" | "excused" | "missing")[];
+    scoreStatuses?: (ClassRecordScoreStatus | "missing")[];
     scoreReasons?: (string | null)[];
     total: number | null;
     ps: number | null;
@@ -170,7 +174,10 @@ export interface SpreadsheetData {
 }
 
 export type ClassRecordSlotStatus =
-  "empty" | "manual" | "linked_self" | "linked_other";
+  | "empty"
+  | "manual"
+  | "linked_self"
+  | "linked_other";
 
 export interface ClassRecordSlotOverviewItem {
   itemId: string;

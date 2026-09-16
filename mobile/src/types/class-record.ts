@@ -55,7 +55,7 @@ export interface ClassRecordScore {
   score: number | null;
   bonusPoints?: number;
   bonusReason?: string | null;
-  status?: "recorded" | "excused";
+  status?: "recorded" | "excused" | "excused_with_score";
   reason?: string | null;
 }
 
@@ -82,7 +82,7 @@ export interface RecordScoreDto {
   score?: number | null;
   bonusPoints?: number;
   bonusReason?: string;
-  status?: "recorded" | "excused";
+  status?: "recorded" | "excused" | "excused_with_score";
   reason?: string;
 }
 
@@ -132,7 +132,9 @@ export interface SpreadsheetStudentRow {
     total: number | null;
     ps: number | null;
     ws: number | null;
-    scoreStatuses?: Array<"recorded" | "excused" | "missing">;
+    scoreStatuses?: Array<
+      "recorded" | "excused" | "excused_with_score" | "missing"
+    >;
     scoreReasons?: Array<string | null>;
   }[];
   initialGrade: number | null;

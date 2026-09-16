@@ -259,3 +259,47 @@ it("requires a reason and sends explicit bonus evidence for a manual score", asy
   });
   await act(async () => tree.unmount());
 });
+it("sends a manual credited score with its excused reason", async () => {
+  mockEvidence(true, false, true);
+  const recordScore = jest.fn().mockResolvedValue(undefined);
+  (classRecordApi as any).recordScore = recordScore;
+  let tree!: TestTree;
+  await act(async () => {
+    tree = TestRenderer.create(<AcademicWorkbook classId="class" admin />);
+  });
+
+  await act(async () => {
+    tree.root
+      .findAllByType("Chip" as any)
+      .find((node) => node.props.label === "Cruz, Ana · Archived account")!
+      .props.onPress();
+    tree.root
+      .findAllByType("Chip" as any)
+      .find((node) => node.props.label === "Written Work: Quiz (10)")!
+      .props.onPress();
+  });
+
+  const field = (label: string) =>
+    tree.root
+      .findAllByType("Field" as any)
+      .find((node) => node.props.label === label)!;
+  await act(async () => {
+    field("Manual credited score for exemption").props.onChangeText("8");
+    field("Exemption or correction reason").props.onChangeText(
+      "Winner of the Division Science Fair",
+    );
+  });
+  const save = tree.root
+    .findAllByType("Action" as any)
+    .find((node) => node.props.label === "Save score and mark excused")!;
+  expect(save.props.disabled).toBe(false);
+  await act(async () => save.props.onPress());
+
+  expect(recordScore).toHaveBeenCalledWith("item-1", {
+    studentId: "student-1",
+    status: "excused_with_score",
+    score: 8,
+    reason: "Winner of the Division Science Fair",
+  });
+  await act(async () => tree.unmount());
+});

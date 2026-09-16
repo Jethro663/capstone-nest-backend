@@ -110,6 +110,32 @@ describe('period finalization readiness', () => {
     });
     expect((await service.getReadiness('r')).ready).toBe(true);
   });
+  it('accepts a scored exemption as complete linked-assessment evidence', async () => {
+    const { service, db, categories } = fixture();
+    categories[0].items[0].assessmentId = 'a' as never;
+    Object.assign(categories[0].items[0].scores[0], {
+      status: 'excused_with_score',
+      score: '80',
+      reason: 'Winner of the Division Science Fair',
+      sourceAttemptId: null,
+    });
+    db.query.assessmentAttempts.findMany.mockResolvedValue([
+      {
+        id: 'attempt',
+        assessmentId: 'a',
+        studentId: 's',
+        isSubmitted: true,
+        isReturned: true,
+        score: 75,
+        assessment: { type: 'quiz', questions: [] },
+      },
+    ]);
+
+    expect(await service.getReadiness('r')).toMatchObject({
+      ready: true,
+      blockers: [],
+    });
+  });
   it('blocks an ongoing attempt even if another score exists', async () => {
     const { service, db, categories } = fixture();
     categories[0].items[0].assessmentId = 'a' as never;

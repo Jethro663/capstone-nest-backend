@@ -691,7 +691,9 @@
 }
 
 .scoreCell[data-score-status="excused"],
-.scoreButton[data-score-status="excused"] {
+.scoreButton[data-score-status="excused"],
+.scoreCell[data-score-status="excused_with_score"],
+.scoreButton[data-score-status="excused_with_score"] {
   background: var(--record-excused-bg);
   color: var(--record-excused-text);
 }

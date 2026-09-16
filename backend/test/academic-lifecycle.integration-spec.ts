@@ -1138,15 +1138,23 @@ describe('academic lifecycle PostgreSQL integration', () => {
           ? category.items
           : category.items.slice(0, 1);
       for (const item of items) {
+        const scoredExemption = category.name === 'Written Works';
         await workbook.updateClassRecordItem(
           item.id,
-          { maxScore: 100 },
+          { maxScore: scoredExemption ? 20 : 100 },
           fixture.actor.id,
           ['teacher'],
         );
         await workbook.recordScore(
           item.id,
-          { studentId: fixture.student.id, score: 80 },
+          scoredExemption
+            ? {
+                studentId: fixture.student.id,
+                status: 'excused_with_score',
+                score: 18,
+                reason: 'Winner of the Division Science Fair',
+              }
+            : { studentId: fixture.student.id, score: 80 },
           fixture.actor.id,
           ['teacher'],
         );
@@ -1161,10 +1169,21 @@ describe('academic lifecycle PostgreSQL integration', () => {
       gradeCount: 1,
       classRecord: { status: 'finalized', revision: 1 },
     });
+    const firstRevision =
+      await database.db.query.academicPeriodGradeRevisions.findFirst();
+    expect(
+      firstRevision?.evidence.categories.find(
+        (category) => category.name === 'Written Works',
+      )?.items[0].scores[0],
+    ).toMatchObject({
+      status: 'excused_with_score',
+      score: '18',
+      reason: 'Winner of the Division Science Fair',
+    });
     await expect(
       workbook.recordScore(
         record.categories[0].items[0].id,
-        { studentId: fixture.student.id, score: 90 },
+        { studentId: fixture.student.id, score: 19 },
         fixture.actor.id,
         ['teacher'],
       ),
@@ -1180,7 +1199,7 @@ describe('academic lifecycle PostgreSQL integration', () => {
     );
     await workbook.recordScore(
       record.categories[0].items[0].id,
-      { studentId: fixture.student.id, score: 90 },
+      { studentId: fixture.student.id, score: 19 },
       fixture.actor.id,
       ['teacher'],
     );
@@ -1448,6 +1467,50 @@ describe('academic lifecycle PostgreSQL integration', () => {
       item.id,
       f.student.id,
       'Verified original quiz submission',
+      f.actor.id,
+      ['admin'],
+    );
+    expect(await database.db.query.classRecordScores.findFirst()).toMatchObject(
+      { status: 'recorded', score: '16.00', sourceAttemptId: attempt.id },
+    );
+    await workbook.recordScore(
+      item.id,
+      {
+        studentId: f.student.id,
+        status: 'excused_with_score',
+        score: 18,
+        reason: 'Winner of the Division Science Fair',
+      },
+      f.actor.id,
+      ['admin'],
+    );
+    await workbook.syncScoresFromAssessment(item.id, f.actor.id, ['admin']);
+    expect(await database.db.query.classRecordScores.findFirst()).toMatchObject(
+      {
+        status: 'excused_with_score',
+        score: '18.00',
+        reason: 'Winner of the Division Science Fair',
+        sourceAttemptId: null,
+      },
+    );
+    const scoredExemptionSheet = await workbook.getSpreadsheet(
+      f.records[0].id,
+      f.actor.id,
+      ['admin'],
+    );
+    const scoredExemption = scoredExemptionSheet.students
+      .find((student) => student.studentId === f.student.id)
+      ?.categories.find((entry) => entry.categoryId === category.id);
+    expect(scoredExemption).toMatchObject({
+      scores: [18],
+      effectiveScores: [18],
+      scoreStatuses: ['excused_with_score'],
+      scoreReasons: ['Winner of the Division Science Fair'],
+    });
+    await workbook.restoreAssessmentEvidence(
+      item.id,
+      f.student.id,
+      'Restore verified quiz after contest credit review',
       f.actor.id,
       ['admin'],
     );

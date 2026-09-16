@@ -55,8 +55,11 @@ export function TeacherClassRecordWorkbook({
     Record<string, { eligibility: PeriodEligibility | ""; reason: string }>
   >({});
   const [cell, setCell] = useState<Cell | null>(null);
-  const [mode, setMode] = useState<"recorded" | "excused">("recorded");
+  const [mode, setMode] = useState<
+    "recorded" | "excused" | "excused_with_score"
+  >("recorded");
   const [excuseReason, setExcuseReason] = useState("");
+  const [manualExcusedScore, setManualExcusedScore] = useState("");
   const [savingCell, setSavingCell] = useState(false);
   const {
     spreadsheet: sheet,
@@ -99,8 +102,13 @@ export function TeacherClassRecordWorkbook({
   ) => {
     if (!canGrade || student.eligibility !== "eligible" || !item.hps) return;
     setCell({ item, student, status, reason });
-    setMode(status === "excused" ? "excused" : "recorded");
+    setMode(
+      status === "excused" || status === "excused_with_score"
+        ? status
+        : "recorded",
+    );
     setExcuseReason(reason);
+    setManualExcusedScore(score == null ? "" : String(score));
     if (!item.assessmentId)
       state.handleCellClick(item.id, student.studentId, score, {
         maxScore: item.hps,
@@ -113,19 +121,26 @@ export function TeacherClassRecordWorkbook({
     setSavingCell(true);
     try {
       const saved =
-        mode === "excused"
-          ? await state.excuseScore(
+        mode === "excused_with_score"
+          ? await state.excuseScoreWithManualScore(
               cell.item.id,
               cell.student.studentId,
+              Number(manualExcusedScore),
               excuseReason,
             )
-          : cell.item.assessmentId && cell.status === "excused"
-            ? await state.restoreAssessmentEvidence(
+          : mode === "excused"
+            ? await state.excuseScore(
                 cell.item.id,
                 cell.student.studentId,
                 excuseReason,
               )
-            : await state.handleCellSave();
+            : cell.item.assessmentId && cell.status.startsWith("excused")
+              ? await state.restoreAssessmentEvidence(
+                  cell.item.id,
+                  cell.student.studentId,
+                  excuseReason,
+                )
+              : await state.handleCellSave();
       if (saved) {
         setCell(null);
         state.setEditingCell(null);
@@ -825,8 +840,9 @@ export function TeacherClassRecordWorkbook({
               {cell?.item.title}
             </DialogTitle>
             <DialogDescription>
-              Zero is an explicit score. Exemptions exclude this item’s
-              denominator for this learner and require evidence.
+              Zero is an explicit score. Excused without score excludes this
+              item for the learner; excused with manual score counts the score
+              and full HPS. Both require a reason.
             </DialogDescription>
           </DialogHeader>
           <Label htmlFor="score-entry-status">Score status</Label>
@@ -837,7 +853,10 @@ export function TeacherClassRecordWorkbook({
             onChange={(e) => setMode(e.target.value as typeof mode)}
           >
             <option value="recorded">Recorded score</option>
-            <option value="excused">Excused with reason</option>
+            <option value="excused">Excused without score</option>
+            <option value="excused_with_score">
+              Excused with manual score
+            </option>
           </select>
           {mode === "excused" ? (
             <>
@@ -847,6 +866,32 @@ export function TeacherClassRecordWorkbook({
                 value={excuseReason}
                 onChange={(e) => setExcuseReason(e.target.value)}
               />
+            </>
+          ) : mode === "excused_with_score" ? (
+            <>
+              <Label htmlFor="manual-excused-score">
+                Manual credited score
+              </Label>
+              <Input
+                id="manual-excused-score"
+                type="number"
+                min={0}
+                max={cell?.item.hps ?? undefined}
+                step="0.01"
+                value={manualExcusedScore}
+                onChange={(e) => setManualExcusedScore(e.target.value)}
+              />
+              <Label htmlFor="score-exemption-reason">Exemption reason</Label>
+              <Input
+                id="score-exemption-reason"
+                value={excuseReason}
+                onChange={(e) => setExcuseReason(e.target.value)}
+                placeholder="Example: Winner of the division contest"
+              />
+              <p className="text-sm">
+                The credited score counts toward the grade while the reason
+                remains part of the learner&apos;s evidence.
+              </p>
             </>
           ) : cell?.item.assessmentId ? (
             <p className="text-sm">
@@ -901,7 +946,7 @@ export function TeacherClassRecordWorkbook({
           )}
           {mode === "recorded" &&
             cell?.item.assessmentId &&
-            cell.status === "excused" && (
+            cell.status.startsWith("excused") && (
               <>
                 <Label htmlFor="restore-assessment-reason">
                   Correction reason
@@ -930,7 +975,7 @@ export function TeacherClassRecordWorkbook({
             </Button>
             {cell?.item.assessmentId &&
             mode === "recorded" &&
-            cell.status !== "excused" ? (
+            !cell.status.startsWith("excused") ? (
               <Button
                 disabled={!!state.syncingItemId}
                 onClick={async () => {
@@ -944,11 +989,19 @@ export function TeacherClassRecordWorkbook({
               <Button
                 disabled={
                   savingCell ||
-                  (mode === "excused" || cell?.item.assessmentId
+                  (mode === "excused"
                     ? !excuseReason.trim()
-                    : !state.editValue.trim() ||
-                      (Number(state.editBonusPoints || 0) > 0 &&
-                        !state.editBonusReason.trim()))
+                    : mode === "excused_with_score"
+                      ? !excuseReason.trim() ||
+                        !manualExcusedScore.trim() ||
+                        !Number.isFinite(Number(manualExcusedScore)) ||
+                        Number(manualExcusedScore) < 0 ||
+                        Number(manualExcusedScore) > (cell?.item.hps ?? 0)
+                      : cell?.item.assessmentId
+                        ? !excuseReason.trim()
+                        : !state.editValue.trim() ||
+                          (Number(state.editBonusPoints || 0) > 0 &&
+                            !state.editBonusReason.trim()))
                 }
                 onClick={() => void saveCell()}
               >

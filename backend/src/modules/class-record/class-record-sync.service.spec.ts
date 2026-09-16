@@ -93,16 +93,19 @@ describe('assessment score synchronization', () => {
     );
     expect(values).not.toHaveBeenCalled();
   });
-  it('preserves an explicit exemption during resynchronization', async () => {
-    const { service, db, values } = fixture();
-    db.query.classRecordScores.findMany.mockResolvedValue([
-      { studentId: 'student', status: 'excused' },
-    ] as never);
-    expect(await service.syncFromAssessment('item', 'teacher')).toEqual({
-      synced: 0,
-    });
-    expect(values).not.toHaveBeenCalled();
-  });
+  it.each(['excused', 'excused_with_score'])(
+    'preserves an explicit %s exemption during resynchronization',
+    async (status) => {
+      const { service, db, values } = fixture();
+      db.query.classRecordScores.findMany.mockResolvedValue([
+        { studentId: 'student', status },
+      ] as never);
+      expect(await service.syncFromAssessment('item', 'teacher')).toEqual({
+        synced: 0,
+      });
+      expect(values).not.toHaveBeenCalled();
+    },
+  );
   it('waits for manual short-answer review and ignores ineligible students', async () => {
     const { service, assessment, attempts, db, values } = fixture();
     assessment.questions = [{ type: 'short_answer' }] as never;

@@ -27,6 +27,7 @@ it("keeps zero, missing and excused separate and exports policy denominator and 
           { id: "a", title: "A", hps: 20 },
           { id: "b", title: "B", hps: 10 },
           { id: "c", title: "C", hps: 5 },
+          { id: "d", title: "D", hps: 10 },
         ],
       },
     ],
@@ -44,9 +45,19 @@ it("keeps zero, missing and excused separate and exports policy denominator and 
         categories: [
           {
             categoryId: "ww",
-            scores: [0, null, null],
-            scoreStatuses: ["recorded", "missing", "excused"],
-            scoreReasons: [null, null, "Verified reason"],
+            scores: [0, null, null, 8],
+            scoreStatuses: [
+              "recorded",
+              "missing",
+              "excused",
+              "excused_with_score",
+            ],
+            scoreReasons: [
+              null,
+              null,
+              "Verified reason",
+              "Winner of the Division Science Fair",
+            ],
             total: null,
             ps: null,
             ws: null,
@@ -91,7 +102,12 @@ it("keeps zero, missing and excused separate and exports policy denominator and 
     "eligible",
     "Archived account",
   ]);
-  expect(rows.period[1].slice(3, 6)).toEqual([0, null, "EXCUSED"]);
+  expect(rows.period[1].slice(3, 7)).toEqual([
+    0,
+    null,
+    "EXCUSED",
+    "8 (EXCUSED)",
+  ]);
   expect(rows.evidence[3]).toEqual([
     "Cruz, Ana",
     "Archived account",
@@ -100,6 +116,18 @@ it("keeps zero, missing and excused separate and exports policy denominator and 
     "excused",
     "Verified reason",
     5,
+    "Written Works",
+    20,
+    null,
+  ]);
+  expect(rows.evidence[4]).toEqual([
+    "Cruz, Ana",
+    "Archived account",
+    "D",
+    8,
+    "excused_with_score",
+    "Winner of the Division Science Fair",
+    10,
     "Written Works",
     20,
     null,

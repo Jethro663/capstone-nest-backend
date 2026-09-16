@@ -9,6 +9,10 @@ import {
   ValidateIf,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import {
+  CLASS_RECORD_SCORE_STATUSES,
+  type ClassRecordScoreStatus,
+} from '../../../common/contracts/class-record-score-status';
 
 export class RecordScoreDto {
   @IsUUID('4', { message: 'studentId must be a valid UUID' })
@@ -32,8 +36,8 @@ export class RecordScoreDto {
   bonusReason?: string;
 
   @IsOptional()
-  @IsIn(['recorded', 'excused'])
-  status?: 'recorded' | 'excused';
+  @IsIn(CLASS_RECORD_SCORE_STATUSES)
+  status?: ClassRecordScoreStatus;
 
   @IsOptional()
   @IsString()

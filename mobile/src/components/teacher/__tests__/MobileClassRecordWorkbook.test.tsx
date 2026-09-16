@@ -132,4 +132,35 @@ describe("MobileClassRecordWorkbook learner visibility", () => {
       }).props.accessibilityState.selected,
     ).toBe(true);
   });
+
+  it("shows a manually scored exemption as both excused and credited", () => {
+    const scoredExemptionWorkbook = workbook("draft");
+    scoredExemptionWorkbook.categories = [
+      {
+        id: "written",
+        name: "Written Works",
+        weight: 30,
+        items: [{ id: "item-1", title: "Quiz", hps: 10, order: 1 }],
+      },
+    ];
+    scoredExemptionWorkbook.students[0].categories = [
+      {
+        categoryId: "written",
+        scores: [8],
+        scoreStatuses: ["excused_with_score"],
+        scoreReasons: ["Winner of the Division Science Fair"],
+        total: 8,
+        ps: 80,
+        ws: 24,
+      },
+    ];
+    let renderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        <MobileClassRecordWorkbook workbook={scoredExemptionWorkbook} />,
+      );
+    });
+
+    expect(text(renderer!.toJSON())).toContain("Excused · 8.0/10");
+  });
 });

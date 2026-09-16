@@ -62,6 +62,7 @@ export function AcademicWorkbook({
   const [studentId, setStudentId] = useState("");
   const [itemId, setItemId] = useState("");
   const [score, setScore] = useState("");
+  const [excusedScore, setExcusedScore] = useState("");
   const [bonusPoints, setBonusPoints] = useState("0");
   const [bonusReason, setBonusReason] = useState("");
   const [hps, setHps] = useState("");
@@ -127,6 +128,7 @@ export function AcademicWorkbook({
     setItemId("");
     setReason("");
     setScore("");
+    setExcusedScore("");
     setBonusPoints("0");
     setBonusReason("");
     setHps("");
@@ -170,7 +172,13 @@ export function AcademicWorkbook({
     );
     setBonusPoints(String(values?.bonusPoints?.[itemIndex] ?? 0));
     setBonusReason(values?.bonusReasons?.[itemIndex] ?? "");
-  }, [itemId, itemIndex, studentId, values]);
+    setExcusedScore(
+      scoreStatus === "excused_with_score" &&
+        values?.scores?.[itemIndex] != null
+        ? String(values.scores[itemIndex])
+        : "",
+    );
+  }, [itemId, itemIndex, scoreStatus, studentId, values]);
   return (
     <View style={{ gap: 12 }}>
       <Panel
@@ -428,7 +436,36 @@ export function AcademicWorkbook({
                       )
                     }
                   />
-                  {item.assessmentId && scoreStatus === "excused" && (
+                  <Field
+                    label="Manual credited score for exemption"
+                    value={excusedScore}
+                    onChangeText={setExcusedScore}
+                  />
+                  <Action
+                    label="Save score and mark excused"
+                    disabled={
+                      !canGrade ||
+                      person?.eligibility !== "eligible" ||
+                      !reason.trim() ||
+                      !excusedScore.trim() ||
+                      !Number.isFinite(Number(excusedScore)) ||
+                      Number(excusedScore) < 0 ||
+                      Number(excusedScore) > Number(item.hps || 0)
+                    }
+                    onPress={() =>
+                      void write(
+                        () =>
+                          classRecordApi.recordScore(item.id, {
+                            studentId,
+                            status: "excused_with_score",
+                            score: Number(excusedScore),
+                            reason: reason.trim(),
+                          }),
+                        "Manual score and exemption reason recorded together.",
+                      )
+                    }
+                  />
+                  {item.assessmentId && scoreStatus.startsWith("excused") && (
                     <Action
                       label="Restore assessment evidence"
                       disabled={!canGrade || !reason.trim()}

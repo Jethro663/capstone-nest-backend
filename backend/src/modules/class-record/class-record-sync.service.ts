@@ -27,6 +27,7 @@ import {
 import { AuditService } from '../audit/audit.service';
 import { AcademicPolicyService } from '../academic-state/academic-policy.service';
 import { buildAcademicScoreContract } from '../academic-state/academic-score';
+import { isExcusedScoreStatus } from '../../common/contracts/class-record-score-status';
 
 @Injectable()
 export class ClassRecordSyncService {
@@ -141,7 +142,9 @@ export class ClassRecordSyncService {
     });
     const eligible = new Set(participants.map((p) => p.studentId));
     const excused = new Set(
-      scores.filter((s) => s.status === 'excused').map((s) => s.studentId),
+      scores
+        .filter((s) => isExcusedScoreStatus(s.status))
+        .map((s) => s.studentId),
     );
     const seen = new Set<string>();
     const synchronized: string[] = [];

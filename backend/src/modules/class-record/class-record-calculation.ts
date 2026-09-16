@@ -4,6 +4,10 @@ import type {
   GradeBand,
 } from '../academic-state/academic-policy';
 import { calculateBoundedScore } from '../academic-state/academic-score';
+import {
+  excludesItemFromGrade,
+  isScoredClassRecordStatus,
+} from '../../common/contracts/class-record-score-status';
 
 export interface GradeBlocker {
   code: string;
@@ -108,7 +112,7 @@ export function calculateStudentRecord(
       const scoreRow = item.scores.find(
         (score) => score.studentId === studentId,
       );
-      if (scoreRow?.status === 'excused') {
+      if (excludesItemFromGrade(scoreRow?.status)) {
         if (scoreRow.score !== null || !scoreRow.reason?.trim())
           add(
             'invalid_exemption',
@@ -117,6 +121,15 @@ export function calculateStudentRecord(
           );
         continue;
       }
+      if (
+        scoreRow?.status === 'excused_with_score' &&
+        (!scoreRow.reason?.trim() || Number(scoreRow.bonusPoints ?? 0) !== 0)
+      )
+        add(
+          'invalid_exemption',
+          'Excused scores with manual credit require a reason and cannot include bonus points',
+          item.id,
+        );
       const hps = Number(item.maxScore);
       totalHPS += hps;
       if (!scoreRow || scoreRow.score === null) {
@@ -129,7 +142,7 @@ export function calculateStudentRecord(
         !Number.isFinite(score) ||
         score < 0 ||
         score > hps ||
-        (scoreRow.status && scoreRow.status !== 'recorded')
+        (scoreRow.status && !isScoredClassRecordStatus(scoreRow.status))
       ) {
         add(
           'invalid_score',

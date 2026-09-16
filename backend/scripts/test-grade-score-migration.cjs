@@ -107,6 +107,19 @@ async function seedLegacyOverflow(client) {
   `);
 }
 
+async function seedScoredExemptionOwners(client) {
+  await client.query(`
+    INSERT INTO users (id, email, password, first_name, last_name)
+    VALUES
+      ('10000000-0000-0000-0000-000000000001', 'teacher.migration@example.test', 'x', 'Test', 'Teacher'),
+      ('10000000-0000-0000-0000-000000000002', 'student.migration@example.test', 'x', 'Test', 'Student');
+    INSERT INTO sections (id, name, grade_level, school_year)
+    VALUES ('20000000-0000-0000-0000-000000000001', 'Migration Test', 'Grade 7', '2026-2027');
+    INSERT INTO classes (id, subject_name, subject_code, section_id, teacher_id, school_year)
+    VALUES ('30000000-0000-0000-0000-000000000001', 'Mathematics', 'MATH-MIGRATION', '20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', '2026-2027');
+  `);
+}
+
 async function assertUpgrade(client) {
   const response = await client.query(`
     SELECT id FROM assessment_responses
@@ -198,6 +211,26 @@ async function expectSqlState(client, sql, expectedCode) {
   throw new Error(`Expected PostgreSQL error ${expectedCode}`);
 }
 
+async function assertScoredExemptionConstraint(client) {
+  await client.query(`
+    INSERT INTO class_records (id, class_id, teacher_id, grading_period)
+    VALUES ('a0000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'Q1');
+    INSERT INTO class_record_categories (id, gradebook_id, name, weight_percentage)
+    VALUES ('a0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000001', 'Written Works', 100);
+    INSERT INTO class_record_items (id, gradebook_id, category_id, title, max_score)
+    VALUES ('a0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000002', 'Contest credit', 20);
+    INSERT INTO class_record_scores (gradebook_item_id, student_id, score, status, reason)
+    VALUES ('a0000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000002', 18, 'excused_with_score', 'Winner of the Division Science Fair');
+  `);
+  await expectSqlState(
+    client,
+    `UPDATE class_record_scores
+     SET reason = NULL
+     WHERE gradebook_item_id = 'a0000000-0000-0000-0000-000000000003'`,
+    '23514',
+  );
+}
+
 async function rerunRepairs(client) {
   const migration = fs.readFileSync(
     path.join(migrationsDirectory, '0017_grade_score_invariants.sql'),
@@ -230,7 +263,7 @@ async function main() {
 
     await withDatabase(upgradeDatabase, async (client) => {
       for (const file of migrationFiles.filter(
-        (file) => !file.startsWith('0017_'),
+        (file) => file < '0017_grade_score_invariants.sql',
       )) {
         await applyMigration(client, file);
       }
@@ -248,10 +281,18 @@ async function main() {
       if (evidenceBefore.rows[0].count !== evidenceAfter.rows[0].count) {
         throw new Error('Repair rerun created duplicate evidence');
       }
+      for (const file of migrationFiles.filter(
+        (file) => file > '0017_grade_score_invariants.sql',
+      )) {
+        await applyMigration(client, file);
+      }
+      await assertScoredExemptionConstraint(client);
     });
 
     await withDatabase(freshDatabase, async (client) => {
       for (const file of migrationFiles) await applyMigration(client, file);
+      await seedScoredExemptionOwners(client);
+      await assertScoredExemptionConstraint(client);
     });
 
     const upgradedAudit = runAudit(upgradeDatabase);

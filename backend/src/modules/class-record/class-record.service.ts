@@ -50,6 +50,7 @@ import {
   toClassRecordAccountState,
   withClassRecordAccountState,
 } from './class-record-account-state';
+import { isExcusedScoreStatus } from '../../common/contracts/class-record-score-status';
 
 /** DepEd default category configuration and fallback profile */
 const DEFAULT_DEPED_PROFILE = {
@@ -1004,6 +1005,22 @@ export class ClassRecordService {
           throw new BadRequestException(
             'Excused items require a reason and no score or bonus points',
           );
+      } else if (status === 'excused_with_score') {
+        if (!entry.reason?.trim())
+          throw new BadRequestException('Excused scores require a reason');
+        if ((entry.bonusPoints ?? 0) !== 0)
+          throw new BadRequestException(
+            'Excused scores with manual credit cannot include bonus points',
+          );
+        if (
+          entry.score == null ||
+          !Number.isFinite(entry.score) ||
+          entry.score < 0 ||
+          entry.score > maxScore
+        )
+          throw new BadRequestException(
+            `Scored entries must be between 0 and max score of ${maxScore}`,
+          );
       } else if (
         status !== 'recorded' ||
         entry.score == null ||
@@ -1019,7 +1036,7 @@ export class ClassRecordService {
         throw new BadRequestException(
           'Grade linked assessments in assessment grading, then synchronize the result',
         );
-      if (status === 'recorded') {
+      if (status === 'recorded' || status === 'excused_with_score') {
         try {
           calculateBoundedScore({
             basePoints: entry.score!,
@@ -1039,10 +1056,12 @@ export class ClassRecordService {
         classRecordItemId: itemId,
         studentId: entry.studentId,
         score: status === 'excused' ? null : String(entry.score),
-        bonusPoints:
-          status === 'excused' ? '0' : String(entry.bonusPoints ?? 0),
-        bonusReason:
-          status === 'excused' ? null : entry.bonusReason?.trim() || null,
+        bonusPoints: isExcusedScoreStatus(status)
+          ? '0'
+          : String(entry.bonusPoints ?? 0),
+        bonusReason: isExcusedScoreStatus(status)
+          ? null
+          : entry.bonusReason?.trim() || null,
         status,
         reason: entry.reason?.trim() || null,
         sourceAttemptId: null,
@@ -1170,7 +1189,7 @@ export class ClassRecordService {
         eq(classRecordScores.studentId, studentId),
       ),
     });
-    if (previous?.status !== 'excused')
+    if (!isExcusedScoreStatus(previous?.status))
       throw new BadRequestException(
         'Only an excused assessment score can be restored',
       );

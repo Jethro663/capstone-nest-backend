@@ -68,6 +68,12 @@ export interface TeacherClassRecordState {
     studentId: string,
     reason: string,
   ) => Promise<boolean>;
+  excuseScoreWithManualScore: (
+    itemId: string,
+    studentId: string,
+    score: number,
+    reason: string,
+  ) => Promise<boolean>;
   generateQuarter: (period: GradingPeriod) => Promise<void>;
   finalizeQuarter: () => Promise<boolean>;
   reopenQuarter: (reason: string) => Promise<boolean>;
@@ -367,6 +373,36 @@ export function useTeacherClassRecord(
     },
     [spreadsheet, refreshEvidence],
   );
+  const excuseScoreWithManualScore = useCallback(
+    async (
+      itemId: string,
+      studentId: string,
+      score: number,
+      reason: string,
+    ) => {
+      if (
+        !reason.trim() ||
+        !Number.isFinite(score) ||
+        score < 0 ||
+        !spreadsheet?.academicCapabilities?.canGrade
+      )
+        return false;
+      try {
+        await classRecordService.recordScore(itemId, {
+          studentId,
+          status: "excused_with_score",
+          score,
+          reason: reason.trim(),
+        });
+        await refreshEvidence();
+        return true;
+      } catch (error) {
+        fail(error, "Scored exemption was rejected.");
+        return false;
+      }
+    },
+    [spreadsheet, refreshEvidence],
+  );
   const restoreAssessmentEvidence = useCallback(
     async (itemId: string, studentId: string, reason: string) => {
       if (!reason.trim() || !spreadsheet?.academicCapabilities?.canGrade)
@@ -578,6 +614,7 @@ export function useTeacherClassRecord(
     loadAnnual,
     confirmRoster,
     excuseScore,
+    excuseScoreWithManualScore,
     restoreAssessmentEvidence,
     generateQuarter,
     finalizeQuarter,

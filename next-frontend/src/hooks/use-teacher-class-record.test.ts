@@ -154,6 +154,36 @@ it("takes period labels and score permissions from the server", async () => {
   expect(result.current.editingCell).toBeNull();
   expect(classRecordService.recordScore).not.toHaveBeenCalled();
 });
+it("sends a manually scored exemption as distinct audited evidence", async () => {
+  const { result } = renderHook(() => useTeacherClassRecord("class-1"));
+  await waitFor(() => expect(result.current.spreadsheetStatus).toBe("ready"));
+  (classRecordService.recordScore as jest.Mock).mockResolvedValue({ data: {} });
+
+  await act(async () => {
+    await (
+      result.current as typeof result.current & {
+        excuseScoreWithManualScore: (
+          itemId: string,
+          studentId: string,
+          score: number,
+          reason: string,
+        ) => Promise<boolean>;
+      }
+    ).excuseScoreWithManualScore(
+      "item-1",
+      "student-1",
+      18,
+      "Winner of the Division Science Fair",
+    );
+  });
+
+  expect(classRecordService.recordScore).toHaveBeenCalledWith("item-1", {
+    studentId: "student-1",
+    status: "excused_with_score",
+    score: 18,
+    reason: "Winner of the Division Science Fair",
+  });
+});
 it("ignores a late response from a previously selected class", async () => {
   let resolveFirst!: (value: unknown) => void;
   (classRecordService.getByClass as jest.Mock).mockImplementation(

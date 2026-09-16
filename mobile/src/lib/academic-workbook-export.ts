@@ -39,7 +39,9 @@ export function academicExportRows(
           cells.push(
             result?.scoreStatuses?.[index] === "excused"
               ? "EXCUSED"
-              : (result?.scores[index] ?? null),
+              : result?.scoreStatuses?.[index] === "excused_with_score"
+                ? `${result?.scores[index]} (EXCUSED)`
+                : (result?.scores[index] ?? null),
           ),
         );
         cells.push(

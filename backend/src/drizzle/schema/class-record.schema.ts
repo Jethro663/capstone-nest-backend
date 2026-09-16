@@ -13,6 +13,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
 import { classes, users, assessments, gradingPeriodEnum } from './base.schema';
+import type { ClassRecordScoreStatus } from '../../common/contracts/class-record-score-status';
 
 // ==========================================
 // ENUMS
@@ -165,7 +166,7 @@ export const classRecordScores = pgTable(
       .default('0'),
     bonusReason: text('bonus_reason'),
     status: text('status')
-      .$type<'recorded' | 'excused'>()
+      .$type<ClassRecordScoreStatus>()
       .notNull()
       .default('recorded'),
     reason: text('reason'),
@@ -176,7 +177,7 @@ export const classRecordScores = pgTable(
   (table) => ({
     scoreStatusCheck: check(
       'class_record_score_status_valid',
-      sql`(${table.status} = 'recorded' AND ${table.score} IS NOT NULL AND ${table.score} >= 0 AND ${table.bonusPoints} >= 0 AND (${table.bonusPoints} = 0 OR (${table.bonusReason} IS NOT NULL AND length(trim(${table.bonusReason})) > 0))) OR (${table.status} = 'excused' AND ${table.score} IS NULL AND ${table.bonusPoints} = 0 AND length(trim(${table.reason})) > 0 AND ${table.reason} IS NOT NULL)`,
+      sql`(${table.status} = 'recorded' AND ${table.score} IS NOT NULL AND ${table.score} >= 0 AND ${table.bonusPoints} >= 0 AND (${table.bonusPoints} = 0 OR (${table.bonusReason} IS NOT NULL AND length(trim(${table.bonusReason})) > 0))) OR (${table.status} = 'excused' AND ${table.score} IS NULL AND ${table.bonusPoints} = 0 AND length(trim(${table.reason})) > 0 AND ${table.reason} IS NOT NULL) OR (${table.status} = 'excused_with_score' AND ${table.score} IS NOT NULL AND ${table.score} >= 0 AND ${table.bonusPoints} = 0 AND length(trim(${table.reason})) > 0 AND ${table.reason} IS NOT NULL)`,
     ),
     itemStudentUnique: unique('class_record_scores_item_student_unique').on(
       table.classRecordItemId,

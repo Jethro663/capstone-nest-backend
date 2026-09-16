@@ -160,7 +160,7 @@ test("verifyManifest rejects a changed APK", async () => {
   );
 });
 
-test("notification controls and class roster search release keeps Expo and Gradle at 0.1.42 build 43", async () => {
+test("scored exemptions release keeps Expo and Gradle at 0.1.43 build 44", async () => {
   const appJson = JSON.parse(
     await readFile(path.join(__dirname, "..", "app.json"), "utf8"),
   );
@@ -169,9 +169,9 @@ test("notification controls and class roster search release keeps Expo and Gradl
     "utf8",
   );
 
-  assert.equal(appJson.expo.version, "0.1.42");
-  assert.equal(appJson.expo.android.versionCode, 43);
-  assert.match(buildGradle, /\bversionCode\s+43\b/);
-  assert.match(buildGradle, /\bversionName\s+["']0\.1\.42["']/);
+  assert.equal(appJson.expo.version, "0.1.43");
+  assert.equal(appJson.expo.android.versionCode, 44);
+  assert.match(buildGradle, /\bversionCode\s+44\b/);
+  assert.match(buildGradle, /\bversionName\s+["']0\.1\.43["']/);
   assert.equal(appJson.expo.ios.buildNumber, "3");
 });
