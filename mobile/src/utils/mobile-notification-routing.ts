@@ -88,6 +88,8 @@ export function resolveMobileNotificationAction(
 ): MobileNotificationAction {
   const normalizedRole = normalizeText(role);
   const referenceId = notification.referenceId || undefined;
+  const rawClassId = notification.metadata?.classId;
+  const classId = typeof rawClassId === "string" && rawClassId.trim() ? rawClassId : undefined;
 
   if (notification.type === "student_pending_intervention_reminder") {
     return {
@@ -161,11 +163,33 @@ export function resolveMobileNotificationAction(
 
   if (notification.type === "announcement_posted") {
     if (normalizedRole === "teacher") {
+      if (classId) {
+        return {
+          routeName: "TeacherClassDetail",
+          params: { classId, initialTab: "announcements", announcementId: referenceId, source: "announcements" },
+          fallbackRouteName: "TeacherDrawer",
+          fallbackParams: { screen: "TeacherAnnouncements" },
+          requiresReference: false,
+          kind: "announcement",
+          label: "Open Class Announcement",
+        };
+      }
       return teacherDrawerAction(
         "TeacherAnnouncements",
         "Open Announcements",
         "announcement",
       );
+    }
+    if (classId) {
+      return {
+        routeName: "ClassDetail",
+        params: { classId, initialTab: "announcements", announcementId: referenceId, source: "announcements" },
+        fallbackRouteName: "MainTabs",
+        fallbackParams: { screen: "Announcements" },
+        requiresReference: false,
+        kind: "announcement",
+        label: "Open Class Announcement",
+      };
     }
     return mainTabAction("Announcements", "Open Announcements", "announcement");
   }

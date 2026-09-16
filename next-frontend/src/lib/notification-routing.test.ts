@@ -24,4 +24,20 @@ describe('notification-routing compatibility exports', () => {
       '/dashboard/student/assessments/assessment-1',
     );
   });
+
+  it('opens class announcements in their exact student and teacher class workspaces', () => {
+    const announcement: Notification = {
+      ...sampleNotification,
+      type: 'announcement_posted',
+      referenceId: 'announcement-1',
+      metadata: { classId: 'class-1' },
+    };
+
+    expect(notificationRouting.resolveNotificationDestination(announcement, 'student')).toBe(
+      '/dashboard/student/classes/class-1?announcement=announcement-1',
+    );
+    expect(notificationRouting.resolveNotificationDestination(announcement, 'teacher')).toBe(
+      '/dashboard/teacher/classes/class-1?view=announcements&announcement=announcement-1',
+    );
+  });
 });

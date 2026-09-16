@@ -1,12 +1,12 @@
 {
   "platform": "android",
-  "versionCode": 42,
-  "minSupportedVersionCode": 42,
-  "nativeVersion": "0.1.41",
-  "otaRuntimeVersion": "0.1.41",
+  "versionCode": 43,
+  "minSupportedVersionCode": 43,
+  "nativeVersion": "0.1.42",
+  "otaRuntimeVersion": "0.1.42",
   "apkDownloadUrl": "https://next-frontend-v2-production.up.railway.app/downloads/nexora-student-mobile-release.apk",
   "requiresFullApk": true,
-  "releaseNotes": "Editable roster validation and corrected student Home and My Classes layouts.",
-  "apkSha256": "a6a65a8b74a42d6d8cade3e5d299fe95293b0cd0b612bdacdd1eaa8a063f4a74",
-  "apkSizeBytes": 41077411
+  "releaseNotes": "Adds user-controlled notification deletion, class-aware announcement links, and teacher roster search on web and mobile.",
+  "apkSha256": "432bf5455fafb0b124286a72c25dbb0d6641173656150fc064cc97ccb879a85e",
+  "apkSizeBytes": 41081663
 }

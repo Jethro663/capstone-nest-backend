@@ -828,13 +828,14 @@ export class AcademicStateService {
         })),
       },
     }));
-    await this.notificationsService.createBulk(notificationInputs);
+    const persistedNotifications =
+      await this.notificationsService.createBulk(notificationInputs);
     this.databaseService.afterAcademicCommit(() => {
-      for (const notification of notificationInputs)
+      for (const notification of persistedNotifications)
         this.notificationsGateway.emitToUser(notification.userId, {
           ...notification,
-          id: `academic-${fingerprint}-${notification.userId}`,
-          createdAt: new Date(),
+          id: notification.id,
+          createdAt: notification.createdAt,
         });
     });
     const result = {

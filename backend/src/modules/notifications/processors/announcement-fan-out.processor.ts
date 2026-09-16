@@ -106,17 +106,16 @@ export class AnnouncementFanOutProcessor extends WorkerHost {
 
     const inserted = await this.notificationsService.createBulkDeduped(inputs);
 
-    const now = new Date();
-
     // 3. Emit real-time event ONLY to students whose notification was actually inserted (not deduplicated/skipped)
     for (const item of inserted) {
       this.notificationsGateway.emitToUser(item.userId, {
-        id: announcementId, // referenceId as the identifier on the frontend
+        id: item.id,
         type: 'announcement_posted',
         title: item.title,
         body: item.body,
-        referenceId: announcementId,
-        createdAt: now,
+        referenceId: item.referenceId ?? announcementId,
+        metadata: item.metadata ?? { classId },
+        createdAt: item.createdAt,
       });
     }
 

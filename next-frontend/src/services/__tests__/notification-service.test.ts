@@ -5,6 +5,7 @@ jest.mock('@/lib/api-client', () => ({
   api: {
     get: jest.fn(),
     patch: jest.fn(),
+    delete: jest.fn(),
   },
 }));
 
@@ -47,5 +48,35 @@ describe('notificationService', () => {
         metadata: { referenceId: 'assessment-1' },
       }),
     );
+  });
+
+  it('deletes one current-user notification by its persisted row id', async () => {
+    mockedApi.delete.mockResolvedValue({
+      data: {
+        success: true,
+        message: 'Notification deleted.',
+        data: { dismissedCount: 1 },
+      },
+    });
+
+    const result = await notificationService.dismissOne('notification-1');
+
+    expect(mockedApi.delete).toHaveBeenCalledWith('/notifications/notification-1');
+    expect(result.data.dismissedCount).toBe(1);
+  });
+
+  it('clears only the current user notification inbox', async () => {
+    mockedApi.delete.mockResolvedValue({
+      data: {
+        success: true,
+        message: 'Notifications cleared.',
+        data: { dismissedCount: 4 },
+      },
+    });
+
+    const result = await notificationService.dismissAll();
+
+    expect(mockedApi.delete).toHaveBeenCalledWith('/notifications');
+    expect(result.data.dismissedCount).toBe(4);
   });
 });

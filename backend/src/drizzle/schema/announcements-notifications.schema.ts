@@ -99,6 +99,7 @@ export const notifications = pgTable(
     isRead: boolean('is_read').notNull().default(false),
     readAt: timestamp('read_at'),
     hiddenAt: timestamp('hidden_at', { withTimezone: true }),
+    dismissedAt: timestamp('dismissed_at', { withTimezone: true }),
     createdAt: timestamp('created_at').notNull().defaultNow(),
   },
   (table) => ({
@@ -112,7 +113,7 @@ export const notifications = pgTable(
     ),
     userVisibilityCreatedIdx: index(
       'notifications_user_visibility_created_idx',
-    ).on(table.userId, table.hiddenAt, table.createdAt),
+    ).on(table.userId, table.hiddenAt, table.dismissedAt, table.createdAt),
     userTypeReferenceUniqueIdx: uniqueIndex(
       'notifications_user_type_reference_unique_idx',
     )

@@ -800,6 +800,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         title: string;
         body: string;
         referenceId?: string;
+        metadata?: Notification['metadata'];
         createdAt: string;
       }) => {
         const newNotification = normalizeNotification({
@@ -810,6 +811,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           body: payload.body,
           isRead: false,
           referenceId: payload.referenceId,
+          metadata: payload.metadata,
           createdAt: payload.createdAt,
         });
 

@@ -56,9 +56,15 @@ describe('AnnouncementFanOutProcessor', () => {
     });
     mockNotificationsService = {
       createBulk: jest.fn().mockResolvedValue(undefined),
-      createBulkDeduped: jest
-        .fn()
-        .mockImplementation((inputs) => Promise.resolve(inputs)),
+      createBulkDeduped: jest.fn().mockImplementation((inputs) =>
+        Promise.resolve(
+          inputs.map((input: any, index: number) => ({
+            ...input,
+            id: `notification-${index + 1}`,
+            createdAt: new Date('2026-09-16T00:00:00.000Z'),
+          })),
+        ),
+      ),
     };
     mockGateway = { emitToUser: jest.fn() };
 
@@ -135,13 +141,21 @@ describe('AnnouncementFanOutProcessor', () => {
     expect(mockGateway.emitToUser).toHaveBeenCalledWith(
       's-1',
       expect.objectContaining({
+        id: 'notification-1',
         type: 'announcement_posted',
         title: JOB_DATA.title,
+        referenceId: ANN_ID,
+        metadata: { classId: CLASS_ID },
       }),
     );
     expect(mockGateway.emitToUser).toHaveBeenCalledWith(
       's-2',
-      expect.objectContaining({ type: 'announcement_posted' }),
+      expect.objectContaining({
+        id: 'notification-2',
+        type: 'announcement_posted',
+        referenceId: ANN_ID,
+        metadata: { classId: CLASS_ID },
+      }),
     );
   });
 

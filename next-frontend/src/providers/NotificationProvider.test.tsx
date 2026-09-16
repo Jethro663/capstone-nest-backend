@@ -110,6 +110,15 @@ function NotificationSubscriberProbe() {
   return <div data-testid="subscription-events">{titles.join('|')}</div>;
 }
 
+function NotificationMetadataProbe() {
+  const { subscribe } = useNotifications();
+  const [classId, setClassId] = useState('');
+
+  useEffect(() => subscribe((incoming) => setClassId(String(incoming.metadata?.classId ?? ''))), [subscribe]);
+
+  return <div data-testid="live-class-id">{classId}</div>;
+}
+
 describe('NotificationProvider', () => {
   beforeEach(() => {
     jest.useFakeTimers();
@@ -461,6 +470,29 @@ describe('NotificationProvider', () => {
     const [renderToast] = (toast.custom as jest.Mock).mock.calls[0] as [() => React.ReactNode];
     render(renderToast());
     expect(screen.getByText('You have 2 unread notifications')).toBeInTheDocument();
+  });
+
+  it('preserves class metadata on realtime announcement notifications', async () => {
+    render(
+      <NotificationProvider>
+        <NotificationMetadataProbe />
+      </NotificationProvider>,
+    );
+    await waitFor(() => expect(getAllMock).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      socketListeners.get('notification.new')?.({
+        id: 'notification-row-1',
+        type: 'announcement_posted',
+        title: 'Class reminder',
+        body: 'Bring your worksheet.',
+        referenceId: 'announcement-1',
+        metadata: { classId: 'class-1' },
+        createdAt: '2026-09-02T09:01:00.000Z',
+      });
+    });
+
+    expect(await screen.findByTestId('live-class-id')).toHaveTextContent('class-1');
   });
 
   it('cancels a queued live presentation when the provider unmounts', async () => {

@@ -1976,6 +1976,12 @@ export default function StudentClassDetailPage() {
   const assignmentsUnavailable =
     failedRegions.includes("assessments") || failedRegions.includes("attempts");
   const announcementsUnavailable = failedRegions.includes("announcements");
+  const displayedAnnouncements = useMemo(() => {
+    if (!announcementId) return announcements;
+    return [...announcements].sort((left, right) =>
+      left.id === announcementId ? -1 : right.id === announcementId ? 1 : 0,
+    );
+  }, [announcementId, announcements]);
   const gradesUnavailable = assignmentsUnavailable;
   const calendarUnavailable =
     failedRegions.includes("assessments") || failedRegions.includes("calendar");
@@ -2354,11 +2360,13 @@ export default function StudentClassDetailPage() {
               </div>
             ) : (
               <div className="student-class-stack">
-                {announcements.map((entry) => (
+                {displayedAnnouncements.map((entry) => (
                   <motion.article
                     key={entry.id}
                     className="student-class-announcement-card"
                     data-pinned={entry.isPinned}
+                    data-targeted={entry.id === announcementId}
+                    aria-current={entry.id === announcementId ? "true" : undefined}
                     variants={staggerItem}
                   >
                     {entry.isPinned ? (

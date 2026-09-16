@@ -1460,6 +1460,12 @@
   border-color: #f3c2c8;
 }
 
+.teacher-class-workspace__announcement-card[data-targeted='true'] {
+  border-color: #e70012;
+  border-left-width: 4px;
+  box-shadow: 0 14px 28px -24px rgba(231, 0, 18, 0.62);
+}
+
 .teacher-class-workspace__pin {
   display: inline-flex;
   border-radius: 999px;

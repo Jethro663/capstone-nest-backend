@@ -23,6 +23,8 @@ const makeNotification = (overrides: Partial<any> = {}) => ({
   body: 'A new announcement was posted in your class.',
   isRead: false,
   readAt: null,
+  hiddenAt: null,
+  dismissedAt: null,
   createdAt: new Date(),
   ...overrides,
 });
@@ -41,11 +43,12 @@ describe('NotificationsService', () => {
       returning: jest.Mock;
     } = {
       values: jest.fn(),
-      onConflictDoUpdate: jest.fn().mockResolvedValue(undefined),
+      onConflictDoUpdate: jest.fn(),
       onConflictDoNothing: jest.fn(),
       returning: jest.fn().mockResolvedValue([]),
     };
     insertChain.values.mockReturnValue(insertChain);
+    insertChain.onConflictDoUpdate.mockReturnValue(insertChain);
     insertChain.onConflictDoNothing.mockReturnValue(insertChain);
     return insertChain;
   };
@@ -107,6 +110,74 @@ describe('NotificationsService', () => {
       expect(passedRows[0].userId).toBe('u1');
       expect(passedRows[1].userId).toBe('u2');
       expect(insertChain.onConflictDoUpdate).toHaveBeenCalled();
+    });
+
+    it('returns the persisted notification identities needed by realtime clients', async () => {
+      const insertChain = createInsertChain();
+      const createdAt = new Date('2026-09-16T00:00:00.000Z');
+      insertChain.returning.mockResolvedValue([
+        {
+          id: 'notification-row-1',
+          userId: 'u1',
+          type: 'announcement_posted',
+          referenceId: ANN_ID,
+          title: 'T',
+          body: 'B',
+          metadata: { classId: 'class-1' },
+          dismissedAt: null,
+          createdAt,
+        },
+      ]);
+      mockDb.insert.mockReturnValue(insertChain);
+
+      await expect(
+        service.createBulk([
+          {
+            userId: 'u1',
+            type: 'announcement_posted',
+            referenceId: ANN_ID,
+            title: 'T',
+            body: 'B',
+            metadata: { classId: 'class-1' },
+          },
+        ]),
+      ).resolves.toEqual([
+        expect.objectContaining({
+          id: 'notification-row-1',
+          referenceId: ANN_ID,
+          createdAt,
+        }),
+      ]);
+    });
+
+    it('does not re-emit a notification the user already dismissed', async () => {
+      const insertChain = createInsertChain();
+      insertChain.returning.mockResolvedValue([
+        {
+          id: 'notification-row-1',
+          userId: 'u1',
+          type: 'grade_updated',
+          referenceId: 'grade-1',
+          title: 'Grade updated',
+          body: 'Your grade changed.',
+          metadata: null,
+          dismissedAt: new Date('2026-09-15T00:00:00.000Z'),
+          createdAt: new Date('2026-09-16T00:00:00.000Z'),
+        },
+      ]);
+      mockDb.insert.mockReturnValue(insertChain);
+
+      await expect(
+        service.createBulk([
+          {
+            userId: 'u1',
+            type: 'grade_updated',
+            referenceId: 'grade-1',
+            title: 'Grade updated',
+            body: 'Your grade changed.',
+          },
+        ]),
+      ).resolves.toEqual([]);
     });
 
     it('does nothing when inputs array is empty (no DB call)', async () => {
@@ -199,6 +270,7 @@ describe('NotificationsService', () => {
       );
 
       expect(compiled.sql).toContain('"notifications"."hidden_at" is null');
+      expect(compiled.sql).toContain('"notifications"."dismissed_at" is null');
       expect(compiled.sql).toContain('"notifications"."is_read" = $2');
     });
 
@@ -297,11 +369,14 @@ describe('NotificationsService', () => {
       mockDb.insert.mockReturnValue(insertChain);
       insertChain.returning.mockResolvedValue([
         {
+          id: 'notification-row-u2',
           userId: 'u2',
           type: 'assessment_assigned',
           referenceId: 'assessment-1',
           title: 'New assessment',
           body: 'A new assessment is available.',
+          metadata: { classId: 'class-1' },
+          createdAt: new Date('2026-09-16T00:00:00.000Z'),
         },
       ]);
 
@@ -323,7 +398,57 @@ describe('NotificationsService', () => {
       ]);
 
       expect(inserted.map((item) => item.userId)).toEqual(['u2']);
+      expect(inserted[0]).toEqual(
+        expect.objectContaining({
+          id: 'notification-row-u2',
+          referenceId: 'assessment-1',
+          metadata: { classId: 'class-1' },
+        }),
+      );
       expect(insertChain.onConflictDoNothing).toHaveBeenCalled();
+    });
+  });
+
+  describe('dismissOne()', () => {
+    it('dismisses only the current user notification', async () => {
+      const returning = jest.fn().mockResolvedValue([{ id: NOTIF_ID }]);
+      const where = jest.fn().mockReturnValue({ returning });
+      const set = jest.fn().mockReturnValue({ where });
+      mockDb.update.mockReturnValue({ set });
+
+      const result = await service.dismissOne(NOTIF_ID, USER_ID);
+
+      expect(set).toHaveBeenCalledWith({ dismissedAt: expect.any(Date) });
+      expect(where).toHaveBeenCalledWith(expect.anything());
+      expect(result).toEqual({ dismissedCount: 1 });
+    });
+
+    it('is idempotent when the notification is missing, foreign, or already dismissed', async () => {
+      const returning = jest.fn().mockResolvedValue([]);
+      const where = jest.fn().mockReturnValue({ returning });
+      const set = jest.fn().mockReturnValue({ where });
+      mockDb.update.mockReturnValue({ set });
+
+      await expect(service.dismissOne(NOTIF_ID, USER_ID)).resolves.toEqual({
+        dismissedCount: 0,
+      });
+    });
+  });
+
+  describe('dismissAll()', () => {
+    it('dismisses all visible notifications for only the current user', async () => {
+      const returning = jest
+        .fn()
+        .mockResolvedValue([{ id: 'n1' }, { id: 'n2' }]);
+      const where = jest.fn().mockReturnValue({ returning });
+      const set = jest.fn().mockReturnValue({ where });
+      mockDb.update.mockReturnValue({ set });
+
+      const result = await service.dismissAll(USER_ID);
+
+      expect(set).toHaveBeenCalledWith({ dismissedAt: expect.any(Date) });
+      expect(where).toHaveBeenCalledWith(expect.anything());
+      expect(result).toEqual({ dismissedCount: 2 });
     });
   });
 

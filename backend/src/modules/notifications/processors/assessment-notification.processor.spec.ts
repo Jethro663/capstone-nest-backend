@@ -48,7 +48,15 @@ describe('AssessmentNotificationProcessor', () => {
       section: { id: 'section-1', isActive: true },
     });
     notificationsService = {
-      createBulkDeduped: jest.fn((inputs) => Promise.resolve(inputs)),
+      createBulkDeduped: jest.fn((inputs) =>
+        Promise.resolve(
+          inputs.map((input: Record<string, unknown>, index: number) => ({
+            ...input,
+            id: `notification-row-${index + 1}`,
+            createdAt: new Date('2026-09-16T00:00:00.000Z'),
+          })),
+        ),
+      ),
     };
     gateway = { emitToUser: jest.fn() };
 
@@ -92,6 +100,10 @@ describe('AssessmentNotificationProcessor', () => {
       }),
     ]);
     expect(gateway.emitToUser).toHaveBeenCalledTimes(2);
+    expect(gateway.emitToUser).toHaveBeenCalledWith(
+      'student-1',
+      expect.objectContaining({ id: 'notification-row-1' }),
+    );
   });
 
   it('skips assessment notifications when the class is archived', async () => {

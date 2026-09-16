@@ -104,7 +104,7 @@ export function resolveNotificationDestination(notification: Notification, role?
     }
     if (resolvedRole === 'teacher') {
       return hasClassId
-        ? `/dashboard/teacher/announcements?classId=${classId}`
+        ? `/dashboard/teacher/classes/${classId}?view=announcements&announcement=${referenceId ?? ''}`
         : '/dashboard/teacher/announcements';
     }
   }

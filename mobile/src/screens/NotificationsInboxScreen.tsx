@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { Refreshable, ScreenScroll } from "../components/ui/primitives";
 import { notificationsApi } from "../api/services/notifications";
 import type { RootStackParamList } from "../navigation/types";
@@ -119,6 +119,8 @@ export function NotificationsInboxScreen({ navigation }: Props) {
   const role = resolveMobileRole(user?.roles);
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
   const [markingAll, setMarkingAll] = useState(false);
+  const [clearingAll, setClearingAll] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState("");
   const notificationsQuery = useQuery({
     queryKey: ["mobile-notifications", "inbox"],
@@ -179,6 +181,47 @@ export function NotificationsInboxScreen({ navigation }: Props) {
     }
   };
 
+  const dismissOne = async (notification: MobileNotification) => {
+    try {
+      setDeletingId(notification.id);
+      setActionError("");
+      await notificationsApi.dismissOne(notification.id);
+      await Promise.all([notificationsQuery.refetch(), unreadQuery.refetch()]);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Unable to delete this notification.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const confirmDismissAll = () => {
+    Alert.alert(
+      "Clear all notifications?",
+      "This removes every notification from your account inbox. Announcements, grades, and class activity will remain available in their original pages.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear all",
+          style: "destructive",
+          onPress: () => {
+            void (async () => {
+              try {
+                setClearingAll(true);
+                setActionError("");
+                await notificationsApi.dismissAll();
+                await Promise.all([notificationsQuery.refetch(), unreadQuery.refetch()]);
+              } catch (error) {
+                setActionError(error instanceof Error ? error.message : "Unable to clear notifications.");
+              } finally {
+                setClearingAll(false);
+              }
+            })();
+          },
+        },
+      ],
+    );
+  };
+
   return (
     <ScreenScroll
       backgroundColor={theme.bg}
@@ -219,6 +262,15 @@ export function NotificationsInboxScreen({ navigation }: Props) {
             </View>
             <Pressable accessibilityRole="button" disabled={markingAll || unreadCount === 0} onPress={() => void markAllRead()} style={{ borderRadius: 10, borderWidth: 1, borderColor: "rgba(255,255,255,0.4)", paddingHorizontal: 10, paddingVertical: 8, opacity: markingAll || unreadCount === 0 ? 0.5 : 1 }}>
               <Text style={{ color: colors.white, fontSize: 10, fontWeight: "900" }}>{markingAll ? "Updating..." : "Read all"}</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Clear all notifications"
+              disabled={clearingAll || notifications.length === 0}
+              onPress={confirmDismissAll}
+              style={{ width: 40, height: 40, borderRadius: 10, borderWidth: 1, borderColor: "rgba(255,255,255,0.4)", alignItems: "center", justifyContent: "center", opacity: clearingAll || notifications.length === 0 ? 0.5 : 1 }}
+            >
+              <MaterialCommunityIcons name={clearingAll ? "progress-clock" : "delete-sweep-outline"} size={19} color={colors.white} />
             </Pressable>
           </View>
           <Text style={{ marginTop: 12, fontSize: 13, lineHeight: 20, color: "rgba(255,255,255,0.78)" }}>
@@ -311,6 +363,19 @@ export function NotificationsInboxScreen({ navigation }: Props) {
                         {!notification.isRead ? (
                           <View style={{ width: 9, height: 9, borderRadius: 999, backgroundColor: "#2563EB" }} />
                         ) : null}
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`Delete ${stripRichText(notification.title)}`}
+                          disabled={deletingId === notification.id}
+                          onPress={(event) => {
+                            event.stopPropagation();
+                            void dismissOne(notification);
+                          }}
+                          hitSlop={8}
+                          style={{ width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.72)", opacity: deletingId === notification.id ? 0.5 : 1 }}
+                        >
+                          <MaterialCommunityIcons name="trash-can-outline" size={17} color="#BE123C" />
+                        </Pressable>
                       </View>
                       <Text style={{ marginTop: 3, fontSize: 11, color: theme.muted }}>
                         {tone.label} - {formatDate(notification.createdAt)}

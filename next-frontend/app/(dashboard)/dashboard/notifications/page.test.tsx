@@ -28,6 +28,8 @@ jest.mock('@/providers/NotificationProvider', () => ({
 jest.mock('@/services/notification-service', () => ({
   notificationService: {
     getAll: jest.fn(),
+    dismissOne: jest.fn(),
+    dismissAll: jest.fn(),
   },
 }));
 
@@ -87,6 +89,16 @@ describe('NotificationsPage', () => {
       totalPages: 1,
       page: 1,
     } as Awaited<ReturnType<typeof notificationService.getAll>>);
+    mockedNotificationService.dismissOne.mockResolvedValue({
+      success: true,
+      message: 'Notification deleted.',
+      data: { dismissedCount: 1 },
+    });
+    mockedNotificationService.dismissAll.mockResolvedValue({
+      success: true,
+      message: 'Notifications cleared.',
+      data: { dismissedCount: 2 },
+    });
   });
 
   it('renders student notifications and marks a single item as read', async () => {
@@ -241,6 +253,42 @@ describe('NotificationsPage', () => {
     await waitFor(() => {
       expect(markAllAsRead).toHaveBeenCalled();
       expect(fetchNotifications).toHaveBeenCalled();
+    });
+  });
+
+  it('lets the signed-in user delete one notification from their inbox', async () => {
+    const fetchNotifications = jest.fn().mockResolvedValue(undefined);
+    mockedUseNotifications.mockReturnValue({
+      notifications: [],
+      unreadCount: 1,
+      loading: false,
+      fetchNotifications,
+      markAsRead: jest.fn().mockResolvedValue(undefined),
+      markAllAsRead: jest.fn().mockResolvedValue(undefined),
+      subscribe: jest.fn(() => jest.fn()),
+    });
+
+    render(<NotificationsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete Math update' }));
+
+    await waitFor(() => {
+      expect(mockedNotificationService.dismissOne).toHaveBeenCalledWith('notif-1');
+      expect(fetchNotifications).toHaveBeenCalled();
+    });
+  });
+
+  it('requires confirmation before clearing the signed-in user inbox', async () => {
+    render(<NotificationsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Clear all' }));
+    expect(screen.getByRole('heading', { name: 'Clear all notifications?' })).toBeInTheDocument();
+    expect(mockedNotificationService.dismissAll).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear notifications' }));
+
+    await waitFor(() => {
+      expect(mockedNotificationService.dismissAll).toHaveBeenCalledTimes(1);
     });
   });
 });

@@ -1,5 +1,5 @@
 import { TeacherAnnouncementRow } from "../components/teacher/TeacherAnnouncementRow";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Alert, Pressable, Text, View } from "react-native";
@@ -24,6 +24,7 @@ import type { RootStackParamList, TeacherClassDetailTab } from "../navigation/ty
 import { navigateTeacherDetailBack } from "../navigation/teacher-detail-back";
 import { confirmAction } from "../utils/confirmAction";
 import { formatStudentIdentityLine } from "../utils/studentIdentity";
+import { filterTeacherRoster } from "../utils/teacher-roster-search";
 import { TeacherClassRecordBoard } from "../components/teacher/TeacherClassRecordBoard";
 import { TeacherDiscussionBoard } from "../components/teacher/TeacherDiscussionBoard";
 import { TeacherExtractionBoard } from "../components/teacher/TeacherExtractionBoard";
@@ -34,6 +35,7 @@ import {
   TeacherActionButton,
   TeacherEmpty,
   TeacherRow,
+  TeacherSearch,
   TeacherScreen,
   teacherTheme as theme,
 } from "../components/teacher/TeacherMobilePrimitives";
@@ -70,8 +72,9 @@ const CLASS_TABS = [
 
 export function TeacherClassDetailScreen({ navigation, route }: Props) {
   const queryClient = useQueryClient();
-  const { classId, initialTab } = route.params;
+  const { classId, initialTab, announcementId } = route.params;
   const [activeTab, setActiveTab] = useState<TeacherClassDetailTab>(initialTab ?? "modules");
+  const [studentSearch, setStudentSearch] = useState("");
   const [creatingAssessment, setCreatingAssessment] = useState(false);
   const [deletingModule, setDeletingModule] = useState<{ id: string; title: string } | null>(null);
   const [selectedAssessmentIds, setSelectedAssessmentIds] = useState<string[]>([]);
@@ -100,9 +103,17 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
   const assessmentsQuery = useAssessments(classId);
   const announcementsQuery = useAnnouncements(classId);
   const rosterQuery = useTeacherEnrollments(classId);
+  const visibleRoster = useMemo(
+    () => filterTeacherRoster(rosterQuery.data ?? [], studentSearch),
+    [rosterQuery.data, studentSearch],
+  );
   const schoolEventsQuery = useSchoolEvents({ schoolYear: classQuery.data?.schoolYear });
   const moduleDeleteMutation = useTeacherModuleDeleteMutation(classId);
   const moduleReorderMutation = useTeacherModuleReorderMutation(classId);
+
+  useEffect(() => {
+    if (announcementId) void announcementsQuery.refetch();
+  }, [announcementId, announcementsQuery.refetch]);
 
   const toggleSelectAssessment = (id: string) => {
     setSelectedAssessmentIds((prev) =>
@@ -547,10 +558,14 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
           }
         >
           {announcementsQuery.data?.length ? (
-            announcementsQuery.data.map((announcement) => (
+            [...announcementsQuery.data]
+              .sort((left, right) => left.id === announcementId ? -1 : right.id === announcementId ? 1 : 0)
+              .map((announcement) => (
               <TeacherAnnouncementRow
                 key={announcement.id}
                 announcement={announcement}
+                highlighted={announcement.id === announcementId}
+                initiallyOpen={announcement.id === announcementId}
                 onEdit={(entry) => {
                   setEditingAnnouncement({
                     id: entry.id,
@@ -625,8 +640,14 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
             />
           }
         >
-          {rosterQuery.data?.length ? (
-            rosterQuery.data.map((entry) => {
+          <TeacherSearch value={studentSearch} onChangeText={setStudentSearch} placeholder="Search by name, LRN, or email" />
+          {studentSearch.trim() ? (
+            <Text style={{ marginHorizontal: 20, marginTop: 8, fontSize: 11, color: theme.muted }}>
+              {visibleRoster.length} of {rosterQuery.data?.length ?? 0} students shown
+            </Text>
+          ) : null}
+          {visibleRoster.length ? (
+            visibleRoster.map((entry) => {
               const studentId = entry.student?.id || entry.studentId;
               const name = [entry.student?.firstName, entry.student?.lastName].filter(Boolean).join(" ").trim() || entry.student?.email || "Student";
               return (
@@ -672,6 +693,8 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
                 />
               );
             })
+          ) : rosterQuery.data?.length ? (
+            <TeacherEmpty title="No students found" subtitle="Try a student name, LRN, or email." icon="account-search-outline" />
           ) : (
             <TeacherEmpty title="No roster loaded" subtitle="Enrolled learners will appear here when the class roster is available." icon="account-group-outline" />
           )}

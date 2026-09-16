@@ -45,18 +45,22 @@ describe('DiscussionBoardProcessor', () => {
     ]);
     mockNotificationsService.createBulkDeduped.mockResolvedValue([
       {
+        id: 'notification-row-1',
         userId: 'student-1',
         type: 'discussion_thread_posted',
         title: 'Open Forum',
         body: 'Please discuss chapter 4.',
         referenceId: 'thread-1',
+        createdAt: new Date('2026-09-16T00:00:00.000Z'),
       },
       {
+        id: 'notification-row-2',
         userId: 'student-2',
         type: 'discussion_thread_posted',
         title: 'Open Forum',
         body: 'Please discuss chapter 4.',
         referenceId: 'thread-1',
+        createdAt: new Date('2026-09-16T00:00:00.000Z'),
       },
     ]);
 
@@ -83,6 +87,10 @@ describe('DiscussionBoardProcessor', () => {
       }),
     ]);
     expect(mockNotificationsGateway.emitToUser).toHaveBeenCalledTimes(2);
+    expect(mockNotificationsGateway.emitToUser).toHaveBeenCalledWith(
+      'student-1',
+      expect.objectContaining({ id: 'notification-row-1' }),
+    );
   });
 
   it('skips teacher notification when commenter is the teacher', async () => {
@@ -92,18 +100,22 @@ describe('DiscussionBoardProcessor', () => {
     ]);
     mockNotificationsService.createBulkDeduped.mockResolvedValue([
       {
+        id: 'notification-row-1',
         userId: 'student-1',
         type: 'discussion_comment_posted',
         title: 'New replies in "Open Forum"',
         body: 'A new comment was posted in this discussion thread.',
         referenceId: 'thread-1',
+        createdAt: new Date('2026-09-16T00:00:00.000Z'),
       },
       {
+        id: 'notification-row-2',
         userId: 'student-2',
         type: 'discussion_comment_posted',
         title: 'New replies in "Open Forum"',
         body: 'A new comment was posted in this discussion thread.',
         referenceId: 'thread-1',
+        createdAt: new Date('2026-09-16T00:00:00.000Z'),
       },
     ]);
 
@@ -142,25 +154,31 @@ describe('DiscussionBoardProcessor', () => {
     ]);
     mockNotificationsService.createBulkDeduped.mockResolvedValue([
       {
+        id: 'notification-row-teacher',
         userId: 'teacher-1',
         type: 'discussion_comment_posted',
         title: 'New replies in "Open Forum"',
         body: 'A student posted a new comment in your discussion thread.',
         referenceId: 'thread-1',
+        createdAt: new Date('2026-09-16T00:00:00.000Z'),
       },
       {
+        id: 'notification-row-2',
         userId: 'student-2',
         type: 'discussion_comment_posted',
         title: 'New replies in "Open Forum"',
         body: 'A new comment was posted in this discussion thread.',
         referenceId: 'thread-1',
+        createdAt: new Date('2026-09-16T00:00:00.000Z'),
       },
       {
+        id: 'notification-row-3',
         userId: 'student-3',
         type: 'discussion_comment_posted',
         title: 'New replies in "Open Forum"',
         body: 'A new comment was posted in this discussion thread.',
         referenceId: 'thread-1',
+        createdAt: new Date('2026-09-16T00:00:00.000Z'),
       },
     ]);
 
@@ -194,5 +212,9 @@ describe('DiscussionBoardProcessor', () => {
       }),
     ]);
     expect(mockNotificationsGateway.emitToUser).toHaveBeenCalledTimes(3);
+    expect(mockNotificationsGateway.emitToUser).toHaveBeenCalledWith(
+      'teacher-1',
+      expect.objectContaining({ id: 'notification-row-teacher' }),
+    );
   });
 });

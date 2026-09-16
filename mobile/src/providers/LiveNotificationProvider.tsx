@@ -85,6 +85,7 @@ function notificationToNativeData(notification: MobileNotification, role: string
     body: notification.body || "",
     message: messageFromNotification(notification),
     referenceId: notification.referenceId || "",
+    classId: notification.metadata?.classId || "",
     createdAt: notification.createdAt,
     role: role || "",
   };
@@ -108,6 +109,7 @@ function notificationFromNativeData(data: Record<string, unknown> | undefined): 
     message: readPayloadString(data.message),
     isRead: false,
     referenceId: readPayloadString(data.referenceId) || null,
+    metadata: readPayloadString(data.classId) ? { classId: readPayloadString(data.classId) } : null,
     createdAt: readPayloadString(data.createdAt) || new Date().toISOString(),
   };
 }
@@ -119,6 +121,7 @@ type RealtimeNotificationPayload = {
   body?: unknown;
   message?: unknown;
   referenceId?: unknown;
+  metadata?: unknown;
   createdAt?: unknown;
 };
 
@@ -140,6 +143,9 @@ function notificationFromRealtimePayload(payload: RealtimeNotificationPayload, u
   const referenceId = readPayloadString(payload.referenceId) || null;
   const createdAt = readPayloadString(payload.createdAt) || new Date().toISOString();
   const id = readPayloadString(payload.id) || `${type}:${referenceId || "broadcast"}:${createdAt}`;
+  const metadata = payload.metadata && typeof payload.metadata === "object" && !Array.isArray(payload.metadata)
+    ? payload.metadata as Record<string, unknown>
+    : null;
 
   if (!id || !type || !title) return null;
 
@@ -155,6 +161,7 @@ function notificationFromRealtimePayload(payload: RealtimeNotificationPayload, u
     message,
     isRead: false,
     referenceId,
+    metadata,
     createdAt,
   };
 }
@@ -415,6 +422,8 @@ function navigateToTeacherDrawer(screen: string, params?: unknown) {
 function resolveNotificationNavigation(notification: MobileNotification, role: string | null) {
   const normalizedRole = String(role || "").toLowerCase();
   const referenceId = notification.referenceId || undefined;
+  const rawClassId = notification.metadata?.classId;
+  const classId = typeof rawClassId === "string" && rawClassId.trim() ? rawClassId : undefined;
 
   if (notification.type === "student_pending_intervention_reminder") {
     return () => rootNavigationRef.navigate("LXP", referenceId ? { classId: referenceId, tab: "paths" } : { tab: "paths" });
@@ -447,7 +456,23 @@ function resolveNotificationNavigation(notification: MobileNotification, role: s
 
   if (notification.type === "announcement_posted") {
     if (normalizedRole === "teacher") {
+      if (classId) {
+        return () => rootNavigationRef.navigate("TeacherClassDetail", {
+          classId,
+          initialTab: "announcements",
+          announcementId: referenceId,
+          source: "announcements",
+        });
+      }
       return () => navigateToTeacherDrawer("TeacherAnnouncements");
+    }
+    if (classId) {
+      return () => rootNavigationRef.navigate("ClassDetail", {
+        classId,
+        initialTab: "announcements",
+        announcementId: referenceId,
+        source: "announcements",
+      });
     }
     return () => navigateToMainTab("Announcements");
   }

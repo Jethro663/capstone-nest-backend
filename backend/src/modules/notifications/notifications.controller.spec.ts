@@ -29,6 +29,8 @@ describe('NotificationsController', () => {
     getUnreadCount: jest.fn(),
     markRead: jest.fn(),
     markAllRead: jest.fn(),
+    dismissOne: jest.fn(),
+    dismissAll: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -168,6 +170,39 @@ describe('NotificationsController', () => {
 
       const [, calledUserId] = mockService.markRead.mock.calls[0];
       expect(calledUserId).toBe(CURRENT_USER.userId);
+    });
+  });
+
+  describe('dismissOne()', () => {
+    it('dismisses only the authenticated user notification', async () => {
+      mockService.dismissOne.mockResolvedValue({ dismissedCount: 1 });
+
+      const result = await controller.dismissOne(NOTIF_ID, CURRENT_USER);
+
+      expect(mockService.dismissOne).toHaveBeenCalledWith(
+        NOTIF_ID,
+        CURRENT_USER.userId,
+      );
+      expect(result).toEqual({
+        success: true,
+        message: 'Notification deleted.',
+        data: { dismissedCount: 1 },
+      });
+    });
+  });
+
+  describe('dismissAll()', () => {
+    it('dismisses all visible notifications for the authenticated user', async () => {
+      mockService.dismissAll.mockResolvedValue({ dismissedCount: 4 });
+
+      const result = await controller.dismissAll(CURRENT_USER);
+
+      expect(mockService.dismissAll).toHaveBeenCalledWith(CURRENT_USER.userId);
+      expect(result).toEqual({
+        success: true,
+        message: 'Notifications cleared.',
+        data: { dismissedCount: 4 },
+      });
     });
   });
 });

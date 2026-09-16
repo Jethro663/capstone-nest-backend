@@ -35,7 +35,7 @@ export type TeacherModuleDetailSource = "class" | "library";
 export type TeacherLessonDetailSource = "module" | "lessons";
 export type TeacherAiDraftSource = "class" | "assessments";
 export type StudentClassDetailSource =
-  "classes" | "home" | "calendar" | "courses" | "assessments";
+  "classes" | "home" | "calendar" | "courses" | "assessments" | "announcements";
 export type StudentModuleDetailSource = "class";
 export type StudentLessonDetailSource = "module" | "class" | "home" | "ja";
 export type StudentAssessmentDetailSource =
@@ -96,6 +96,7 @@ export type RootStackParamList = {
     classId: string;
     initialTab?: ClassDetailInitialTab;
     source?: StudentClassDetailSource;
+    announcementId?: string;
   };
   ModuleDetail: {
     classId: string;
@@ -137,6 +138,7 @@ export type RootStackParamList = {
     classId: string;
     initialTab?: TeacherClassDetailTab;
     source?: TeacherClassDetailSource;
+    announcementId?: string;
   };
   TeacherModuleDetail: {
     classId: string;

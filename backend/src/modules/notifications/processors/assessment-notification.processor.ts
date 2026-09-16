@@ -113,18 +113,15 @@ export class AssessmentNotificationProcessor extends WorkerHost {
     inputs: CreateNotificationInput[],
   ): Promise<void> {
     const inserted = await this.notificationsService.createBulkDeduped(inputs);
-    const now = new Date();
-
     for (const input of inserted) {
       this.notificationsGateway.emitToUser(input.userId, {
-        id:
-          input.referenceId ?? `${input.type}:${input.userId}:${now.getTime()}`,
+        id: input.id,
         type: input.type,
         title: input.title,
         body: input.body,
         referenceId: input.referenceId,
         metadata: input.metadata,
-        createdAt: now,
+        createdAt: input.createdAt,
       });
     }
   }

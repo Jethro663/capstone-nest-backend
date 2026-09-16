@@ -5,6 +5,7 @@ function notification(
   type: string,
   referenceId?: string,
   title = type,
+  metadata?: MobileNotification["metadata"],
 ): MobileNotification {
   return {
     id: `notification-${type}`,
@@ -14,6 +15,7 @@ function notification(
     message: type,
     isRead: false,
     referenceId,
+    metadata,
     createdAt: "2026-09-10T08:00:00.000Z",
   };
 }
@@ -47,6 +49,34 @@ describe("teacher mobile notification drawer routing", () => {
     ).toMatchObject({
       routeName: "TeacherDrawer",
       params: { screen: "TeacherClassRecord" },
+    });
+  });
+
+  it("opens a class announcement inside the exact student class workspace", () => {
+    expect(
+      resolveMobileNotificationAction(
+        notification("announcement_posted", "announcement-1", "Class reminder", { classId: "class-1" }),
+        "student",
+      ),
+    ).toMatchObject({
+      routeName: "ClassDetail",
+      params: { classId: "class-1", initialTab: "announcements", announcementId: "announcement-1", source: "announcements" },
+      fallbackRouteName: "MainTabs",
+      fallbackParams: { screen: "Announcements" },
+    });
+  });
+
+  it("opens a class announcement inside the exact teacher class workspace", () => {
+    expect(
+      resolveMobileNotificationAction(
+        notification("announcement_posted", "announcement-1", "Class reminder", { classId: "class-1" }),
+        "teacher",
+      ),
+    ).toMatchObject({
+      routeName: "TeacherClassDetail",
+      params: { classId: "class-1", initialTab: "announcements", announcementId: "announcement-1", source: "announcements" },
+      fallbackRouteName: "TeacherDrawer",
+      fallbackParams: { screen: "TeacherAnnouncements" },
     });
   });
 

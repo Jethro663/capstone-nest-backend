@@ -21,6 +21,7 @@ export function resolveStudentDetailBackTarget<RouteName extends StudentDetailRo
       const value = params as RootStackParamList["ClassDetail"];
       if (value.source === "home") return { name: "MainTabs", params: { screen: "Dashboard" } };
       if (value.source === "assessments") return { name: "MainTabs", params: { screen: "Assessments" } };
+      if (value.source === "announcements") return { name: "MainTabs", params: { screen: "Announcements" } };
       if (value.source === "calendar") return { name: "Calendar", params: undefined };
       if (value.source === "courses") return { name: "Courses", params: undefined };
       return { name: "MainTabs", params: { screen: "Classes" } };

@@ -1761,23 +1761,17 @@ export class LxpService {
     const shouldDedupe = options.dedupe ?? true;
     const createdInputs = shouldDedupe
       ? await this.notificationsService.createBulkDeduped(inputs)
-      : inputs;
+      : await this.notificationsService.createBulk(inputs);
 
-    if (!shouldDedupe) {
-      await this.notificationsService.createBulk(inputs);
-    }
-    const createdAt = new Date();
-
-    createdInputs.forEach((input, index) => {
+    createdInputs.forEach((input) => {
       this.notificationsGateway.emitToUser(input.userId, {
-        id: input.referenceId
-          ? `${input.type}:${input.referenceId}:${input.userId}`
-          : `${input.type}:${input.userId}:${createdAt.getTime()}:${index}`,
+        id: input.id,
         type: input.type,
         title: input.title,
         body: input.body,
         referenceId: input.referenceId,
-        createdAt,
+        metadata: input.metadata,
+        createdAt: input.createdAt,
       });
     });
   }

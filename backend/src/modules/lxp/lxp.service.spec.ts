@@ -47,9 +47,20 @@ describe('LxpService', () => {
 
   beforeEach(async () => {
     jest.resetAllMocks();
-    mockNotificationsService.createBulk.mockResolvedValue(undefined);
+    mockNotificationsService.createBulk.mockImplementation(async (inputs) =>
+      inputs.map((input: Record<string, unknown>, index: number) => ({
+        ...input,
+        id: `notification-row-${index + 1}`,
+        createdAt: new Date('2026-09-16T00:00:00.000Z'),
+      })),
+    );
     mockNotificationsService.createBulkDeduped.mockImplementation(
-      async (inputs) => inputs,
+      async (inputs) =>
+        inputs.map((input: Record<string, unknown>, index: number) => ({
+          ...input,
+          id: `notification-row-${index + 1}`,
+          createdAt: new Date('2026-09-16T00:00:00.000Z'),
+        })),
     );
     mockDb.query.performanceSnapshots.findMany.mockResolvedValue([]);
     mockDb.query.generatedGuidedAssessmentAttempts.findMany.mockResolvedValue(

@@ -11,6 +11,8 @@ interface Props {
   contextLabel?: string;
   onEdit: (announcement: Announcement) => void;
   onDelete: (announcement: Announcement) => void;
+  initiallyOpen?: boolean;
+  highlighted?: boolean;
 }
 
 function formatDate(value?: string | null) {
@@ -34,8 +36,8 @@ function restrictionMessage(
   return `This announcement was created by another account and cannot be ${action} by you.`;
 }
 
-export function TeacherAnnouncementRow({ announcement, contextLabel, onEdit, onDelete }: Props) {
-  const [showDetails, setShowDetails] = useState(false);
+export function TeacherAnnouncementRow({ announcement, contextLabel, onEdit, onDelete, initiallyOpen = false, highlighted = false }: Props) {
+  const [showDetails, setShowDetails] = useState(initiallyOpen);
   const summary = announcementPreview(announcement.content);
 
   return (
@@ -47,6 +49,8 @@ export function TeacherAnnouncementRow({ announcement, contextLabel, onEdit, onD
           paddingVertical: 10,
           borderTopWidth: 1,
           borderTopColor: theme.border,
+          borderLeftWidth: highlighted ? 4 : 0,
+          borderLeftColor: theme.red,
           flexDirection: "row",
           alignItems: "center",
           gap: 8,

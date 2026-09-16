@@ -50,4 +50,14 @@ export const notificationsApi = {
     const response = await apiClient.patch<ApiEnvelope<{ updatedCount?: number }>>("/notifications/read-all");
     return response.data;
   },
+
+  async dismissOne(id: string) {
+    const response = await apiClient.delete<ApiEnvelope<{ dismissedCount: number }>>(`/notifications/${id}`);
+    return response.data;
+  },
+
+  async dismissAll() {
+    const response = await apiClient.delete<ApiEnvelope<{ dismissedCount: number }>>("/notifications");
+    return response.data;
+  },
 };

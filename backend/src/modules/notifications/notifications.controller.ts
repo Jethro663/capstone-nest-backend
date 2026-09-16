@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Patch,
+  Delete,
   Param,
   Query,
   ParseUUIDPipe,
@@ -94,5 +95,29 @@ export class NotificationsController {
   ) {
     const data = await this.notificationsService.markRead(id, user.userId);
     return { success: true, message: 'Notification marked as read.', data };
+  }
+
+  @Delete()
+  @Roles(RoleName.Teacher, RoleName.Student, RoleName.Admin)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Delete all visible notifications for the current user',
+  })
+  async dismissAll(@CurrentUser() user: { userId: string }) {
+    const data = await this.notificationsService.dismissAll(user.userId);
+    return { success: true, message: 'Notifications cleared.', data };
+  }
+
+  @Delete(':id')
+  @Roles(RoleName.Teacher, RoleName.Student, RoleName.Admin)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete one notification for the current user' })
+  @ApiParam({ name: 'id', type: String })
+  async dismissOne(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: { userId: string },
+  ) {
+    const data = await this.notificationsService.dismissOne(id, user.userId);
+    return { success: true, message: 'Notification deleted.', data };
   }
 }

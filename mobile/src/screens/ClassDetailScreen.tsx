@@ -552,11 +552,13 @@ export function StudentClassDetailContent({
   navigation,
   initialTab,
   source,
+  announcementId,
 }: {
   classId: string;
   navigation: DetailNavigation;
   initialTab?: ClassDetailInitialTab;
   source?: StudentClassDetailSource;
+  announcementId?: string;
 }) {
   const [activeTab, setActiveTab] = useState<DetailTab>(
     initialTab ?? "modules",
@@ -621,16 +623,23 @@ export function StudentClassDetailContent({
     })),
   });
   const announcements = useMemo(
-    () =>
-      [...(announcementsQuery.data ?? [])].sort((left, right) => {
+    () => {
+      const sorted = [...(announcementsQuery.data ?? [])].sort((left, right) => {
         if (left.isPinned !== right.isPinned) return left.isPinned ? -1 : 1;
         return (
           new Date(right.createdAt ?? 0).getTime() -
           new Date(left.createdAt ?? 0).getTime()
         );
-      }),
-    [announcementsQuery.data],
+      });
+      if (!announcementId) return sorted;
+      return sorted.sort((left, right) => left.id === announcementId ? -1 : right.id === announcementId ? 1 : 0);
+    },
+    [announcementId, announcementsQuery.data],
   );
+
+  useEffect(() => {
+    if (announcementId) void announcementsQuery.refetch();
+  }, [announcementId, announcementsQuery.refetch]);
 
   const classmates = classItem?.enrollments ?? [];
   const memberCount = classmates.length + (classItem?.teacher ? 1 : 0);
@@ -1689,12 +1698,14 @@ export function StudentClassDetailContent({
               announcements.map((entry) => (
                 <View
                   key={entry.id}
+                  accessibilityLabel={entry.id === announcementId ? `Selected announcement: ${entry.title}` : undefined}
                   style={{
                     marginHorizontal: 16,
                     marginTop: 6,
                     borderRadius: 12,
                     borderWidth: 1,
-                    borderColor: theme.border,
+                    borderColor: entry.id === announcementId ? theme.red : theme.border,
+                    borderLeftWidth: entry.id === announcementId ? 4 : 1,
                     backgroundColor: theme.surface,
                     paddingHorizontal: 14,
                     paddingVertical: 13,
@@ -2479,6 +2490,7 @@ export function ClassDetailScreen({ route, navigation }: Props) {
       navigation={navigation}
       initialTab={route.params.initialTab}
       source={route.params.source}
+      announcementId={route.params.announcementId}
     />
   );
 }

@@ -36,6 +36,11 @@ export interface CreateNotificationInput {
   metadata?: Record<string, unknown>;
 }
 
+export interface CreatedNotification extends CreateNotificationInput {
+  id: string;
+  createdAt: Date;
+}
+
 export interface ArchivedTeacherNotificationContext {
   userIds: string[];
   classIds: string[];
@@ -46,6 +51,7 @@ export function visibleNotificationsWhere(userId: string, isRead?: boolean) {
   const conditions: SQL<unknown>[] = [
     eq(notifications.userId, userId),
     isNull(notifications.hiddenAt),
+    isNull(notifications.dismissedAt),
   ];
   if (typeof isRead === 'boolean') {
     conditions.push(eq(notifications.isRead, isRead));
@@ -63,11 +69,13 @@ export class NotificationsService {
 
   // ─── Internal: bulk insert (called by processor) ─────────────────────────
 
-  async createBulk(inputs: CreateNotificationInput[]): Promise<void> {
-    if (inputs.length === 0) return;
+  async createBulk(
+    inputs: CreateNotificationInput[],
+  ): Promise<CreatedNotification[]> {
+    if (inputs.length === 0) return [];
 
     // Drizzle handles large inserts efficiently in a single statement
-    await this.db
+    const persistedRows = await this.db
       .insert(notifications)
       .values(
         inputs.map((n) => ({
@@ -96,21 +104,29 @@ export class NotificationsService {
           readAt: null,
           createdAt: new Date(),
         },
-      });
+      })
+      .returning();
+
+    return persistedRows
+      .filter((row) => row.dismissedAt === null)
+      .map((row) => ({
+        id: row.id,
+        userId: row.userId,
+        type: row.type,
+        referenceId: row.referenceId ?? undefined,
+        title: row.title,
+        body: row.body,
+        metadata: row.metadata as Record<string, unknown> | undefined,
+        createdAt: row.createdAt,
+      }));
   }
 
   // ─── REST: paginated inbox ────────────────────────────────────────────────
 
   async createBulkDeduped(
     inputs: CreateNotificationInput[],
-  ): Promise<CreateNotificationInput[]> {
+  ): Promise<CreatedNotification[]> {
     if (inputs.length === 0) return [];
-
-    const referenceInputs = inputs.filter((input) => input.referenceId);
-    if (referenceInputs.length === 0) {
-      await this.createBulk(inputs);
-      return inputs;
-    }
 
     const insertedRows = await this.db
       .insert(notifications)
@@ -136,12 +152,14 @@ export class NotificationsService {
       .returning();
 
     return insertedRows.map((row) => ({
+      id: row.id,
       userId: row.userId,
       type: row.type,
       referenceId: row.referenceId ?? undefined,
       title: row.title,
       body: row.body,
       metadata: row.metadata as Record<string, unknown> | undefined,
+      createdAt: row.createdAt,
     }));
   }
 
@@ -273,5 +291,33 @@ export class NotificationsService {
       .returning({ id: notifications.id });
 
     return { updatedCount: result.length };
+  }
+
+  async dismissOne(
+    notificationId: string,
+    userId: string,
+  ): Promise<{ dismissedCount: number }> {
+    const result = await this.db
+      .update(notifications)
+      .set({ dismissedAt: new Date() })
+      .where(
+        and(
+          eq(notifications.id, notificationId),
+          visibleNotificationsWhere(userId),
+        ),
+      )
+      .returning({ id: notifications.id });
+
+    return { dismissedCount: result.length };
+  }
+
+  async dismissAll(userId: string): Promise<{ dismissedCount: number }> {
+    const result = await this.db
+      .update(notifications)
+      .set({ dismissedAt: new Date() })
+      .where(visibleNotificationsWhere(userId))
+      .returning({ id: notifications.id });
+
+    return { dismissedCount: result.length };
   }
 }

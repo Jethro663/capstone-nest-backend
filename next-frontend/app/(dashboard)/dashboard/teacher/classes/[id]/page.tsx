@@ -38,6 +38,7 @@ import {
   Megaphone,
   MessageSquare,
   MoreHorizontal,
+  Search,
   Palette,
   Plus,
   Radar,
@@ -88,6 +89,7 @@ import { useAuth } from "@/providers/AuthProvider";
 import { NewAssignmentWizard } from '@/components/teacher/assessment/NewAssignmentWizard';
 import { normalizeRichText } from "@/lib/rich-text";
 import { upsertTrackedExtractionNotification } from "@/lib/extraction-notification-tracker";
+import { filterStudentRoster } from "@/lib/student-roster-search";
 import {
   createCroppedModuleCoverBlob,
   DEFAULT_MODULE_GRADIENT,
@@ -1453,6 +1455,7 @@ export default function TeacherClassDetailPage() {
   const modulesViewStorageKey = `${STORAGE_KEY_MODULES_VIEW}:${isClassIdValid ? classId : "invalid"}`;
   const calendarViewStorageKey = `${STORAGE_KEY_CALENDAR_VIEW}:${isClassIdValid ? classId : "invalid"}`;
   const viewParam = searchParams.get("view");
+  const announcementId = searchParams.get("announcement");
   const activeTab = isWorkspaceTab(viewParam) ? viewParam : "modules";
 
   const [classItem, setClassItem] = useState<ClassItem | null>(null);
@@ -1568,6 +1571,7 @@ export default function TeacherClassDetailPage() {
   const [helpPage, setHelpPage] = useState(0);
 
   const [busyEnrollmentId, setBusyEnrollmentId] = useState<string | null>(null);
+  const [studentSearch, setStudentSearch] = useState("");
   const [confirmation, setConfirmation] =
     useState<ConfirmationDialogConfig | null>(null);
   const classRecordState = useTeacherClassRecord(
@@ -1837,12 +1841,24 @@ export default function TeacherClassDetailPage() {
     });
   }, [classItem?.enrollments, finalGradeByStudentId]);
 
+  const visibleStudentRows = useMemo(
+    () => filterStudentRoster(studentRows, studentSearch),
+    [studentRows, studentSearch],
+  );
+
   const filteredAssignments = useMemo(() => {
     if (assignmentFilter === "all") return assessments;
     return assessments.filter(
       (assessment) => deriveAssignmentFilter(assessment) === assignmentFilter,
     );
   }, [assignmentFilter, assessments]);
+
+  const displayedAnnouncements = useMemo(() => {
+    if (!announcementId) return announcements;
+    return [...announcements].sort((left, right) =>
+      left.id === announcementId ? -1 : right.id === announcementId ? 1 : 0,
+    );
+  }, [announcementId, announcements]);
 
   const assessmentAttachmentMap = useMemo(() => {
     const map = new Map<
@@ -3805,11 +3821,13 @@ export default function TeacherClassDetailPage() {
             ) : null}
 
             <div className="teacher-class-workspace__stack">
-              {announcements.map((announcement) => (
+              {displayedAnnouncements.map((announcement) => (
                 <article
                   key={announcement.id}
                   className="teacher-class-workspace__announcement-card"
                   data-pinned={announcement.isPinned}
+                  data-targeted={announcement.id === announcementId}
+                  aria-current={announcement.id === announcementId ? "true" : undefined}
                 >
                   <div>
                     {announcement.isPinned ? (
@@ -4307,6 +4325,15 @@ export default function TeacherClassDetailPage() {
                 Add Student
               </Link>
             </div>
+            <div className="relative max-w-xl">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6c7f99]" aria-hidden="true" />
+              <Input type="search" value={studentSearch} onChange={(event) => setStudentSearch(event.target.value)} placeholder="Search students by name, LRN, or email" aria-label="Search students by name, LRN, or email" className="pl-10" />
+              {studentSearch.trim() ? (
+                <p className="mt-2 text-sm text-[#5f728e]" aria-live="polite">
+                  {visibleStudentRows.length} of {studentRows.length} students shown
+                </p>
+              ) : null}
+            </div>
             <div className="teacher-class-workspace__table-wrap">
               <table className="teacher-class-workspace__table">
                 <thead>
@@ -4319,7 +4346,7 @@ export default function TeacherClassDetailPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {studentRows.map((student) => (
+                  {visibleStudentRows.map((student) => (
                     <tr
                       key={student.enrollmentId}
                       className="teacher-class-workspace__table-row teacher-class-workspace__table-row--clickable"
@@ -4408,6 +4435,10 @@ export default function TeacherClassDetailPage() {
               {studentRows.length === 0 ? (
                 <div className="teacher-class-workspace__empty">
                   No students enrolled.
+                </div>
+              ) : visibleStudentRows.length === 0 ? (
+                <div className="teacher-class-workspace__empty">
+                  No students match “{studentSearch.trim()}”. Try a name, LRN, or email.
                 </div>
               ) : null}
             </div>

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowUpRight, Bell, CheckCheck, Filter, RefreshCcw, TriangleAlert } from 'lucide-react';
+import { ArrowUpRight, Bell, CheckCheck, Filter, RefreshCcw, Trash2, TriangleAlert } from 'lucide-react';
 import {
   getNotificationMessage,
   isInterventionAlertNotification,
@@ -20,6 +20,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StudentEmptyState, StudentSectionHeader, StudentStatusChip } from '@/components/student/student-primitives';
+import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
 
 type ReadFilter = 'all' | 'unread' | 'read';
 
@@ -66,6 +67,7 @@ export default function NotificationsPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [filter, setFilter] = useState<ReadFilter>('all');
   const [loading, setLoading] = useState(true);
+  const [confirmation, setConfirmation] = useState<ConfirmationDialogConfig | null>(null);
 
   const backendFilter = useMemo(() => {
     if (filter === 'read') return true;
@@ -124,6 +126,36 @@ export default function NotificationsPage() {
     await refreshAll();
   }, [markAllAsRead, refreshAll]);
 
+  const handleDismissOne = useCallback(
+    async (id: string) => {
+      await notificationService.dismissOne(id);
+      if (items.length === 1 && page > 1) {
+        setPage((current) => Math.max(1, current - 1));
+        await fetchNotifications();
+        return;
+      }
+      await refreshAll();
+    },
+    [fetchNotifications, items.length, page, refreshAll],
+  );
+
+  const requestDismissAll = useCallback(() => {
+    setConfirmation({
+      title: 'Clear all notifications?',
+      description: 'This removes every notification from your account inbox. It does not delete announcements, grades, or class activity.',
+      confirmLabel: 'Clear notifications',
+      tone: 'danger',
+      onConfirm: async () => {
+        await notificationService.dismissAll();
+        setPage(1);
+        setItems([]);
+        setTotalPages(1);
+        await fetchNotifications();
+        if (page === 1) await loadPage();
+      },
+    });
+  }, [fetchNotifications, loadPage, page]);
+
   const handleOpenNotification = useCallback(
     async (notification: Notification) => {
       if (!notification.isRead) {
@@ -159,6 +191,7 @@ export default function NotificationsPage() {
 
   if (isStudent) {
     return (
+      <>
       <div
         role="main"
         aria-label="Student notifications"
@@ -189,6 +222,9 @@ export default function NotificationsPage() {
                   disabled={unreadCount === 0}
                 >
                   <CheckCheck className="mr-2 h-4 w-4" /> Mark All Read
+                </Button>
+                <Button size="sm" variant="outline" className="w-full border-white/35 bg-transparent text-white hover:bg-white/10 hover:text-white sm:w-auto" onClick={requestDismissAll} disabled={items.length === 0}>
+                  <Trash2 className="mr-2 h-4 w-4" /> Clear all
                 </Button>
               </div>
             )}
@@ -307,6 +343,9 @@ export default function NotificationsPage() {
                         Mark Read
                       </Button>
                     )}
+                    <Button type="button" size="sm" variant="ghost" className="w-full text-[#5f728e] hover:bg-[#fff1f3] hover:text-[#c90010] sm:w-auto sm:shrink-0" aria-label={`Delete ${notification.title}`} onClick={() => void handleDismissOne(notification.id)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                     </div>
                   </div>
                 </article>
@@ -320,6 +359,8 @@ export default function NotificationsPage() {
           </div>
         </div>
       </div>
+      <ConfirmationDialog config={confirmation} onClose={() => setConfirmation(null)} />
+      </>
     );
   }
 
@@ -328,6 +369,7 @@ export default function NotificationsPage() {
     const readItems = items.length - unreadItems;
 
     return (
+      <>
       <AdminPageShell
         badge="Admin Notifications"
         title="Notifications"
@@ -346,6 +388,9 @@ export default function NotificationsPage() {
             >
               <CheckCheck className="mr-2 h-4 w-4" />
               Mark All Read
+            </Button>
+            <Button variant="outline" className="admin-button-outline rounded-xl font-black" onClick={requestDismissAll} disabled={items.length === 0}>
+              <Trash2 className="mr-2 h-4 w-4" /> Clear all
             </Button>
           </div>
         )}
@@ -466,6 +511,9 @@ export default function NotificationsPage() {
                           Mark Read
                         </Button>
                       ) : null}
+                      <Button type="button" size="sm" variant="ghost" className="rounded-xl text-[var(--admin-text-muted)] hover:text-[#c90010]" aria-label={`Delete ${notification.title}`} onClick={() => void handleDismissOne(notification.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                       </div>
                     </div>
 
@@ -507,10 +555,13 @@ export default function NotificationsPage() {
           </div>
         </AdminSectionCard>
       </AdminPageShell>
+      <ConfirmationDialog config={confirmation} onClose={() => setConfirmation(null)} />
+      </>
     );
   }
 
   return (
+    <>
     <div
       role="main"
       aria-label="Teacher notifications"
@@ -545,6 +596,9 @@ export default function NotificationsPage() {
               disabled={unreadCount === 0}
             >
               <CheckCheck className="mr-2 h-4 w-4" /> Mark All Read
+            </Button>
+            <Button size="sm" variant="outline" className="border-white/35 bg-transparent text-white hover:bg-white/10 hover:text-white" onClick={requestDismissAll} disabled={items.length === 0}>
+              <Trash2 className="mr-2 h-4 w-4" /> Clear all
             </Button>
           </div>
         </div>
@@ -662,6 +716,9 @@ export default function NotificationsPage() {
                       Mark Read
                     </Button>
                   )}
+                  <Button type="button" size="sm" variant="ghost" className="shrink-0 text-[#5f728e] hover:bg-[#fff1f3] hover:text-[#c90010]" aria-label={`Delete ${notification.title}`} onClick={() => void handleDismissOne(notification.id)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                   </div>
                 </div>
               </article>
@@ -675,6 +732,8 @@ export default function NotificationsPage() {
         </div>
       </div>
     </div>
+    <ConfirmationDialog config={confirmation} onClose={() => setConfirmation(null)} />
+    </>
   );
 }
 

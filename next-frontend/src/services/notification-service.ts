@@ -53,4 +53,24 @@ export const notificationService = {
     const { data } = await api.patch(`/notifications/${id}/read`);
     return data;
   },
+
+  /** DELETE /notifications/:id — Dismiss one notification for the current user */
+  async dismissOne(id: string): Promise<{
+    success: boolean;
+    message: string;
+    data: { dismissedCount: number };
+  }> {
+    const { data } = await api.delete(`/notifications/${id}`);
+    return data;
+  },
+
+  /** DELETE /notifications — Dismiss all visible notifications for the current user */
+  async dismissAll(): Promise<{
+    success: boolean;
+    message: string;
+    data: { dismissedCount: number };
+  }> {
+    const { data } = await api.delete('/notifications');
+    return data;
+  },
 };

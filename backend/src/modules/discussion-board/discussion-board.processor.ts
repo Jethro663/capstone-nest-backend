@@ -114,16 +114,15 @@ export class DiscussionBoardProcessor extends WorkerHost {
     }));
 
     const inserted = await this.notificationsService.createBulkDeduped(inputs);
-    const now = new Date();
     for (const notification of inserted) {
       this.notificationsGateway.emitToUser(notification.userId, {
-        id: `${threadId}:discussion-thread`,
+        id: notification.id,
         type: notification.type,
         title: notification.title,
         body: notification.body,
         referenceId: notification.referenceId,
         metadata: notification.metadata,
-        createdAt: now,
+        createdAt: notification.createdAt,
       });
     }
   }
@@ -167,16 +166,15 @@ export class DiscussionBoardProcessor extends WorkerHost {
       return;
     }
 
-    const now = new Date();
     for (const entry of inserted) {
       this.notificationsGateway.emitToUser(entry.userId, {
-        id: `${threadId}:discussion-comment:${entry.userId}`,
+        id: entry.id,
         type: entry.type,
         title: entry.title,
         body: entry.body,
         referenceId: entry.referenceId,
         metadata: entry.metadata,
-        createdAt: now,
+        createdAt: entry.createdAt,
       });
     }
   }

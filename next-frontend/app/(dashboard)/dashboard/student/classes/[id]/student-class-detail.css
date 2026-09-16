@@ -490,6 +490,12 @@
   border-color: var(--student-danger-border);
 }
 
+.student-class-announcement-card[data-targeted='true'] {
+  border-color: var(--student-accent);
+  border-left-width: 4px;
+  box-shadow: 0 14px 28px -24px rgba(231, 0, 18, 0.7);
+}
+
 .student-class-announcement-card__pin {
   width: fit-content;
   border-radius: 999px;

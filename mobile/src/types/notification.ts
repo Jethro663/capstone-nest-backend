@@ -7,6 +7,10 @@ export interface MobileNotification {
   message?: string;
   isRead: boolean;
   referenceId?: string | null;
+  metadata?: {
+    classId?: string;
+    [key: string]: unknown;
+  } | null;
   createdAt: string;
 }
 
