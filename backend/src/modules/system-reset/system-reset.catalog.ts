@@ -206,7 +206,7 @@ export const RESET_CATALOG: Readonly<Record<string, ResetTableRule>> =
       ),
     ),
   );
-export const RESET_CATALOG_VERSION = 4;
+export const RESET_CATALOG_VERSION = 5;
 export const RESET_QUEUE_NAMES = [
   'announcements',
   'notifications',
@@ -216,6 +216,7 @@ export const RESET_QUEUE_NAMES = [
   'performance-recompute',
   'ai-teacher-generation',
   'admin-erasure-cleanup',
+  'notification-push',
 ] as const;
 export const RESET_ACKNOWLEDGEMENTS = [
   'OTHER_ACCOUNTS_REMOVED',

@@ -13,6 +13,7 @@ describe('reset queue ownership scope', () => {
         'bull:announcements:1',
         'bull:rag-indexing:meta',
         'bull:ai-teacher-generation:events',
+        'bull:notification-push:wait',
       ]),
     ).not.toThrow();
   });
