@@ -13,6 +13,7 @@ const path = require("node:path");
 const {
   bumpMobileReleaseIdentity,
   buildReleasePayload,
+  defaultPaths,
   verifyManifest,
 } = require("./app-version-release.cjs");
 
@@ -102,6 +103,14 @@ test("rejects a mutable Android artifact URL", async () => {
         "https://next-frontend-v2-production.up.railway.app/downloads/nexora-student-mobile-release.apk",
     }),
     /immutable Android artifact URL/i,
+  );
+});
+
+test("verify mode preserves the immutable URL stored in the manifest", () => {
+  assert.equal(defaultPaths({}, "verify").apkDownloadUrl, undefined);
+  assert.match(
+    defaultPaths({}, "prepare").apkDownloadUrl,
+    /nexora-student-mobile-release\.apk$/,
   );
 });
 

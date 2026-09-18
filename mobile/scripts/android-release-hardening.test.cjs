@@ -19,7 +19,15 @@ test("release configuration is HTTPS-only, backup-safe, and permission-minimized
   assert.equal(new Set(permissions).size, permissions.length);
   assert.doesNotMatch(
     manifest,
-    /READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|RECORD_AUDIO|SYSTEM_ALERT_WINDOW/,
+    /RECORD_AUDIO|SYSTEM_ALERT_WINDOW/,
+  );
+  assert.match(
+    manifest,
+    /READ_EXTERNAL_STORAGE[^>]+tools:node="remove"/,
+  );
+  assert.match(
+    manifest,
+    /WRITE_EXTERNAL_STORAGE[^>]+tools:node="remove"/,
   );
   assert.match(manifest, /android:allowBackup="false"/);
   assert.match(manifest, /android:usesCleartextTraffic="false"/);

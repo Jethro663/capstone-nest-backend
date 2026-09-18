@@ -508,7 +508,7 @@ function parseArguments(argv) {
   return values;
 }
 
-function defaultPaths(args) {
+function defaultPaths(args, mode) {
   const repoRoot = path.resolve(__dirname, "../..");
   return {
     apkPath:
@@ -530,7 +530,9 @@ function defaultPaths(args) {
       path.join(repoRoot, "mobile/android/app/build.gradle"),
     apkDownloadUrl:
       args["download-url"] ||
-      "https://next-frontend-v2-production.up.railway.app/downloads/nexora-student-mobile-release.apk",
+      (mode === "prepare"
+        ? "https://next-frontend-v2-production.up.railway.app/downloads/nexora-student-mobile-release.apk"
+        : undefined),
     sourceRevision: args["source-revision"],
   };
 }
@@ -543,7 +545,7 @@ async function main() {
     );
   }
   const args = parseArguments(rawArgs);
-  const paths = defaultPaths(args);
+  const paths = defaultPaths(args, mode);
 
   if (mode === "bump") {
     if (!args.version) {
@@ -601,6 +603,7 @@ module.exports = {
   assertProductionSigner,
   bumpMobileReleaseIdentity,
   buildReleasePayload,
+  defaultPaths,
   parseAaptBadging,
   parseAaptPermissions,
   parseGradleVersions,
