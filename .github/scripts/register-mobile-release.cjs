@@ -8,12 +8,36 @@ const RELEASE_FIELDS = [
   "minSupportedVersionCode",
   "nativeVersion",
   "otaRuntimeVersion",
-  "apkDownloadUrl",
+  "artifactKind",
+  "artifactDownloadUrl",
   "requiresFullApk",
   "releaseNotes",
-  "apkSha256",
-  "apkSizeBytes",
+  "artifactSha256",
+  "artifactSizeBytes",
+  "sourceRevision",
+  "distributionChannel",
 ];
+
+function normalizeRelease(release) {
+  const platform = release.platform;
+  return {
+    platform,
+    versionCode: release.versionCode,
+    minSupportedVersionCode: release.minSupportedVersionCode,
+    nativeVersion: release.nativeVersion,
+    otaRuntimeVersion: release.otaRuntimeVersion,
+    artifactKind: release.artifactKind ?? (platform === "ios" ? "ipa" : "apk"),
+    artifactDownloadUrl: release.artifactDownloadUrl ?? release.apkDownloadUrl,
+    requiresFullApk: release.requiresFullApk,
+    releaseNotes: release.releaseNotes,
+    artifactSha256: release.artifactSha256 ?? release.apkSha256,
+    artifactSizeBytes: release.artifactSizeBytes ?? release.apkSizeBytes,
+    sourceRevision: release.sourceRevision ?? null,
+    distributionChannel:
+      release.distributionChannel ??
+      (platform === "ios" ? "sidestore" : "website"),
+  };
+}
 
 async function requireOk(response, label) {
   if (response.ok) return response;
@@ -24,8 +48,10 @@ async function requireOk(response, label) {
 }
 
 function assertReleaseMatches(expected, actual, label) {
+  const expectedRelease = normalizeRelease(expected);
+  const actualRelease = normalizeRelease(actual);
   const mismatches = RELEASE_FIELDS.filter(
-    (field) => expected[field] !== actual[field],
+    (field) => expectedRelease[field] !== actualRelease[field],
   );
   if (mismatches.length > 0) {
     throw new Error(
@@ -34,29 +60,48 @@ function assertReleaseMatches(expected, actual, label) {
   }
 }
 
-function assertDecisionMatches(manifest, decision, expectedType) {
+function assertDecisionMatches(manifest, decision, expectedAction) {
   const mapped = {
     platform: decision.platform,
     versionCode: decision.latestVersionCode,
     minSupportedVersionCode: decision.minSupportedVersionCode,
     nativeVersion: decision.latestNativeVersion,
     otaRuntimeVersion: decision.otaRuntimeVersion,
-    apkDownloadUrl: decision.apkDownloadUrl,
+    artifactKind: decision.artifactKind,
+    artifactDownloadUrl: decision.artifactDownloadUrl,
     requiresFullApk: decision.requiresFullApk,
     releaseNotes: decision.releaseNotes,
-    apkSha256: decision.apkSha256,
-    apkSizeBytes: decision.apkSizeBytes,
+    artifactSha256: decision.artifactSha256,
+    artifactSizeBytes: decision.artifactSizeBytes,
+    sourceRevision: decision.sourceRevision,
+    distributionChannel: decision.distributionChannel,
   };
   assertReleaseMatches(manifest, mapped, "Backend release policy");
-  if (decision.updateType !== expectedType) {
+  if (decision.updateAction !== expectedAction) {
     throw new Error(
-      `Backend returned ${decision.updateType}; expected ${expectedType}`,
+      `Backend returned ${decision.updateAction}; expected ${expectedAction}`,
     );
   }
-  if ((expectedType === "apk_forced") !== Boolean(decision.isForceUpdate)) {
+  if (
+    (expectedAction === "binary_forced") !==
+    Boolean(decision.isForceUpdate)
+  ) {
     throw new Error(
       "Backend force-update flag does not match the expected policy",
     );
+  }
+  if (manifest.platform === "android") {
+    const legacyType =
+      expectedAction === "binary_forced"
+        ? "apk_forced"
+        : expectedAction === "binary_optional"
+          ? "apk_optional"
+          : "none";
+    if (decision.updateType !== legacyType) {
+      throw new Error(
+        `Backend returned legacy action ${decision.updateType}; expected ${legacyType}`,
+      );
+    }
   }
 }
 
@@ -76,29 +121,40 @@ async function registerMobileRelease({
     throw new Error("CI_ADMIN_SECRET is unavailable from the backend service");
   }
 
-  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  const manifest = normalizeRelease(
+    JSON.parse(await readFile(manifestPath, "utf8")),
+  );
+  const platformLabel = manifest.platform === "ios" ? "iOS" : "Android";
+  const artifactLabel = manifest.artifactKind.toUpperCase();
   const requestHeaders = { "cache-control": "no-cache" };
   const liveManifest = await fetchJson(
     fetchImpl,
     manifestUrl,
     { cache: "no-store", headers: requestHeaders },
-    "Live Android manifest check",
+    `Live ${platformLabel} manifest check`,
   );
-  assertReleaseMatches(manifest, liveManifest, "Live Android manifest");
+  assertReleaseMatches(
+    manifest,
+    liveManifest,
+    `Live ${platformLabel} manifest`,
+  );
 
-  const apkResponse = await requireOk(
-    await fetchImpl(manifest.apkDownloadUrl, {
+  const artifactResponse = await requireOk(
+    await fetchImpl(manifest.artifactDownloadUrl, {
       cache: "no-store",
       headers: requestHeaders,
     }),
-    "Live Android APK check",
+    `Live ${platformLabel} ${artifactLabel} check`,
   );
-  const apkBytes = Buffer.from(await apkResponse.arrayBuffer());
-  const liveSize = apkBytes.byteLength;
-  const liveSha = createHash("sha256").update(apkBytes).digest("hex");
-  if (liveSize !== manifest.apkSizeBytes || liveSha !== manifest.apkSha256) {
+  const artifactBytes = Buffer.from(await artifactResponse.arrayBuffer());
+  const liveSize = artifactBytes.byteLength;
+  const liveSha = createHash("sha256").update(artifactBytes).digest("hex");
+  if (
+    liveSize !== manifest.artifactSizeBytes ||
+    liveSha !== manifest.artifactSha256
+  ) {
     throw new Error(
-      `Live Android APK differs from the tested manifest: expected ${manifest.apkSizeBytes} bytes/${manifest.apkSha256}, received ${liveSize} bytes/${liveSha}`,
+      `Live ${platformLabel} ${artifactLabel} differs from the tested manifest: expected ${manifest.artifactSizeBytes} bytes/${manifest.artifactSha256}, received ${liveSize} bytes/${liveSha}`,
     );
   }
 
@@ -113,7 +169,7 @@ async function registerMobileRelease({
       },
       body: JSON.stringify(manifest),
     },
-    "Android release registration",
+    `${platformLabel} release registration`,
   );
 
   const checkPolicy = async (currentVersionCode) => {
@@ -133,7 +189,7 @@ async function registerMobileRelease({
       fetchImpl,
       `${apiBaseUrl.replace(/\/$/, "")}/check?${query}`,
       { cache: "no-store", headers: requestHeaders },
-      `Android policy check for build ${currentVersionCode}`,
+      `${platformLabel} policy check for build ${currentVersionCode}`,
     );
     return payload.data;
   };
@@ -142,7 +198,11 @@ async function registerMobileRelease({
     .filter((value) => value < manifest.minSupportedVersionCode)
     .filter((value, index, values) => values.indexOf(value) === index);
   for (const oldBuild of oldBuilds) {
-    assertDecisionMatches(manifest, await checkPolicy(oldBuild), "apk_forced");
+    assertDecisionMatches(
+      manifest,
+      await checkPolicy(oldBuild),
+      "binary_forced",
+    );
   }
   assertDecisionMatches(
     manifest,
@@ -153,8 +213,12 @@ async function registerMobileRelease({
   return {
     versionCode: manifest.versionCode,
     nativeVersion: manifest.nativeVersion,
-    apkSizeBytes: liveSize,
-    apkSha256: liveSha,
+    platform: manifest.platform,
+    artifactKind: manifest.artifactKind,
+    artifactSizeBytes: liveSize,
+    artifactSha256: liveSha,
+    apkSizeBytes: manifest.platform === "android" ? liveSize : undefined,
+    apkSha256: manifest.platform === "android" ? liveSha : undefined,
     checkedOldBuilds: oldBuilds,
   };
 }
@@ -177,13 +241,14 @@ async function main() {
     ciSecret: process.env.CI_ADMIN_SECRET,
   });
   process.stdout.write(
-    `Registered and verified Android ${result.nativeVersion} (build ${result.versionCode}), ${result.apkSizeBytes} bytes, SHA-256 ${result.apkSha256}; forced-update checks passed for builds ${result.checkedOldBuilds.join(", ") || "none"}.\n`,
+    `Registered and verified ${result.platform} ${result.nativeVersion} (build ${result.versionCode}), ${result.artifactSizeBytes} bytes, SHA-256 ${result.artifactSha256}; forced-update checks passed for builds ${result.checkedOldBuilds.join(", ") || "none"}.\n`,
   );
 }
 
 module.exports = {
   assertDecisionMatches,
   assertReleaseMatches,
+  normalizeRelease,
   registerMobileRelease,
 };
 

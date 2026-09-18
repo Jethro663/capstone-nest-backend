@@ -71,6 +71,7 @@ const groups: Array<{ action: ResetAction; group: string; tables: string[] }> =
         'archived_users',
         'otp_verifications',
         'refresh_tokens',
+        'notification_devices',
         'admin_demo_mode_states',
         'admin_maintenance_sessions',
       ],
@@ -205,7 +206,7 @@ export const RESET_CATALOG: Readonly<Record<string, ResetTableRule>> =
       ),
     ),
   );
-export const RESET_CATALOG_VERSION = 3;
+export const RESET_CATALOG_VERSION = 4;
 export const RESET_QUEUE_NAMES = [
   'announcements',
   'notifications',

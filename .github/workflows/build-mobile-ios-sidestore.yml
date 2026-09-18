@@ -30,9 +30,11 @@ jobs:
       contents: write
     env:
       EXPO_PUBLIC_API_URL: https://capstone-backend-v2-production.up.railway.app/api
+      EXPO_PUBLIC_SOURCE_REVISION: ${{ github.sha }}
       RELEASE_TAG: ios-sidestore-latest
       STABLE_IPA_NAME: Nexora-iOS-latest-unsigned.ipa
       STABLE_METADATA_NAME: Nexora-iOS-latest-metadata.txt
+      MOBILE_RELEASE_API_BASE_URL: https://capstone-backend-v2-production.up.railway.app/api/app-version
 
     steps:
       - name: Check out the requested source revision
@@ -135,8 +137,14 @@ jobs:
           VERSION=$(node -p "require('./mobile/app.json').expo.version")
           BUILD=$(node -p "require('./mobile/app.json').expo.ios.buildNumber")
           SHORT_SHA=${GITHUB_SHA:0:8}
+          IMMUTABLE_RELEASE_TAG="ios-sidestore-v${VERSION}-build${BUILD}-${SHORT_SHA}"
+          IMMUTABLE_IPA_NAME="Nexora-iOS-v${VERSION}-build${BUILD}-${SHORT_SHA}-unsigned.ipa"
+          IMMUTABLE_METADATA_NAME="Nexora-iOS-v${VERSION}-build${BUILD}-${SHORT_SHA}-metadata.txt"
+          IMMUTABLE_MANIFEST_NAME="Nexora-iOS-v${VERSION}-build${BUILD}-${SHORT_SHA}-release.json"
           printf 'artifact_name=Nexora-iOS-%s-build%s-%s\n' "$VERSION" "$BUILD" "$SHORT_SHA" >> "$GITHUB_OUTPUT"
-          printf 'version=%s\nbuild=%s\n' "$VERSION" "$BUILD" >> "$GITHUB_OUTPUT"
+          printf 'version=%s\nbuild=%s\nrelease_tag=%s\nipa_name=%s\nmetadata_name=%s\nmanifest_name=%s\n' \
+            "$VERSION" "$BUILD" "$IMMUTABLE_RELEASE_TAG" "$IMMUTABLE_IPA_NAME" \
+            "$IMMUTABLE_METADATA_NAME" "$IMMUTABLE_MANIFEST_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Verify the packaged IPA and produce metadata
         shell: bash
@@ -147,19 +155,47 @@ jobs:
             "mobile/dist/ios/$STABLE_METADATA_NAME" \
             "$GITHUB_SHA"
 
+      - name: Bind the verified IPA to immutable release metadata
+        shell: bash
+        env:
+          IMMUTABLE_RELEASE_TAG: ${{ steps.package.outputs.release_tag }}
+          IMMUTABLE_IPA_NAME: ${{ steps.package.outputs.ipa_name }}
+          IMMUTABLE_METADATA_NAME: ${{ steps.package.outputs.metadata_name }}
+          IMMUTABLE_MANIFEST_NAME: ${{ steps.package.outputs.manifest_name }}
+          RELEASE_NOTES: ${{ github.event_name == 'workflow_dispatch' && inputs.release_notes || 'Physical iPhone acceptance build for Nexora Capstone 2.' }}
+        run: |
+          set -euo pipefail
+          OUTPUT_DIR="$GITHUB_WORKSPACE/mobile/dist/ios"
+          cp "$OUTPUT_DIR/$STABLE_IPA_NAME" "$OUTPUT_DIR/$IMMUTABLE_IPA_NAME"
+          cp "$OUTPUT_DIR/$STABLE_METADATA_NAME" "$OUTPUT_DIR/$IMMUTABLE_METADATA_NAME"
+          (
+            cd "$OUTPUT_DIR"
+            shasum -a 256 "$IMMUTABLE_IPA_NAME" > "$IMMUTABLE_IPA_NAME.sha256"
+            shasum -a 256 -c "$IMMUTABLE_IPA_NAME.sha256"
+          )
+          ARTIFACT_URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$IMMUTABLE_RELEASE_TAG/$IMMUTABLE_IPA_NAME"
+          node mobile/scripts/ios-release-manifest.cjs \
+            --app-json mobile/app.json \
+            --ipa "$OUTPUT_DIR/$IMMUTABLE_IPA_NAME" \
+            --output "$OUTPUT_DIR/$IMMUTABLE_MANIFEST_NAME" \
+            --artifact-url "$ARTIFACT_URL" \
+            --source-revision "$GITHUB_SHA" \
+            --release-notes "$RELEASE_NOTES"
+
       - name: Upload the immutable workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.package.outputs.artifact_name }}
           path: |
-            mobile/dist/ios/Nexora-iOS-latest-unsigned.ipa
-            mobile/dist/ios/Nexora-iOS-latest-unsigned.ipa.sha256
-            mobile/dist/ios/Nexora-iOS-latest-metadata.txt
+            mobile/dist/ios/${{ steps.package.outputs.ipa_name }}
+            mobile/dist/ios/${{ steps.package.outputs.ipa_name }}.sha256
+            mobile/dist/ios/${{ steps.package.outputs.metadata_name }}
+            mobile/dist/ios/${{ steps.package.outputs.manifest_name }}
           if-no-files-found: error
           retention-days: 30
           compression-level: 0
 
-      - name: Publish the rolling SideStore prerelease
+      - name: Publish the immutable SideStore prerelease
         if: ${{ github.event_name == 'push' || inputs.publish == true }}
         shell: bash
         env:
@@ -167,6 +203,10 @@ jobs:
           RELEASE_NOTES: ${{ github.event_name == 'workflow_dispatch' && inputs.release_notes || 'Physical iPhone acceptance build for Nexora Capstone 2.' }}
           VERSION: ${{ steps.package.outputs.version }}
           BUILD: ${{ steps.package.outputs.build }}
+          IMMUTABLE_RELEASE_TAG: ${{ steps.package.outputs.release_tag }}
+          IMMUTABLE_IPA_NAME: ${{ steps.package.outputs.ipa_name }}
+          IMMUTABLE_METADATA_NAME: ${{ steps.package.outputs.metadata_name }}
+          IMMUTABLE_MANIFEST_NAME: ${{ steps.package.outputs.manifest_name }}
         run: |
           set -euo pipefail
           NOTES_PATH="$RUNNER_TEMP/nexora-ios-release-notes.md"
@@ -176,6 +216,56 @@ jobs:
             printf 'Version: `%s`  \nBuild: `%s`  \nSource: `%s`\n\n' "$VERSION" "$BUILD" "$GITHUB_SHA"
             printf 'This is an unsigned physical-iPhone Release build. SideStore applies the tester’s personal seven-day development signature. Refresh it in SideStore before expiry. This is not an App Store or TestFlight release.\n\n'
             printf 'Follow the [complete Windows and iPhone guide](https://github.com/%s/blob/developement/docs/mobile-ios-sidestore-windows-guide.md).\n' "$GITHUB_REPOSITORY"
+          } > "$NOTES_PATH"
+          if gh release view "$IMMUTABLE_RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Immutable release $IMMUTABLE_RELEASE_TAG already exists; refusing to overwrite it." >&2
+            exit 1
+          fi
+          gh release create "$IMMUTABLE_RELEASE_TAG" \
+            --target "$GITHUB_SHA" \
+            --title "Nexora iOS SideStore — v$VERSION build $BUILD ($GITHUB_SHA)" \
+            --notes-file "$NOTES_PATH" \
+            --prerelease \
+            "mobile/dist/ios/$IMMUTABLE_IPA_NAME" \
+            "mobile/dist/ios/$IMMUTABLE_IPA_NAME.sha256" \
+            "mobile/dist/ios/$IMMUTABLE_METADATA_NAME" \
+            "mobile/dist/ios/$IMMUTABLE_MANIFEST_NAME"
+
+      - name: Register and verify the published iOS release policy
+        if: ${{ github.event_name == 'push' || inputs.publish == true }}
+        shell: bash
+        env:
+          CI_ADMIN_SECRET: ${{ secrets.CI_ADMIN_SECRET }}
+          IMMUTABLE_RELEASE_TAG: ${{ steps.package.outputs.release_tag }}
+          IMMUTABLE_MANIFEST_NAME: ${{ steps.package.outputs.manifest_name }}
+        run: |
+          set -euo pipefail
+          MANIFEST_URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$IMMUTABLE_RELEASE_TAG/$IMMUTABLE_MANIFEST_NAME"
+          curl --fail --location --retry 5 --retry-delay 2 "$MANIFEST_URL" -o /dev/null
+          MOBILE_RELEASE_MANIFEST_PATH="mobile/dist/ios/$IMMUTABLE_MANIFEST_NAME" \
+          MOBILE_RELEASE_MANIFEST_URL="$MANIFEST_URL" \
+          node .github/scripts/register-mobile-release.cjs
+
+      - name: Refresh the rolling SideStore prerelease
+        if: ${{ github.event_name == 'push' || inputs.publish == true }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_NOTES: ${{ github.event_name == 'workflow_dispatch' && inputs.release_notes || 'Physical iPhone acceptance build for Nexora Capstone 2.' }}
+          VERSION: ${{ steps.package.outputs.version }}
+          BUILD: ${{ steps.package.outputs.build }}
+          IMMUTABLE_RELEASE_TAG: ${{ steps.package.outputs.release_tag }}
+          IMMUTABLE_IPA_NAME: ${{ steps.package.outputs.ipa_name }}
+          IMMUTABLE_METADATA_NAME: ${{ steps.package.outputs.metadata_name }}
+          IMMUTABLE_MANIFEST_NAME: ${{ steps.package.outputs.manifest_name }}
+        run: |
+          set -euo pipefail
+          NOTES_PATH="$RUNNER_TEMP/nexora-ios-release-notes.md"
+          {
+            printf '# Nexora iOS SideStore latest build\n\n'
+            printf '%s\n\n' "$RELEASE_NOTES"
+            printf 'Immutable release: [%s](https://github.com/%s/releases/tag/%s)  \nSource: `%s`\n' \
+              "$IMMUTABLE_RELEASE_TAG" "$GITHUB_REPOSITORY" "$IMMUTABLE_RELEASE_TAG" "$GITHUB_SHA"
           } > "$NOTES_PATH"
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh api --method PATCH \
@@ -200,5 +290,5 @@ jobs:
             "mobile/dist/ios/$STABLE_METADATA_NAME" \
             --clobber
           printf '### iOS SideStore release\n\n' >> "$GITHUB_STEP_SUMMARY"
-          printf '[Release page](https://github.com/%s/releases/tag/%s)\n\n' "$GITHUB_REPOSITORY" "$RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"
+          printf '[Immutable release](https://github.com/%s/releases/tag/%s)\n\n' "$GITHUB_REPOSITORY" "$IMMUTABLE_RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"
           printf '[Direct IPA download](https://github.com/%s/releases/download/%s/%s)\n' "$GITHUB_REPOSITORY" "$RELEASE_TAG" "$STABLE_IPA_NAME" >> "$GITHUB_STEP_SUMMARY"

@@ -5,9 +5,7 @@ const SCREEN_FILES = [
   "AssessmentsScreen.tsx",
   "CalendarScreen.tsx",
   "LessonsScreen.tsx",
-  "LxpScreen.tsx",
   "ProfileScreen.tsx",
-  "ProgressScreen.tsx",
 ];
 
 const MOJIBAKE_MARKERS = ["Ã°", "Ã¢", "ðŸ", "âœ", "â€¢"];
@@ -24,4 +22,3 @@ describe("mobile screen copy sanitization", () => {
     }
   });
 });
-

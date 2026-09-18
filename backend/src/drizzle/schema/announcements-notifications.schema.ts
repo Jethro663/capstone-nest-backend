@@ -9,6 +9,7 @@ import {
   pgEnum,
   index,
   uniqueIndex,
+  integer,
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
 import { users } from './base.schema';
@@ -128,3 +129,63 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
     references: [users.id],
   }),
 }));
+
+export const notificationDevices = pgTable(
+  'notification_devices',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    installationId: uuid('installation_id').notNull(),
+    platform: varchar('platform', { length: 10 })
+      .$type<'android' | 'ios'>()
+      .notNull(),
+    provider: varchar('provider', { length: 20 }).$type<'expo'>().notNull(),
+    pushTokenCiphertext: text('push_token_ciphertext').notNull(),
+    tokenFingerprint: varchar('token_fingerprint', { length: 64 }).notNull(),
+    appVersion: varchar('app_version', { length: 50 }).notNull(),
+    buildNumber: integer('build_number').notNull(),
+    notificationsEnabled: boolean('notifications_enabled')
+      .notNull()
+      .default(true),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    disabledAt: timestamp('disabled_at', { withTimezone: true }),
+    disableReason: varchar('disable_reason', { length: 50 }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    userInstallationUniqueIdx: uniqueIndex(
+      'notification_devices_user_installation_unique_idx',
+    ).on(table.userId, table.installationId),
+    activeTokenFingerprintUniqueIdx: uniqueIndex(
+      'notification_devices_active_token_fingerprint_unique_idx',
+    )
+      .on(table.tokenFingerprint)
+      .where(
+        sql`${table.disabledAt} IS NULL AND ${table.notificationsEnabled} = true`,
+      ),
+    activeUserIdx: index('notification_devices_active_user_idx')
+      .on(table.userId, table.lastSeenAt)
+      .where(
+        sql`${table.disabledAt} IS NULL AND ${table.notificationsEnabled} = true`,
+      ),
+  }),
+);
+
+export const notificationDevicesRelations = relations(
+  notificationDevices,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [notificationDevices.userId],
+      references: [users.id],
+    }),
+  }),
+);

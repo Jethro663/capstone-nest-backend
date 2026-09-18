@@ -1,5 +1,5 @@
 import React from "react";
-import { AppState, Platform, Text } from "react-native";
+import { AppState, Linking, Platform, Text } from "react-native";
 import type { AppVersionDecision } from "../../services/update/update.types";
 import { UpdateProvider } from "../UpdateProvider";
 import { reportUpdatePolicyFailure } from "../../services/update/update-admission";
@@ -18,6 +18,7 @@ jest.mock("react-native", () => {
     Text: component("Text"),
     View: component("View"),
     Platform: { OS: "android" },
+    Linking: { openURL: jest.fn(async () => undefined) },
     AppState: {
       currentState: "active",
       addEventListener: jest.fn(() => ({ remove: jest.fn() })),
@@ -60,6 +61,14 @@ const policy12: AppVersionDecision = {
   minSupportedVersionCode: 1,
   latestNativeVersion: "0.1.11",
   otaRuntimeVersion: "0.1.11",
+  artifactKind: "apk",
+  artifactDownloadUrl:
+    "https://next-frontend-v2-production.up.railway.app/downloads/nexora-student-mobile-release.apk",
+  artifactSha256:
+    "0184bfc3ffcbbed8cbc0596769c77a81075931757b743132fcb0bc50bd83124f",
+  artifactSizeBytes: 40050811,
+  sourceRevision: "a".repeat(40),
+  distributionChannel: "website",
   apkDownloadUrl:
     "https://next-frontend-v2-production.up.railway.app/downloads/nexora-student-mobile-release.apk",
   apkSha256: "0184bfc3ffcbbed8cbc0596769c77a81075931757b743132fcb0bc50bd83124f",
@@ -67,6 +76,7 @@ const policy12: AppVersionDecision = {
   isForceUpdate: false,
   requiresFullApk: true,
   releaseNotes: "Four-quarter assessment filters.",
+  updateAction: "binary_optional",
   updateType: "apk_optional",
 };
 
@@ -91,6 +101,7 @@ const policy17: AppVersionDecision = {
   apkSizeBytes: 40200000,
   releaseNotes:
     "Prevents duplicate latest-version prompts and adds visible app version details.",
+  updateAction: "binary_forced",
 };
 
 const policy18: AppVersionDecision = {
@@ -110,6 +121,26 @@ const noUpdatePolicy: AppVersionDecision = {
   minSupportedVersionCode: 16,
   isForceUpdate: false,
   requiresFullApk: false,
+  updateAction: "none",
+  updateType: "none",
+};
+
+const iosPolicy: AppVersionDecision = {
+  ...policy17,
+  platform: "ios",
+  latestVersionCode: 46,
+  minSupportedVersionCode: 46,
+  latestNativeVersion: "0.1.45",
+  otaRuntimeVersion: "",
+  artifactKind: "ipa",
+  artifactDownloadUrl: "https://example.com/Nexora-iOS.ipa",
+  artifactSha256: "b".repeat(64),
+  artifactSizeBytes: 14_000_000,
+  distributionChannel: "sidestore",
+  apkDownloadUrl: "",
+  apkSha256: null,
+  apkSizeBytes: null,
+  updateAction: "binary_forced",
   updateType: "none",
 };
 const renderers: any[] = [];
@@ -251,6 +282,32 @@ describe("UpdateProvider", () => {
     expect(flattenText(renderer.toJSON())).toContain("Mandatory App Update");
   });
 
+  it("warns legacy debug-signed installs about the one-time production reinstall", async () => {
+    mockGetClientVersionInfo.mockReturnValue({
+      platform: "android",
+      currentNativeVersion: "0.1.45",
+      currentVersionCode: 46,
+    });
+    mockCheckUpdatePolicy.mockResolvedValue({
+      ...policy17,
+      latestVersionCode: 47,
+      minSupportedVersionCode: 46,
+      latestNativeVersion: "0.1.46",
+      isForceUpdate: false,
+      updateAction: "binary_optional",
+      updateType: "apk_optional",
+    });
+
+    const renderer = await renderProvider();
+
+    expect(flattenText(renderer.toJSON())).toContain(
+      "one-time production-signing migration",
+    );
+    expect(flattenText(renderer.toJSON())).toContain(
+      "uninstall the old Nexora app",
+    );
+  });
+
   it("admits the app only after the installed build and fresh policy confirm the upgrade", async () => {
     const renderer = await renderProvider();
     await press(renderer, "Download & Install Update");
@@ -272,23 +329,21 @@ describe("UpdateProvider", () => {
     expect(renderer.root.findAllByType("Modal")).toHaveLength(0);
   });
 
-  it("bypasses all APK work on iOS even when Android would be forced", async () => {
+  it("blocks stale iOS clients with a SideStore-aware update action", async () => {
     (Platform as { OS: string }).OS = "ios";
     mockGetClientVersionInfo.mockReturnValue({
       platform: "ios",
       currentVersionCode: 3,
       currentNativeVersion: "0.1.0",
     });
-    mockCheckUpdatePolicy.mockResolvedValue({
-      ...policy17,
-      isForceUpdate: true,
-      updateType: "apk_forced",
-    });
+    mockCheckUpdatePolicy.mockResolvedValue(iosPolicy);
     const renderer = await renderProvider();
-    expect(flattenText(renderer.toJSON())).toContain("Child content");
-    expect(mockCheckUpdatePolicy).not.toHaveBeenCalled();
+    expect(flattenText(renderer.toJSON())).not.toContain("Child content");
+    expect(flattenText(renderer.toJSON())).toContain("iPhone Update Required");
+    expect(mockCheckUpdatePolicy).toHaveBeenCalledTimes(1);
     expect(mockCleanOldApkFiles).not.toHaveBeenCalled();
-    expect(mockTriggerOtaUpdate).not.toHaveBeenCalled();
+    await press(renderer, "Open iPhone Update");
+    expect(Linking.openURL).toHaveBeenCalledWith(iosPolicy.artifactDownloadUrl);
   });
 
   it("rechecks on foreground and keeps existing content mounted but inaccessible", async () => {

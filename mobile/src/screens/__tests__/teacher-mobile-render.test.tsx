@@ -47,8 +47,12 @@ jest.mock("@expo/vector-icons", () => {
 });
 
 jest.mock("expo-image-picker", () => ({
-  launchImageLibraryAsync: jest.fn().mockResolvedValue({ canceled: true, assets: [] }),
-  requestMediaLibraryPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
+  launchImageLibraryAsync: jest
+    .fn()
+    .mockResolvedValue({ canceled: true, assets: [] }),
+  requestMediaLibraryPermissionsAsync: jest
+    .fn()
+    .mockResolvedValue({ granted: true }),
   MediaTypeOptions: { Images: "Images" },
 }));
 
@@ -105,28 +109,88 @@ jest.mock("../../components/teacher/TeacherMobilePrimitives", () => {
     },
     stripRichText: (value?: string) => value || "",
     TeacherScreen: ({ title, children }: any) =>
-      ReactRuntime.createElement("TeacherScreen", null, ReactRuntime.createElement(Text, null, title), children),
+      ReactRuntime.createElement(
+        "TeacherScreen",
+        null,
+        ReactRuntime.createElement(Text, null, title),
+        children,
+      ),
     TeacherPanel: ({ title, subtitle, children }: any) =>
-      ReactRuntime.createElement("TeacherPanel", null, title ? ReactRuntime.createElement(Text, null, title) : null, subtitle ? ReactRuntime.createElement(Text, null, subtitle) : null, children),
-    TeacherAccordionSection: ({ title, count, expanded, action, children, onToggle }: any) =>
+      ReactRuntime.createElement(
+        "TeacherPanel",
+        null,
+        title ? ReactRuntime.createElement(Text, null, title) : null,
+        subtitle ? ReactRuntime.createElement(Text, null, subtitle) : null,
+        children,
+      ),
+    TeacherAccordionSection: ({
+      title,
+      count,
+      expanded,
+      action,
+      children,
+      onToggle,
+    }: any) =>
       ReactRuntime.createElement(
         "TeacherAccordionSection",
         { title, count, expanded, onToggle },
-        ReactRuntime.createElement(Text, null, `${title}${count === undefined ? "" : `:${count}`}`),
+        ReactRuntime.createElement(
+          Text,
+          null,
+          `${title}${count === undefined ? "" : `:${count}`}`,
+        ),
         action,
         expanded ? children : null,
       ),
     TeacherSelectMenu: ({ label, selectedValue }: any) =>
-      ReactRuntime.createElement("TeacherSelectMenu", null, ReactRuntime.createElement(Text, null, `${label}:${selectedValue}`)),
+      ReactRuntime.createElement(
+        "TeacherSelectMenu",
+        null,
+        ReactRuntime.createElement(Text, null, `${label}:${selectedValue}`),
+      ),
     TeacherStats: ({ items }: any) =>
-      ReactRuntime.createElement("TeacherStats", null, items.map((item: any) => ReactRuntime.createElement(Text, { key: item.label }, `${item.label}:${item.value}`))),
-    TeacherChip: ({ label }: any) => ReactRuntime.createElement(Text, null, label),
+      ReactRuntime.createElement(
+        "TeacherStats",
+        null,
+        items.map((item: any) =>
+          ReactRuntime.createElement(
+            Text,
+            { key: item.label },
+            `${item.label}:${item.value}`,
+          ),
+        ),
+      ),
+    TeacherChip: ({ label }: any) =>
+      ReactRuntime.createElement(Text, null, label),
     TeacherActionButton: ({ label, onPress }: any) =>
-      ReactRuntime.createElement("Pressable", { accessibilityLabel: label, onPress }, ReactRuntime.createElement(Text, null, label)),
-    TeacherEmpty: ({ title, subtitle }: any) => ReactRuntime.createElement("TeacherEmpty", null, ReactRuntime.createElement(Text, null, title), ReactRuntime.createElement(Text, null, subtitle)),
-    TeacherRow: ({ title, subtitle, right }: any) => ReactRuntime.createElement("TeacherRow", null, ReactRuntime.createElement(Text, null, title), subtitle ? ReactRuntime.createElement(Text, null, subtitle) : null, right),
+      ReactRuntime.createElement(
+        "Pressable",
+        { accessibilityLabel: label, onPress },
+        ReactRuntime.createElement(Text, null, label),
+      ),
+    TeacherEmpty: ({ title, subtitle }: any) =>
+      ReactRuntime.createElement(
+        "TeacherEmpty",
+        null,
+        ReactRuntime.createElement(Text, null, title),
+        ReactRuntime.createElement(Text, null, subtitle),
+      ),
+    TeacherRow: ({ title, subtitle, right }: any) =>
+      ReactRuntime.createElement(
+        "TeacherRow",
+        null,
+        ReactRuntime.createElement(Text, null, title),
+        subtitle ? ReactRuntime.createElement(Text, null, subtitle) : null,
+        right,
+      ),
     TeacherSearch: component("TeacherSearch"),
-    TeacherInlineField: ({ label, value }: any) => ReactRuntime.createElement("TeacherInlineField", null, ReactRuntime.createElement(Text, null, label), ReactRuntime.createElement(Text, null, value)),
+    TeacherInlineField: ({ label, value }: any) =>
+      ReactRuntime.createElement(
+        "TeacherInlineField",
+        null,
+        ReactRuntime.createElement(Text, null, label),
+        ReactRuntime.createElement(Text, null, value),
+      ),
   };
 });
 
@@ -139,21 +203,71 @@ jest.mock("../../components/teacher/TeacherWorkspacePrimitives", () => {
 
   return {
     TeacherContextStrip: ({ title, subtitle, status }: any) =>
-      ReactRuntime.createElement("TeacherContextStrip", null, ReactRuntime.createElement(Text, null, title), subtitle ? ReactRuntime.createElement(Text, null, subtitle) : null, status ? ReactRuntime.createElement(Text, null, status) : null),
+      ReactRuntime.createElement(
+        "TeacherContextStrip",
+        null,
+        ReactRuntime.createElement(Text, null, title),
+        subtitle ? ReactRuntime.createElement(Text, null, subtitle) : null,
+        status ? ReactRuntime.createElement(Text, null, status) : null,
+      ),
     TeacherSegmentedTabs: ({ items, activeKey, onSelect }: any) =>
-      ReactRuntime.createElement("TeacherSegmentedTabs", null, items.map((item: any) => ReactRuntime.createElement(Pressable, { key: item.key, accessibilityLabel: item.label, onPress: () => onSelect(item.key), active: item.key === activeKey }, ReactRuntime.createElement(Text, null, item.label)))),
-    TeacherActionSheet: ({ visible, title, children }: any) => visible
-      ? ReactRuntime.createElement("TeacherActionSheet", null, ReactRuntime.createElement(Text, null, title), children)
-      : null,
+      ReactRuntime.createElement(
+        "TeacherSegmentedTabs",
+        null,
+        items.map((item: any) =>
+          ReactRuntime.createElement(
+            Pressable,
+            {
+              key: item.key,
+              accessibilityLabel: item.label,
+              onPress: () => onSelect(item.key),
+              active: item.key === activeKey,
+            },
+            ReactRuntime.createElement(Text, null, item.label),
+          ),
+        ),
+      ),
+    TeacherActionSheet: ({ visible, title, children }: any) =>
+      visible
+        ? ReactRuntime.createElement(
+            "TeacherActionSheet",
+            null,
+            ReactRuntime.createElement(Text, null, title),
+            children,
+          )
+        : null,
     TeacherFlatSection: ({ title, subtitle, action, children }: any) =>
-      ReactRuntime.createElement("TeacherFlatSection", null, ReactRuntime.createElement(Text, null, title), subtitle ? ReactRuntime.createElement(Text, null, subtitle) : null, action, children),
+      ReactRuntime.createElement(
+        "TeacherFlatSection",
+        null,
+        ReactRuntime.createElement(Text, null, title),
+        subtitle ? ReactRuntime.createElement(Text, null, subtitle) : null,
+        action,
+        children,
+      ),
     TeacherSummaryStrip: ({ items }: any) =>
-      ReactRuntime.createElement("TeacherSummaryStrip", null, items.map((item: any) => ReactRuntime.createElement(Text, { key: item.label }, `${item.label}:${item.value}`))),
+      ReactRuntime.createElement(
+        "TeacherSummaryStrip",
+        null,
+        items.map((item: any) =>
+          ReactRuntime.createElement(
+            Text,
+            { key: item.label },
+            `${item.label}:${item.value}`,
+          ),
+        ),
+      ),
   };
 });
 
 jest.mock("../../api/config", () => ({
   API_BASE_URL: "http://localhost:3000/api",
+}));
+
+jest.mock("../../api/services/mobile-workspace", () => ({
+  mobileWorkspaceApi: {
+    getTeacherOverviewForUser: jest.fn(),
+  },
 }));
 
 jest.mock("../../api/services/announcements", () => ({
@@ -184,11 +298,15 @@ jest.mock("../../api/hooks", () => ({
     assessments: (classId: string) => ["assessments", classId],
     announcements: (classId: string) => ["announcements", classId],
     teacherClassAtRisk: (classId: string) => ["teacher-class-at-risk", classId],
+    mobileTeacherOverview: ["mobile-workspace", "teacher", "overview"],
   },
   useTeacherClasses: jest.fn(),
   useAssessmentDetail: jest.fn(),
   useTeacherAssessmentUpdateMutation: jest.fn(),
-  useTeacherDeleteAssessmentMutation: jest.fn(() => ({ mutate: jest.fn(), isPending: false })),
+  useTeacherDeleteAssessmentMutation: jest.fn(() => ({
+    mutate: jest.fn(),
+    isPending: false,
+  })),
   useTeacherAssessmentSubmissions: jest.fn(),
   useTeacherProfile: jest.fn(),
   useTeacherProfileUpdateMutation: jest.fn(),
@@ -200,33 +318,106 @@ const mockedUseQuery = useQuery as jest.Mock;
 const mockedUseAuth = useAuth as jest.Mock;
 const mockedUseTeacherClasses = useTeacherClasses as jest.Mock;
 const mockedUseAssessmentDetail = useAssessmentDetail as jest.Mock;
-const mockedUseTeacherAssessmentUpdateMutation = useTeacherAssessmentUpdateMutation as jest.Mock;
-const mockedUseTeacherAssessmentSubmissions = useTeacherAssessmentSubmissions as jest.Mock;
+const mockedUseTeacherAssessmentUpdateMutation =
+  useTeacherAssessmentUpdateMutation as jest.Mock;
+const mockedUseTeacherAssessmentSubmissions =
+  useTeacherAssessmentSubmissions as jest.Mock;
 const mockedUseTeacherProfile = useTeacherProfile as jest.Mock;
-const mockedUseTeacherProfileUpdateMutation = useTeacherProfileUpdateMutation as jest.Mock;
-const mockedUseTeacherProfileAvatarMutation = useTeacherProfileAvatarMutation as jest.Mock;
+const mockedUseTeacherProfileUpdateMutation =
+  useTeacherProfileUpdateMutation as jest.Mock;
+const mockedUseTeacherProfileAvatarMutation =
+  useTeacherProfileAvatarMutation as jest.Mock;
 
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
 
-function flattenText(node: TestRenderer.ReactTestRendererJSON | TestRenderer.ReactTestRendererJSON[] | null): string {
+function flattenText(
+  node:
+    | TestRenderer.ReactTestRendererJSON
+    | TestRenderer.ReactTestRendererJSON[]
+    | null,
+): string {
   if (!node) return "";
   if (Array.isArray(node)) return node.map(flattenText).join(" ");
-  const children = Array.isArray(node.children) ? node.children.map((child) => (typeof child === "string" ? child : flattenText(child))).join(" ") : "";
+  const children = Array.isArray(node.children)
+    ? node.children
+        .map((child) =>
+          typeof child === "string" ? child : flattenText(child),
+        )
+        .join(" ")
+    : "";
   return children;
 }
 
 describe("teacher mobile screens", () => {
   beforeEach(() => {
     mockedUseQueries.mockReturnValue([]);
-    mockedUseQuery.mockImplementation(({ queryKey }: { queryKey: string[] }) => ({
-      data: queryKey.includes("teacher-assessment-stats")
-        ? { totalAttempts: 1, submittedAttempts: 1, averageScore: 88, highestScore: 88, lowestScore: 88, passRate: 100, averageTimeSeconds: 120, completionRate: 100, totalEnrolled: 1 }
-        : { totalResponses: 1, uniqueSubmitterCount: 1, questions: [] },
-      isError: false,
-      error: null,
-      isRefetching: false,
-      refetch: jest.fn(),
-    }));
+    mockedUseQuery.mockImplementation(
+      ({ queryKey }: { queryKey: string[] }) => ({
+        data: queryKey.includes("mobile-workspace")
+          ? {
+              classes: [
+                {
+                  id: "class-1",
+                  subjectCode: "INF234",
+                  subjectName: "Capstone",
+                  section: { id: "section-1", name: "12-A", gradeLevel: "12" },
+                  schoolYear: "2025-2026",
+                  enrollmentCount: 32,
+                  room: "ICT Lab",
+                  schedules: [
+                    {
+                      id: "schedule-1",
+                      days: ["W"],
+                      startTime: "10:00",
+                      endTime: "11:00",
+                    },
+                  ],
+                },
+                {
+                  id: "class-2",
+                  subjectCode: "ICT101",
+                  subjectName: "Programming",
+                  section: { id: "section-2", name: "11-B", gradeLevel: "11" },
+                  schoolYear: "2025-2026",
+                  enrollmentCount: 30,
+                  schedules: [],
+                },
+                {
+                  id: "class-3",
+                  subjectCode: "EXTRA",
+                  subjectName: "Third class",
+                  section: { id: "section-3", name: "10-C", gradeLevel: "10" },
+                  schoolYear: "2025-2026",
+                  enrollmentCount: 28,
+                  schedules: [],
+                },
+              ],
+              assessments: [],
+              announcements: [],
+              atRiskCounts: {},
+              generatedAt: new Date().toISOString(),
+              requestBudget: { clientRequests: 1, dbQueries: 4 },
+              offlineSnapshotReadsEnabled: true,
+            }
+          : queryKey.includes("teacher-assessment-stats")
+            ? {
+                totalAttempts: 1,
+                submittedAttempts: 1,
+                averageScore: 88,
+                highestScore: 88,
+                lowestScore: 88,
+                passRate: 100,
+                averageTimeSeconds: 120,
+                completionRate: 100,
+                totalEnrolled: 1,
+              }
+            : { totalResponses: 1, uniqueSubmitterCount: 1, questions: [] },
+        isError: false,
+        error: null,
+        isRefetching: false,
+        refetch: jest.fn(),
+      }),
+    );
     mockedUseAuth.mockReturnValue({
       user: {
         id: "teacher-1",
@@ -250,7 +441,14 @@ describe("teacher mobile screens", () => {
           schoolYear: "2025-2026",
           enrollmentCount: 32,
           room: "ICT Lab",
-          schedules: [{ id: "schedule-1", days: ["W"], startTime: "10:00", endTime: "11:00" }],
+          schedules: [
+            {
+              id: "schedule-1",
+              days: ["W"],
+              startTime: "10:00",
+              endTime: "11:00",
+            },
+          ],
         },
         {
           id: "class-2",
@@ -285,9 +483,15 @@ describe("teacher mobile screens", () => {
 
     const text = flattenText(renderer.toJSON());
     expect(text).toContain("Teacher Home");
-    expect(renderer.root.findAll((node) => node.type === "TeacherStats")).toHaveLength(0);
-    expect(renderer.root.findAll((node) => node.type === "TeacherAccordionSection")).toHaveLength(0);
-    expect(renderer.root.findAll((node) => node.type === "TeacherActionButton")).toHaveLength(0);
+    expect(
+      renderer.root.findAll((node) => node.type === "TeacherStats"),
+    ).toHaveLength(0);
+    expect(
+      renderer.root.findAll((node) => node.type === "TeacherAccordionSection"),
+    ).toHaveLength(0);
+    expect(
+      renderer.root.findAll((node) => node.type === "TeacherActionButton"),
+    ).toHaveLength(0);
     expect(text).toContain("Next up");
     expect(text).toContain("Today");
     expect(text).toContain("Priority");
@@ -319,7 +523,13 @@ describe("teacher mobile screens", () => {
     });
     mockedUseTeacherAssessmentSubmissions.mockReturnValue({
       data: {
-        summary: { total: 1, notStarted: 0, inProgress: 0, turnedIn: 1, returned: 0 },
+        summary: {
+          total: 1,
+          notStarted: 0,
+          inProgress: 0,
+          turnedIn: 1,
+          returned: 0,
+        },
         submissions: [
           {
             studentId: "student-1",
@@ -332,14 +542,23 @@ describe("teacher mobile screens", () => {
       isRefetching: false,
       refetch: jest.fn(),
     });
-    mockedUseTeacherAssessmentUpdateMutation.mockReturnValue({ mutateAsync: jest.fn(), isPending: false });
+    mockedUseTeacherAssessmentUpdateMutation.mockReturnValue({
+      mutateAsync: jest.fn(),
+      isPending: false,
+    });
 
     let renderer: TestRenderer.ReactTestRenderer;
     act(() => {
       renderer = TestRenderer.create(
         <TeacherAssessmentDetailScreen
           navigation={{ goBack: jest.fn(), navigate: jest.fn() } as never}
-          route={{ key: "TeacherAssessmentDetail", name: "TeacherAssessmentDetail", params: { assessmentId: "assessment-1", classId: "class-1" } } as never}
+          route={
+            {
+              key: "TeacherAssessmentDetail",
+              name: "TeacherAssessmentDetail",
+              params: { assessmentId: "assessment-1", classId: "class-1" },
+            } as never
+          }
         />,
       );
     });
@@ -348,7 +567,9 @@ describe("teacher mobile screens", () => {
     expect(text).toContain("Quarter Quiz");
     expect(text).toContain("Submissions");
     act(() => {
-      renderer.root.findByProps({ accessibilityLabel: "Submissions" }).props.onPress();
+      renderer.root
+        .findByProps({ accessibilityLabel: "Submissions" })
+        .props.onPress();
     });
     text = flattenText(renderer.toJSON());
     expect(text).toContain("Student One");
@@ -368,8 +589,14 @@ describe("teacher mobile screens", () => {
       isRefetching: false,
       refetch: jest.fn(),
     });
-    mockedUseTeacherProfileUpdateMutation.mockReturnValue({ mutateAsync: jest.fn(), isPending: false });
-    mockedUseTeacherProfileAvatarMutation.mockReturnValue({ mutateAsync: jest.fn(), isPending: false });
+    mockedUseTeacherProfileUpdateMutation.mockReturnValue({
+      mutateAsync: jest.fn(),
+      isPending: false,
+    });
+    mockedUseTeacherProfileAvatarMutation.mockReturnValue({
+      mutateAsync: jest.fn(),
+      isPending: false,
+    });
 
     let renderer: TestRenderer.ReactTestRenderer;
     act(() => {
@@ -382,7 +609,9 @@ describe("teacher mobile screens", () => {
     });
 
     const professionalSection = renderer.root.find(
-      (node) => node.type === "TeacherAccordionSection" && node.props.title === "Professional details",
+      (node) =>
+        node.type === "TeacherAccordionSection" &&
+        node.props.title === "Professional details",
     );
     act(() => professionalSection.props.onToggle());
 
@@ -390,7 +619,9 @@ describe("teacher mobile screens", () => {
     expect(text).toContain("Teacher One");
     expect(text).toContain("ICT");
     expect(text).toContain("Employee ID");
-    expect(renderer.root.findAll((node) => node.type === "TeacherStats")).toHaveLength(0);
+    expect(
+      renderer.root.findAll((node) => node.type === "TeacherStats"),
+    ).toHaveLength(0);
     expect(text).not.toContain("teacher profile API");
     expect(text).toContain("Contact details");
     expect(text).toContain("Professional details");

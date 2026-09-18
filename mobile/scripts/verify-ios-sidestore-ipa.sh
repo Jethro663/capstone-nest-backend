@@ -89,6 +89,7 @@ fi
 )
 
 IPA_SIZE=$(stat -f %z "$IPA_PATH")
+IPA_SHA=$(shasum -a 256 "$IPA_PATH" | awk '{print $1}')
 XCODE_VERSION=$(xcodebuild -version | paste -sd ' ' -)
 EXPO_VERSION=$(node -p "require(process.argv[1]).dependencies.expo" "$(dirname "$APP_JSON")/package.json")
 {
@@ -100,6 +101,7 @@ EXPO_VERSION=$(node -p "require(process.argv[1]).dependencies.expo" "$(dirname "
   printf 'bundleIdentifier=%s\n' "$BUNDLE_ID"
   printf 'apiUrl=%s\n' "$EXPECTED_API_URL"
   printf 'ipaBytes=%s\n' "$IPA_SIZE"
+  printf 'ipaSha256=%s\n' "$IPA_SHA"
   printf 'builtAtUtc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 } > "$METADATA_PATH"
 

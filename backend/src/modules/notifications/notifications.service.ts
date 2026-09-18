@@ -2,6 +2,8 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  Logger,
+  Optional,
 } from '@nestjs/common';
 import {
   and,
@@ -17,6 +19,7 @@ import {
 import { DatabaseService } from '../../database/database.service';
 import { notifications } from '../../drizzle/schema';
 import { QueryNotificationsDto } from './DTO/query-notifications.dto';
+import { PushNotificationDispatchService } from './push-notification-dispatch.service';
 
 export interface CreateNotificationInput {
   userId: string;
@@ -61,7 +64,13 @@ export function visibleNotificationsWhere(userId: string, isRead?: boolean) {
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly databaseService: DatabaseService) {}
+  private readonly logger = new Logger(NotificationsService.name);
+
+  constructor(
+    private readonly databaseService: DatabaseService,
+    @Optional()
+    private readonly pushNotificationDispatch?: PushNotificationDispatchService,
+  ) {}
 
   private get db() {
     return this.databaseService.db;
@@ -107,7 +116,7 @@ export class NotificationsService {
       })
       .returning();
 
-    return persistedRows
+    const created = persistedRows
       .filter((row) => row.dismissedAt === null)
       .map((row) => ({
         id: row.id,
@@ -119,6 +128,8 @@ export class NotificationsService {
         metadata: row.metadata as Record<string, unknown> | undefined,
         createdAt: row.createdAt,
       }));
+    await this.dispatchPushWithoutAffectingInbox(created);
+    return created;
   }
 
   // ─── REST: paginated inbox ────────────────────────────────────────────────
@@ -151,7 +162,7 @@ export class NotificationsService {
       })
       .returning();
 
-    return insertedRows.map((row) => ({
+    const created = insertedRows.map((row) => ({
       id: row.id,
       userId: row.userId,
       type: row.type,
@@ -161,6 +172,21 @@ export class NotificationsService {
       metadata: row.metadata as Record<string, unknown> | undefined,
       createdAt: row.createdAt,
     }));
+    await this.dispatchPushWithoutAffectingInbox(created);
+    return created;
+  }
+
+  private async dispatchPushWithoutAffectingInbox(
+    created: CreatedNotification[],
+  ): Promise<void> {
+    if (!this.pushNotificationDispatch || created.length === 0) return;
+    try {
+      await this.pushNotificationDispatch.enqueueCreated(created);
+    } catch {
+      this.logger.warn(
+        '[notifications] Push dispatch failed after persistence; inbox rows remain available.',
+      );
+    }
   }
 
   async hideArchivedTeacherContext(

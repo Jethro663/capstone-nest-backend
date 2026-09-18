@@ -63,8 +63,8 @@ describe("student mobile follow-up layout contracts", () => {
     expect(source).toContain("styles.actionTrailingSlot");
     expect(source).toContain('accessibilityLabel="View tasks"');
     expect(source).toContain('accessibilityLabel="View schedule"');
-    expect(source).toContain(">Tasks</Text>");
-    expect(source).toContain(">Schedule</Text>");
+    expect(source).toMatch(/>\s*Tasks\s*<\/Text>/);
+    expect(source).toMatch(/>\s*Schedule\s*<\/Text>/);
     expect(source).toContain(
       "numberOfLines={2} style={styles.primaryButtonText}",
     );

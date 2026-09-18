@@ -8,7 +8,7 @@ import { useAssessmentResult } from "../api/hooks";
 import { assessmentsApi } from "../api/services/assessments";
 import type { RootStackParamList } from "../navigation/types";
 import { studentDarkTheme as theme, stripRichText } from "../theme/studentDark";
-import { Refreshable, ScreenScroll } from "../components/ui/primitives";
+import { StudentScreen } from "../components/student/StudentWorkspacePrimitives";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AssessmentResults">;
 type Tone = "blue" | "green" | "amber" | "red" | "purple";
@@ -30,10 +30,12 @@ function formatFileSize(bytes?: number | null) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function isImageFile(file?: {
-  mimeType?: string | null;
-  originalName?: string | null;
-} | null) {
+function isImageFile(
+  file?: {
+    mimeType?: string | null;
+    originalName?: string | null;
+  } | null,
+) {
   const mimeType = (file?.mimeType || "").toLowerCase();
   if (mimeType.startsWith("image/")) {
     return true;
@@ -72,7 +74,9 @@ function ToneTag({ label, tone }: { label: string; tone: Tone }) {
         paddingVertical: 5,
       }}
     >
-      <Text style={{ fontSize: 10, fontWeight: "700", color: toneStyle.color }}>{label}</Text>
+      <Text style={{ fontSize: 10, fontWeight: "700", color: toneStyle.color }}>
+        {label}
+      </Text>
     </View>
   );
 }
@@ -100,7 +104,11 @@ function ActionButton({
       style={{
         borderRadius: 12,
         borderWidth: primary || ghost ? 0 : 1,
-        borderColor: ghost ? "transparent" : primary ? "transparent" : theme.border,
+        borderColor: ghost
+          ? "transparent"
+          : primary
+            ? "transparent"
+            : theme.border,
         backgroundColor: disabled
           ? theme.active
           : primary
@@ -152,11 +160,30 @@ function MetricTile({
         paddingVertical: 12,
       }}
     >
-      <Text style={{ fontSize: 10, fontWeight: "700", color: theme.muted }}>{eyebrow}</Text>
-      <Text style={{ marginTop: 8, fontSize: 24, lineHeight: 28, fontWeight: "900", color: toneStyle.color }}>
+      <Text style={{ fontSize: 10, fontWeight: "700", color: theme.muted }}>
+        {eyebrow}
+      </Text>
+      <Text
+        style={{
+          marginTop: 8,
+          fontSize: 24,
+          lineHeight: 28,
+          fontWeight: "900",
+          color: toneStyle.color,
+        }}
+      >
         {value}
       </Text>
-      <Text style={{ marginTop: 6, fontSize: 11, lineHeight: 16, color: theme.subtext }}>{caption}</Text>
+      <Text
+        style={{
+          marginTop: 6,
+          fontSize: 11,
+          lineHeight: 16,
+          color: theme.subtext,
+        }}
+      >
+        {caption}
+      </Text>
     </View>
   );
 }
@@ -195,18 +222,41 @@ function FileRow({
             backgroundColor: theme.blueSoft,
           }}
         >
-          <MaterialCommunityIcons name="paperclip" size={15} color={theme.blue} />
+          <MaterialCommunityIcons
+            name="paperclip"
+            size={15}
+            color={theme.blue}
+          />
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: "700", color: theme.text }}>
+          <Text
+            numberOfLines={1}
+            style={{ fontSize: 12, fontWeight: "700", color: theme.text }}
+          >
             {file.originalName || "Attachment"}
           </Text>
-          <Text numberOfLines={1} style={{ marginTop: 2, fontSize: 10, color: theme.muted }}>
-            {[formatFileSize(file.sizeBytes), file.mimeType || null].filter(Boolean).join(" • ")}
+          <Text
+            numberOfLines={1}
+            style={{ marginTop: 2, fontSize: 10, color: theme.muted }}
+          >
+            {[formatFileSize(file.sizeBytes), file.mimeType || null]
+              .filter(Boolean)
+              .join(" • ")}
           </Text>
         </View>
       </View>
-      {actions ? <View style={{ marginTop: 10, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>{actions}</View> : null}
+      {actions ? (
+        <View
+          style={{
+            marginTop: 10,
+            flexDirection: "row",
+            flexWrap: "wrap",
+            gap: 8,
+          }}
+        >
+          {actions}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -222,12 +272,18 @@ function formatAnswer(response: {
   const options = response.question?.options ?? [];
 
   if (response.selectedOptionId) {
-    return options.find((option) => option.id === response.selectedOptionId)?.text || response.selectedOptionId;
+    return (
+      options.find((option) => option.id === response.selectedOptionId)?.text ||
+      response.selectedOptionId
+    );
   }
 
   if (response.selectedOptionIds?.length) {
     return response.selectedOptionIds
-      .map((optionId) => options.find((option) => option.id === optionId)?.text || optionId)
+      .map(
+        (optionId) =>
+          options.find((option) => option.id === optionId)?.text || optionId,
+      )
       .join(", ");
   }
 
@@ -248,7 +304,12 @@ export function AssessmentResultsScreen({ route, navigation }: Props) {
   const [busyAction, setBusyAction] = useState("");
 
   const submittedFiles = useMemo(
-    () => (result?.submittedFiles?.length ? result.submittedFiles : result?.submittedFile ? [result.submittedFile] : []),
+    () =>
+      result?.submittedFiles?.length
+        ? result.submittedFiles
+        : result?.submittedFile
+          ? [result.submittedFile]
+          : [],
     [result?.submittedFile, result?.submittedFiles],
   );
   const isFileUploadAssessment = result?.assessment?.type === "file_upload";
@@ -266,10 +327,17 @@ export function AssessmentResultsScreen({ route, navigation }: Props) {
   };
 
   const openHistory = () => {
-    navigation.navigate("AssessmentHistory", assessmentId ? { assessmentId } : undefined);
+    navigation.navigate(
+      "AssessmentHistory",
+      assessmentId ? { assessmentId } : undefined,
+    );
   };
 
-  const runFileAction = async (key: string, action: () => Promise<void>, successMessage?: string) => {
+  const runFileAction = async (
+    key: string,
+    action: () => Promise<void>,
+    successMessage?: string,
+  ) => {
     try {
       setBusyAction(key);
       setNotice("");
@@ -285,56 +353,59 @@ export function AssessmentResultsScreen({ route, navigation }: Props) {
   };
 
   return (
-    <ScreenScroll
-      backgroundColor={theme.bg}
-      refreshControl={
-        <Refreshable
-          refreshing={resultQuery.isRefetching}
-          onRefresh={() => {
-            void resultQuery.refetch();
-          }}
-        />
+    <StudentScreen
+      title={
+        result
+          ? `Attempt #${result.attemptNumber ?? result.attempt?.attemptNumber ?? "?"}`
+          : "Assessment Result"
+      }
+      showBackButton
+      onBackPress={() => navigation.goBack()}
+      refreshing={resultQuery.isRefetching}
+      onRefresh={() => void resultQuery.refetch()}
+      rightAction={
+        result ? (
+          <ToneTag
+            label={
+              result.isReturned === false
+                ? "Pending"
+                : feedbackLocked
+                  ? "Feedback Locked"
+                  : result.passed == null
+                    ? "Ungraded"
+                    : result.passed
+                      ? "Passed"
+                      : "Needs Work"
+            }
+            tone={
+              result.isReturned === false ||
+              feedbackLocked ||
+              result.passed == null
+                ? "amber"
+                : result.passed
+                  ? "green"
+                  : "red"
+            }
+          />
+        ) : undefined
       }
     >
-      <View style={{ backgroundColor: theme.header, borderBottomWidth: 1, borderBottomColor: theme.border }}>
-        <View style={{ paddingHorizontal: 16, paddingTop: 44, paddingBottom: 16 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <Pressable
-              onPress={() => navigation.goBack()}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 999,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: theme.active,
-              }}
-            >
-              <MaterialCommunityIcons name="chevron-left" size={20} color={theme.text} />
-            </Pressable>
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: theme.text, fontSize: 12, fontWeight: "700" }}>Assessment Result</Text>
-              <Text style={{ marginTop: 4, color: theme.text, fontSize: 28, fontWeight: "800" }}>
-                {result ? `Attempt #${result.attemptNumber ?? result.attempt?.attemptNumber ?? "?"}` : "Loading..."}
-              </Text>
-            </View>
-            {result ? (
-              <ToneTag
-                label={result.isReturned === false ? "Pending" : feedbackLocked ? "Feedback Locked" : result.passed == null ? "Ungraded" : result.passed ? "Passed" : "Needs Work"}
-                tone={result.isReturned === false || feedbackLocked || result.passed == null ? "amber" : result.passed ? "green" : "red"}
-              />
-            ) : null}
-          </View>
-        </View>
-      </View>
-
       <View style={{ paddingHorizontal: 16, paddingTop: 18, gap: 10 }}>
         {resultQuery.error ? (
           <DarkPanel>
-            <Text style={{ fontSize: 14, fontWeight: "800", color: theme.text }}>
+            <Text
+              style={{ fontSize: 14, fontWeight: "800", color: theme.text }}
+            >
               Unable to load this attempt
             </Text>
-            <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: theme.muted }}>
+            <Text
+              style={{
+                marginTop: 6,
+                fontSize: 12,
+                lineHeight: 18,
+                color: theme.muted,
+              }}
+            >
               {peekAppError(resultQuery.error).message}
             </Text>
           </DarkPanel>
@@ -342,38 +413,87 @@ export function AssessmentResultsScreen({ route, navigation }: Props) {
 
         {notice ? (
           <DarkPanel>
-            <Text style={{ fontSize: 12, lineHeight: 18, color: theme.text }}>{notice}</Text>
+            <Text style={{ fontSize: 12, lineHeight: 18, color: theme.text }}>
+              {notice}
+            </Text>
           </DarkPanel>
         ) : null}
 
         {!result ? (
           <DarkPanel>
-            <Text style={{ color: theme.muted }}>Loading attempt result...</Text>
+            <Text style={{ color: theme.muted }}>
+              Loading attempt result...
+            </Text>
           </DarkPanel>
         ) : result.isReturned === false || feedbackLocked ? (
           <>
             <DarkPanel>
-              <Text style={{ fontSize: 12, color: theme.muted }}>Submission Status</Text>
-              <Text style={{ marginTop: 6, fontSize: 26, lineHeight: 32, fontWeight: "900", color: theme.text }}>
-                {feedbackLocked ? "Feedback Not Yet Available" : "Awaiting Teacher Review"}
+              <Text style={{ fontSize: 12, color: theme.muted }}>
+                Submission Status
               </Text>
-              <Text style={{ marginTop: 10, fontSize: 13, lineHeight: 20, color: theme.subtext }}>
+              <Text
+                style={{
+                  marginTop: 6,
+                  fontSize: 26,
+                  lineHeight: 32,
+                  fontWeight: "900",
+                  color: theme.text,
+                }}
+              >
                 {feedbackLocked
-                  ? result.feedbackStatus?.message || `Detailed feedback is delayed${result.feedbackStatus?.hoursRemaining != null ? ` for about ${result.feedbackStatus.hoursRemaining} more hour(s)` : ""}.`
+                  ? "Feedback Not Yet Available"
+                  : "Awaiting Teacher Review"}
+              </Text>
+              <Text
+                style={{
+                  marginTop: 10,
+                  fontSize: 13,
+                  lineHeight: 20,
+                  color: theme.subtext,
+                }}
+              >
+                {feedbackLocked
+                  ? result.feedbackStatus?.message ||
+                    `Detailed feedback is delayed${result.feedbackStatus?.hoursRemaining != null ? ` for about ${result.feedbackStatus.hoursRemaining} more hour(s)` : ""}.`
                   : "Your submission is recorded. Results and teacher feedback will appear here once they are returned."}
               </Text>
-              <View style={{ marginTop: 14, flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-                <ActionButton label="Back to Assessment" onPress={openAssessment} />
+              <View
+                style={{
+                  marginTop: 14,
+                  flexDirection: "row",
+                  flexWrap: "wrap",
+                  gap: 10,
+                }}
+              >
+                <ActionButton
+                  label="Back to Assessment"
+                  onPress={openAssessment}
+                />
                 {!isFileUploadAssessment ? (
-                  <ActionButton label="Open History" onPress={openHistory} variant="secondary" />
+                  <ActionButton
+                    label="Open History"
+                    onPress={openHistory}
+                    variant="secondary"
+                  />
                 ) : null}
               </View>
             </DarkPanel>
 
             {isFileUploadAssessment && submittedFiles.length > 0 ? (
               <DarkPanel>
-                <Text style={{ fontSize: 16, fontWeight: "800", color: theme.text }}>Your submission files</Text>
-                <Text style={{ marginTop: 4, fontSize: 11, lineHeight: 17, color: theme.muted }}>
+                <Text
+                  style={{ fontSize: 16, fontWeight: "800", color: theme.text }}
+                >
+                  Your submission files
+                </Text>
+                <Text
+                  style={{
+                    marginTop: 4,
+                    fontSize: 11,
+                    lineHeight: 17,
+                    color: theme.muted,
+                  }}
+                >
                   Review the files currently included in this upload.
                 </Text>
                 <View style={{ marginTop: 12, gap: 8 }}>
@@ -390,14 +510,14 @@ export function AssessmentResultsScreen({ route, navigation }: Props) {
                               variant="ghost"
                               disabled={busyAction === `open-${file.id}`}
                               onPress={() =>
-                                void runFileAction(
-                                  `open-${file.id}`,
-                                  () =>
-                                    assessmentsApi.openAttemptSubmissionAttachmentFile(
+                                void runFileAction(`open-${file.id}`, () =>
+                                  assessmentsApi
+                                    .openAttemptSubmissionAttachmentFile(
                                       route.params.attemptId,
                                       file.id,
                                       file.originalName || "submission-file",
-                                    ).then(() => undefined),
+                                    )
+                                    .then(() => undefined),
                                 )
                               }
                             />
@@ -411,11 +531,13 @@ export function AssessmentResultsScreen({ route, navigation }: Props) {
                               void runFileAction(
                                 `download-${file.id}`,
                                 () =>
-                                  assessmentsApi.downloadAttemptSubmissionAttachmentFile(
-                                    route.params.attemptId,
-                                    file.id,
-                                    file.originalName || "submission-file",
-                                  ).then(() => undefined),
+                                  assessmentsApi
+                                    .downloadAttemptSubmissionAttachmentFile(
+                                      route.params.attemptId,
+                                      file.id,
+                                      file.originalName || "submission-file",
+                                    )
+                                    .then(() => undefined),
                                 "Submission file saved to this device.",
                               )
                             }
@@ -431,26 +553,85 @@ export function AssessmentResultsScreen({ route, navigation }: Props) {
         ) : (
           <>
             <DarkPanel>
-              <Text style={{ fontSize: 11, fontWeight: "700", color: theme.muted }}>Assessment Result</Text>
-              <Text style={{ marginTop: 6, fontSize: 26, lineHeight: 32, fontWeight: "900", color: theme.text }}>
+              <Text
+                style={{ fontSize: 11, fontWeight: "700", color: theme.muted }}
+              >
+                Assessment Result
+              </Text>
+              <Text
+                style={{
+                  marginTop: 6,
+                  fontSize: 26,
+                  lineHeight: 32,
+                  fontWeight: "900",
+                  color: theme.text,
+                }}
+              >
                 {result.assessment?.title || "Assessment"}
               </Text>
-              <Text style={{ marginTop: 8, fontSize: 13, lineHeight: 20, color: theme.subtext }}>
-                Review your score, teacher feedback, and the files or answers attached to this attempt.
+              <Text
+                style={{
+                  marginTop: 8,
+                  fontSize: 13,
+                  lineHeight: 20,
+                  color: theme.subtext,
+                }}
+              >
+                Review your score, teacher feedback, and the files or answers
+                attached to this attempt.
               </Text>
 
-              <View style={{ marginTop: 14, flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+              <View
+                style={{
+                  marginTop: 14,
+                  flexDirection: "row",
+                  flexWrap: "wrap",
+                  gap: 10,
+                }}
+              >
                 <MetricTile
                   eyebrow="SCORE"
-                  value={result.score == null ? "Pending" : `${Math.round(result.score)}%`}
-                  caption={result.passed == null ? "This response still needs grading." : result.passed ? "You met the passing requirement." : "You still need improvement."}
-                  tone={result.passed == null ? "amber" : result.passed ? "green" : "amber"}
+                  value={
+                    result.score == null
+                      ? "Pending"
+                      : `${Math.round(result.score)}%`
+                  }
+                  caption={
+                    result.passed == null
+                      ? "This response still needs grading."
+                      : result.passed
+                        ? "You met the passing requirement."
+                        : "You still need improvement."
+                  }
+                  tone={
+                    result.passed == null
+                      ? "amber"
+                      : result.passed
+                        ? "green"
+                        : "amber"
+                  }
                 />
                 <MetricTile
                   eyebrow="STATUS"
-                  value={result.passed == null ? "Ungraded" : result.passed ? "Pass" : "Review"}
-                  caption={result.isReturned ? "Teacher has already returned this attempt." : "Recorded in the system."}
-                  tone={result.passed == null ? "amber" : result.passed ? "green" : "red"}
+                  value={
+                    result.passed == null
+                      ? "Ungraded"
+                      : result.passed
+                        ? "Pass"
+                        : "Review"
+                  }
+                  caption={
+                    result.isReturned
+                      ? "Teacher has already returned this attempt."
+                      : "Recorded in the system."
+                  }
+                  tone={
+                    result.passed == null
+                      ? "amber"
+                      : result.passed
+                        ? "green"
+                        : "red"
+                  }
                 />
                 <MetricTile
                   eyebrow="ATTEMPT"
@@ -461,33 +642,107 @@ export function AssessmentResultsScreen({ route, navigation }: Props) {
               </View>
 
               {result.teacherFeedback ? (
-                <Text style={{ marginTop: 14, fontSize: 13, lineHeight: 20, color: theme.subtext }}>
-                  Teacher feedback: <Text style={{ color: theme.text }}>{result.teacherFeedback}</Text>
+                <Text
+                  style={{
+                    marginTop: 14,
+                    fontSize: 13,
+                    lineHeight: 20,
+                    color: theme.subtext,
+                  }}
+                >
+                  Teacher feedback:{" "}
+                  <Text style={{ color: theme.text }}>
+                    {result.teacherFeedback}
+                  </Text>
                 </Text>
               ) : null}
 
-              <View style={{ marginTop: 14, flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-                <ActionButton label="Back to Assessment" onPress={openAssessment} />
+              <View
+                style={{
+                  marginTop: 14,
+                  flexDirection: "row",
+                  flexWrap: "wrap",
+                  gap: 10,
+                }}
+              >
+                <ActionButton
+                  label="Back to Assessment"
+                  onPress={openAssessment}
+                />
                 {!isFileUploadAssessment ? (
-                  <ActionButton label="Open History" onPress={openHistory} variant="secondary" />
+                  <ActionButton
+                    label="Open History"
+                    onPress={openHistory}
+                    variant="secondary"
+                  />
                 ) : null}
               </View>
             </DarkPanel>
 
             {result.assessment?.rubricCriteria?.length ? (
               <DarkPanel>
-                <Text style={{ fontSize: 16, fontWeight: "800", color: theme.text }}>Rubric breakdown</Text>
-                <Text style={{ marginTop: 4, fontSize: 11, lineHeight: 17, color: theme.muted }}>Scores and criterion feedback returned by your teacher.</Text>
+                <Text
+                  style={{ fontSize: 16, fontWeight: "800", color: theme.text }}
+                >
+                  Rubric breakdown
+                </Text>
+                <Text
+                  style={{
+                    marginTop: 4,
+                    fontSize: 11,
+                    lineHeight: 17,
+                    color: theme.muted,
+                  }}
+                >
+                  Scores and criterion feedback returned by your teacher.
+                </Text>
                 <View style={{ marginTop: 12, gap: 8 }}>
                   {result.assessment.rubricCriteria.map((criterion) => {
-                    const score = result.rubricScores?.find((entry) => entry.criterionId === criterion.id);
+                    const score = result.rubricScores?.find(
+                      (entry) => entry.criterionId === criterion.id,
+                    );
                     return (
-                      <View key={criterion.id} style={{ borderRadius: 12, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.active, padding: 12 }}>
-                        <Text style={{ fontSize: 13, fontWeight: "800", color: theme.text }}>{criterion.title}</Text>
-                        <Text style={{ marginTop: 4, fontSize: 12, color: score ? theme.green : theme.muted }}>
-                          {score ? `${score.pointsEarned}/${criterion.points} points` : "Awaiting rubric score"}
+                      <View
+                        key={criterion.id}
+                        style={{
+                          borderRadius: 12,
+                          borderWidth: 1,
+                          borderColor: theme.border,
+                          backgroundColor: theme.active,
+                          padding: 12,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 13,
+                            fontWeight: "800",
+                            color: theme.text,
+                          }}
+                        >
+                          {criterion.title}
                         </Text>
-                        {score?.feedback ? <Text style={{ marginTop: 5, fontSize: 11, color: theme.subtext }}>{score.feedback}</Text> : null}
+                        <Text
+                          style={{
+                            marginTop: 4,
+                            fontSize: 12,
+                            color: score ? theme.green : theme.muted,
+                          }}
+                        >
+                          {score
+                            ? `${score.pointsEarned}/${criterion.points} points`
+                            : "Awaiting rubric score"}
+                        </Text>
+                        {score?.feedback ? (
+                          <Text
+                            style={{
+                              marginTop: 5,
+                              fontSize: 11,
+                              color: theme.subtext,
+                            }}
+                          >
+                            {score.feedback}
+                          </Text>
+                        ) : null}
                       </View>
                     );
                   })}
@@ -497,8 +752,19 @@ export function AssessmentResultsScreen({ route, navigation }: Props) {
 
             {isFileUploadAssessment ? (
               <DarkPanel>
-                <Text style={{ fontSize: 16, fontWeight: "800", color: theme.text }}>Submitted files</Text>
-                <Text style={{ marginTop: 4, fontSize: 11, lineHeight: 17, color: theme.muted }}>
+                <Text
+                  style={{ fontSize: 16, fontWeight: "800", color: theme.text }}
+                >
+                  Submitted files
+                </Text>
+                <Text
+                  style={{
+                    marginTop: 4,
+                    fontSize: 11,
+                    lineHeight: 17,
+                    color: theme.muted,
+                  }}
+                >
                   Files that were included when this upload was reviewed.
                 </Text>
                 <View style={{ marginTop: 12, gap: 8 }}>
@@ -516,14 +782,14 @@ export function AssessmentResultsScreen({ route, navigation }: Props) {
                                 variant="ghost"
                                 disabled={busyAction === `open-${file.id}`}
                                 onPress={() =>
-                                  void runFileAction(
-                                    `open-${file.id}`,
-                                    () =>
-                                      assessmentsApi.openAttemptSubmissionAttachmentFile(
+                                  void runFileAction(`open-${file.id}`, () =>
+                                    assessmentsApi
+                                      .openAttemptSubmissionAttachmentFile(
                                         route.params.attemptId,
                                         file.id,
                                         file.originalName || "submission-file",
-                                      ).then(() => undefined),
+                                      )
+                                      .then(() => undefined),
                                   )
                                 }
                               />
@@ -537,11 +803,13 @@ export function AssessmentResultsScreen({ route, navigation }: Props) {
                                 void runFileAction(
                                   `download-${file.id}`,
                                   () =>
-                                    assessmentsApi.downloadAttemptSubmissionAttachmentFile(
-                                      route.params.attemptId,
-                                      file.id,
-                                      file.originalName || "submission-file",
-                                    ).then(() => undefined),
+                                    assessmentsApi
+                                      .downloadAttemptSubmissionAttachmentFile(
+                                        route.params.attemptId,
+                                        file.id,
+                                        file.originalName || "submission-file",
+                                      )
+                                      .then(() => undefined),
                                   "Submission file saved to this device.",
                                 )
                               }
@@ -551,7 +819,13 @@ export function AssessmentResultsScreen({ route, navigation }: Props) {
                       />
                     ))
                   ) : (
-                    <Text style={{ fontSize: 12, lineHeight: 18, color: theme.muted }}>
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        lineHeight: 18,
+                        color: theme.muted,
+                      }}
+                    >
                       No submission files were attached to this result.
                     </Text>
                   )}
@@ -566,32 +840,106 @@ export function AssessmentResultsScreen({ route, navigation }: Props) {
 
                 return (
                   <DarkPanel key={`${response.questionId}-${index}`}>
-                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                      <Text style={{ fontSize: 12, color: theme.muted }}>Question {index + 1}</Text>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 10,
+                      }}
+                    >
+                      <Text style={{ fontSize: 12, color: theme.muted }}>
+                        Question {index + 1}
+                      </Text>
                       <ToneTag
-                        label={response.isCorrect == null ? "Awaiting grade" : response.isCorrect ? "Correct" : "Needs correction"}
-                        tone={response.isCorrect == null ? "amber" : response.isCorrect ? "green" : "red"}
+                        label={
+                          response.isCorrect == null
+                            ? "Awaiting grade"
+                            : response.isCorrect
+                              ? "Correct"
+                              : "Needs correction"
+                        }
+                        tone={
+                          response.isCorrect == null
+                            ? "amber"
+                            : response.isCorrect
+                              ? "green"
+                              : "red"
+                        }
                       />
                     </View>
-                    <Text style={{ marginTop: 8, fontSize: 14, lineHeight: 21, fontWeight: "800", color: theme.text }}>
-                      {stripRichText(response.question?.content || "Question content unavailable")}
+                    <Text
+                      style={{
+                        marginTop: 8,
+                        fontSize: 14,
+                        lineHeight: 21,
+                        fontWeight: "800",
+                        color: theme.text,
+                      }}
+                    >
+                      {stripRichText(
+                        response.question?.content ||
+                          "Question content unavailable",
+                      )}
                     </Text>
-                    <Text style={{ marginTop: 10, fontSize: 12, lineHeight: 18, color: theme.subtext }}>
-                      Your previous answer: <Text style={{ color: theme.text }}>{formatAnswer(response)}</Text>
+                    <Text
+                      style={{
+                        marginTop: 10,
+                        fontSize: 12,
+                        lineHeight: 18,
+                        color: theme.subtext,
+                      }}
+                    >
+                      Your previous answer:{" "}
+                      <Text style={{ color: theme.text }}>
+                        {formatAnswer(response)}
+                      </Text>
                     </Text>
-                    {result.feedbackStatus?.unlocked !== false && correctAnswer ? (
-                      <Text style={{ marginTop: 8, fontSize: 12, lineHeight: 18, color: theme.muted }}>
-                        Correct answer: <Text style={{ color: theme.green, fontWeight: "900" }}>{correctAnswer}</Text>
+                    {result.feedbackStatus?.unlocked !== false &&
+                    correctAnswer ? (
+                      <Text
+                        style={{
+                          marginTop: 8,
+                          fontSize: 12,
+                          lineHeight: 18,
+                          color: theme.muted,
+                        }}
+                      >
+                        Correct answer:{" "}
+                        <Text style={{ color: theme.green, fontWeight: "900" }}>
+                          {correctAnswer}
+                        </Text>
                       </Text>
                     ) : null}
-                    {result.feedbackStatus?.unlocked !== false && response.question?.explanation ? (
-                      <Text style={{ marginTop: 8, fontSize: 12, lineHeight: 18, color: theme.muted }}>
-                        Explanation: <Text style={{ color: theme.text }}>{stripRichText(response.question.explanation)}</Text>
+                    {result.feedbackStatus?.unlocked !== false &&
+                    response.question?.explanation ? (
+                      <Text
+                        style={{
+                          marginTop: 8,
+                          fontSize: 12,
+                          lineHeight: 18,
+                          color: theme.muted,
+                        }}
+                      >
+                        Explanation:{" "}
+                        <Text style={{ color: theme.text }}>
+                          {stripRichText(response.question.explanation)}
+                        </Text>
                       </Text>
                     ) : null}
                     {response.hint ? (
-                      <Text style={{ marginTop: 8, fontSize: 12, lineHeight: 18, color: theme.muted }}>
-                        Hint: <Text style={{ color: theme.text }}>{response.hint}</Text>
+                      <Text
+                        style={{
+                          marginTop: 8,
+                          fontSize: 12,
+                          lineHeight: 18,
+                          color: theme.muted,
+                        }}
+                      >
+                        Hint:{" "}
+                        <Text style={{ color: theme.text }}>
+                          {response.hint}
+                        </Text>
                       </Text>
                     ) : null}
                   </DarkPanel>
@@ -601,6 +949,6 @@ export function AssessmentResultsScreen({ route, navigation }: Props) {
           </>
         )}
       </View>
-    </ScreenScroll>
+    </StudentScreen>
   );
 }

@@ -4,6 +4,33 @@ apply plugin: "com.facebook.react"
 
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
 
+def nexoraReleaseProperty = { String name ->
+    findProperty(name) ?: System.getenv(name)
+}
+def nexoraReleaseStoreFile = nexoraReleaseProperty("NEXORA_RELEASE_STORE_FILE")
+def nexoraReleaseStorePassword = nexoraReleaseProperty("NEXORA_RELEASE_STORE_PASSWORD")
+def nexoraReleaseKeyAlias = nexoraReleaseProperty("NEXORA_RELEASE_KEY_ALIAS")
+def nexoraReleaseKeyPassword = nexoraReleaseProperty("NEXORA_RELEASE_KEY_PASSWORD")
+def hasNexoraReleaseSigning = [
+    nexoraReleaseStoreFile,
+    nexoraReleaseStorePassword,
+    nexoraReleaseKeyAlias,
+    nexoraReleaseKeyPassword,
+].every { value -> value != null && !value.toString().trim().isEmpty() }
+
+gradle.taskGraph.whenReady { graph ->
+    def requestsReleaseArtifact = graph.allTasks.any { task ->
+        task.project == project && task.name.toLowerCase().contains("release")
+    }
+    if (requestsReleaseArtifact && !hasNexoraReleaseSigning) {
+        throw new GradleException(
+            "Release signing is required. Set NEXORA_RELEASE_STORE_FILE, " +
+            "NEXORA_RELEASE_STORE_PASSWORD, NEXORA_RELEASE_KEY_ALIAS, and " +
+            "NEXORA_RELEASE_KEY_PASSWORD outside the repository."
+        )
+    }
+}
+
 /**
  * This is the configuration block to customize your React Native Android app.
  * By default you don't need to apply any configuration, just uncomment the lines you need.
@@ -92,8 +119,8 @@ android {
         applicationId 'com.nexora.lms.mobile'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 46
-        versionName "0.1.45"
+        versionCode 47
+        versionName "0.1.46"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
@@ -104,15 +131,21 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        release {
+            if (hasNexoraReleaseSigning) {
+                storeFile file(nexoraReleaseStoreFile)
+                storePassword nexoraReleaseStorePassword
+                keyAlias nexoraReleaseKeyAlias
+                keyPassword nexoraReleaseKeyPassword
+            }
+        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
             minifyEnabled enableMinifyInReleaseBuilds
@@ -130,6 +163,68 @@ android {
     androidResources {
         ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
     }
+}
+
+def certificateSha256 = { File storePath, String storePassword, String alias ->
+    Exception lastError = null
+    for (String storeType : ["JKS", "PKCS12"]) {
+        try {
+            def keyStore = java.security.KeyStore.getInstance(storeType)
+            storePath.withInputStream { stream ->
+                keyStore.load(stream, storePassword.toCharArray())
+            }
+            def certificate = keyStore.getCertificate(alias)
+            if (certificate == null) {
+                throw new GradleException("Signing alias '${alias}' was not found in ${storePath}.")
+            }
+            return java.security.MessageDigest
+                .getInstance("SHA-256")
+                .digest(certificate.encoded)
+                .collect { String.format("%02x", it & 0xff) }
+                .join("")
+        } catch (Exception error) {
+            lastError = error
+        }
+    }
+    throw new GradleException("Unable to read signing certificate from ${storePath}.", lastError)
+}
+
+def verifyNexoraReleaseSigner = tasks.register("verifyNexoraReleaseSigner") {
+    group = "verification"
+    description = "Rejects missing or Android-debug release signing identities."
+    doLast {
+        if (!hasNexoraReleaseSigning) {
+            throw new GradleException("Release signing inputs are unavailable.")
+        }
+        def releaseStore = file(nexoraReleaseStoreFile)
+        if (!releaseStore.isFile()) {
+            throw new GradleException("Release signing store does not exist: ${releaseStore}")
+        }
+        def releaseFingerprint = certificateSha256(
+            releaseStore,
+            nexoraReleaseStorePassword.toString(),
+            nexoraReleaseKeyAlias.toString(),
+        )
+        def debugFingerprint = certificateSha256(
+            file("debug.keystore"),
+            "android",
+            "androiddebugkey",
+        )
+        if (releaseFingerprint == debugFingerprint) {
+            throw new GradleException(
+                "Release signing certificate matches debug.keystore; refusing to package."
+            )
+        }
+        def evidenceDirectory = layout.buildDirectory.dir("reports/nexora-release-signer").get().asFile
+        evidenceDirectory.mkdirs()
+        new File(evidenceDirectory, "certificate-sha256.txt").text =
+            "certificate-sha256=${releaseFingerprint}\n"
+        logger.lifecycle("Nexora release signer SHA-256: ${releaseFingerprint}")
+    }
+}
+
+tasks.named("preReleaseBuild").configure {
+    dependsOn(verifyNexoraReleaseSigner)
 }
 
 // Apply static values from `gradle.properties` to the `android.packagingOptions`

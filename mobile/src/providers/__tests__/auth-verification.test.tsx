@@ -12,7 +12,16 @@ jest.mock("../UpdateProvider", () => ({
   useUpdate: () => ({ state: { access: "allowed" } }),
 }));
 jest.mock("../../api/services/auth", () => ({
-  authApi: { login: jest.fn(), getCurrentUser: jest.fn() },
+  authApi: { login: jest.fn(), logout: jest.fn(), getCurrentUser: jest.fn() },
+}));
+jest.mock("../../services/notifications/push-registration.runtime", () => ({
+  revokeCurrentPushInstallation: jest.fn(),
+}));
+jest.mock("../../services/offline/workspace-snapshot", () => ({
+  workspaceSnapshotStore: { purgeUser: jest.fn() },
+}));
+jest.mock("../../features/assessment-editor/recovery", () => ({
+  clearAllEditorRecovery: jest.fn(),
 }));
 jest.mock("../../api/client", () => ({
   clearAuthSession: jest.fn(),
@@ -82,6 +91,52 @@ it.each(["student", "teacher"])(
   },
 );
 
+it("best-effort revokes the current push installation before logout clears auth", async () => {
+  const pushRuntime = jest.requireMock(
+    "../../services/notifications/push-registration.runtime",
+  );
+  await mount();
+  jest.mocked(authApi.login).mockResolvedValue(session("student", true));
+  jest.mocked(authApi.logout).mockResolvedValue(undefined);
+  await act(async () => {
+    await auth.login("student@example.invalid", "password");
+    await auth.logout();
+  });
+
+  expect(pushRuntime.revokeCurrentPushInstallation).toHaveBeenCalledTimes(1);
+  expect(authApi.logout).toHaveBeenCalledTimes(1);
+  expect(clearAuthSession).toHaveBeenCalled();
+  const offlineStore = jest.requireMock(
+    "../../services/offline/workspace-snapshot",
+  );
+  expect(offlineStore.workspaceSnapshotStore.purgeUser).toHaveBeenCalledWith(
+    "user-1",
+  );
+});
+
+it("purges the previous account snapshot when a different account signs in", async () => {
+  const offlineStore = jest.requireMock(
+    "../../services/offline/workspace-snapshot",
+  );
+  await mount();
+  jest
+    .mocked(authApi.login)
+    .mockResolvedValueOnce(session("student", true))
+    .mockResolvedValueOnce({
+      ...session("teacher", true),
+      user: { ...session("teacher", true).user, id: "user-2" },
+    });
+
+  await act(async () => {
+    await auth.login("student@example.invalid", "password");
+    await auth.login("teacher@example.invalid", "password");
+  });
+
+  expect(offlineStore.workspaceSnapshotStore.purgeUser).toHaveBeenCalledWith(
+    "user-1",
+  );
+});
+
 it.each(["student", "teacher"])(
   "rejects restoring an unverified %s session",
   async (role) => {
@@ -98,6 +153,12 @@ it.each(["student", "teacher"])(
     expect(auth.isAuthenticated).toBe(false);
     expect(auth.user).toBeNull();
     expect(clearAuthSession).toHaveBeenCalled();
+    const offlineStore = jest.requireMock(
+      "../../services/offline/workspace-snapshot",
+    );
+    expect(offlineStore.workspaceSnapshotStore.purgeUser).toHaveBeenCalledWith(
+      "user-1",
+    );
   },
 );
 

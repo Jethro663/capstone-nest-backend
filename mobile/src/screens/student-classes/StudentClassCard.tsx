@@ -44,11 +44,13 @@ export function StudentClassCard({
   onOpenClass,
   onOpenTasks,
   onOpenSchedule,
+  disabled = false,
 }: {
   classItem: StudentClassRow;
   onOpenClass: () => void;
   onOpenTasks: () => void;
   onOpenSchedule: () => void;
+  disabled?: boolean;
 }) {
   const isComplete = classItem.status === "completed";
   const statusLabel = isComplete
@@ -70,8 +72,13 @@ export function StudentClassCard({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Open ${classItem.subjectName}`}
+          accessibilityState={{ disabled }}
+          disabled={disabled}
           onPress={onOpenClass}
-          style={({ pressed }) => [styles.heroPressTarget, pressed ? styles.heroPressed : null]}
+          style={({ pressed }) => [
+            styles.heroPressTarget,
+            pressed ? styles.heroPressed : null,
+          ]}
         >
           <View style={styles.heroStatusRow}>
             <View
@@ -100,7 +107,9 @@ export function StudentClassCard({
           </View>
 
           <View style={styles.heroIdentity}>
-            <Text numberOfLines={2} style={styles.subjectName}>{classItem.subjectName}</Text>
+            <Text numberOfLines={2} style={styles.subjectName}>
+              {classItem.subjectName}
+            </Text>
             <Text numberOfLines={1} style={styles.gradeLine}>
               Grade {classItem.subjectGradeLevel} • {classItem.sectionName}
             </Text>
@@ -113,11 +122,23 @@ export function StudentClassCard({
 
       <View style={styles.body}>
         <View style={styles.metricsRow}>
-          <Metric icon="account-group-outline" value={classItem.classmatesCount} label="Classmates" />
+          <Metric
+            icon="account-group-outline"
+            value={classItem.classmatesCount}
+            label="Classmates"
+          />
           <View style={styles.metricDivider} />
-          <Metric icon="book-open-page-variant-outline" value={classItem.totalLessons} label="Lessons" />
+          <Metric
+            icon="book-open-page-variant-outline"
+            value={classItem.totalLessons}
+            label="Lessons"
+          />
           <View style={styles.metricDivider} />
-          <Metric icon="clipboard-clock-outline" value={classItem.pendingCount} label="Pending" />
+          <Metric
+            icon="clipboard-clock-outline"
+            value={classItem.pendingCount}
+            label="Pending"
+          />
         </View>
 
         <View style={styles.progressPanel}>
@@ -125,25 +146,40 @@ export function StudentClassCard({
             <View>
               <Text style={styles.progressLabel}>Learning progress</Text>
               <Text style={styles.progressMeta}>
-                {classItem.completedLessons} of {classItem.totalLessons} lessons complete
+                {classItem.completedLessons} of {classItem.totalLessons} lessons
+                complete
               </Text>
             </View>
             <Text style={styles.progressValue}>{classItem.progress}%</Text>
           </View>
           <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${Math.max(0, Math.min(100, classItem.progress))}%` }]} />
+            <View
+              style={[
+                styles.progressFill,
+                { width: `${Math.max(0, Math.min(100, classItem.progress))}%` },
+              ]}
+            />
           </View>
         </View>
 
         <View style={styles.contextRow}>
           <View style={styles.contextChip}>
-            <MaterialCommunityIcons name="clipboard-text-outline" size={14} color={theme.redText} />
+            <MaterialCommunityIcons
+              name="clipboard-text-outline"
+              size={14}
+              color={theme.redText}
+            />
             <Text style={styles.contextText}>
-              {classItem.totalAssessments} {classItem.totalAssessments === 1 ? "task" : "tasks"}
+              {classItem.totalAssessments}{" "}
+              {classItem.totalAssessments === 1 ? "task" : "tasks"}
             </Text>
           </View>
           <View style={styles.contextChip}>
-            <MaterialCommunityIcons name="account-group-outline" size={14} color={theme.blue} />
+            <MaterialCommunityIcons
+              name="account-group-outline"
+              size={14}
+              color={theme.blue}
+            />
             <Text style={styles.contextText}>{classItem.sectionName}</Text>
           </View>
         </View>
@@ -151,14 +187,28 @@ export function StudentClassCard({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={isComplete ? "Open class" : "Continue learning"}
+          accessibilityState={{ disabled }}
+          disabled={disabled}
           onPress={onOpenClass}
-          style={({ pressed }) => [styles.primaryButton, pressed ? styles.pressed : null]}
+          style={({ pressed }) => [
+            styles.primaryButton,
+            pressed ? styles.pressed : null,
+          ]}
         >
           <View style={styles.primaryLabelSlot}>
-            <Text numberOfLines={2} style={styles.primaryButtonText}>{isComplete ? "Open Class" : "Continue Learning"}</Text>
+            <Text numberOfLines={2} style={styles.primaryButtonText}>
+              {isComplete ? "Open Class" : "Continue Learning"}
+            </Text>
           </View>
-          <View testID="class-action-trailing-slot" style={styles.actionTrailingSlot}>
-            <MaterialCommunityIcons name="arrow-right" size={17} color="#FFFFFF" />
+          <View
+            testID="class-action-trailing-slot"
+            style={styles.actionTrailingSlot}
+          >
+            <MaterialCommunityIcons
+              name="arrow-right"
+              size={17}
+              color="#FFFFFF"
+            />
           </View>
         </Pressable>
 
@@ -166,24 +216,46 @@ export function StudentClassCard({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="View tasks"
+            accessibilityState={{ disabled }}
+            disabled={disabled}
             onPress={onOpenTasks}
-            style={({ pressed }) => [styles.secondaryButton, pressed ? styles.pressed : null]}
+            style={({ pressed }) => [
+              styles.secondaryButton,
+              pressed ? styles.pressed : null,
+            ]}
           >
             <View testID="class-action-icon-slot" style={styles.actionIconSlot}>
-              <MaterialCommunityIcons name="clipboard-text-outline" size={17} color={theme.redText} />
+              <MaterialCommunityIcons
+                name="clipboard-text-outline"
+                size={17}
+                color={theme.redText}
+              />
             </View>
-            <Text numberOfLines={2} style={styles.secondaryButtonText}>Tasks</Text>
+            <Text numberOfLines={2} style={styles.secondaryButtonText}>
+              Tasks
+            </Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="View schedule"
+            accessibilityState={{ disabled }}
+            disabled={disabled}
             onPress={onOpenSchedule}
-            style={({ pressed }) => [styles.secondaryButton, pressed ? styles.pressed : null]}
+            style={({ pressed }) => [
+              styles.secondaryButton,
+              pressed ? styles.pressed : null,
+            ]}
           >
             <View testID="class-action-icon-slot" style={styles.actionIconSlot}>
-              <MaterialCommunityIcons name="calendar-blank-outline" size={17} color={theme.subtext} />
+              <MaterialCommunityIcons
+                name="calendar-blank-outline"
+                size={17}
+                color={theme.subtext}
+              />
             </View>
-            <Text numberOfLines={2} style={styles.scheduleButtonText}>Schedule</Text>
+            <Text numberOfLines={2} style={styles.scheduleButtonText}>
+              Schedule
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -220,37 +292,175 @@ const styles = StyleSheet.create({
   },
   statusPillComplete: { borderColor: "#BBF7D0", backgroundColor: "#DCFCE7" },
   statusPillReady: { borderColor: "#E2E8F0", backgroundColor: "#F8FAFC" },
-  statusText: { color: theme.redText, fontSize: 9, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" },
+  statusText: {
+    color: theme.redText,
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+  },
   statusTextComplete: { color: "#166534" },
   statusTextReady: { color: theme.subtext },
   heroIdentity: { marginTop: 18 },
-  subjectName: { color: "#FFFFFF", fontSize: 29, lineHeight: 32, fontWeight: "800", letterSpacing: -0.35 },
-  gradeLine: { marginTop: 8, color: "rgba(255,255,255,0.92)", fontSize: 13, lineHeight: 18, fontWeight: "700" },
-  teacherLine: { marginTop: 2, color: "rgba(255,255,255,0.80)", fontSize: 12, lineHeight: 17, fontWeight: "600" },
+  subjectName: {
+    color: "#FFFFFF",
+    fontSize: 29,
+    lineHeight: 32,
+    fontWeight: "800",
+    letterSpacing: -0.35,
+  },
+  gradeLine: {
+    marginTop: 8,
+    color: "rgba(255,255,255,0.92)",
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "700",
+  },
+  teacherLine: {
+    marginTop: 2,
+    color: "rgba(255,255,255,0.80)",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "600",
+  },
   body: { padding: 14 },
   metricsRow: { minHeight: 58, flexDirection: "row", alignItems: "stretch" },
   metric: { flex: 1, alignItems: "center", justifyContent: "center" },
   metricDivider: { width: 1, marginVertical: 8, backgroundColor: theme.border },
-  metricValue: { marginTop: 2, color: theme.text, fontSize: 18, fontWeight: "900" },
-  metricLabel: { marginTop: 1, color: theme.muted, fontSize: 9, fontWeight: "800" },
-  progressPanel: { marginTop: 11, borderRadius: 14, backgroundColor: theme.bg, padding: 12 },
-  progressHeading: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 },
+  metricValue: {
+    marginTop: 2,
+    color: theme.text,
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  metricLabel: {
+    marginTop: 1,
+    color: theme.muted,
+    fontSize: 9,
+    fontWeight: "800",
+  },
+  progressPanel: {
+    marginTop: 11,
+    borderRadius: 14,
+    backgroundColor: theme.bg,
+    padding: 12,
+  },
+  progressHeading: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
   progressLabel: { color: theme.text, fontSize: 12, fontWeight: "900" },
-  progressMeta: { marginTop: 3, color: theme.muted, fontSize: 9, lineHeight: 13 },
+  progressMeta: {
+    marginTop: 3,
+    color: theme.muted,
+    fontSize: 9,
+    lineHeight: 13,
+  },
   progressValue: { color: theme.redText, fontSize: 16, fontWeight: "900" },
-  progressTrack: { height: 7, marginTop: 11, overflow: "hidden", borderRadius: 999, backgroundColor: theme.border },
-  progressFill: { height: "100%", borderRadius: 999, backgroundColor: theme.red },
+  progressTrack: {
+    height: 7,
+    marginTop: 11,
+    overflow: "hidden",
+    borderRadius: 999,
+    backgroundColor: theme.border,
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 999,
+    backgroundColor: theme.red,
+  },
   contextRow: { marginTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 7 },
-  contextChip: { minHeight: 30, borderRadius: 999, backgroundColor: theme.bg, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 6 },
+  contextChip: {
+    minHeight: 30,
+    borderRadius: 999,
+    backgroundColor: theme.bg,
+    paddingHorizontal: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
   contextText: { color: theme.subtext, fontSize: 9, fontWeight: "800" },
-  primaryButton: { width: "100%", minWidth: 0, minHeight: 52, marginTop: 13, overflow: "hidden", borderRadius: 13, backgroundColor: theme.redText, paddingHorizontal: 14, flexDirection: "row", alignItems: "center" },
-  primaryLabelSlot: { flex: 1, minWidth: 0, alignItems: "center", justifyContent: "center", paddingLeft: 24 },
-  primaryButtonText: { flexShrink: 1, textAlign: "center", color: "#FFFFFF", fontSize: 12, lineHeight: 16, fontWeight: "900" },
-  actionTrailingSlot: { width: 24, flexShrink: 0, alignItems: "flex-end", justifyContent: "center" },
-  secondaryActionRow: { marginTop: 8, flexDirection: "row", flexWrap: "wrap", alignItems: "stretch", gap: 9 },
-  secondaryButton: { flexGrow: 1, flexBasis: 120, minWidth: 0, minHeight: 52, overflow: "hidden", borderRadius: 13, borderWidth: 1, borderColor: theme.border2, backgroundColor: theme.surface, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
-  actionIconSlot: { width: 24, flexShrink: 0, alignItems: "center", justifyContent: "center" },
-  secondaryButtonText: { flex: 1, minWidth: 0, textAlign: "center", color: theme.redText, fontSize: 11, lineHeight: 14, fontWeight: "900" },
-  scheduleButtonText: { flex: 1, minWidth: 0, textAlign: "center", color: theme.subtext, fontSize: 11, lineHeight: 14, fontWeight: "900" },
+  primaryButton: {
+    width: "100%",
+    minWidth: 0,
+    minHeight: 52,
+    marginTop: 13,
+    overflow: "hidden",
+    borderRadius: 13,
+    backgroundColor: theme.redText,
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  primaryLabelSlot: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingLeft: 24,
+  },
+  primaryButtonText: {
+    flexShrink: 1,
+    textAlign: "center",
+    color: "#FFFFFF",
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "900",
+  },
+  actionTrailingSlot: {
+    width: 24,
+    flexShrink: 0,
+    alignItems: "flex-end",
+    justifyContent: "center",
+  },
+  secondaryActionRow: {
+    marginTop: 8,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "stretch",
+    gap: 9,
+  },
+  secondaryButton: {
+    flexGrow: 1,
+    flexBasis: 120,
+    minWidth: 0,
+    minHeight: 52,
+    overflow: "hidden",
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: theme.border2,
+    backgroundColor: theme.surface,
+    paddingHorizontal: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  actionIconSlot: {
+    width: 24,
+    flexShrink: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  secondaryButtonText: {
+    flex: 1,
+    minWidth: 0,
+    textAlign: "center",
+    color: theme.redText,
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "900",
+  },
+  scheduleButtonText: {
+    flex: 1,
+    minWidth: 0,
+    textAlign: "center",
+    color: theme.subtext,
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "900",
+  },
   pressed: { opacity: 0.72 },
 });

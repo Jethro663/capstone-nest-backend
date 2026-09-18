@@ -4,6 +4,7 @@ import {
   adminParityManifest,
   adminWebRouteParity,
   adminWebCategoryOrder,
+  type AdminParityEntry,
   type AdminParityStatus,
 } from "../admin-parity-manifest";
 
@@ -147,10 +148,21 @@ describe("administrator web/mobile parity manifest", () => {
     }
   });
 
-  it("marks every administrator domain aligned after implementation", () => {
+  it("never marks a domain aligned without named capability evidence", () => {
+    for (const entry of adminParityManifest) {
+      if (entry.status === "aligned") {
+        const evidence = (
+          entry as AdminParityEntry & {
+            evidence?: readonly string[];
+          }
+        ).evidence;
+        expect(evidence?.length).toBeGreaterThan(0);
+      }
+    }
+
     expect(
-      adminParityManifest.filter((entry) => entry.status !== "aligned"),
-    ).toEqual([]);
+      adminParityManifest.some((entry) => entry.status !== "aligned"),
+    ).toBe(true);
   });
 
   it("maps every current web administrator page to an explicit mobile task", () => {

@@ -65,12 +65,54 @@ export class CreateAppVersionDto {
       'https://your-site.com/downloads/nexora-student-mobile-release.apk',
     description: 'Direct download URL for the APK or store link',
   })
+  @IsOptional()
   @IsString()
   @IsUrl(
     { require_tld: false },
     { message: 'apkDownloadUrl must be a valid URL' },
   )
-  apkDownloadUrl: string;
+  apkDownloadUrl?: string;
+
+  @ApiPropertyOptional({
+    example: 'ipa',
+    enum: ['apk', 'ipa', 'store_link'],
+    description: 'Platform-neutral release artifact kind',
+  })
+  @IsOptional()
+  @IsString()
+  @IsIn(['apk', 'ipa', 'store_link'])
+  artifactKind?: string;
+
+  @ApiPropertyOptional({
+    example: 'https://example.com/Nexora-iOS.ipa',
+    description: 'HTTPS artifact or controlled distribution URL',
+  })
+  @IsOptional()
+  @IsString()
+  @IsUrl(
+    { require_tld: false },
+    { message: 'artifactDownloadUrl must be a valid URL' },
+  )
+  artifactDownloadUrl?: string;
+
+  @ApiPropertyOptional({
+    example: 'sidestore',
+    enum: ['website', 'sidestore', 'store'],
+  })
+  @IsOptional()
+  @IsString()
+  @IsIn(['website', 'sidestore', 'store'])
+  distributionChannel?: string;
+
+  @ApiPropertyOptional({
+    example: '0ea3122212cdd14053fba70d4e50b2d1f6b7a9a9',
+  })
+  @IsOptional()
+  @IsString()
+  @Matches(/^[a-f0-9]{40}$/i, {
+    message: 'sourceRevision must be a 40-character hexadecimal Git SHA',
+  })
+  sourceRevision?: string;
 
   @ApiPropertyOptional({
     example: false,
@@ -96,7 +138,8 @@ export class CreateAppVersionDto {
   })
   @ValidateIf(
     (dto: CreateAppVersionDto, value: unknown) =>
-      dto.requiresFullApk === true || (value !== undefined && value !== null),
+      (dto.requiresFullApk === true && !dto.artifactSha256) ||
+      (value !== undefined && value !== null),
   )
   @IsString()
   @Matches(/^[a-f0-9]{64}$/i, {
@@ -106,14 +149,44 @@ export class CreateAppVersionDto {
 
   @ApiPropertyOptional({
     example: null,
+    description: 'Platform-neutral SHA-256 digest of the release artifact',
+  })
+  @ValidateIf(
+    (dto: CreateAppVersionDto, value: unknown) =>
+      (dto.requiresFullApk === true && !dto.apkSha256) ||
+      (value !== undefined && value !== null),
+  )
+  @IsString()
+  @Matches(/^[a-f0-9]{64}$/i, {
+    message: 'artifactSha256 must be a 64-character hexadecimal SHA-256 digest',
+  })
+  artifactSha256?: string;
+
+  @ApiPropertyOptional({
+    example: null,
     description: 'Size of the APK file in bytes for integrity verification',
   })
   @ValidateIf(
     (dto: CreateAppVersionDto, value: unknown) =>
-      dto.requiresFullApk === true || (value !== undefined && value !== null),
+      (dto.requiresFullApk === true && !dto.artifactSizeBytes) ||
+      (value !== undefined && value !== null),
   )
   @Type(() => Number)
   @IsInt()
   @Min(1)
   apkSizeBytes?: number;
+
+  @ApiPropertyOptional({
+    example: null,
+    description: 'Platform-neutral release artifact size in bytes',
+  })
+  @ValidateIf(
+    (dto: CreateAppVersionDto, value: unknown) =>
+      (dto.requiresFullApk === true && !dto.apkSizeBytes) ||
+      (value !== undefined && value !== null),
+  )
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  artifactSizeBytes?: number;
 }

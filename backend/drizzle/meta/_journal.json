@@ -239,6 +239,20 @@
       "when": 1789553135054,
       "tag": "0033_class_record_excused_with_score",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1789728000000,
+      "tag": "0034_platform_neutral_app_artifacts",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1789728060000,
+      "tag": "0035_notification_devices",
+      "breakpoints": true
     }
   ]
 }

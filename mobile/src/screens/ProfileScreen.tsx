@@ -1,10 +1,20 @@
-import { useEffect, useMemo, useState, type ComponentProps, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import { Image, Pressable, Text, TextInput, View } from "react-native";
-import { Refreshable, ScreenScroll } from "../components/ui/primitives";
-import { useProfile, useProfileAvatarMutation, useProfileUpdateMutation } from "../api/hooks";
+import { StudentScreen } from "../components/student/StudentWorkspacePrimitives";
+import {
+  useProfile,
+  useProfileAvatarMutation,
+  useProfileUpdateMutation,
+} from "../api/hooks";
 import { API_BASE_URL } from "../api/config";
 import { peekAppError, toAppError } from "../api/http";
 import type { MainTabParamList } from "../navigation/types";
@@ -16,7 +26,6 @@ import { PhPhoneInputField } from "../components/ui/PhPhoneInputField";
 import { PasswordChangeForm } from "../components/account/PasswordChangeForm";
 import { AppVersionInfo } from "../components/AppVersionInfo";
 import { studentDarkTheme } from "../theme/studentDark";
-import { RoleMenuButton } from "../components/navigation/RoleNavigationDrawer";
 
 type Props = BottomTabScreenProps<MainTabParamList, "Profile">;
 
@@ -65,13 +74,7 @@ function formatIdentityValue(value?: string | null, fallback = "--") {
   return hasValue(value) ? value!.trim() : fallback;
 }
 
-function SectionHeader({
-  title,
-  badge,
-}: {
-  title: string;
-  badge?: string;
-}) {
+function SectionHeader({ title, badge }: { title: string; badge?: string }) {
   return (
     <View
       style={{
@@ -103,16 +106,26 @@ function SectionHeader({
             paddingVertical: 3,
           }}
         >
-          <Text style={{ color: theme.red, fontSize: 10, fontWeight: "600" }}>{badge}</Text>
+          <Text style={{ color: theme.red, fontSize: 10, fontWeight: "600" }}>
+            {badge}
+          </Text>
         </View>
       ) : null}
     </View>
   );
 }
 
-function FieldLabel({ label, required = false }: { label: string; required?: boolean }) {
+function FieldLabel({
+  label,
+  required = false,
+}: {
+  label: string;
+  required?: boolean;
+}) {
   return (
-    <View style={{ alignItems: "center", flexDirection: "row", marginBottom: 5 }}>
+    <View
+      style={{ alignItems: "center", flexDirection: "row", marginBottom: 5 }}
+    >
       {required ? (
         <View
           style={{
@@ -274,7 +287,11 @@ function QuickLink({
       >
         {label}
       </Text>
-      <MaterialCommunityIcons color={theme.dim} name="chevron-right" size={16} />
+      <MaterialCommunityIcons
+        color={theme.dim}
+        name="chevron-right"
+        size={16}
+      />
     </Pressable>
   );
 }
@@ -288,9 +305,19 @@ export function ProfileScreen(props: Props) {
   const [phone, setPhone] = useState(profile?.phone ?? "");
   const [address, setAddress] = useState(profile?.address ?? "");
   const [familyName, setFamilyName] = useState(profile?.familyName ?? "");
-  const [familyRelationship, setFamilyRelationship] = useState(profile?.familyRelationship ?? "");
-  const [familyContact, setFamilyContact] = useState(profile?.familyContact ?? "");
-  const [dateOfBirth, setDateOfBirth] = useState(profile?.dateOfBirth ?? profile?.dob ?? user?.dateOfBirth ?? user?.dob ?? "");
+  const [familyRelationship, setFamilyRelationship] = useState(
+    profile?.familyRelationship ?? "",
+  );
+  const [familyContact, setFamilyContact] = useState(
+    profile?.familyContact ?? "",
+  );
+  const [dateOfBirth, setDateOfBirth] = useState(
+    profile?.dateOfBirth ??
+      profile?.dob ??
+      user?.dateOfBirth ??
+      user?.dob ??
+      "",
+  );
   const [gender, setGender] = useState(profile?.gender ?? user?.gender ?? "");
   const [error, setError] = useState("");
 
@@ -310,7 +337,9 @@ export function ProfileScreen(props: Props) {
       }),
     [currentEmail, currentFirstName, currentLastName],
   );
-  const avatarUri = resolveProfileImageUri(profile?.profilePicture || user?.profilePicture);
+  const avatarUri = resolveProfileImageUri(
+    profile?.profilePicture || user?.profilePicture,
+  );
   const avatarInitials = resolveAvatarInitials(fullName);
 
   useEffect(() => {
@@ -319,7 +348,13 @@ export function ProfileScreen(props: Props) {
     setFamilyName(profile?.familyName || "");
     setFamilyRelationship(profile?.familyRelationship || "");
     setFamilyContact(profile?.familyContact || "");
-    setDateOfBirth(profile?.dateOfBirth || profile?.dob || user?.dateOfBirth || user?.dob || "");
+    setDateOfBirth(
+      profile?.dateOfBirth ||
+        profile?.dob ||
+        user?.dateOfBirth ||
+        user?.dob ||
+        "",
+    );
     setGender(profile?.gender || user?.gender || "");
   }, [
     profile?.address,
@@ -336,10 +371,14 @@ export function ProfileScreen(props: Props) {
   ]);
 
   const phoneAnalysis = useMemo(() => analyzePhPhone(phone), [phone]);
-  const familyContactAnalysis = useMemo(() => analyzePhPhone(familyContact), [familyContact]);
+  const familyContactAnalysis = useMemo(
+    () => analyzePhPhone(familyContact),
+    [familyContact],
+  );
 
   const isPhoneValid = !hasValue(phone) || phoneAnalysis.isValid;
-  const isFamilyContactValid = !hasValue(familyContact) || familyContactAnalysis.isValid;
+  const isFamilyContactValid =
+    !hasValue(familyContact) || familyContactAnalysis.isValid;
   const isContactSectionValid = isPhoneValid && isFamilyContactValid;
 
   const statusItems = useMemo<ProfileStatusItem[]>(
@@ -353,7 +392,10 @@ export function ProfileScreen(props: Props) {
       { label: "Home Address", value: address },
       { label: "Guardian Name", value: familyName },
       { label: "Relationship", value: familyRelationship },
-      { label: "Guardian Contact", value: familyContactAnalysis.isValid ? familyContact : null },
+      {
+        label: "Guardian Contact",
+        value: familyContactAnalysis.isValid ? familyContact : null,
+      },
     ],
     [
       address,
@@ -371,9 +413,14 @@ export function ProfileScreen(props: Props) {
     ],
   );
 
-  const requiredCount = statusItems.filter((item) => !hasValue(item.value)).length;
+  const requiredCount = statusItems.filter(
+    (item) => !hasValue(item.value),
+  ).length;
   const canSaveProfile = isContactSectionValid && requiredCount === 0;
-  const refreshBusy = profileQuery.isRefetching || updateMutation.isPending || avatarMutation.isPending;
+  const refreshBusy =
+    profileQuery.isRefetching ||
+    updateMutation.isPending ||
+    avatarMutation.isPending;
   const completionHeadline =
     requiredCount === 0
       ? "All required fields are complete."
@@ -410,8 +457,14 @@ export function ProfileScreen(props: Props) {
         return;
       }
 
-      const normPhone = phoneAnalysis.normalizedE164 ?? normalizePhilippinePhone(phone) ?? phone;
-      const normFamilyContact = familyContactAnalysis.normalizedE164 ?? normalizePhilippinePhone(familyContact) ?? familyContact;
+      const normPhone =
+        phoneAnalysis.normalizedE164 ??
+        normalizePhilippinePhone(phone) ??
+        phone;
+      const normFamilyContact =
+        familyContactAnalysis.normalizedE164 ??
+        normalizePhilippinePhone(familyContact) ??
+        familyContact;
 
       const payload = {
         phone: normPhone ?? undefined,
@@ -455,64 +508,35 @@ export function ProfileScreen(props: Props) {
   };
 
   return (
-    <ScreenScroll
-      backgroundColor={theme.pageBg}
-      refreshControl={<Refreshable onRefresh={() => void profileQuery.refetch()} refreshing={refreshBusy} />}
-    >
-      <View style={{ backgroundColor: theme.pageBg, paddingBottom: 32 }}>
-        <View
+    <StudentScreen
+      title="My Profile"
+      refreshing={refreshBusy}
+      onRefresh={() => void profileQuery.refetch()}
+      rightAction={
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open notifications"
+          onPress={() => props.navigation.navigate("Notifications" as never)}
           style={{
-            backgroundColor: theme.topbar,
-            borderBottomColor: theme.border,
-            borderBottomWidth: 1,
-            paddingBottom: 7,
-            paddingHorizontal: 16,
-            paddingTop: 7,
+            alignItems: "center",
+            backgroundColor: theme.active,
+            borderColor: theme.border,
+            borderWidth: 1,
+            borderRadius: 12,
+            height: 44,
+            justifyContent: "center",
+            width: 44,
           }}
         >
-          <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
-            <View style={{ alignItems: "center", flexDirection: "row" }}>
-              <RoleMenuButton color={theme.red} />
-              <Text style={{ color: theme.text, fontSize: 20, fontWeight: "900", marginLeft: 9 }}>My Profile</Text>
-            </View>
-
-            <View style={{ alignItems: "center", flexDirection: "row" }}>
-              <Pressable
-                onPress={() => props.navigation.navigate("Notifications" as never)}
-                style={{
-                  alignItems: "center",
-                  backgroundColor: theme.active,
-                  borderColor: theme.border,
-                  borderWidth: 1,
-                  borderRadius: 999,
-                  height: 44,
-                  justifyContent: "center",
-                  width: 44,
-                }}
-              >
-                <MaterialCommunityIcons color={theme.text} name="bell-outline" size={18} />
-              </Pressable>
-              <Pressable
-                onPress={() => void profileQuery.refetch()}
-                style={{
-                  display: "none",
-                  alignItems: "center",
-                  backgroundColor: theme.active,
-                  borderColor: theme.border,
-                  borderWidth: 1,
-                  borderRadius: 999,
-                  height: 44,
-                  justifyContent: "center",
-                  marginLeft: 9,
-                  width: 44,
-                }}
-              >
-                <MaterialCommunityIcons color={theme.text} name="cog-outline" size={18} />
-              </Pressable>
-            </View>
-          </View>
-        </View>
-
+          <MaterialCommunityIcons
+            color={theme.text}
+            name="bell-outline"
+            size={18}
+          />
+        </Pressable>
+      }
+    >
+      <View style={{ backgroundColor: theme.pageBg, paddingBottom: 32 }}>
         <View
           style={{
             backgroundColor: theme.bg,
@@ -538,7 +562,13 @@ export function ProfileScreen(props: Props) {
             }}
           />
           <View style={{ alignItems: "flex-start", flexDirection: "row" }}>
-            <View style={{ marginRight: 20, paddingBottom: 10, position: "relative" }}>
+            <View
+              style={{
+                marginRight: 20,
+                paddingBottom: 10,
+                position: "relative",
+              }}
+            >
               <Pressable
                 onPress={() => void handleAvatarPick()}
                 style={{
@@ -554,9 +584,20 @@ export function ProfileScreen(props: Props) {
                 }}
               >
                 {avatarUri ? (
-                  <Image source={{ uri: avatarUri }} style={{ height: "100%", width: "100%" }} />
+                  <Image
+                    source={{ uri: avatarUri }}
+                    style={{ height: "100%", width: "100%" }}
+                  />
                 ) : (
-                  <Text style={{ color: "#FFFFFF", fontSize: 22, fontWeight: "700" }}>{avatarInitials}</Text>
+                  <Text
+                    style={{
+                      color: "#FFFFFF",
+                      fontSize: 22,
+                      fontWeight: "700",
+                    }}
+                  >
+                    {avatarInitials}
+                  </Text>
                 )}
               </Pressable>
               <Pressable
@@ -575,14 +616,30 @@ export function ProfileScreen(props: Props) {
                   width: 44,
                 }}
               >
-                <MaterialCommunityIcons color={theme.text} name="pencil-outline" size={16} />
+                <MaterialCommunityIcons
+                  color={theme.text}
+                  name="pencil-outline"
+                  size={16}
+                />
               </Pressable>
             </View>
 
             <View style={{ flex: 1, minWidth: 0, paddingTop: 4 }}>
-              <Text style={{ color: theme.text, fontSize: 18, fontWeight: "700", marginBottom: 3 }}>{fullName}</Text>
-              <Text style={{ color: theme.muted, fontSize: 11, marginBottom: 8 }}>
-                Student - {currentGradeLevel || "Assigned grade"} - {currentEmail}
+              <Text
+                style={{
+                  color: theme.text,
+                  fontSize: 18,
+                  fontWeight: "700",
+                  marginBottom: 3,
+                }}
+              >
+                {fullName}
+              </Text>
+              <Text
+                style={{ color: theme.muted, fontSize: 11, marginBottom: 8 }}
+              >
+                Student - {currentGradeLevel || "Assigned grade"} -{" "}
+                {currentEmail}
               </Text>
               <View
                 style={{
@@ -606,7 +663,14 @@ export function ProfileScreen(props: Props) {
                     width: 5,
                   }}
                 />
-                <Text style={{ color: theme.green, fontSize: 10, fontWeight: "600", letterSpacing: 0.3 }}>
+                <Text
+                  style={{
+                    color: theme.green,
+                    fontSize: 10,
+                    fontWeight: "600",
+                    letterSpacing: 0.3,
+                  }}
+                >
                   {currentStatus} - Student
                 </Text>
               </View>
@@ -626,7 +690,11 @@ export function ProfileScreen(props: Props) {
                 paddingVertical: 9,
               }}
             >
-              <MaterialCommunityIcons color={theme.text} name="image-outline" size={14} />
+              <MaterialCommunityIcons
+                color={theme.text}
+                name="image-outline"
+                size={14}
+              />
               <Text
                 style={{
                   color: theme.text,
@@ -656,8 +724,20 @@ export function ProfileScreen(props: Props) {
               paddingVertical: 10,
             }}
           >
-            <MaterialCommunityIcons color={theme.red} name="alert-circle-outline" size={15} style={{ marginRight: 9, marginTop: 1 }} />
-            <Text style={{ color: theme.redText, flex: 1, fontSize: 11, lineHeight: 16 }}>
+            <MaterialCommunityIcons
+              color={theme.red}
+              name="alert-circle-outline"
+              size={15}
+              style={{ marginRight: 9, marginTop: 1 }}
+            />
+            <Text
+              style={{
+                color: theme.redText,
+                flex: 1,
+                fontSize: 11,
+                lineHeight: 16,
+              }}
+            >
               {peekAppError(profileQuery.error).message}
             </Text>
           </View>
@@ -666,7 +746,8 @@ export function ProfileScreen(props: Props) {
         <View
           style={{
             alignItems: "flex-start",
-            backgroundColor: requiredCount === 0 ? theme.greenSoft : theme.redSoft,
+            backgroundColor:
+              requiredCount === 0 ? theme.greenSoft : theme.redSoft,
             borderColor: requiredCount === 0 ? theme.greenLine : theme.redLine,
             borderRadius: 10,
             borderWidth: 1,
@@ -679,11 +760,22 @@ export function ProfileScreen(props: Props) {
         >
           <MaterialCommunityIcons
             color={requiredCount === 0 ? theme.green : theme.red}
-            name={requiredCount === 0 ? "check-circle-outline" : "alert-circle-outline"}
+            name={
+              requiredCount === 0
+                ? "check-circle-outline"
+                : "alert-circle-outline"
+            }
             size={15}
             style={{ marginRight: 9, marginTop: 1 }}
           />
-          <Text style={{ color: requiredCount === 0 ? theme.green : theme.redText, flex: 1, fontSize: 11, lineHeight: 16 }}>
+          <Text
+            style={{
+              color: requiredCount === 0 ? theme.green : theme.redText,
+              flex: 1,
+              fontSize: 11,
+              lineHeight: 16,
+            }}
+          >
             <Text style={{ fontWeight: "600" }}>{completionHeadline} </Text>
             {completionSubcopy}
           </Text>
@@ -704,12 +796,29 @@ export function ProfileScreen(props: Props) {
               paddingVertical: 10,
             }}
           >
-            <MaterialCommunityIcons color={theme.red} name="close-circle-outline" size={15} style={{ marginRight: 9, marginTop: 1 }} />
-            <Text style={{ color: theme.redText, flex: 1, fontSize: 11, lineHeight: 16 }}>{error}</Text>
+            <MaterialCommunityIcons
+              color={theme.red}
+              name="close-circle-outline"
+              size={15}
+              style={{ marginRight: 9, marginTop: 1 }}
+            />
+            <Text
+              style={{
+                color: theme.redText,
+                flex: 1,
+                fontSize: 11,
+                lineHeight: 16,
+              }}
+            >
+              {error}
+            </Text>
           </View>
         ) : null}
 
-        <SectionHeader badge={requiredCount === 0 ? "Complete" : `${requiredCount} required`} title="Student Identity" />
+        <SectionHeader
+          badge={requiredCount === 0 ? "Complete" : `${requiredCount} required`}
+          title="Student Identity"
+        />
 
         <View
           style={{
@@ -724,8 +833,19 @@ export function ProfileScreen(props: Props) {
           }}
         >
           <FormRow twoColumn>
-            <View style={{ borderRightColor: theme.border, borderRightWidth: 1, flex: 1, paddingRight: 12 }}>
-              <ReadOnlyField label="First Name" required value={currentFirstName} />
+            <View
+              style={{
+                borderRightColor: theme.border,
+                borderRightWidth: 1,
+                flex: 1,
+                paddingRight: 12,
+              }}
+            >
+              <ReadOnlyField
+                label="First Name"
+                required
+                value={currentFirstName}
+              />
             </View>
             <View style={{ flex: 1, paddingLeft: 12 }}>
               <ReadOnlyField label="Middle Name" value={currentMiddleName} />
@@ -733,8 +853,19 @@ export function ProfileScreen(props: Props) {
           </FormRow>
 
           <FormRow twoColumn>
-            <View style={{ borderRightColor: theme.border, borderRightWidth: 1, flex: 1, paddingRight: 12 }}>
-              <ReadOnlyField label="Last Name" required value={currentLastName} />
+            <View
+              style={{
+                borderRightColor: theme.border,
+                borderRightWidth: 1,
+                flex: 1,
+                paddingRight: 12,
+              }}
+            >
+              <ReadOnlyField
+                label="Last Name"
+                required
+                value={currentLastName}
+              />
             </View>
             <View style={{ flex: 1, paddingLeft: 12 }}>
               <ReadOnlyField compact label="Email" value={currentEmail} />
@@ -742,16 +873,34 @@ export function ProfileScreen(props: Props) {
           </FormRow>
 
           <FormRow twoColumn>
-            <View style={{ borderRightColor: theme.border, borderRightWidth: 1, flex: 1, paddingRight: 12 }}>
+            <View
+              style={{
+                borderRightColor: theme.border,
+                borderRightWidth: 1,
+                flex: 1,
+                paddingRight: 12,
+              }}
+            >
               <ReadOnlyField compact label="LRN" value={currentLrn} />
             </View>
             <View style={{ flex: 1, paddingLeft: 12 }}>
-              <ReadOnlyField label="Grade Level" required value={currentGradeLevel} />
+              <ReadOnlyField
+                label="Grade Level"
+                required
+                value={currentGradeLevel}
+              />
             </View>
           </FormRow>
 
           <FormRow twoColumn>
-            <View style={{ borderRightColor: theme.border, borderRightWidth: 1, flex: 1, paddingRight: 12 }}>
+            <View
+              style={{
+                borderRightColor: theme.border,
+                borderRightWidth: 1,
+                flex: 1,
+                paddingRight: 12,
+              }}
+            >
               <EditableField
                 label="Date of Birth"
                 onChangeText={setDateOfBirth}
@@ -779,7 +928,14 @@ export function ProfileScreen(props: Props) {
               paddingVertical: 12,
             }}
           >
-            <View style={{ borderRightColor: theme.border, borderRightWidth: 1, flex: 1, paddingRight: 12 }}>
+            <View
+              style={{
+                borderRightColor: theme.border,
+                borderRightWidth: 1,
+                flex: 1,
+                paddingRight: 12,
+              }}
+            >
               <PhPhoneInputField
                 label="Contact Number"
                 onChangeText={(next) => {
@@ -828,8 +984,21 @@ export function ProfileScreen(props: Props) {
             />
           </FormRow>
 
-          <View style={{ flexDirection: "row", paddingHorizontal: 14, paddingVertical: 12 }}>
-            <View style={{ borderRightColor: theme.border, borderRightWidth: 1, flex: 1, paddingRight: 12 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+            }}
+          >
+            <View
+              style={{
+                borderRightColor: theme.border,
+                borderRightWidth: 1,
+                flex: 1,
+                paddingRight: 12,
+              }}
+            >
               <EditableField
                 autoCapitalize="words"
                 label="Relationship"
@@ -859,18 +1028,32 @@ export function ProfileScreen(props: Props) {
             onPress={() => void handleSave()}
             style={{
               alignItems: "center",
-              backgroundColor: isContactSectionValid ? theme.red : theme.surface,
+              backgroundColor: isContactSectionValid
+                ? theme.red
+                : theme.surface,
               borderColor: isContactSectionValid ? theme.red : theme.border,
               borderRadius: 10,
               borderWidth: 1,
               justifyContent: "center",
-              opacity: updateMutation.isPending || !isContactSectionValid ? 0.6 : 1,
+              opacity:
+                updateMutation.isPending || !isContactSectionValid ? 0.6 : 1,
               paddingVertical: 12,
             }}
           >
             <View style={{ alignItems: "center", flexDirection: "row" }}>
-              <MaterialCommunityIcons color={isContactSectionValid ? "#FFFFFF" : theme.dim} name="content-save-outline" size={14} />
-              <Text style={{ color: isContactSectionValid ? "#FFFFFF" : theme.dim, fontSize: 13, fontWeight: "600", marginLeft: 7 }}>
+              <MaterialCommunityIcons
+                color={isContactSectionValid ? "#FFFFFF" : theme.dim}
+                name="content-save-outline"
+                size={14}
+              />
+              <Text
+                style={{
+                  color: isContactSectionValid ? "#FFFFFF" : theme.dim,
+                  fontSize: 13,
+                  fontWeight: "600",
+                  marginLeft: 7,
+                }}
+              >
                 {updateMutation.isPending
                   ? "Saving Profile Changes..."
                   : !isContactSectionValid
@@ -906,17 +1089,38 @@ export function ProfileScreen(props: Props) {
               paddingTop: 12,
             }}
           >
-            <MaterialCommunityIcons color={requiredCount === 0 ? theme.green : theme.amber} name="alert-circle-outline" size={14} />
-            <Text style={{ color: theme.text, flex: 1, fontSize: 12, fontWeight: "600", marginLeft: 8 }}>{completionHeadline}</Text>
+            <MaterialCommunityIcons
+              color={requiredCount === 0 ? theme.green : theme.amber}
+              name="alert-circle-outline"
+              size={14}
+            />
+            <Text
+              style={{
+                color: theme.text,
+                flex: 1,
+                fontSize: 12,
+                fontWeight: "600",
+                marginLeft: 8,
+              }}
+            >
+              {completionHeadline}
+            </Text>
             <View
               style={{
-                backgroundColor: requiredCount === 0 ? theme.greenSoft : theme.amberSoft,
+                backgroundColor:
+                  requiredCount === 0 ? theme.greenSoft : theme.amberSoft,
                 borderRadius: 5,
                 paddingHorizontal: 8,
                 paddingVertical: 2,
               }}
             >
-              <Text style={{ color: requiredCount === 0 ? theme.green : theme.amber, fontSize: 10, fontWeight: "600" }}>
+              <Text
+                style={{
+                  color: requiredCount === 0 ? theme.green : theme.amber,
+                  fontSize: 10,
+                  fontWeight: "600",
+                }}
+              >
                 {requiredCount === 0 ? "0 left" : `${requiredCount} left`}
               </Text>
             </View>
@@ -929,7 +1133,10 @@ export function ProfileScreen(props: Props) {
                 key={item.label}
                 style={{
                   alignItems: "center",
-                  borderBottomColor: index === statusItems.length - 1 ? "transparent" : theme.border,
+                  borderBottomColor:
+                    index === statusItems.length - 1
+                      ? "transparent"
+                      : theme.border,
                   borderBottomWidth: index === statusItems.length - 1 ? 0 : 1,
                   flexDirection: "row",
                   paddingHorizontal: 14,
@@ -948,7 +1155,11 @@ export function ProfileScreen(props: Props) {
                     width: 18,
                   }}
                 >
-                  <MaterialCommunityIcons color={complete ? theme.green : theme.red} name={complete ? "check" : "close"} size={11} />
+                  <MaterialCommunityIcons
+                    color={complete ? theme.green : theme.red}
+                    name={complete ? "check" : "close"}
+                    size={11}
+                  />
                 </View>
                 <Text
                   style={{
@@ -966,7 +1177,9 @@ export function ProfileScreen(props: Props) {
           })}
         </View>
 
-        <View style={{ flexDirection: "row", marginHorizontal: 16, marginTop: 12 }}>
+        <View
+          style={{ flexDirection: "row", marginHorizontal: 16, marginTop: 12 }}
+        >
           <QuickLink
             icon="file-document-outline"
             iconColor={theme.blue}
@@ -978,7 +1191,9 @@ export function ProfileScreen(props: Props) {
             icon="clipboard-check-outline"
             iconColor={theme.purple}
             label="Evaluations"
-            onPress={() => props.navigation.navigate("StudentEvaluations" as never)}
+            onPress={() =>
+              props.navigation.navigate("StudentEvaluations" as never)
+            }
           />
         </View>
 
@@ -1016,7 +1231,16 @@ export function ProfileScreen(props: Props) {
             }}
           >
             <MaterialCommunityIcons color={theme.red} name="logout" size={16} />
-            <Text style={{ color: theme.red, fontSize: 13, fontWeight: "600", marginLeft: 8 }}>Sign Out</Text>
+            <Text
+              style={{
+                color: theme.red,
+                fontSize: 13,
+                fontWeight: "600",
+                marginLeft: 8,
+              }}
+            >
+              Sign Out
+            </Text>
           </Pressable>
         </View>
 
@@ -1025,6 +1249,6 @@ export function ProfileScreen(props: Props) {
           style={{ marginHorizontal: 16, marginTop: 16 }}
         />
       </View>
-    </ScreenScroll>
+    </StudentScreen>
   );
 }

@@ -10,6 +10,7 @@ import {
 } from "react";
 import {
   AppState,
+  Linking,
   Platform,
   Modal,
   Pressable,
@@ -20,7 +21,6 @@ import {
 } from "react-native";
 import {
   checkUpdatePolicy,
-  triggerOtaUpdate,
   downloadApk,
   verifyApkIntegrity,
   installApk,
@@ -113,15 +113,255 @@ const noUpdateValue: UpdateContextValue = {
   openSettingsForPermission: async () => {},
 };
 
+const iosUpdateStyles = {
+  overlay: {
+    flex: 1,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    backgroundColor: "rgba(10, 25, 47, 0.72)",
+    padding: 24,
+  },
+  dialog: {
+    width: "100%" as const,
+    maxWidth: 420,
+    borderRadius: radii.lg,
+    backgroundColor: colors.surface,
+    padding: 24,
+    ...shadow.card,
+  },
+  title: {
+    marginTop: 12,
+    color: colors.text,
+    fontSize: 20,
+    fontWeight: "800" as const,
+    textAlign: "center" as const,
+  },
+  body: {
+    marginTop: 10,
+    color: colors.muted,
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: "center" as const,
+  },
+  primaryButton: {
+    marginTop: 20,
+    minHeight: 48,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    borderRadius: radii.md,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 18,
+  },
+  primaryButtonText: {
+    color: colors.white,
+    fontSize: 15,
+    fontWeight: "800" as const,
+  },
+  secondaryButton: {
+    marginTop: 10,
+    minHeight: 46,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 18,
+  },
+  secondaryButtonText: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: "700" as const,
+  },
+};
+
 export function UpdateProvider({ children }: PropsWithChildren) {
-  if (Platform.OS !== "android") {
-    return (
-      <UpdateContext.Provider value={noUpdateValue}>
-        {children}
-      </UpdateContext.Provider>
-    );
+  if (Platform.OS === "android") {
+    return <AndroidUpdateProvider>{children}</AndroidUpdateProvider>;
   }
-  return <AndroidUpdateProvider>{children}</AndroidUpdateProvider>;
+  if (Platform.OS === "ios") {
+    return <IosUpdateProvider>{children}</IosUpdateProvider>;
+  }
+  return (
+    <UpdateContext.Provider value={noUpdateValue}>
+      {children}
+    </UpdateContext.Provider>
+  );
+}
+
+function IosUpdateProvider({ children }: PropsWithChildren) {
+  const [state, setState] = useState<UpdateState>(initialState);
+  const [dismissedOptional, setDismissedOptional] = useState(false);
+  const checkPromise = useRef<Promise<void> | null>(null);
+
+  const checkForUpdates = useCallback((): Promise<void> => {
+    if (checkPromise.current) return checkPromise.current;
+    const run = async () => {
+      setState((previous) => ({
+        ...previous,
+        access: "checking",
+        status: "checking",
+        errorMessage: null,
+        failureStage: null,
+      }));
+      try {
+        const decision = await checkUpdatePolicy();
+        const mandatory =
+          decision.updateAction === "binary_forced" || decision.isForceUpdate;
+        const requiresUpdate = decision.updateAction !== "none";
+        setDismissedOptional(false);
+        setState((previous) => ({
+          ...previous,
+          access: mandatory ? "blocked" : "allowed",
+          status: requiresUpdate ? "binary_required" : "idle",
+          decision,
+          errorMessage: null,
+          failureStage: null,
+        }));
+      } catch (error: unknown) {
+        setState((previous) => ({
+          ...previous,
+          access: "blocked",
+          status: "error",
+          errorMessage: errorMessage(
+            error,
+            "Unable to verify the iPhone app version.",
+          ),
+          failureStage: "check",
+        }));
+      } finally {
+        checkPromise.current = null;
+      }
+    };
+    const promise = run();
+    checkPromise.current = promise;
+    return promise;
+  }, []);
+
+  useEffect(() => {
+    void checkForUpdates();
+  }, [checkForUpdates]);
+
+  const openIosUpdate = useCallback(async () => {
+    const url = state.decision?.artifactDownloadUrl;
+    if (!url || !/^https:\/\//i.test(url)) {
+      setState((previous) => ({
+        ...previous,
+        status: "error",
+        errorMessage: "The iPhone update link is not ready. Please retry.",
+        failureStage: "check",
+      }));
+      return;
+    }
+    try {
+      await Linking.openURL(url);
+    } catch (error: unknown) {
+      setState((previous) => ({
+        ...previous,
+        errorMessage: errorMessage(error, "Unable to open the iPhone update."),
+        failureStage: "check",
+      }));
+    }
+  }, [state.decision]);
+
+  const mandatory = Boolean(
+    state.decision &&
+    (state.decision.updateAction === "binary_forced" ||
+      state.decision.isForceUpdate),
+  );
+  const showUpdate =
+    state.status === "binary_required" &&
+    Boolean(state.decision) &&
+    (mandatory || !dismissedOptional);
+
+  const value = useMemo<UpdateContextValue>(
+    () => ({
+      state,
+      checkForUpdates,
+      startApkDownload: openIosUpdate,
+      installDownloadedApk: openIosUpdate,
+      dismissOptionalUpdate: () => setDismissedOptional(true),
+      openSettingsForPermission: openIosUpdate,
+    }),
+    [checkForUpdates, openIosUpdate, state],
+  );
+
+  const canShowChildren = state.access === "allowed";
+  return (
+    <UpdateContext.Provider value={value}>
+      {canShowChildren ? children : null}
+      <Modal
+        visible={state.status === "checking" && !canShowChildren}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {}}
+      >
+        <View style={iosUpdateStyles.overlay}>
+          <View style={iosUpdateStyles.dialog}>
+            <ActivityIndicator color={colors.primary} />
+            <Text style={iosUpdateStyles.title}>Checking iPhone version</Text>
+            <Text style={iosUpdateStyles.body}>
+              Verifying this SideStore build before opening Nexora.
+            </Text>
+          </View>
+        </View>
+      </Modal>
+      <Modal
+        visible={showUpdate}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!mandatory) setDismissedOptional(true);
+        }}
+      >
+        <View style={iosUpdateStyles.overlay}>
+          <View style={iosUpdateStyles.dialog}>
+            <Text style={iosUpdateStyles.title}>
+              {mandatory ? "iPhone Update Required" : "iPhone Update Available"}
+            </Text>
+            <Text style={iosUpdateStyles.body}>
+              {state.decision?.releaseNotes ??
+                "Open the verified Nexora SideStore release to continue."}
+            </Text>
+            <Pressable
+              style={iosUpdateStyles.primaryButton}
+              onPress={openIosUpdate}
+            >
+              <Text style={iosUpdateStyles.primaryButtonText}>
+                Open iPhone Update
+              </Text>
+            </Pressable>
+            {!mandatory ? (
+              <Pressable
+                style={iosUpdateStyles.secondaryButton}
+                onPress={() => setDismissedOptional(true)}
+              >
+                <Text style={iosUpdateStyles.secondaryButtonText}>Later</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
+      <Modal
+        visible={state.status === "error" && state.access === "blocked"}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {}}
+      >
+        <View style={iosUpdateStyles.overlay}>
+          <View style={iosUpdateStyles.dialog}>
+            <Text style={iosUpdateStyles.title}>Verify iPhone Update</Text>
+            <Text style={iosUpdateStyles.body}>{state.errorMessage}</Text>
+            <Pressable
+              style={iosUpdateStyles.primaryButton}
+              onPress={checkForUpdates}
+            >
+              <Text style={iosUpdateStyles.primaryButtonText}>Retry Check</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+    </UpdateContext.Provider>
+  );
 }
 
 function AndroidUpdateProvider({ children }: PropsWithChildren) {
@@ -130,7 +370,6 @@ function AndroidUpdateProvider({ children }: PropsWithChildren) {
   const checkPromise = useRef<Promise<void> | null>(null);
   const operationBusy = useRef(false);
   const checkedDecision = useRef<UpdateState["decision"]>(null);
-  const otaAttempted = useRef(false);
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -157,10 +396,6 @@ function AndroidUpdateProvider({ children }: PropsWithChildren) {
         checkedDecision.current = decision;
 
         if (decision.updateType === "none") {
-          if (!otaAttempted.current) {
-            otaAttempted.current = true;
-            if (await triggerOtaUpdate()) return;
-          }
           // The policy service validates installed identity before approving access.
           setAndroidAdmission("allowed");
           setHasAdmitted(true);
@@ -504,6 +739,10 @@ function AndroidUpdateProvider({ children }: PropsWithChildren) {
   const availableVersionLabel = state.decision
     ? `Available v${state.decision.latestNativeVersion} (build ${state.decision.latestVersionCode})`
     : "";
+  const requiresLegacySignerMigration =
+    Platform.OS === "android" &&
+    clientVersionInfo.currentVersionCode <= 46 &&
+    (state.decision?.latestVersionCode ?? 0) >= 47;
 
   return (
     <UpdateContext.Provider value={value}>
@@ -745,6 +984,43 @@ function AndroidUpdateProvider({ children }: PropsWithChildren) {
                       update to continue accessing new features and
                       improvements.
                     </Text>
+                    {requiresLegacySignerMigration ? (
+                      <View
+                        style={{
+                          marginTop: 12,
+                          borderRadius: radii.md,
+                          borderWidth: 1,
+                          borderColor: colors.amber,
+                          backgroundColor: colors.surface,
+                          padding: 12,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: colors.text,
+                            fontSize: 13,
+                            fontWeight: "800",
+                            lineHeight: 19,
+                          }}
+                        >
+                          This is a one-time production-signing migration.
+                        </Text>
+                        <Text
+                          style={{
+                            color: colors.textSecondary,
+                            fontSize: 12,
+                            lineHeight: 18,
+                            marginTop: 4,
+                          }}
+                        >
+                          Builds 46 and earlier used the legacy test signature.
+                          Finish any active work while online, then uninstall
+                          the old Nexora app and install this school release.
+                          Local offline snapshots will be removed; official
+                          synced school records remain on the server.
+                        </Text>
+                      </View>
+                    ) : null}
                     {state.decision?.releaseNotes ? (
                       <View
                         style={{
@@ -927,9 +1203,9 @@ function AndroidUpdateProvider({ children }: PropsWithChildren) {
                         lineHeight: 20,
                       }}
                     >
-                      If installation is blocked, tap "Open Settings (Unknown
-                      Apps)" and enable "Allow from this source" for Nexora.
-                      Then return here and retry.
+                      {requiresLegacySignerMigration
+                        ? "Because this device has a legacy-signed build, uninstall the old Nexora app before installing the production-signed release."
+                        : 'If installation is blocked, tap "Open Settings (Unknown Apps)" and enable "Allow from this source" for Nexora. Then return here and retry.'}
                     </Text>
                   </View>
                 )}

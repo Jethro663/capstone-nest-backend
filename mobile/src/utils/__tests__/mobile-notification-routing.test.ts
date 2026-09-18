@@ -39,7 +39,10 @@ describe("teacher mobile notification drawer routing", () => {
 
   it("opens teacher announcements and class record through TeacherDrawer", () => {
     expect(
-      resolveMobileNotificationAction(notification("announcement_posted"), "teacher"),
+      resolveMobileNotificationAction(
+        notification("announcement_posted"),
+        "teacher",
+      ),
     ).toMatchObject({
       routeName: "TeacherDrawer",
       params: { screen: "TeacherAnnouncements" },
@@ -55,12 +58,22 @@ describe("teacher mobile notification drawer routing", () => {
   it("opens a class announcement inside the exact student class workspace", () => {
     expect(
       resolveMobileNotificationAction(
-        notification("announcement_posted", "announcement-1", "Class reminder", { classId: "class-1" }),
+        notification(
+          "announcement_posted",
+          "announcement-1",
+          "Class reminder",
+          { classId: "class-1" },
+        ),
         "student",
       ),
     ).toMatchObject({
       routeName: "ClassDetail",
-      params: { classId: "class-1", initialTab: "announcements", announcementId: "announcement-1", source: "announcements" },
+      params: {
+        classId: "class-1",
+        initialTab: "announcements",
+        announcementId: "announcement-1",
+        source: "announcements",
+      },
       fallbackRouteName: "MainTabs",
       fallbackParams: { screen: "Announcements" },
     });
@@ -69,12 +82,22 @@ describe("teacher mobile notification drawer routing", () => {
   it("opens a class announcement inside the exact teacher class workspace", () => {
     expect(
       resolveMobileNotificationAction(
-        notification("announcement_posted", "announcement-1", "Class reminder", { classId: "class-1" }),
+        notification(
+          "announcement_posted",
+          "announcement-1",
+          "Class reminder",
+          { classId: "class-1" },
+        ),
         "teacher",
       ),
     ).toMatchObject({
       routeName: "TeacherClassDetail",
-      params: { classId: "class-1", initialTab: "announcements", announcementId: "announcement-1", source: "announcements" },
+      params: {
+        classId: "class-1",
+        initialTab: "announcements",
+        announcementId: "announcement-1",
+        source: "announcements",
+      },
       fallbackRouteName: "TeacherDrawer",
       fallbackParams: { screen: "TeacherAnnouncements" },
     });
@@ -96,11 +119,43 @@ describe("teacher mobile notification drawer routing", () => {
 
   it("preserves the non-teacher extraction fallback on MainTabs", () => {
     expect(
-      resolveMobileNotificationAction(notification("extraction_completed"), "student"),
+      resolveMobileNotificationAction(
+        notification("extraction_completed"),
+        "student",
+      ),
     ).toMatchObject({
       routeName: "MainTabs",
       params: { screen: "Classes" },
       fallbackRouteName: "MainTabs",
+    });
+  });
+
+  it("keeps administrator notification targets inside mounted admin routes", () => {
+    expect(
+      resolveMobileNotificationAction(
+        notification("assessment_assigned", "assessment-1"),
+        "admin",
+      ),
+    ).toMatchObject({
+      routeName: "TeacherAssessmentDetail",
+      params: { assessmentId: "assessment-1" },
+    });
+    expect(
+      resolveMobileNotificationAction(
+        notification("announcement_posted", "announcement-1", "Reminder", {
+          classId: "class-1",
+        }),
+        "admin",
+      ),
+    ).toMatchObject({
+      routeName: "TeacherClassDetail",
+      params: { classId: "class-1", initialTab: "announcements" },
+    });
+    expect(
+      resolveMobileNotificationAction(notification("grade_updated"), "admin"),
+    ).toMatchObject({
+      routeName: "MainTabs",
+      params: { screen: "AdminClassRecord" },
     });
   });
 });

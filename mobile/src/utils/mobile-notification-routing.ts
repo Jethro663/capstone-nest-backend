@@ -1,4 +1,9 @@
 import type { MobileNotification } from "../types/notification";
+import {
+  resolveAllowedMobileDestination,
+  type MobileDeepLinkRole,
+  type MobileDeepLinkTarget,
+} from "../navigation/linking";
 
 type NavigateFn = (name: string, params?: unknown) => void;
 
@@ -8,14 +13,30 @@ export type MobileNotificationAction = {
   fallbackRouteName: string;
   fallbackParams?: unknown;
   requiresReference: boolean;
-  kind: "assessment" | "announcement" | "discussion" | "grade" | "intervention" | "extraction" | "history";
+  kind:
+    | "assessment"
+    | "announcement"
+    | "discussion"
+    | "grade"
+    | "intervention"
+    | "extraction"
+    | "history";
   label: string;
 };
 
 const AT_RISK_TERMS = ["at risk", "at-risk", "flagged"];
 const INTERVENTION_ALERT_TERMS = ["intervention", "support plan"];
-const BLUE_REMINDER_TYPES = new Set(["student_pending_task_reminder", "student_pending_intervention_reminder"]);
-const BLUE_INTERVENTION_TERMS = ["checklist", "learner path", "learners path", "assigned path", "pending intervention"];
+const BLUE_REMINDER_TYPES = new Set([
+  "student_pending_task_reminder",
+  "student_pending_intervention_reminder",
+]);
+const BLUE_INTERVENTION_TERMS = [
+  "checklist",
+  "learner path",
+  "learners path",
+  "assigned path",
+  "pending intervention",
+];
 const ASSESSMENT_TYPES = new Set([
   "assessment_assigned",
   "assessment_due",
@@ -28,7 +49,11 @@ function normalizeText(value: unknown) {
   return String(value).trim().toLowerCase();
 }
 
-function mainTabAction(tabName: string, label: string, kind: MobileNotificationAction["kind"]): MobileNotificationAction {
+function mainTabAction(
+  tabName: string,
+  label: string,
+  kind: MobileNotificationAction["kind"],
+): MobileNotificationAction {
   return {
     routeName: "MainTabs",
     params: { screen: tabName },
@@ -62,7 +87,32 @@ function historyAction() {
   return mainTabAction("Announcements", "Open Notifications", "history");
 }
 
-export function getMobileNotificationMessage(notification: Pick<MobileNotification, "message" | "body">) {
+function normalizeRole(role: string | null): MobileDeepLinkRole {
+  const normalized = normalizeText(role);
+  if (normalized === "teacher" || normalized === "admin") return normalized;
+  return "student";
+}
+
+function targetAction(
+  target: MobileDeepLinkTarget,
+  fallback: MobileNotificationAction,
+  kind: MobileNotificationAction["kind"],
+  label: string,
+): MobileNotificationAction {
+  return {
+    routeName: String(target.routeName),
+    params: target.params,
+    fallbackRouteName: fallback.fallbackRouteName,
+    fallbackParams: fallback.fallbackParams,
+    requiresReference: true,
+    kind,
+    label,
+  };
+}
+
+export function getMobileNotificationMessage(
+  notification: Pick<MobileNotification, "message" | "body">,
+) {
   const message = notification.message?.trim();
   if (message) return message;
   return notification.body?.trim() || "A new update is available.";
@@ -78,7 +128,8 @@ export function isMobileInterventionAlertNotification(
   );
 
   if (AT_RISK_TERMS.some((term) => joined.includes(term))) return true;
-  if (BLUE_INTERVENTION_TERMS.some((term) => joined.includes(term))) return false;
+  if (BLUE_INTERVENTION_TERMS.some((term) => joined.includes(term)))
+    return false;
   return INTERVENTION_ALERT_TERMS.some((term) => joined.includes(term));
 }
 
@@ -87,14 +138,20 @@ export function resolveMobileNotificationAction(
   role: string | null,
 ): MobileNotificationAction {
   const normalizedRole = normalizeText(role);
+  const mobileRole = normalizeRole(role);
   const referenceId = notification.referenceId || undefined;
   const rawClassId = notification.metadata?.classId;
-  const classId = typeof rawClassId === "string" && rawClassId.trim() ? rawClassId : undefined;
+  const classId =
+    typeof rawClassId === "string" && rawClassId.trim()
+      ? rawClassId
+      : undefined;
 
   if (notification.type === "student_pending_intervention_reminder") {
     return {
       routeName: "LXP",
-      params: referenceId ? { classId: referenceId, tab: "paths" } : { tab: "paths" },
+      params: referenceId
+        ? { classId: referenceId, tab: "paths" }
+        : { tab: "paths" },
       fallbackRouteName: "LXP",
       fallbackParams: { tab: "paths" },
       requiresReference: false,
@@ -113,15 +170,32 @@ export function resolveMobileNotificationAction(
   }
 
   if (isMobileInterventionAlertNotification(notification)) {
-    if (normalizedRole === "teacher") {
+    if (normalizedRole === "teacher" || normalizedRole === "admin") {
+      const fallback = teacherDrawerAction(
+        "TeacherInterventions",
+        "Open Intervention",
+        "intervention",
+      );
+      const target = referenceId
+        ? resolveAllowedMobileDestination(
+            { kind: "intervention", resourceId: referenceId },
+            mobileRole,
+          )
+        : null;
+      if (target) {
+        return targetAction(
+          target,
+          fallback,
+          "intervention",
+          "Open Intervention",
+        );
+      }
       return {
-        routeName: referenceId ? "TeacherInterventionDetail" : "TeacherDrawer",
-        params: referenceId
-          ? { caseId: referenceId }
-          : { screen: "TeacherInterventions" },
+        routeName: "TeacherDrawer",
+        params: { screen: "TeacherInterventions" },
         fallbackRouteName: "TeacherDrawer",
         fallbackParams: { screen: "TeacherInterventions" },
-        requiresReference: Boolean(referenceId),
+        requiresReference: false,
         kind: "intervention",
         label: "Open Intervention",
       };
@@ -139,26 +213,26 @@ export function resolveMobileNotificationAction(
   }
 
   if (ASSESSMENT_TYPES.has(notification.type)) {
-    if (normalizedRole === "teacher") {
-      return {
-        routeName: referenceId ? "TeacherAssessmentDetail" : "TeacherDrawer",
-        params: referenceId ? { assessmentId: referenceId } : { screen: "Assessments" },
-        fallbackRouteName: "TeacherDrawer",
-        fallbackParams: { screen: "Assessments" },
-        requiresReference: Boolean(referenceId),
-        kind: "assessment",
-        label: "Open Assessment",
-      };
+    const fallback =
+      mobileRole === "student"
+        ? {
+            routeName: "AssessmentHistory",
+            fallbackRouteName: "AssessmentHistory",
+            requiresReference: false,
+            kind: "assessment" as const,
+            label: "Open Assessment",
+          }
+        : teacherDrawerAction("Assessments", "Open Assessment", "assessment");
+    const target = referenceId
+      ? resolveAllowedMobileDestination(
+          { kind: "assessment", resourceId: referenceId },
+          mobileRole,
+        )
+      : null;
+    if (target) {
+      return targetAction(target, fallback, "assessment", "Open Assessment");
     }
-
-    return {
-      routeName: "AssessmentHistory",
-      params: referenceId ? { assessmentId: referenceId } : undefined,
-      fallbackRouteName: "AssessmentHistory",
-      requiresReference: Boolean(referenceId),
-      kind: "assessment",
-      label: "Open Assessment",
-    };
+    return fallback;
   }
 
   if (notification.type === "announcement_posted") {
@@ -166,7 +240,12 @@ export function resolveMobileNotificationAction(
       if (classId) {
         return {
           routeName: "TeacherClassDetail",
-          params: { classId, initialTab: "announcements", announcementId: referenceId, source: "announcements" },
+          params: {
+            classId,
+            initialTab: "announcements",
+            announcementId: referenceId,
+            source: "announcements",
+          },
           fallbackRouteName: "TeacherDrawer",
           fallbackParams: { screen: "TeacherAnnouncements" },
           requiresReference: false,
@@ -181,9 +260,34 @@ export function resolveMobileNotificationAction(
       );
     }
     if (classId) {
+      const target = resolveAllowedMobileDestination(
+        { kind: "class", resourceId: classId },
+        mobileRole,
+      );
+      if (mobileRole === "admin" && target) {
+        return {
+          routeName: String(target.routeName),
+          params: {
+            ...(target.params as Record<string, unknown>),
+            initialTab: "announcements",
+            announcementId: referenceId,
+            source: "announcements",
+          },
+          fallbackRouteName: "MainTabs",
+          fallbackParams: { screen: "AdminAnnouncements" },
+          requiresReference: false,
+          kind: "announcement",
+          label: "Open Class Announcement",
+        };
+      }
       return {
         routeName: "ClassDetail",
-        params: { classId, initialTab: "announcements", announcementId: referenceId, source: "announcements" },
+        params: {
+          classId,
+          initialTab: "announcements",
+          announcementId: referenceId,
+          source: "announcements",
+        },
         fallbackRouteName: "MainTabs",
         fallbackParams: { screen: "Announcements" },
         requiresReference: false,
@@ -194,7 +298,10 @@ export function resolveMobileNotificationAction(
     return mainTabAction("Announcements", "Open Announcements", "announcement");
   }
 
-  if (notification.type === "discussion_thread_posted" || notification.type === "discussion_comment_posted") {
+  if (
+    notification.type === "discussion_thread_posted" ||
+    notification.type === "discussion_comment_posted"
+  ) {
     return mainTabAction("Classes", "Open Classes", "discussion");
   }
 
@@ -206,8 +313,16 @@ export function resolveMobileNotificationAction(
         "grade",
       );
     }
+    if (mobileRole === "admin") {
+      return mainTabAction("AdminClassRecord", "Open Class Record", "grade");
+    }
+    const target = resolveAllowedMobileDestination(
+      { kind: "performance" },
+      mobileRole,
+    );
     return {
-      routeName: "Performance",
+      routeName: String(target?.routeName || "Performance"),
+      params: target?.params,
       fallbackRouteName: "Performance",
       requiresReference: false,
       kind: "grade",
@@ -215,11 +330,17 @@ export function resolveMobileNotificationAction(
     };
   }
 
-  if (notification.type === "extraction_completed" || notification.type === "extraction_failed") {
-    const primaryRouteName = normalizedRole === "teacher" ? "TeacherDrawer" : "MainTabs";
+  if (
+    notification.type === "extraction_completed" ||
+    notification.type === "extraction_failed"
+  ) {
+    const primaryRouteName =
+      normalizedRole === "teacher" ? "TeacherDrawer" : "MainTabs";
     return {
       routeName: referenceId ? "TeacherExtractionDetail" : primaryRouteName,
-      params: referenceId ? { extractionId: referenceId } : { screen: "Classes" },
+      params: referenceId
+        ? { extractionId: referenceId }
+        : { screen: "Classes" },
       fallbackRouteName: primaryRouteName,
       fallbackParams: { screen: "Classes" },
       requiresReference: Boolean(referenceId),
@@ -233,7 +354,10 @@ export function resolveMobileNotificationAction(
     : historyAction();
 }
 
-async function validateMobileNotificationAction(action: MobileNotificationAction, notification: MobileNotification) {
+async function validateMobileNotificationAction(
+  action: MobileNotificationAction,
+  notification: MobileNotification,
+) {
   if (!action.requiresReference) return true;
   const referenceId = notification.referenceId;
   if (!referenceId) return false;

@@ -50,6 +50,7 @@ describe('system reset preservation contract', () => {
     'class_records',
     'assessment_attempts',
     'refresh_tokens',
+    'notification_devices',
     'otp_verifications',
     'admin_maintenance_sessions',
   ])('clears %s, even when created by the retained admin', (name) => {

@@ -155,16 +155,39 @@ describe("role drawer integration", () => {
   });
 
   it.each([
-    "../../screens/DashboardScreen.tsx",
-    "../../screens/LessonsScreen.tsx",
-    "../../screens/AssessmentsScreen.tsx",
-    "../../screens/AnnouncementsScreen.tsx",
-    "../../screens/ProfileScreen.tsx",
-  ])("gives the student tab root %s a drawer trigger", (screenPath) => {
-    const source = readSource(screenPath);
-    expect(source).toContain("RoleMenuButton");
-    expect(source).toContain("<RoleMenuButton");
-  });
+    [
+      "../../screens/DashboardScreen.tsx",
+      "../../screens/student-home/StudentHomeView.tsx",
+    ],
+    [
+      "../../screens/LessonsScreen.tsx",
+      "../../screens/student-classes/StudentClassesView.tsx",
+    ],
+    [
+      "../../screens/AssessmentsScreen.tsx",
+      "../../screens/student-assessments/StudentAssessmentsView.tsx",
+    ],
+    [
+      "../../screens/AnnouncementsScreen.tsx",
+      "../../screens/student-announcements/StudentAnnouncementsView.tsx",
+    ],
+    ["../../screens/ProfileScreen.tsx", "../../screens/ProfileScreen.tsx"],
+  ])(
+    "gives the student tab root %s a drawer trigger through its mounted StudentScreen owner",
+    (screenPath, mountedViewPath) => {
+      const rootSource = readSource(screenPath);
+      const mountedViewSource = readSource(mountedViewPath);
+      const sharedShell = readSource(
+        "../../components/student/StudentWorkspacePrimitives.tsx",
+      );
+      expect(rootSource).toMatch(
+        /Student(Home|Classes|Assessments|Announcements)View|StudentScreen/,
+      );
+      expect(mountedViewSource).toContain("<StudentScreen");
+      expect(sharedShell).toContain("RoleHeaderNavigationButton");
+      expect(sharedShell).toContain("<RoleHeaderNavigationButton");
+    },
+  );
 
   it("removes bottom-bar reservation from the long student Home and Profile screens", () => {
     expect(readSource("../../screens/DashboardScreen.tsx")).not.toContain(
@@ -184,7 +207,9 @@ describe("role drawer integration", () => {
     expect(source).toContain("leadingAction=");
     expect(chat).toContain("leadingAction");
     expect(navigator).toContain('role="student"');
-    expect(navigator).toMatch(/function ChatbotRouteScreen[\s\S]*RoleDrawerProvider/);
+    expect(navigator).toMatch(
+      /function ChatbotRouteScreen[\s\S]*RoleDrawerProvider/,
+    );
   });
 
   it("passes logout authority into the teacher drawer provider", () => {

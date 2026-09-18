@@ -1,11 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotificationsController } from './notifications.controller';
 import { NotificationsService } from './notifications.service';
+import { NotificationDevicesService } from './notification-devices.service';
 
 // ─── Fixtures ───────────────────────────────────────────────────────────────
 
 const CURRENT_USER = { userId: 'user-uuid-1' };
 const NOTIF_ID = 'notif-uuid-1';
+const INSTALLATION_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 
 const makeNotification = (overrides: Partial<any> = {}) => ({
   id: NOTIF_ID,
@@ -32,13 +34,20 @@ describe('NotificationsController', () => {
     dismissOne: jest.fn(),
     dismissAll: jest.fn(),
   };
+  const mockDevicesService = {
+    register: jest.fn(),
+    revoke: jest.fn(),
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [NotificationsController],
-      providers: [{ provide: NotificationsService, useValue: mockService }],
+      providers: [
+        { provide: NotificationsService, useValue: mockService },
+        { provide: NotificationDevicesService, useValue: mockDevicesService },
+      ],
     }).compile();
 
     controller = module.get<NotificationsController>(NotificationsController);
@@ -203,6 +212,59 @@ describe('NotificationsController', () => {
         message: 'Notifications cleared.',
         data: { dismissedCount: 4 },
       });
+    });
+  });
+
+  describe('notification devices', () => {
+    it('registers against the authenticated user and never accepts a body user id', async () => {
+      const dto = {
+        platform: 'android' as const,
+        provider: 'expo' as const,
+        pushToken: 'ExponentPushToken[abcdefghijklmnopqrstuvwxyz123456]',
+        notificationsEnabled: true,
+        appVersion: '0.1.45',
+        buildNumber: 46,
+      };
+      mockDevicesService.register.mockResolvedValue({
+        installationId: INSTALLATION_ID,
+        notificationsEnabled: true,
+      });
+
+      const result = await controller.registerDevice(
+        INSTALLATION_ID,
+        CURRENT_USER,
+        dto,
+      );
+
+      expect(mockDevicesService.register).toHaveBeenCalledWith(
+        CURRENT_USER.userId,
+        INSTALLATION_ID,
+        dto,
+      );
+      expect(result).toEqual({
+        success: true,
+        message: 'Notification device registered.',
+        data: {
+          installationId: INSTALLATION_ID,
+          notificationsEnabled: true,
+        },
+      });
+    });
+
+    it('revokes only the authenticated user installation', async () => {
+      mockDevicesService.revoke.mockResolvedValue({
+        installationId: INSTALLATION_ID,
+        notificationsEnabled: false,
+        disabled: true,
+      });
+
+      await controller.revokeDevice(INSTALLATION_ID, CURRENT_USER);
+
+      expect(mockDevicesService.revoke).toHaveBeenCalledWith(
+        CURRENT_USER.userId,
+        INSTALLATION_ID,
+        'user_revoke',
+      );
     });
   });
 });

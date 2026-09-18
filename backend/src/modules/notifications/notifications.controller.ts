@@ -3,6 +3,8 @@ import {
   Get,
   Patch,
   Delete,
+  Put,
+  Body,
   Param,
   Query,
   ParseUUIDPipe,
@@ -23,13 +25,63 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RoleName } from '../../common/constants/role.constants';
 import { NotificationsService } from './notifications.service';
 import { QueryNotificationsDto } from './DTO/query-notifications.dto';
+import { RegisterNotificationDeviceDto } from './DTO/register-notification-device.dto';
+import { NotificationDevicesService } from './notification-devices.service';
 
 @ApiTags('Notifications')
 @ApiBearerAuth('token')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('notifications')
 export class NotificationsController {
-  constructor(private readonly notificationsService: NotificationsService) {}
+  constructor(
+    private readonly notificationsService: NotificationsService,
+    private readonly notificationDevicesService: NotificationDevicesService,
+  ) {}
+
+  @Put('devices/:installationId')
+  @Roles(RoleName.Teacher, RoleName.Student, RoleName.Admin)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Idempotently register this authenticated mobile installation',
+  })
+  async registerDevice(
+    @Param('installationId', ParseUUIDPipe) installationId: string,
+    @CurrentUser() user: { userId: string },
+    @Body() input: RegisterNotificationDeviceDto,
+  ) {
+    const data = await this.notificationDevicesService.register(
+      user.userId,
+      installationId,
+      input,
+    );
+    return {
+      success: true,
+      message: 'Notification device registered.',
+      data,
+    };
+  }
+
+  @Delete('devices/:installationId')
+  @Roles(RoleName.Teacher, RoleName.Student, RoleName.Admin)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Revoke this authenticated mobile installation',
+  })
+  async revokeDevice(
+    @Param('installationId', ParseUUIDPipe) installationId: string,
+    @CurrentUser() user: { userId: string },
+  ) {
+    const data = await this.notificationDevicesService.revoke(
+      user.userId,
+      installationId,
+      'user_revoke',
+    );
+    return {
+      success: true,
+      message: 'Notification device revoked.',
+      data,
+    };
+  }
 
   @Get()
   @Roles(RoleName.Teacher, RoleName.Student, RoleName.Admin)

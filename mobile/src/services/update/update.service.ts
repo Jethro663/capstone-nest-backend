@@ -1,7 +1,6 @@
 import { Platform } from "react-native";
 import * as Application from "expo-application";
 import * as FileSystem from "expo-file-system/legacy";
-import * as Updates from "expo-updates";
 import { publicClient } from "../../api/client";
 import { unwrapEnvelope } from "../../api/http";
 import type { ApiEnvelope } from "../../types/api";
@@ -40,17 +39,12 @@ export function getClientVersionInfo() {
   const platform = Platform.OS;
   const { currentNativeVersion, currentVersionCode } =
     getInstalledNativeVersionInfo();
-  const resolvedRuntimeVersion =
-    Updates.isEnabled && typeof Updates.runtimeVersion === "string"
-      ? Updates.runtimeVersion.trim()
-      : "";
-  const currentRuntimeVersion = resolvedRuntimeVersion || undefined;
 
   return {
     platform,
     currentNativeVersion,
     currentVersionCode,
-    currentRuntimeVersion,
+    currentRuntimeVersion: undefined,
   };
 }
 
@@ -61,25 +55,9 @@ export async function checkUpdatePolicy(): Promise<AppVersionDecision> {
     currentVersionCode,
     currentRuntimeVersion,
   } = getClientVersionInfo();
-  if (platform !== "android") {
-    return {
-      platform,
-      latestVersionCode: currentVersionCode,
-      minSupportedVersionCode: 1,
-      latestNativeVersion: currentNativeVersion,
-      otaRuntimeVersion: currentRuntimeVersion ?? "",
-      apkDownloadUrl: "",
-      apkSha256: null,
-      apkSizeBytes: null,
-      isForceUpdate: false,
-      requiresFullApk: false,
-      releaseNotes: null,
-      updateType: "none",
-    };
-  }
   if (!Number.isSafeInteger(currentVersionCode) || currentVersionCode < 1) {
     throw new Error(
-      "Unable to verify the installed Android build. Reopen the installed Nexora app.",
+      "Unable to verify the installed mobile build. Reopen the installed Nexora app.",
     );
   }
   const response = await publicClient.get<ApiEnvelope<AppVersionDecision>>(
@@ -96,17 +74,19 @@ export async function checkUpdatePolicy(): Promise<AppVersionDecision> {
   const decision = unwrapEnvelope(response.data);
   if (
     !decision ||
-    decision.platform !== "android" ||
+    decision.platform !== platform ||
     !Number.isSafeInteger(decision.latestVersionCode) ||
     decision.latestVersionCode < 1 ||
     !Number.isSafeInteger(decision.minSupportedVersionCode) ||
     decision.minSupportedVersionCode < 1 ||
     decision.minSupportedVersionCode > decision.latestVersionCode ||
-    !["none", "apk_optional", "apk_forced"].includes(decision.updateType) ||
-    (decision.updateType === "none" &&
+    !["none", "binary_optional", "binary_forced"].includes(
+      decision.updateAction,
+    ) ||
+    (decision.updateAction === "none" &&
       (currentVersionCode < decision.minSupportedVersionCode ||
         decision.isForceUpdate)) ||
-    (decision.updateType !== "none" &&
+    (decision.updateAction !== "none" &&
       currentVersionCode >= decision.latestVersionCode)
   ) {
     throw new Error(
@@ -114,38 +94,22 @@ export async function checkUpdatePolicy(): Promise<AppVersionDecision> {
     );
   }
   if (currentVersionCode < decision.minSupportedVersionCode) {
-    decision.updateType = "apk_forced";
+    decision.updateAction = "binary_forced";
     decision.isForceUpdate = true;
+    if (platform === "android") decision.updateType = "apk_forced";
   }
   if (
-    decision.updateType !== "none" &&
-    (!/^https:\/\//i.test(decision.apkDownloadUrl) ||
-      !Number.isSafeInteger(decision.apkSizeBytes) ||
-      (decision.apkSizeBytes ?? 0) < 1 ||
-      !/^[a-f0-9]{64}$/i.test(decision.apkSha256 ?? ""))
+    decision.updateAction !== "none" &&
+    (!/^https:\/\//i.test(decision.artifactDownloadUrl) ||
+      !Number.isSafeInteger(decision.artifactSizeBytes) ||
+      (decision.artifactSizeBytes ?? 0) < 1 ||
+      !/^[a-f0-9]{64}$/i.test(decision.artifactSha256 ?? ""))
   ) {
     throw new Error(
-      "The Android update package is not ready. Please retry the version check.",
+      "The mobile update package is not ready. Please retry the version check.",
     );
   }
   return decision;
-}
-
-export async function triggerOtaUpdate(): Promise<boolean> {
-  try {
-    if (__DEV__ || !Updates.isEnabled) {
-      return false;
-    }
-    const checkResult = await Updates.checkForUpdateAsync();
-    if (checkResult.isAvailable) {
-      await Updates.fetchUpdateAsync();
-      await Updates.reloadAsync();
-      return true;
-    }
-    return false;
-  } catch {
-    return false;
-  }
 }
 
 export async function cleanOldApkFiles(

@@ -6,6 +6,7 @@ import {
 } from './notifications.service';
 import { DatabaseService } from '../../database/database.service';
 import { PgDialect } from 'drizzle-orm/pg-core';
+import { PushNotificationDispatchService } from './push-notification-dispatch.service';
 
 // ─── Fixtures ───────────────────────────────────────────────────────────────
 
@@ -83,6 +84,47 @@ describe('NotificationsService', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('createBulk()', () => {
+    it('keeps the persisted inbox result when post-commit push dispatch fails', async () => {
+      const insertChain = createInsertChain();
+      const persisted = {
+        id: 'notification-row-1',
+        userId: 'u1',
+        type: 'announcement_posted',
+        referenceId: ANN_ID,
+        title: 'T',
+        body: 'B',
+        metadata: null,
+        dismissedAt: null,
+        createdAt: new Date('2026-09-18T00:00:00.000Z'),
+      };
+      insertChain.returning.mockResolvedValue([persisted]);
+      mockDb.insert.mockReturnValue(insertChain);
+      const dispatch = {
+        enqueueCreated: jest.fn().mockRejectedValue(new Error('queue down')),
+      };
+      const isolatedService = new NotificationsService(
+        { db: mockDb } as DatabaseService,
+        dispatch as unknown as PushNotificationDispatchService,
+      );
+
+      await expect(
+        isolatedService.createBulk([
+          {
+            userId: 'u1',
+            type: 'announcement_posted',
+            referenceId: ANN_ID,
+            title: 'T',
+            body: 'B',
+          },
+        ]),
+      ).resolves.toEqual([
+        expect.objectContaining({ id: 'notification-row-1' }),
+      ]);
+      expect(dispatch.enqueueCreated).toHaveBeenCalledWith([
+        expect.objectContaining({ id: 'notification-row-1' }),
+      ]);
+    });
+
     it('calls db.insert with all provided inputs', async () => {
       const insertChain = createInsertChain();
       mockDb.insert.mockReturnValue(insertChain);

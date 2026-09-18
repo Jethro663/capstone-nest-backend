@@ -11,6 +11,7 @@ const {
 const os = require("node:os");
 const path = require("node:path");
 const {
+  bumpMobileReleaseIdentity,
   buildReleasePayload,
   verifyManifest,
 } = require("./app-version-release.cjs");
@@ -41,6 +42,8 @@ async function fixtureOptions({
     "package: name='com.nexora.lms.mobile' versionCode='14' versionName='0.1.13'",
     "uses-permission: name='android.permission.REQUEST_INSTALL_PACKAGES'",
   ].join("\n"),
+  apkSignerOutput = `Signer #1 certificate SHA-256 digest: ${"11".repeat(32)}`,
+  sourceRevision = "a".repeat(40),
 } = {}) {
   await writeFile(
     fixtureAppJsonPath,
@@ -65,8 +68,10 @@ async function fixtureOptions({
     appJsonPath: fixtureAppJsonPath,
     buildGradlePath: fixtureBuildGradlePath,
     apkBadging,
+    apkSignerOutput,
     apkDownloadUrl:
-      "https://next-frontend-v2-production.up.railway.app/downloads/nexora-student-mobile-release.apk",
+      "https://next-frontend-v2-production.up.railway.app/downloads/android/14-aaaaaaaa/nexora-mobile-0.1.13-build14.apk",
+    sourceRevision,
     releaseNotes: "Navigation stability and JAHUB mobile updates.",
   };
 }
@@ -78,10 +83,32 @@ test("buildReleasePayload derives exact APK size and SHA-256", async () => {
   assert.equal(payload.versionCode, 14);
   assert.equal(payload.nativeVersion, "0.1.13");
   assert.equal(payload.otaRuntimeVersion, "0.1.13");
+  assert.equal(payload.artifactKind, "apk");
+  assert.equal(payload.artifactDownloadUrl, payload.apkDownloadUrl);
+  assert.equal(payload.sourceRevision, "a".repeat(40));
+  assert.equal(payload.distributionChannel, "website");
   assert.equal(payload.apkSizeBytes, Buffer.byteLength(fixtureApk));
   assert.equal(
     payload.apkSha256,
     createHash("sha256").update(fixtureApk).digest("hex"),
+  );
+});
+
+test("rejects a mutable Android artifact URL", async () => {
+  await assert.rejects(
+    buildReleasePayload({
+      ...(await fixtureOptions()),
+      apkDownloadUrl:
+        "https://next-frontend-v2-production.up.railway.app/downloads/nexora-student-mobile-release.apk",
+    }),
+    /immutable Android artifact URL/i,
+  );
+});
+
+test("rejects Android release metadata without an exact source revision", async () => {
+  await assert.rejects(
+    buildReleasePayload(await fixtureOptions({ sourceRevision: "not-a-sha" })),
+    /sourceRevision/i,
   );
 });
 
@@ -150,6 +177,18 @@ test("rejects an APK without the embedded installer permission", async () => {
   );
 });
 
+test("rejects an APK signed with the known Android debug certificate", async () => {
+  await assert.rejects(
+    buildReleasePayload(
+      await fixtureOptions({
+        apkSignerOutput:
+          "Signer #1 certificate SHA-256 digest: fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c",
+      }),
+    ),
+    /debug certificate/i,
+  );
+});
+
 test("verifyManifest rejects a changed APK", async () => {
   const options = await fixtureOptions();
   const payload = await buildReleasePayload(options);
@@ -160,7 +199,7 @@ test("verifyManifest rejects a changed APK", async () => {
   );
 });
 
-test("teacher lesson authoring release keeps Expo and Gradle at 0.1.45 build 46", async () => {
+test("mobile release identity keeps iOS build number aligned with Android versionCode", async () => {
   const appJson = JSON.parse(
     await readFile(path.join(__dirname, "..", "app.json"), "utf8"),
   );
@@ -169,9 +208,73 @@ test("teacher lesson authoring release keeps Expo and Gradle at 0.1.45 build 46"
     "utf8",
   );
 
-  assert.equal(appJson.expo.version, "0.1.45");
-  assert.equal(appJson.expo.android.versionCode, 46);
-  assert.match(buildGradle, /\bversionCode\s+46\b/);
-  assert.match(buildGradle, /\bversionName\s+["']0\.1\.45["']/);
-  assert.equal(appJson.expo.ios.buildNumber, "3");
+  assert.equal(appJson.expo.version, "0.1.46");
+  assert.equal(appJson.expo.android.versionCode, 47);
+  assert.match(buildGradle, /\bversionCode\s+47\b/);
+  assert.match(buildGradle, /\bversionName\s+["']0\.1\.46["']/);
+  assert.equal(
+    appJson.expo.ios.buildNumber,
+    String(appJson.expo.android.versionCode),
+  );
+});
+
+test("bumps Android and iOS release identity atomically", async () => {
+  await writeFile(
+    fixtureAppJsonPath,
+    `${JSON.stringify(
+      {
+        expo: {
+          version: "0.1.45",
+          ios: { buildNumber: "46" },
+          android: { versionCode: 46 },
+        },
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  await writeFile(
+    fixtureBuildGradlePath,
+    'defaultConfig {\n  versionCode 46\n  versionName "0.1.45"\n}\n',
+  );
+
+  await bumpMobileReleaseIdentity({
+    appJsonPath: fixtureAppJsonPath,
+    buildGradlePath: fixtureBuildGradlePath,
+    nextVersion: "0.1.46",
+  });
+
+  const appJson = JSON.parse(await readFile(fixtureAppJsonPath, "utf8"));
+  const gradle = await readFile(fixtureBuildGradlePath, "utf8");
+  assert.equal(appJson.expo.version, "0.1.46");
+  assert.equal(appJson.expo.android.versionCode, 47);
+  assert.equal(appJson.expo.ios.buildNumber, "47");
+  assert.match(gradle, /versionCode 47/);
+  assert.match(gradle, /versionName "0\.1\.46"/);
+});
+
+test("refuses to bump from platform-divergent identity", async () => {
+  await writeFile(
+    fixtureAppJsonPath,
+    JSON.stringify({
+      expo: {
+        version: "0.1.45",
+        ios: { buildNumber: "45" },
+        android: { versionCode: 46 },
+      },
+    }),
+  );
+  await writeFile(
+    fixtureBuildGradlePath,
+    'defaultConfig { versionCode 46\nversionName "0.1.45" }',
+  );
+
+  await assert.rejects(
+    bumpMobileReleaseIdentity({
+      appJsonPath: fixtureAppJsonPath,
+      buildGradlePath: fixtureBuildGradlePath,
+      nextVersion: "0.1.46",
+    }),
+    /iOS buildNumber 45 does not match Android versionCode 46/,
+  );
 });

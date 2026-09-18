@@ -17,6 +17,7 @@ import type { Assessment, AssessmentAttempt } from "../types/assessment";
 import type { ClassItem } from "../types/class";
 import type { LxpPathSummary } from "../types/lxp";
 import type { MobileNotification } from "../types/notification";
+import { resolveMobileNotificationAction } from "../utils/mobile-notification-routing";
 import {
   addQuietNotifications,
   dismissQuietNotifications,
@@ -24,11 +25,21 @@ import {
 } from "../utils/quiet-notification-presentation";
 import { useAuth } from "./AuthProvider";
 import { LiveNotificationContext } from "./LiveNotificationContext";
+import { syncCurrentPushRegistration } from "../services/notifications/push-registration.runtime";
 
 const AT_RISK_TERMS = ["at risk", "at-risk", "flagged"];
 const INTERVENTION_ALERT_TERMS = ["intervention", "support plan"];
-const BLUE_REMINDER_TYPES = new Set(["student_pending_task_reminder", "student_pending_intervention_reminder"]);
-const BLUE_INTERVENTION_TERMS = ["checklist", "learner path", "learners path", "assigned path", "pending intervention"];
+const BLUE_REMINDER_TYPES = new Set([
+  "student_pending_task_reminder",
+  "student_pending_intervention_reminder",
+]);
+const BLUE_INTERVENTION_TERMS = [
+  "checklist",
+  "learner path",
+  "learners path",
+  "assigned path",
+  "pending intervention",
+];
 const ASSESSMENT_TYPES = new Set([
   "assessment_assigned",
   "assessment_due",
@@ -45,6 +56,7 @@ const AUTO_DISMISS_MS = 6000;
 const NATIVE_NOTIFICATION_CHANNEL_ID = "nexora-live";
 const NATIVE_NOTIFICATION_PREFIX = "nexora-notification";
 const NOTIFICATION_TAP_RETRY_MS = 320;
+const PUSH_REGISTRATION_RETRY_MS = 30_000;
 
 try {
   Notifications.setNotificationHandler({
@@ -65,7 +77,9 @@ function normalizeText(value: unknown) {
   return String(value).trim().toLowerCase();
 }
 
-function messageFromNotification(notification: Pick<MobileNotification, "message" | "body">) {
+function messageFromNotification(
+  notification: Pick<MobileNotification, "message" | "body">,
+) {
   const message = notification.message?.trim();
   if (message) return message;
   return notification.body?.trim() || "A new update is available.";
@@ -75,7 +89,10 @@ function readPayloadString(value: unknown) {
   return typeof value === "string" ? value : "";
 }
 
-function notificationToNativeData(notification: MobileNotification, role: string | null) {
+function notificationToNativeData(
+  notification: MobileNotification,
+  role: string | null,
+) {
   return {
     source: NATIVE_NOTIFICATION_PREFIX,
     notificationId: notification.id,
@@ -91,10 +108,13 @@ function notificationToNativeData(notification: MobileNotification, role: string
   };
 }
 
-function notificationFromNativeData(data: Record<string, unknown> | undefined): MobileNotification | null {
+function notificationFromNativeData(
+  data: Record<string, unknown> | undefined,
+): MobileNotification | null {
   if (!data || data.source !== NATIVE_NOTIFICATION_PREFIX) return null;
 
-  const id = readPayloadString(data.notificationId) || readPayloadString(data.id);
+  const id =
+    readPayloadString(data.notificationId) || readPayloadString(data.id);
   const title = readPayloadString(data.title);
   const type = readPayloadString(data.type);
 
@@ -109,7 +129,9 @@ function notificationFromNativeData(data: Record<string, unknown> | undefined): 
     message: readPayloadString(data.message),
     isRead: false,
     referenceId: readPayloadString(data.referenceId) || null,
-    metadata: readPayloadString(data.classId) ? { classId: readPayloadString(data.classId) } : null,
+    metadata: readPayloadString(data.classId)
+      ? { classId: readPayloadString(data.classId) }
+      : null,
     createdAt: readPayloadString(data.createdAt) || new Date().toISOString(),
   };
 }
@@ -125,27 +147,44 @@ type RealtimeNotificationPayload = {
   createdAt?: unknown;
 };
 
-function getNotificationSeenKeys(notification: Pick<MobileNotification, "id" | "type" | "referenceId">) {
+function getNotificationSeenKeys(
+  notification: Pick<MobileNotification, "id" | "type" | "referenceId">,
+) {
   return notification.id ? [notification.id] : [];
 }
 
-function hasSeenNotification(seen: Set<string>, notification: Pick<MobileNotification, "id" | "type" | "referenceId">) {
+function hasSeenNotification(
+  seen: Set<string>,
+  notification: Pick<MobileNotification, "id" | "type" | "referenceId">,
+) {
   return getNotificationSeenKeys(notification).some((key) => seen.has(key));
 }
 
-function markNotificationSeen(seen: Set<string>, notification: Pick<MobileNotification, "id" | "type" | "referenceId">) {
+function markNotificationSeen(
+  seen: Set<string>,
+  notification: Pick<MobileNotification, "id" | "type" | "referenceId">,
+) {
   getNotificationSeenKeys(notification).forEach((key) => seen.add(key));
 }
 
-function notificationFromRealtimePayload(payload: RealtimeNotificationPayload, userId: string): MobileNotification | null {
+function notificationFromRealtimePayload(
+  payload: RealtimeNotificationPayload,
+  userId: string,
+): MobileNotification | null {
   const type = readPayloadString(payload.type);
   const title = readPayloadString(payload.title);
   const referenceId = readPayloadString(payload.referenceId) || null;
-  const createdAt = readPayloadString(payload.createdAt) || new Date().toISOString();
-  const id = readPayloadString(payload.id) || `${type}:${referenceId || "broadcast"}:${createdAt}`;
-  const metadata = payload.metadata && typeof payload.metadata === "object" && !Array.isArray(payload.metadata)
-    ? payload.metadata as Record<string, unknown>
-    : null;
+  const createdAt =
+    readPayloadString(payload.createdAt) || new Date().toISOString();
+  const id =
+    readPayloadString(payload.id) ||
+    `${type}:${referenceId || "broadcast"}:${createdAt}`;
+  const metadata =
+    payload.metadata &&
+    typeof payload.metadata === "object" &&
+    !Array.isArray(payload.metadata)
+      ? (payload.metadata as Record<string, unknown>)
+      : null;
 
   if (!id || !type || !title) return null;
 
@@ -182,20 +221,31 @@ function isInterventionAlertNotification(
   );
 
   if (AT_RISK_TERMS.some((term) => joined.includes(term))) return true;
-  if (BLUE_INTERVENTION_TERMS.some((term) => joined.includes(term))) return false;
+  if (BLUE_INTERVENTION_TERMS.some((term) => joined.includes(term)))
+    return false;
   return INTERVENTION_ALERT_TERMS.some((term) => joined.includes(term));
 }
 
-function shouldSurfaceNotificationOnHydration(notification: MobileNotification) {
+function shouldSurfaceNotificationOnHydration(
+  notification: MobileNotification,
+) {
   return !notification.isRead;
 }
 
 function isLocalReminderId(value: string) {
-  return value.startsWith("student-reminder:") || value.startsWith("teacher-reminder:");
+  return (
+    value.startsWith("student-reminder:") ||
+    value.startsWith("teacher-reminder:")
+  );
 }
 
-function isLocalReminderNotification(notification: Pick<MobileNotification, "id" | "type">) {
-  return isLocalReminderId(notification.id) || BLUE_REMINDER_TYPES.has(notification.type);
+function isLocalReminderNotification(
+  notification: Pick<MobileNotification, "id" | "type">,
+) {
+  return (
+    isLocalReminderId(notification.id) ||
+    BLUE_REMINDER_TYPES.has(notification.type)
+  );
 }
 
 function resolveUserId(user: unknown) {
@@ -212,7 +262,13 @@ function reminderDateKey() {
 }
 
 function getClassLabel(classItem: ClassItem) {
-  return classItem.subjectName || classItem.subjectCode || classItem.name || classItem.className || "your class";
+  return (
+    classItem.subjectName ||
+    classItem.subjectCode ||
+    classItem.name ||
+    classItem.className ||
+    "your class"
+  );
 }
 
 function getAssessmentDueMs(assessment: Assessment) {
@@ -223,27 +279,49 @@ function getAssessmentDueMs(assessment: Assessment) {
 
 function getLatestAttempt(attempts: AssessmentAttempt[]) {
   return [...attempts].sort((left, right) => {
-    const leftTime = Date.parse(left.submittedAt || left.startedAt || left.createdAt || "");
-    const rightTime = Date.parse(right.submittedAt || right.startedAt || right.createdAt || "");
-    return (Number.isFinite(rightTime) ? rightTime : 0) - (Number.isFinite(leftTime) ? leftTime : 0);
+    const leftTime = Date.parse(
+      left.submittedAt || left.startedAt || left.createdAt || "",
+    );
+    const rightTime = Date.parse(
+      right.submittedAt || right.startedAt || right.createdAt || "",
+    );
+    return (
+      (Number.isFinite(rightTime) ? rightTime : 0) -
+      (Number.isFinite(leftTime) ? leftTime : 0)
+    );
   })[0];
 }
 
-async function buildStudentPendingTaskReminder(studentId: string): Promise<MobileNotification | null> {
-  const classRows = await classesApi.getStudentClasses(studentId).catch(() => [] as ClassItem[]);
+async function buildStudentPendingTaskReminder(
+  studentId: string,
+): Promise<MobileNotification | null> {
+  const classRows = await classesApi
+    .getStudentClasses(studentId)
+    .catch(() => [] as ClassItem[]);
   if (classRows.length === 0) return null;
 
   const batches = await Promise.all(
     classRows.slice(0, STUDENT_REMINDER_CLASS_LIMIT).map(async (classItem) => {
-      const assessments = await assessmentsApi.getByClass(classItem.id).catch(() => [] as Assessment[]);
+      const assessments = await assessmentsApi
+        .getByClass(classItem.id)
+        .catch(() => [] as Assessment[]);
       const published = assessments
-        .filter((assessment) => assessment.id && assessment.isPublished !== false)
+        .filter(
+          (assessment) => assessment.id && assessment.isPublished !== false,
+        )
         .slice(0, STUDENT_REMINDER_ASSESSMENT_LIMIT);
 
       const statuses = await Promise.all(
         published.map(async (assessment) => {
-          const attempts = await assessmentsApi.getStudentAttempts(assessment.id).catch(() => [] as AssessmentAttempt[]);
-          return { assessment, classItem, latestAttempt: getLatestAttempt(attempts), dueMs: getAssessmentDueMs(assessment) };
+          const attempts = await assessmentsApi
+            .getStudentAttempts(assessment.id)
+            .catch(() => [] as AssessmentAttempt[]);
+          return {
+            assessment,
+            classItem,
+            latestAttempt: getLatestAttempt(attempts),
+            dueMs: getAssessmentDueMs(assessment),
+          };
         }),
       );
 
@@ -253,17 +331,30 @@ async function buildStudentPendingTaskReminder(studentId: string): Promise<Mobil
 
   const pending = batches
     .flat()
-    .sort((left, right) => left.dueMs - right.dueMs || left.assessment.title.localeCompare(right.assessment.title));
+    .sort(
+      (left, right) =>
+        left.dueMs - right.dueMs ||
+        left.assessment.title.localeCompare(right.assessment.title),
+    );
 
   if (pending.length === 0) return null;
 
   const first = pending[0];
   const classLabel = getClassLabel(first.classItem);
-  const title = pending.length === 1 ? "1 pending task waiting" : String(pending.length) + " pending tasks waiting";
+  const title =
+    pending.length === 1
+      ? "1 pending task waiting"
+      : String(pending.length) + " pending tasks waiting";
   const message =
     pending.length === 1
-      ? first.assessment.title + " in " + classLabel + " is ready. Tap to open your assessments."
-      : first.assessment.title + " is next, plus " + String(pending.length - 1) + " more task(s). Tap to open your assessments.";
+      ? first.assessment.title +
+        " in " +
+        classLabel +
+        " is ready. Tap to open your assessments."
+      : first.assessment.title +
+        " is next, plus " +
+        String(pending.length - 1) +
+        " more task(s). Tap to open your assessments.";
 
   return {
     id:
@@ -290,29 +381,45 @@ function getPendingPathCount(path: LxpPathSummary) {
   const explicitPending = Number(path.counts?.pending ?? 0);
   if (explicitPending > 0) return explicitPending;
 
-  const total = Number(path.progress?.totalCheckpoints ?? path.counts?.total ?? 0);
-  const completed = Number(path.progress?.completedCheckpoints ?? path.counts?.completed ?? 0);
+  const total = Number(
+    path.progress?.totalCheckpoints ?? path.counts?.total ?? 0,
+  );
+  const completed = Number(
+    path.progress?.completedCheckpoints ?? path.counts?.completed ?? 0,
+  );
   return Math.max(0, total - completed);
 }
 
-async function buildStudentPendingInterventionReminder(studentId: string): Promise<MobileNotification | null> {
+async function buildStudentPendingInterventionReminder(
+  studentId: string,
+): Promise<MobileNotification | null> {
   const eligibility = await lxpApi.getEligibility().catch(() => null);
   const paths = eligibility?.paths || [];
   const pendingPaths = paths
     .map((path) => ({ path, pendingCount: getPendingPathCount(path) }))
-    .filter(({ path, pendingCount }) => path.status !== "completed" && pendingCount > 0);
+    .filter(
+      ({ path, pendingCount }) =>
+        path.status !== "completed" && pendingCount > 0,
+    );
 
   if (pendingPaths.length === 0) {
     const alerts = await lxpApi.getInterventionAlerts().catch(() => null);
-    const assignedAlerts = (alerts?.alerts || []).filter((alert) => alert.hasAssignedPath);
+    const assignedAlerts = (alerts?.alerts || []).filter(
+      (alert) => alert.hasAssignedPath,
+    );
     if (assignedAlerts.length === 0) return null;
 
     const firstAlert = assignedAlerts[0];
-    const subjectLabel = firstAlert.subjectName || firstAlert.subjectCode || "Learners Path";
+    const subjectLabel =
+      firstAlert.subjectName || firstAlert.subjectCode || "Learners Path";
     const message =
       assignedAlerts.length === 1
-        ? subjectLabel + " has an intervention path ready. JA can guide you through it now."
-        : subjectLabel + " is ready, plus " + String(assignedAlerts.length - 1) + " more intervention path(s). JA can guide you now.";
+        ? subjectLabel +
+          " has an intervention path ready. JA can guide you through it now."
+        : subjectLabel +
+          " is ready, plus " +
+          String(assignedAlerts.length - 1) +
+          " more intervention path(s). JA can guide you now.";
 
     return {
       id:
@@ -336,12 +443,24 @@ async function buildStudentPendingInterventionReminder(studentId: string): Promi
   }
 
   const first = pendingPaths[0];
-  const totalPending = pendingPaths.reduce((sum, item) => sum + item.pendingCount, 0);
-  const subjectLabel = first.path.class?.subjectName || first.path.class?.subjectCode || "Learners Path";
+  const totalPending = pendingPaths.reduce(
+    (sum, item) => sum + item.pendingCount,
+    0,
+  );
+  const subjectLabel =
+    first.path.class?.subjectName ||
+    first.path.class?.subjectCode ||
+    "Learners Path";
   const message =
     totalPending === 1
-      ? subjectLabel + " has 1 pending intervention step. JA can guide you through it now."
-      : subjectLabel + " has " + String(first.pendingCount) + " pending step(s), with " + String(totalPending) + " total across your intervention paths.";
+      ? subjectLabel +
+        " has 1 pending intervention step. JA can guide you through it now."
+      : subjectLabel +
+        " has " +
+        String(first.pendingCount) +
+        " pending step(s), with " +
+        String(totalPending) +
+        " total across your intervention paths.";
 
   return {
     id:
@@ -364,8 +483,12 @@ async function buildStudentPendingInterventionReminder(studentId: string): Promi
   };
 }
 
-async function buildTeacherPendingInterventionReminder(userId: string): Promise<MobileNotification | null> {
-  const pending = await lxpApi.getTeacherPendingInterventionCount().catch(() => null);
+async function buildTeacherPendingInterventionReminder(
+  userId: string,
+): Promise<MobileNotification | null> {
+  const pending = await lxpApi
+    .getTeacherPendingInterventionCount()
+    .catch(() => null);
   const pendingCount = Number(pending?.pendingCount ?? 0);
   if (pendingCount <= 0) return null;
 
@@ -375,12 +498,18 @@ async function buildTeacherPendingInterventionReminder(userId: string): Promise<
     subjectCode?: string | null;
     pendingCount?: number | null;
   }>;
-  const firstClass = classBreakdown.find((entry) => Number(entry.pendingCount ?? 0) > 0);
-  const classLabel = firstClass?.subjectName || firstClass?.subjectCode || "your classes";
+  const firstClass = classBreakdown.find(
+    (entry) => Number(entry.pendingCount ?? 0) > 0,
+  );
+  const classLabel =
+    firstClass?.subjectName || firstClass?.subjectCode || "your classes";
   const message =
     pendingCount === 1
       ? classLabel + " has 1 learner waiting for intervention review."
-      : classLabel + " has intervention work waiting, with " + String(pendingCount) + " learner(s) needing review.";
+      : classLabel +
+        " has intervention work waiting, with " +
+        String(pendingCount) +
+        " learner(s) needing review.";
 
   return {
     id:
@@ -403,106 +532,27 @@ async function buildTeacherPendingInterventionReminder(userId: string): Promise<
   };
 }
 
-function navigateToMainTab(tabName: string) {
+function navigateToNotification(
+  notification: MobileNotification,
+  role: string | null,
+) {
   if (!rootNavigationRef.isReady()) return false;
-  (rootNavigationRef.navigate as unknown as (name: string, params?: unknown) => void)("MainTabs", { screen: tabName });
-  return true;
-}
-
-function navigateToTeacherDrawer(screen: string, params?: unknown) {
-  if (!rootNavigationRef.isReady()) return false;
-  const drawerParams = params === undefined ? { screen } : { screen, params };
-  (rootNavigationRef.navigate as unknown as (name: string, params?: unknown) => void)(
-    "TeacherDrawer",
-    drawerParams,
-  );
-  return true;
-}
-
-function resolveNotificationNavigation(notification: MobileNotification, role: string | null) {
-  const normalizedRole = String(role || "").toLowerCase();
-  const referenceId = notification.referenceId || undefined;
-  const rawClassId = notification.metadata?.classId;
-  const classId = typeof rawClassId === "string" && rawClassId.trim() ? rawClassId : undefined;
-
-  if (notification.type === "student_pending_intervention_reminder") {
-    return () => rootNavigationRef.navigate("LXP", referenceId ? { classId: referenceId, tab: "paths" } : { tab: "paths" });
-  }
-
-  if (notification.type === "teacher_pending_intervention_reminder") {
-    return () => navigateToTeacherDrawer(
-      "TeacherInterventions",
-      referenceId ? { classId: referenceId } : undefined,
-    );
-  }
-
-  if (isInterventionAlertNotification(notification)) {
-    if (normalizedRole === "teacher") {
-      return referenceId
-        ? () => rootNavigationRef.navigate("TeacherInterventionDetail", { caseId: referenceId })
-        : () => navigateToTeacherDrawer("TeacherInterventions");
-    }
-    return () => rootNavigationRef.navigate("LXP", { tab: "case" });
-  }
-
-  if (ASSESSMENT_TYPES.has(notification.type)) {
-    if (normalizedRole === "teacher") {
-      return referenceId
-        ? () => rootNavigationRef.navigate("TeacherAssessmentDetail", { assessmentId: referenceId })
-        : () => navigateToTeacherDrawer("Assessments");
-    }
-    return () => rootNavigationRef.navigate("AssessmentHistory", referenceId ? { assessmentId: referenceId } : undefined);
-  }
-
-  if (notification.type === "announcement_posted") {
-    if (normalizedRole === "teacher") {
-      if (classId) {
-        return () => rootNavigationRef.navigate("TeacherClassDetail", {
-          classId,
-          initialTab: "announcements",
-          announcementId: referenceId,
-          source: "announcements",
-        });
-      }
-      return () => navigateToTeacherDrawer("TeacherAnnouncements");
-    }
-    if (classId) {
-      return () => rootNavigationRef.navigate("ClassDetail", {
-        classId,
-        initialTab: "announcements",
-        announcementId: referenceId,
-        source: "announcements",
-      });
-    }
-    return () => navigateToMainTab("Announcements");
-  }
-
-  if (notification.type === "discussion_thread_posted" || notification.type === "discussion_comment_posted") {
-    return () => navigateToMainTab("Classes");
-  }
-
-  if (notification.type === "grade_updated") {
-    if (normalizedRole === "teacher") {
-      return () => navigateToTeacherDrawer("TeacherClassRecord");
-    }
-    return () => rootNavigationRef.navigate("Performance");
-  }
-
-  return normalizedRole === "teacher"
-    ? () => navigateToTeacherDrawer("Home")
-    : () => navigateToMainTab("Dashboard");
-}
-
-function navigateToNotification(notification: MobileNotification, role: string | null) {
-  if (!rootNavigationRef.isReady()) return false;
-  resolveNotificationNavigation(notification, role)();
+  const action = resolveMobileNotificationAction(notification, role);
+  (
+    rootNavigationRef.navigate as unknown as (
+      name: string,
+      params?: unknown,
+    ) => void
+  )(action.routeName, action.params);
   return true;
 }
 
 export function LiveNotificationProvider({ children }: PropsWithChildren) {
   const { isAuthenticated, user } = useAuth();
   const insets = useSafeAreaInsets();
-  const [quietPresentation, setQuietPresentation] = useState(EMPTY_QUIET_NOTIFICATION_PRESENTATION);
+  const [quietPresentation, setQuietPresentation] = useState(
+    EMPTY_QUIET_NOTIFICATION_PRESENTATION,
+  );
   const [unreadCount, setUnreadCount] = useState(0);
 
   const seenIdsRef = useRef<Set<string>>(new Set());
@@ -510,7 +560,9 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
   const mountedRef = useRef(true);
   const pollInFlightRef = useRef(false);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const autoDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const nativeReadyRef = useRef(false);
   const nativeDeniedRef = useRef(false);
   const scheduledNativeIdsRef = useRef<Set<string>>(new Set());
@@ -519,6 +571,10 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
   const pendingNativeOpenRef = useRef<MobileNotification | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const appStateRef = useRef(AppState.currentState);
+  const pushRegistrationInFlightRef = useRef(false);
+  const pushRegistrationRetryRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   const slide = useRef(new Animated.Value(-140)).current;
   const opacity = useRef(new Animated.Value(0)).current;
@@ -537,6 +593,10 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
       }
       socketRef.current?.disconnect();
       socketRef.current = null;
+      if (pushRegistrationRetryRef.current) {
+        clearTimeout(pushRegistrationRetryRef.current);
+        pushRegistrationRetryRef.current = null;
+      }
     };
   }, []);
 
@@ -546,15 +606,19 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
 
     try {
       if (Platform.OS === "android") {
-        await Notifications.setNotificationChannelAsync(NATIVE_NOTIFICATION_CHANNEL_ID, {
-          name: "Nexora live alerts",
-          importance: Notifications.AndroidImportance.HIGH,
-          lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-          vibrationPattern: [0, 260, 120, 260],
-          lightColor: "#E3062C",
-          enableVibrate: true,
-          showBadge: true,
-        });
+        await Notifications.setNotificationChannelAsync(
+          NATIVE_NOTIFICATION_CHANNEL_ID,
+          {
+                name: "Nexora live alerts",
+                importance: Notifications.AndroidImportance.HIGH,
+                lockscreenVisibility:
+                  Notifications.AndroidNotificationVisibility.PRIVATE,
+            vibrationPattern: [0, 260, 120, 260],
+            lightColor: "#E3062C",
+            enableVibrate: true,
+            showBadge: true,
+          },
+        );
       }
 
       const current = await Notifications.getPermissionsAsync();
@@ -575,6 +639,36 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
     }
   }, []);
 
+  const syncPushDevice = useCallback(async () => {
+    if (pushRegistrationInFlightRef.current) return null;
+    pushRegistrationInFlightRef.current = true;
+    try {
+      return await syncCurrentPushRegistration();
+    } finally {
+      pushRegistrationInFlightRef.current = false;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated || !user?.id) return;
+    let active = true;
+    const register = async () => {
+      const result = await syncPushDevice();
+      if (!active || result?.status !== "retryable_error") return;
+      pushRegistrationRetryRef.current = setTimeout(() => {
+        void register();
+      }, PUSH_REGISTRATION_RETRY_MS);
+    };
+    void register();
+    return () => {
+      active = false;
+      if (pushRegistrationRetryRef.current) {
+        clearTimeout(pushRegistrationRetryRef.current);
+        pushRegistrationRetryRef.current = null;
+      }
+    };
+  }, [isAuthenticated, syncPushDevice, user?.id]);
+
   const scheduleNativeNotification = useCallback(
     async (notification: MobileNotification) => {
       if (scheduledNativeIdsRef.current.has(notification.id)) return;
@@ -589,7 +683,9 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
         await Notifications.scheduleNotificationAsync({
           identifier: `${NATIVE_NOTIFICATION_PREFIX}:${notification.id}`,
           content: {
-            title: interventionAlert ? `JA alert: ${notification.title}` : notification.title,
+            title: interventionAlert
+              ? `JA alert: ${notification.title}`
+              : notification.title,
             body: messageFromNotification(notification),
             data: notificationToNativeData(notification, role),
             sound: true,
@@ -598,7 +694,10 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
             vibrate: interventionAlert ? [0, 280, 120, 280] : [0, 180],
             autoDismiss: true,
           },
-          trigger: Platform.OS === "android" ? { channelId: NATIVE_NOTIFICATION_CHANNEL_ID } : null,
+          trigger:
+            Platform.OS === "android"
+              ? { channelId: NATIVE_NOTIFICATION_CHANNEL_ID }
+              : null,
         });
       } catch {
         scheduledNativeIdsRef.current.delete(notification.id);
@@ -642,7 +741,11 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
 
   const enqueueLiveNotification = useCallback(
     (notification: MobileNotification) => {
-      if (!notification.id || hasSeenNotification(seenIdsRef.current, notification)) return false;
+      if (
+        !notification.id ||
+        hasSeenNotification(seenIdsRef.current, notification)
+      )
+        return false;
       markNotificationSeen(seenIdsRef.current, notification);
       setQuietPresentation((current) => addQuietNotifications(current, 1));
       return true;
@@ -700,10 +803,21 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
         autoDismissTimerRef.current = null;
       }
     };
-  }, [dismissActive, opacity, quietPresentation.count, quietPresentation.visible, slide]);
+  }, [
+    dismissActive,
+    opacity,
+    quietPresentation.count,
+    quietPresentation.visible,
+    slide,
+  ]);
 
   const syncStudentReminderNotifications = useCallback(async () => {
-    if (!isAuthenticated || role !== "student" || studentReminderInFlightRef.current) return;
+    if (
+      !isAuthenticated ||
+      role !== "student" ||
+      studentReminderInFlightRef.current
+    )
+      return;
 
     const studentId = resolveUserId(user);
     if (!studentId) return;
@@ -725,14 +839,22 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
   }, [enqueueLiveNotification, isAuthenticated, role, user]);
 
   const syncTeacherReminderNotifications = useCallback(async () => {
-    if (!isAuthenticated || role !== "teacher" || teacherReminderInFlightRef.current) return;
+    if (
+      !isAuthenticated ||
+      role !== "teacher" ||
+      teacherReminderInFlightRef.current
+    )
+      return;
 
     const teacherId = resolveUserId(user);
     if (!teacherId) return;
 
     teacherReminderInFlightRef.current = true;
     try {
-      const interventionReminder = await buildTeacherPendingInterventionReminder(teacherId).catch(() => null);
+      const interventionReminder =
+        await buildTeacherPendingInterventionReminder(teacherId).catch(
+          () => null,
+        );
       if (interventionReminder) enqueueLiveNotification(interventionReminder);
     } catch {
       // Teacher reminders should never interrupt the core notification stream.
@@ -772,13 +894,17 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
         return;
       }
 
-      const fresh = rows.filter((row) => !row.isRead && !hasSeenNotification(seenIdsRef.current, row));
+      const fresh = rows.filter(
+        (row) => !row.isRead && !hasSeenNotification(seenIdsRef.current, row),
+      );
       if (fresh.length === 0) return;
 
       fresh.forEach((row) => {
         markNotificationSeen(seenIdsRef.current, row);
       });
-      setQuietPresentation((current) => addQuietNotifications(current, fresh.length));
+      setQuietPresentation((current) =>
+        addQuietNotifications(current, fresh.length),
+      );
     } catch {
       // Keep UI resilient and skip transient notification failures.
     } finally {
@@ -814,7 +940,6 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
     };
   }, [isAuthenticated, pollNotifications, user?.id]);
 
-
   useEffect(() => {
     if (!isAuthenticated || !user?.id) {
       socketRef.current?.disconnect();
@@ -840,7 +965,10 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
     });
 
     socket.on("notification.new", (payload: RealtimeNotificationPayload) => {
-      const notification = notificationFromRealtimePayload(payload, activeUserId);
+      const notification = notificationFromRealtimePayload(
+        payload,
+        activeUserId,
+      );
       if (!notification) return;
 
       const inserted = enqueueLiveNotification(notification);
@@ -892,18 +1020,30 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
       const previousState = appStateRef.current;
       appStateRef.current = nextState;
 
-      if ((previousState === "background" || previousState === "inactive") && nextState === "active") {
+      if (
+        (previousState === "background" || previousState === "inactive") &&
+        nextState === "active"
+      ) {
         clearLocalReminderSeenKeys();
         void pollNotifications();
         void syncStudentReminderNotifications();
         void syncTeacherReminderNotifications();
+        void syncPushDevice();
       }
     });
 
     return () => {
       subscription.remove();
     };
-  }, [clearLocalReminderSeenKeys, isAuthenticated, pollNotifications, syncStudentReminderNotifications, syncTeacherReminderNotifications, user?.id]);
+  }, [
+    clearLocalReminderSeenKeys,
+    isAuthenticated,
+    pollNotifications,
+    syncPushDevice,
+    syncStudentReminderNotifications,
+    syncTeacherReminderNotifications,
+    user?.id,
+  ]);
 
   useEffect(() => {
     if (!isAuthenticated || !user?.id) return;
@@ -911,18 +1051,23 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
     void ensureNativeNotificationsReady();
 
     const handleResponse = (response: Notifications.NotificationResponse) => {
-      const notification = notificationFromNativeData(response.notification.request.content.data);
+      const notification = notificationFromNativeData(
+        response.notification.request.content.data,
+      );
       if (!notification) return;
       openOrDeferNativeNotification(notification);
     };
 
-    const subscription = Notifications.addNotificationResponseReceivedListener(handleResponse);
+    const subscription =
+      Notifications.addNotificationResponseReceivedListener(handleResponse);
 
     void Notifications.getLastNotificationResponseAsync()
       .then((response) => {
         if (!response) return;
         handleResponse(response);
-        if (typeof Notifications.clearLastNotificationResponseAsync === "function") {
+        if (
+          typeof Notifications.clearLastNotificationResponseAsync === "function"
+        ) {
           return Notifications.clearLastNotificationResponseAsync();
         }
         return undefined;
@@ -934,14 +1079,21 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
     return () => {
       subscription.remove();
     };
-  }, [ensureNativeNotificationsReady, isAuthenticated, openOrDeferNativeNotification, user?.id]);
+  }, [
+    ensureNativeNotificationsReady,
+    isAuthenticated,
+    openOrDeferNativeNotification,
+    user?.id,
+  ]);
 
   useEffect(() => {
     if (!isAuthenticated || nativeDeniedRef.current) return;
 
-    void Notifications.setBadgeCountAsync(Math.max(0, unreadCount)).catch(() => {
-      // Some Android launchers do not support badges; the in-app count remains authoritative.
-    });
+    void Notifications.setBadgeCountAsync(Math.max(0, unreadCount)).catch(
+      () => {
+        // Some Android launchers do not support badges; the in-app count remains authoritative.
+      },
+    );
   }, [isAuthenticated, unreadCount]);
 
   useEffect(() => {

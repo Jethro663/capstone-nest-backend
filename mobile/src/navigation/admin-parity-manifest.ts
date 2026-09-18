@@ -40,6 +40,7 @@ export type AdminParityEntry = {
   backendOwners: readonly string[];
   actionGraph: string;
   status: AdminParityStatus;
+  evidence?: readonly string[];
   gap?: string;
 };
 
@@ -304,11 +305,20 @@ const adminParityInventoryBaseline: readonly AdminParityEntry[] = [
  * deployment evidence are recorded separately from this implementation flag.
  */
 export const adminParityManifest: readonly AdminParityEntry[] =
-  adminParityInventoryBaseline.map(({ gap: _resolvedGap, ...entry }) => ({
-    ...entry,
-    currentMobileRoute: entry.targetMobileRoute,
-    status: "aligned" as const,
-  }));
+  adminParityInventoryBaseline.map((entry) => {
+    const isAcceptedProfile = entry.id === "profile";
+    return {
+      ...entry,
+      currentMobileRoute: entry.targetMobileRoute,
+      status: isAcceptedProfile ? ("aligned" as const) : ("partial" as const),
+      evidence: isAcceptedProfile
+        ? ["AdminProfileScreen.tsx", "profile-version-surface.test.ts"]
+        : [`route:${entry.targetMobileRoute}`, "admin-parity-manifest.test.ts"],
+      gap: isAcceptedProfile
+        ? undefined
+        : "The route is mounted, but capability acceptance still requires field, authorization, pagination, mutation-order, error-state, and runtime evidence.",
+    };
+  });
 
 export type AdminWebRouteParityEntry = {
   webPath: string;

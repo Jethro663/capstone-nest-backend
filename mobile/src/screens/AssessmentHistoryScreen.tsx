@@ -7,7 +7,7 @@ import { peekAppError } from "../api/http";
 import { useAssessmentHistory } from "../api/hooks";
 import type { RootStackParamList } from "../navigation/types";
 import { studentDarkTheme as theme } from "../theme/studentDark";
-import { Refreshable, ScreenScroll } from "../components/ui/primitives";
+import { StudentScreen } from "../components/student/StudentWorkspacePrimitives";
 import { presentAcademicScore } from "../lib/academicScore";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AssessmentHistory">;
@@ -149,91 +149,41 @@ export function AssessmentHistoryScreen({ route, navigation }: Props) {
   }, [historyQuery.data?.data, routeAssessmentId, routeClassId]);
 
   return (
-    <ScreenScroll
-      backgroundColor={theme.bg}
-      refreshControl={
-        <Refreshable
-          refreshing={historyQuery.isRefetching}
-          onRefresh={() => {
-            void historyQuery.refetch();
-          }}
+    <StudentScreen
+      title="Assessment History"
+      showBackButton
+      onBackPress={() => navigation.goBack()}
+      refreshing={historyQuery.isRefetching}
+      onRefresh={() => void historyQuery.refetch()}
+      rightAction={
+        <ToneTag
+          label={`${historyQuery.data?.total ?? filteredRows.length} attempts`}
+          tone="blue"
         />
       }
     >
       <View
         style={{
-          backgroundColor: theme.header,
-          borderBottomWidth: 1,
-          borderBottomColor: theme.border,
+          marginHorizontal: 16,
+          marginTop: 12,
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: theme.border,
+          backgroundColor: theme.surface,
+          paddingHorizontal: 14,
         }}
       >
-        <View
-          style={{ paddingHorizontal: 16, paddingTop: 44, paddingBottom: 16 }}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <Pressable
-              onPress={() => navigation.goBack()}
-              style={{
-                width: 38,
-                height: 38,
-                borderRadius: 999,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: theme.active,
-              }}
-            >
-              <MaterialCommunityIcons
-                name="chevron-left"
-                size={20}
-                color={theme.text}
-              />
-            </Pressable>
-            <View style={{ flex: 1 }}>
-              <Text
-                style={{ color: theme.text, fontSize: 12, fontWeight: "700" }}
-              >
-                Student Records
-              </Text>
-              <Text
-                style={{
-                  marginTop: 4,
-                  color: theme.text,
-                  fontSize: 28,
-                  fontWeight: "800",
-                }}
-              >
-                Assessment History
-              </Text>
-            </View>
-            <ToneTag
-              label={`${historyQuery.data?.total ?? filteredRows.length} attempts`}
-              tone="blue"
-            />
-          </View>
-
-          <View
-            style={{
-              marginTop: 14,
-              borderRadius: 14,
-              borderWidth: 1,
-              borderColor: theme.border,
-              backgroundColor: theme.active,
-              paddingHorizontal: 14,
-              paddingVertical: 4,
-            }}
-          >
-            <TextInput
-              value={search}
-              onChangeText={(value) => {
-                setSearch(value);
-                setPage(1);
-              }}
-              placeholder="Search by assessment or class"
-              placeholderTextColor={theme.muted}
-              style={{ color: theme.text, fontSize: 13, paddingVertical: 10 }}
-            />
-          </View>
-        </View>
+        <TextInput
+          accessibilityLabel="Search assessment history"
+          value={search}
+          onChangeText={(value) => {
+            setSearch(value);
+            setPage(1);
+          }}
+          placeholder="Search by assessment or class"
+          placeholderTextColor={theme.muted}
+          style={{ color: theme.text, fontSize: 13, paddingVertical: 12 }}
+        />
       </View>
 
       <View style={{ paddingHorizontal: 16, paddingTop: 18, gap: 10 }}>
@@ -686,6 +636,6 @@ export function AssessmentHistoryScreen({ route, navigation }: Props) {
           </DarkPanel>
         ) : null}
       </View>
-    </ScreenScroll>
+    </StudentScreen>
   );
 }

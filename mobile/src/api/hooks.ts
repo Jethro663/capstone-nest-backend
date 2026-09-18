@@ -17,6 +17,7 @@ import { schoolEventsApi } from "./services/school-events";
 import { sectionsApi } from "./services/sections";
 import type { TeacherSectionCandidateQuery } from "./services/sections";
 import { teacherProfileApi } from "./services/teacher-profile";
+import { mobileWorkspaceApi } from "./services/mobile-workspace";
 import type {
   AssessmentHistoryQuery,
   TeacherReportQuery,
@@ -137,6 +138,10 @@ export const queryKeys = {
   teacherInterventionClassReport: (classId?: string) =>
     ["teacher-intervention-class-report", classId ?? "missing"] as const,
   teacherPendingInterventions: ["teacher-pending-interventions"] as const,
+  mobileStudentOverview: ["mobile-workspace", "student", "overview"] as const,
+  mobileTeacherOverview: ["mobile-workspace", "teacher", "overview"] as const,
+  mobileCalendar: (role: "student" | "teacher", from: string, to: string) =>
+    ["mobile-workspace", role, "calendar", from, to] as const,
   teacherEvaluationSummary: (
     evaluationType: TeacherEvaluationType,
     classId?: string,
@@ -159,6 +164,27 @@ export const queryKeys = {
   teacherReportSystemUsage: (query?: TeacherReportQuery) =>
     ["teacher-report-system-usage", query ?? "all"] as const,
 };
+
+export const useMobileStudentOverview = () =>
+  useQuery({
+    queryKey: queryKeys.mobileStudentOverview,
+    queryFn: mobileWorkspaceApi.getStudentOverview,
+  });
+
+export const useMobileTeacherOverview = () =>
+  useQuery({
+    queryKey: queryKeys.mobileTeacherOverview,
+    queryFn: mobileWorkspaceApi.getTeacherOverview,
+  });
+
+export const useMobileCalendar = (
+  role: "student" | "teacher",
+  range: { from: string; to: string },
+) =>
+  useQuery({
+    queryKey: queryKeys.mobileCalendar(role, range.from, range.to),
+    queryFn: () => mobileWorkspaceApi.getCalendar(role, range),
+  });
 
 export const useStudentClasses = (studentId?: string) =>
   useQuery({

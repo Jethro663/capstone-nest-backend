@@ -26,6 +26,10 @@ import {
   TeacherSelectMenu,
   teacherTheme as theme,
 } from "../components/teacher/TeacherMobilePrimitives";
+import {
+  TeacherContextStrip,
+  TeacherFlatSection,
+} from "../components/teacher/TeacherWorkspacePrimitives";
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, "Assessments">,
@@ -48,11 +52,17 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
   const [expandedClassId, setExpandedClassId] = useState<string | null>(null);
   const [aiJobsExpanded, setAiJobsExpanded] = useState(false);
   const [creatingAssessment, setCreatingAssessment] = useState(false);
-  const [selectedAssessmentIds, setSelectedAssessmentIds] = useState<string[]>([]);
-  const [deletingAssessment, setDeletingAssessment] = useState<{ id: string; title: string } | null>(null);
+  const [selectedAssessmentIds, setSelectedAssessmentIds] = useState<string[]>(
+    [],
+  );
+  const [deletingAssessment, setDeletingAssessment] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [isDeletingAssessment, setIsDeletingAssessment] = useState(false);
-  const [deletingAiJob, setDeletingAiJob] = useState<TeacherAiJobSummary | null>(null);
+  const [deletingAiJob, setDeletingAiJob] =
+    useState<TeacherAiJobSummary | null>(null);
   const [isDeletingAiJob, setIsDeletingAiJob] = useState(false);
   const initializedExpansion = useRef(false);
   const classIds = classesQuery.data?.map((entry) => entry.id) ?? [];
@@ -63,8 +73,11 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
       enabled: classIds.length > 0,
     })),
   });
-  const assessmentLoadFailed = classesQuery.isError || assessmentQueries.some(query => query.isError);
-  const assessmentsLoading = classesQuery.isLoading || assessmentQueries.some(query => query.isLoading);
+  const assessmentLoadFailed =
+    classesQuery.isError || assessmentQueries.some((query) => query.isError);
+  const assessmentsLoading =
+    classesQuery.isLoading ||
+    assessmentQueries.some((query) => query.isLoading);
 
   const records = useMemo(
     () =>
@@ -93,21 +106,26 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
   const classGroups = useMemo(
     () =>
       (classesQuery.data ?? [])
-        .filter((classItem) => classFilter === "all" || classItem.id === classFilter)
+        .filter(
+          (classItem) => classFilter === "all" || classItem.id === classFilter,
+        )
         .map((classItem) => ({
           classItem,
-          assessments: filteredRecords.filter((assessment) => assessment.classId === classItem.id),
+          assessments: filteredRecords.filter(
+            (assessment) => assessment.classId === classItem.id,
+          ),
         })),
     [classFilter, classesQuery.data, filteredRecords],
   );
 
   const classNames = useMemo(
-    () => Object.fromEntries(
-      (classesQuery.data ?? []).map((classItem) => [
-        classItem.id,
-        `${classItem.subjectCode} · ${classItem.subjectName}`,
-      ]),
-    ),
+    () =>
+      Object.fromEntries(
+        (classesQuery.data ?? []).map((classItem) => [
+          classItem.id,
+          `${classItem.subjectCode} · ${classItem.subjectName}`,
+        ]),
+      ),
     [classesQuery.data],
   );
 
@@ -119,7 +137,7 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
 
   const toggleSelectAssessment = (id: string) => {
     setSelectedAssessmentIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
     );
   };
 
@@ -133,7 +151,10 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
   };
 
   const refetchAllAssessments = async () => {
-    await Promise.all([classesQuery.refetch(), ...assessmentQueries.map((query) => query.refetch())]);
+    await Promise.all([
+      classesQuery.refetch(),
+      ...assessmentQueries.map((query) => query.refetch()),
+    ]);
   };
 
   const handleDeleteSingleAssessment = async () => {
@@ -142,9 +163,14 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
       setIsDeletingAssessment(true);
       await assessmentsApi.delete(deletingAssessment.id);
       setDeletingAssessment(null);
-      setSelectedAssessmentIds((prev) => prev.filter((id) => id !== deletingAssessment.id));
+      setSelectedAssessmentIds((prev) =>
+        prev.filter((id) => id !== deletingAssessment.id),
+      );
       await refetchAllAssessments();
-      Alert.alert("Assessment Deleted", "The assessment has been deleted successfully.");
+      Alert.alert(
+        "Assessment Deleted",
+        "The assessment has been deleted successfully.",
+      );
     } catch (err) {
       Alert.alert("Unable to delete assessment", toAppError(err).message);
     } finally {
@@ -156,11 +182,16 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
     if (!selectedAssessmentIds.length || isDeletingAssessment) return;
     try {
       setIsDeletingAssessment(true);
-      await Promise.all(selectedAssessmentIds.map((id) => assessmentsApi.delete(id)));
+      await Promise.all(
+        selectedAssessmentIds.map((id) => assessmentsApi.delete(id)),
+      );
       setShowBulkDeleteConfirm(false);
       setSelectedAssessmentIds([]);
       await refetchAllAssessments();
-      Alert.alert("Assessments Deleted", `${selectedAssessmentIds.length} assessment(s) deleted successfully.`);
+      Alert.alert(
+        "Assessments Deleted",
+        `${selectedAssessmentIds.length} assessment(s) deleted successfully.`,
+      );
     } catch (err) {
       Alert.alert("Unable to delete assessments", toAppError(err).message);
     } finally {
@@ -172,7 +203,10 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
     if (creatingAssessment) return;
     const classId = targetClassId || classesQuery.data?.[0]?.id;
     if (!classId) {
-      Alert.alert("No class selected", "A class is required before creating an assessment.");
+      Alert.alert(
+        "No class selected",
+        "A class is required before creating an assessment.",
+      );
       return;
     }
 
@@ -199,7 +233,10 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
       }
       setDeletingAiJob(null);
       await aiJobsQuery.refetch();
-      Alert.alert("AI Draft Job Deleted", "The generation job was removed. Any approved assessment remains available.");
+      Alert.alert(
+        "AI Draft Job Deleted",
+        "The generation job was removed. Any approved assessment remains available.",
+      );
     } catch (error) {
       Alert.alert("Unable to delete AI draft job", toAppError(error).message);
     } finally {
@@ -210,15 +247,28 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
   return (
     <TeacherScreen
       title="Assessments"
-      subtitle="Open a class accordion to review its specific assessments and grading workflow."
       icon="clipboard-text-outline"
-      refreshing={classesQuery.isRefetching || aiJobsQuery.isRefetching || assessmentQueries.some((query) => query.isRefetching)}
+      refreshing={
+        classesQuery.isRefetching ||
+        aiJobsQuery.isRefetching ||
+        assessmentQueries.some((query) => query.isRefetching)
+      }
       onRefresh={() => {
-        void Promise.all([classesQuery.refetch(), aiJobsQuery.refetch(), ...assessmentQueries.map((query) => query.refetch())]);
+        void Promise.all([
+          classesQuery.refetch(),
+          aiJobsQuery.refetch(),
+          ...assessmentQueries.map((query) => query.refetch()),
+        ]);
       }}
     >
+      <TeacherContextStrip
+        title="Assessment workspace"
+        subtitle="Create, review, grade, and manage work by class."
+        status={`${filteredRecords.length} shown`}
+        icon="clipboard-text-outline"
+      />
       {assessmentLoadFailed ? (
-        <TeacherPanel
+        <TeacherFlatSection
           title="Assessments could not fully load"
           subtitle="This is a loading problem, not an empty class. Retry to restore the list."
         >
@@ -229,7 +279,7 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
               onPress={() => void refetchAllAssessments()}
             />
           </View>
-        </TeacherPanel>
+        </TeacherFlatSection>
       ) : null}
 
       <TeacherSelectMenu
@@ -293,9 +343,16 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
         >
           <Pressable
             accessibilityRole="checkbox"
-            accessibilityState={{ checked: selectedAssessmentIds.length === filteredRecords.length }}
+            accessibilityState={{
+              checked: selectedAssessmentIds.length === filteredRecords.length,
+            }}
             onPress={toggleSelectAllAssessments}
-            style={{ minHeight: 44, flexDirection: "row", alignItems: "center", gap: 8 }}
+            style={{
+              minHeight: 44,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+            }}
           >
             <MaterialCommunityIcons
               name={
@@ -308,8 +365,12 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
               size={20}
               color={selectedAssessmentIds.length > 0 ? theme.red : theme.muted}
             />
-            <Text style={{ fontSize: 12, fontWeight: "800", color: theme.text }}>
-              {selectedAssessmentIds.length === filteredRecords.length ? "Deselect all" : "Select all"}
+            <Text
+              style={{ fontSize: 12, fontWeight: "800", color: theme.text }}
+            >
+              {selectedAssessmentIds.length === filteredRecords.length
+                ? "Deselect all"
+                : "Select all"}
             </Text>
           </Pressable>
           <Text style={{ fontSize: 11, color: theme.muted }}>
@@ -346,71 +407,147 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
             >
               {assessments.length ? (
                 assessments.map((assessment) => (
-                      <TeacherRow
-                        key={assessment.id}
-                        title={assessment.title}
-                        subtitle={`${assessment.academicCapabilities?.periodLabel || assessment.quarter || "Unassigned period"} · ${assessment.totalPoints ?? 0} points · Due ${formatDate(assessment.dueDate)}${assessment.academicCapabilities?.readOnlyReason ? " · " + assessment.academicCapabilities.readOnlyReason : ""}`}
-                        left={
+                  <TeacherRow
+                    key={assessment.id}
+                    title={assessment.title}
+                    subtitle={`${assessment.academicCapabilities?.periodLabel || assessment.quarter || "Unassigned period"} · ${assessment.totalPoints ?? 0} points · Due ${formatDate(assessment.dueDate)}${assessment.academicCapabilities?.readOnlyReason ? " · " + assessment.academicCapabilities.readOnlyReason : ""}`}
+                    left={
+                      <Pressable
+                        onPress={() => toggleSelectAssessment(assessment.id)}
+                        hitSlop={8}
+                        style={{ paddingRight: 4 }}
+                      >
+                        <MaterialCommunityIcons
+                          name={
+                            selectedAssessmentIds.includes(assessment.id)
+                              ? "checkbox-marked"
+                              : "checkbox-blank-outline"
+                          }
+                          size={20}
+                          color={
+                            selectedAssessmentIds.includes(assessment.id)
+                              ? theme.red
+                              : theme.dim
+                          }
+                        />
+                      </Pressable>
+                    }
+                    onPress={() =>
+                      navigation.navigate("TeacherAssessmentDetail", {
+                        assessmentId: assessment.id,
+                        classId: assessment.classId,
+                      })
+                    }
+                    right={
+                      <View style={{ alignItems: "flex-end" }}>
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            fontWeight: "700",
+                            color: assessment.isPublished
+                              ? theme.green
+                              : theme.amber,
+                          }}
+                        >
+                          {assessment.isPublished ? "Ready to give" : "Draft"}
+                        </Text>
+                        <Text style={{ fontSize: 10, color: theme.muted }}>
+                          {assessment.questions?.length ?? 0} questions
+                        </Text>
+                        <View
+                          style={{ marginTop: 4, flexDirection: "row", gap: 6 }}
+                        >
                           <Pressable
-                            onPress={() => toggleSelectAssessment(assessment.id)}
-                            hitSlop={8}
-                            style={{ paddingRight: 4 }}
+                            onPress={() =>
+                              navigation.navigate("TeacherAssessmentEditor", {
+                                assessmentId: assessment.id,
+                                classId: assessment.classId,
+                              })
+                            }
+                            accessibilityRole="button"
+                            style={{
+                              minHeight: 44,
+                              borderRadius: 6,
+                              backgroundColor: theme.active,
+                              paddingHorizontal: 12,
+                              paddingVertical: 12,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                fontSize: 10,
+                                fontWeight: "700",
+                                color: theme.text,
+                              }}
+                            >
+                              {assessment.academicCapabilities?.canPrepare
+                                ? "Edit"
+                                : "Review"}
+                            </Text>
+                          </Pressable>
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={`More actions for ${assessment.title}`}
+                            onPress={() =>
+                              Alert.alert(
+                                assessment.title,
+                                "Assessment actions",
+                                [
+                                  {
+                                    text: "Details and submissions",
+                                    onPress: () =>
+                                      navigation.navigate(
+                                        "TeacherAssessmentDetail",
+                                        { assessmentId: assessment.id },
+                                      ),
+                                  },
+                                  ...(assessment.academicCapabilities
+                                    ?.canPrepare
+                                    ? [
+                                        {
+                                          text: "Delete assessment",
+                                          style: "destructive" as const,
+                                          onPress: () =>
+                                            setDeletingAssessment({
+                                              id: assessment.id,
+                                              title: assessment.title,
+                                            }),
+                                        },
+                                      ]
+                                    : []),
+                                  { text: "Cancel", style: "cancel" },
+                                ],
+                              )
+                            }
+                            style={{
+                              minHeight: 44,
+                              minWidth: 44,
+                              alignItems: "center",
+                              justifyContent: "center",
+                              borderRadius: 6,
+                              borderWidth: 1,
+                              borderColor: theme.border,
+                            }}
                           >
                             <MaterialCommunityIcons
-                              name={selectedAssessmentIds.includes(assessment.id) ? "checkbox-marked" : "checkbox-blank-outline"}
+                              name="dots-horizontal"
                               size={20}
-                              color={selectedAssessmentIds.includes(assessment.id) ? theme.red : theme.dim}
+                              color={theme.text}
                             />
                           </Pressable>
-                        }
-                        onPress={() =>
-                          navigation.navigate("TeacherAssessmentDetail", {
-                            assessmentId: assessment.id,
-                            classId: assessment.classId,
-                          })
-                        }
-                        right={
-                          <View style={{ alignItems: "flex-end" }}>
-                            <Text style={{ fontSize: 12, fontWeight: "700", color: assessment.isPublished ? theme.green : theme.amber }}>
-                              {assessment.isPublished ? "Ready to give" : "Draft"}
-                            </Text>
-                            <Text style={{ fontSize: 10, color: theme.muted }}>
-                              {assessment.questions?.length ?? 0} questions
-                            </Text>
-                            <View style={{ marginTop: 4, flexDirection: "row", gap: 6 }}>
-                              <Pressable
-                                onPress={() =>
-                                  navigation.navigate("TeacherAssessmentEditor", {
-                                    assessmentId: assessment.id,
-                                    classId: assessment.classId,
-                                  })
-                                }
-                                accessibilityRole="button"
-                                style={{ minHeight: 44, borderRadius: 6, backgroundColor: theme.active, paddingHorizontal: 12, paddingVertical: 12 }}
-                              >
-                                <Text style={{ fontSize: 10, fontWeight: "700", color: theme.text }}>{assessment.academicCapabilities?.canPrepare ? "Edit" : "Review"}</Text>
-                              </Pressable>
-                              <Pressable
-                                accessibilityRole="button"
-                                accessibilityLabel={`More actions for ${assessment.title}`}
-                                onPress={() => Alert.alert(assessment.title, "Assessment actions", [
-                                  { text: "Details and submissions", onPress: () => navigation.navigate("TeacherAssessmentDetail", { assessmentId: assessment.id }) },
-                                  ...(assessment.academicCapabilities?.canPrepare ? [{ text: "Delete assessment", style: "destructive" as const, onPress: () => setDeletingAssessment({ id: assessment.id, title: assessment.title }) }] : []),
-                                  { text: "Cancel", style: "cancel" },
-                                ])}
-                                style={{ minHeight: 44, minWidth: 44, alignItems: "center", justifyContent: "center", borderRadius: 6, borderWidth: 1, borderColor: theme.border }}
-                              >
-                                <MaterialCommunityIcons name="dots-horizontal" size={20} color={theme.text} />
-                              </Pressable>
-                            </View>
-                          </View>
-                        }
-                      />
+                        </View>
+                      </View>
+                    }
+                  />
                 ))
               ) : (
                 <>
                   <TeacherEmpty
-                    title={assessmentsLoading ? "Loading assessments…" : "No assessments yet"}
+                    title={
+                      assessmentsLoading
+                        ? "Loading assessments…"
+                        : "No assessments yet"
+                    }
                     subtitle={
                       assessmentsLoading
                         ? "Loading class work."
@@ -419,13 +556,21 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
                     icon="clipboard-plus-outline"
                   />
                   {!assessmentsLoading ? (
-                    <View style={{ paddingHorizontal: 14, paddingBottom: 14, alignItems: "center" }}>
+                    <View
+                      style={{
+                        paddingHorizontal: 14,
+                        paddingBottom: 14,
+                        alignItems: "center",
+                      }}
+                    >
                       <TeacherActionButton
                         label="Create first assessment"
                         icon="plus"
                         tone="red"
                         disabled={creatingAssessment}
-                        onPress={() => void handleCreateAssessment(classItem.id)}
+                        onPress={() =>
+                          void handleCreateAssessment(classItem.id)
+                        }
                       />
                     </View>
                   ) : null}
@@ -436,7 +581,9 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
         })
       ) : (
         <TeacherEmpty
-          title={assessmentsLoading ? "Loading classes…" : "No assigned classes"}
+          title={
+            assessmentsLoading ? "Loading classes…" : "No assigned classes"
+          }
           subtitle={
             assessmentsLoading
               ? "Loading your assessment workspace."
@@ -464,7 +611,10 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
           onRefresh={() => void aiJobsQuery.refetch()}
           onResume={(job) => {
             if (!job.classId) {
-              Alert.alert("Class unavailable", "This AI draft job is not linked to an available class.");
+              Alert.alert(
+                "Class unavailable",
+                "This AI draft job is not linked to an available class.",
+              );
               return;
             }
             navigation.navigate("TeacherAiDraft", {

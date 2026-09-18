@@ -38,9 +38,17 @@ import {
   type ComponentProps,
   type ComponentType,
   type ReactNode,
+  useMemo,
   useState,
 } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Linking,
+  Pressable,
+  Text,
+  View,
+} from "react-native";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import {
   createBottomTabNavigator,
@@ -135,66 +143,11 @@ import { resolveMobileRole } from "./role-resolver";
 import { rootNavigationRef } from "./navigation-ref";
 import { resolveAuthenticatedSurface } from "./auth-surface";
 import type { RoleDrawerDestination } from "./role-drawer-model";
+import { createMobileLinking } from "./linking";
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
-
-function StudentRoutePlaceholder({
-  title,
-  subtitle,
-}: {
-  title: string;
-  subtitle: string;
-}) {
-  return (
-    <View
-      style={{
-        flex: 1,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: colors.surface,
-        paddingHorizontal: 24,
-      }}
-    >
-      <View
-        style={{
-          maxWidth: 360,
-          width: "100%",
-          borderRadius: 28,
-          borderWidth: 1,
-          borderColor: colors.border,
-          backgroundColor: colors.card,
-          padding: 24,
-        }}
-      >
-        <Text style={{ fontSize: 12, fontWeight: "900", color: colors.indigo }}>
-          Student parity route
-        </Text>
-        <Text
-          style={{
-            marginTop: 10,
-            fontSize: 22,
-            fontWeight: "900",
-            color: colors.text,
-          }}
-        >
-          {title}
-        </Text>
-        <Text
-          style={{
-            marginTop: 8,
-            fontSize: 13,
-            lineHeight: 20,
-            color: colors.textSecondary,
-          }}
-        >
-          {subtitle}
-        </Text>
-      </View>
-    </View>
-  );
-}
 
 type TabScreenComponent<Name extends StudentTabRouteName> = ComponentType<
   BottomTabScreenProps<MainTabParamList, Name>
@@ -203,23 +156,6 @@ type TabScreenComponent<Name extends StudentTabRouteName> = ComponentType<
 type StackScreenComponent<
   Name extends StudentStackRouteName | StudentSupportRouteName,
 > = ComponentType<NativeStackScreenProps<RootStackParamList, Name>>;
-
-function createTabPlaceholderScreen<Name extends StudentTabRouteName>(
-  title: string,
-  subtitle: string,
-): TabScreenComponent<Name> {
-  return function TabPlaceholderScreen(_props) {
-    return <StudentRoutePlaceholder title={title} subtitle={subtitle} />;
-  };
-}
-
-function createStackPlaceholderScreen<
-  Name extends StudentStackRouteName | StudentSupportRouteName,
->(title: string, subtitle: string): StackScreenComponent<Name> {
-  return function StackPlaceholderScreen(_props) {
-    return <StudentRoutePlaceholder title={title} subtitle={subtitle} />;
-  };
-}
 
 function ClassesRouteScreen(
   props: BottomTabScreenProps<MainTabParamList, "Classes">,
@@ -262,7 +198,9 @@ function ChatbotRouteScreen(
     >
       <JaScreen
         navigation={props.navigation as never}
-        route={{ params: { panel: "ask", classId: props.route.params?.classId } }}
+        route={{
+          params: { panel: "ask", classId: props.route.params?.classId },
+        }}
         preferBackNavigation
       />
     </RoleDrawerProvider>
@@ -1238,6 +1176,34 @@ export function AppNavigator() {
     isProfileIncomplete,
     roles: user?.roles,
   });
+  const linkingRole =
+    surface === "student" || surface === "teacher" || surface === "admin"
+      ? mobileRole
+      : null;
+  const linking = useMemo(
+    () =>
+      createMobileLinking(
+        linkingRole,
+        (reason) => {
+          Alert.alert(
+            "Link unavailable",
+            reason === "role_not_allowed"
+              ? "This link is not available for your account. Open Notifications or Home instead."
+              : "This Nexora link is invalid or no longer supported. Open Notifications or Home instead.",
+          );
+        },
+        {
+          getInitialURL: () => Linking.getInitialURL(),
+          subscribe: (listener) => {
+            const subscription = Linking.addEventListener("url", ({ url }) =>
+              listener(url),
+            );
+            return () => subscription.remove();
+          },
+        },
+      ),
+    [linkingRole],
+  );
 
   if (surface === "loading") {
     return <RootFallback />;
@@ -1266,7 +1232,9 @@ export function AppNavigator() {
 
   return (
     <NavigationContainer
+      key={`navigation-${surface}-${linkingRole ?? "guest"}`}
       ref={rootNavigationRef}
+      linking={linking}
       theme={navigationTheme}
       onReady={() => {
         if (!isAuthenticated) {

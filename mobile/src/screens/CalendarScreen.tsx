@@ -1,17 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQueries } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { queryKeys, useSchoolEvents, useStudentClasses } from "../api/hooks";
-import { announcementsApi } from "../api/services/announcements";
-import { assessmentsApi } from "../api/services/assessments";
+import { queryKeys } from "../api/hooks";
+import { mobileWorkspaceApi } from "../api/services/mobile-workspace";
 import { peekAppError } from "../api/http";
-import { Refreshable, ScreenScroll } from "../components/ui/primitives";
+import { StudentScreen } from "../components/student/StudentWorkspacePrimitives";
 import type { RootStackParamList } from "../navigation/types";
-import { useAuth } from "../providers/AuthProvider";
 import { studentDarkTheme as theme, stripRichText } from "../theme/studentDark";
-import { RoleHeaderNavigationButton } from "../components/navigation/RoleNavigationDrawer";
 import {
   buildCalendarDayIndex,
   buildMonthCells,
@@ -25,6 +22,12 @@ import {
   type CalendarFeedItem,
   type CalendarFeedKind,
 } from "../utils/calendarFeed";
+import type { ClassItem } from "../types/class";
+import type { Assessment } from "../types/assessment";
+import type { Announcement } from "../types/announcement";
+import type { SchoolEvent } from "../types/school-event";
+import { useAuth } from "../providers/AuthProvider";
+import { OfflineWorkspaceNotice } from "../components/offline/OfflineWorkspaceNotice";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Calendar">;
 
@@ -96,12 +99,20 @@ function FilterChip({
         paddingVertical: 8,
       }}
     >
-      <Text style={{ fontSize: 11, fontWeight: "700", color: active ? theme.red : theme.text }}>{label}</Text>
+      <Text
+        style={{
+          fontSize: 11,
+          fontWeight: "700",
+          color: active ? theme.red : theme.text,
+        }}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }
 
-function getClassLabel(classId: string, classes: ReturnType<typeof useStudentClasses>["data"]) {
+function getClassLabel(classId: string, classes: ClassItem[]) {
   const classItem = classes?.find((entry) => entry.id === classId);
   if (!classItem) return "Class";
   return `${classItem.subjectName} - ${classItem.section?.name || "Section"}`;
@@ -109,85 +120,137 @@ function getClassLabel(classId: string, classes: ReturnType<typeof useStudentCla
 
 export function CalendarScreen({ navigation, route }: Props) {
   const { user } = useAuth();
-  const studentId = user?.userId || user?.id;
-  const classesQuery = useStudentClasses(studentId);
   const [selectedSchoolYear, setSelectedSchoolYear] = useState("");
-  const [selectedClassId, setSelectedClassId] = useState(route.params?.classId || "all");
-  const [calendarMonth, setCalendarMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
-  const [selectedDateKey, setSelectedDateKey] = useState(() => toDateKey(new Date()));
+  const [selectedClassId, setSelectedClassId] = useState(
+    route.params?.classId || "all",
+  );
+  const [calendarMonth, setCalendarMonth] = useState(
+    () => new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+  );
+  const [selectedDateKey, setSelectedDateKey] = useState(() =>
+    toDateKey(new Date()),
+  );
 
-  const classes = classesQuery.data ?? [];
-  const routeClass = classes.find((entry) => entry.id === route.params?.classId);
-  const tentativeSchoolYear = selectedSchoolYear || routeClass?.schoolYear || classes[0]?.schoolYear || "";
-  const schoolEventsQuery = useSchoolEvents(tentativeSchoolYear ? { schoolYear: tentativeSchoolYear } : undefined);
+  const calendarRange = useMemo(() => {
+    const cells = buildMonthCells(calendarMonth);
+    const first = new Date(cells[0].date);
+    first.setHours(0, 0, 0, 0);
+    const last = new Date(cells[cells.length - 1].date);
+    last.setHours(23, 59, 59, 999);
+    return { from: first.toISOString(), to: last.toISOString() };
+  }, [calendarMonth]);
+  const workspaceQuery = useQuery({
+    queryKey: [
+      ...queryKeys.mobileCalendar(
+        "student",
+        calendarRange.from,
+        calendarRange.to,
+      ),
+      user?.id,
+    ],
+    queryFn: () =>
+      mobileWorkspaceApi.getCalendarForUser(user!.id, "student", calendarRange),
+    enabled: !!user?.id,
+  });
+  const offlineState = workspaceQuery.data?.offlineState;
+  const offline = !!offlineState;
+
+  const classes = (workspaceQuery.data?.classes ?? []) as ClassItem[];
+  const routeClass = classes.find(
+    (entry) => entry.id === route.params?.classId,
+  );
+  const schoolEvents = (workspaceQuery.data?.schoolEvents ??
+    []) as SchoolEvent[];
   const schoolYears = useMemo(
-    () => buildSchoolYearList(classes, schoolEventsQuery.data ?? []),
-    [classes, schoolEventsQuery.data],
+    () => buildSchoolYearList(classes, schoolEvents),
+    [classes, schoolEvents],
   );
   const resolvedSchoolYear =
-    selectedSchoolYear || routeClass?.schoolYear || classes[0]?.schoolYear || schoolYears[0] || "";
+    selectedSchoolYear ||
+    routeClass?.schoolYear ||
+    classes[0]?.schoolYear ||
+    schoolYears[0] ||
+    "";
 
   useEffect(() => {
     if (selectedSchoolYear) return;
-    setSelectedSchoolYear(routeClass?.schoolYear || classes[0]?.schoolYear || schoolYears[0] || "");
+    setSelectedSchoolYear(
+      routeClass?.schoolYear || classes[0]?.schoolYear || schoolYears[0] || "",
+    );
   }, [classes, routeClass?.schoolYear, schoolYears, selectedSchoolYear]);
 
   useEffect(() => {
     if (selectedClassId === "all") return;
     const matchingClass = classes.find((entry) => entry.id === selectedClassId);
-    if (!matchingClass || (resolvedSchoolYear && matchingClass.schoolYear !== resolvedSchoolYear)) {
+    if (
+      !matchingClass ||
+      (resolvedSchoolYear && matchingClass.schoolYear !== resolvedSchoolYear)
+    ) {
       setSelectedClassId("all");
     }
   }, [classes, resolvedSchoolYear, selectedClassId]);
 
   const scopedClasses = useMemo(
-    () => classes.filter((classItem) => !resolvedSchoolYear || classItem.schoolYear === resolvedSchoolYear),
+    () =>
+      classes.filter(
+        (classItem) =>
+          !resolvedSchoolYear || classItem.schoolYear === resolvedSchoolYear,
+      ),
     [classes, resolvedSchoolYear],
   );
   const scopedClassIds = scopedClasses.map((entry) => entry.id);
 
-  const assessmentQueries = useQueries({
-    queries: scopedClassIds.map((classId) => ({
-      queryKey: queryKeys.assessments(classId),
-      queryFn: () => assessmentsApi.getByClass(classId),
-      enabled: scopedClassIds.length > 0,
-    })),
-  });
-
-  const announcementQueries = useQueries({
-    queries: scopedClassIds.map((classId) => ({
-      queryKey: queryKeys.announcements(classId),
-      queryFn: () => announcementsApi.getByClass(classId),
-      enabled: scopedClassIds.length > 0,
-    })),
-  });
-
   const assessmentsByClass = useMemo(
     () =>
-      Object.fromEntries(scopedClassIds.map((classId, index) => [classId, assessmentQueries[index]?.data ?? []])),
-    [assessmentQueries, scopedClassIds],
+      Object.fromEntries(
+        scopedClassIds.map((classId) => [
+          classId,
+          (workspaceQuery.data?.assessments ?? []).filter(
+            (assessment) => assessment.classId === classId,
+          ) as Assessment[],
+        ]),
+      ),
+    [scopedClassIds, workspaceQuery.data?.assessments],
   );
   const announcementsByClass = useMemo(
     () =>
-      Object.fromEntries(scopedClassIds.map((classId, index) => [classId, announcementQueries[index]?.data ?? []])),
-    [announcementQueries, scopedClassIds],
+      Object.fromEntries(
+        scopedClassIds.map((classId) => [
+          classId,
+          (workspaceQuery.data?.announcements ?? []).filter(
+            (announcement) => announcement.classId === classId,
+          ) as Announcement[],
+        ]),
+      ),
+    [scopedClassIds, workspaceQuery.data?.announcements],
   );
 
   const feedItems = useMemo(
     () =>
       normalizeCalendarFeed({
         classes,
-        schoolEvents: schoolEventsQuery.data ?? [],
+        schoolEvents,
         assessmentsByClass,
         announcementsByClass,
         selectedSchoolYear: resolvedSchoolYear,
         selectedClassId,
         month: calendarMonth,
       }),
-    [announcementsByClass, assessmentsByClass, calendarMonth, classes, resolvedSchoolYear, schoolEventsQuery.data, selectedClassId],
+    [
+      announcementsByClass,
+      assessmentsByClass,
+      calendarMonth,
+      classes,
+      resolvedSchoolYear,
+      schoolEvents,
+      selectedClassId,
+    ],
   );
   const dayIndex = useMemo(() => buildCalendarDayIndex(feedItems), [feedItems]);
-  const monthCells = useMemo(() => buildMonthCells(calendarMonth), [calendarMonth]);
+  const monthCells = useMemo(
+    () => buildMonthCells(calendarMonth),
+    [calendarMonth],
+  );
   const fallbackDateKey = useMemo(() => {
     if (feedItems.length === 0) return null;
 
@@ -203,7 +266,9 @@ export function CalendarScreen({ navigation, route }: Props) {
     return toDateKey(firstMonthItem.startsAt);
   }, [calendarMonth, feedItems]);
   const activeDateKey =
-    dayIndex[selectedDateKey]?.length || !fallbackDateKey ? selectedDateKey : fallbackDateKey;
+    dayIndex[selectedDateKey]?.length || !fallbackDateKey
+      ? selectedDateKey
+      : fallbackDateKey;
   const selectedDayItems = dayIndex[activeDateKey] ?? [];
 
   useEffect(() => {
@@ -213,60 +278,65 @@ export function CalendarScreen({ navigation, route }: Props) {
     if (fallbackDateKey && fallbackDateKey !== selectedDateKey) {
       setSelectedDateKey(fallbackDateKey);
     }
-  }, [fallbackDateKey, feedItems.length, selectedDateKey, selectedDayItems.length]);
-  const refreshing =
-    classesQuery.isRefetching ||
-    schoolEventsQuery.isRefetching ||
-    assessmentQueries.some((query) => query.isRefetching) ||
-    announcementQueries.some((query) => query.isRefetching);
+  }, [
+    fallbackDateKey,
+    feedItems.length,
+    selectedDateKey,
+    selectedDayItems.length,
+  ]);
+  const unavailableSection = Object.entries(
+    workspaceQuery.data?.sections ?? {},
+  ).find(([, status]) => status === "unavailable")?.[0];
   const primaryError =
-    classesQuery.error ||
-    schoolEventsQuery.error ||
-    assessmentQueries.find((query) => query.error)?.error ||
-    announcementQueries.find((query) => query.error)?.error;
-
-  const handleRefresh = () =>
-    Promise.all([
-      classesQuery.refetch(),
-      schoolEventsQuery.refetch(),
-      ...assessmentQueries.map((query) => query.refetch()),
-      ...announcementQueries.map((query) => query.refetch()),
-    ]);
+    workspaceQuery.error ||
+    (unavailableSection
+      ? new Error(`${unavailableSection} are temporarily unavailable.`)
+      : null);
+  const refreshing = workspaceQuery.isRefetching;
+  const handleRefresh = () => workspaceQuery.refetch();
 
   const openFeedItem = (item: CalendarFeedItem) => {
+    if (offline) return;
     if (item.kind === "assessment" && item.classId) {
       const assessmentId = item.id.replace(/^assessment-/, "");
-      navigation.navigate("AssessmentDetail", { assessmentId, classId: item.classId, source: "calendar" });
+      navigation.navigate("AssessmentDetail", {
+        assessmentId,
+        classId: item.classId,
+        source: "calendar",
+      });
       return;
     }
 
     if (item.kind === "announcement" && item.classId) {
-      navigation.navigate("ClassDetail", { classId: item.classId, initialTab: "announcements", source: "calendar" });
+      navigation.navigate("ClassDetail", {
+        classId: item.classId,
+        initialTab: "announcements",
+        source: "calendar",
+      });
       return;
     }
 
     if (item.kind === "class_schedule" && item.classId) {
-      navigation.navigate("ClassDetail", { classId: item.classId, initialTab: "calendar", source: "calendar" });
+      navigation.navigate("ClassDetail", {
+        classId: item.classId,
+        initialTab: "calendar",
+        source: "calendar",
+      });
     }
   };
 
   return (
-    <ScreenScroll
-      backgroundColor={theme.bg}
-      refreshControl={<Refreshable refreshing={refreshing} onRefresh={() => void handleRefresh()} />}
+    <StudentScreen
+      title="Calendar"
+      showBackButton
+      onBackPress={() => navigation.goBack()}
+      refreshing={refreshing}
+      onRefresh={() => void handleRefresh()}
     >
-      <View style={{ backgroundColor: theme.header, borderBottomWidth: 1, borderBottomColor: theme.border }}>
-        <View style={{ paddingHorizontal: 16, paddingTop: 7, paddingBottom: 7 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <RoleHeaderNavigationButton color={theme.redText} onBackPress={() => navigation.goBack()} />
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 20, fontWeight: "900", color: theme.text }}>Calendar</Text>
-            </View>
-          </View>
-        </View>
-      </View>
-
       <View style={{ paddingHorizontal: 16, paddingTop: 14, gap: 14 }}>
+        {offlineState ? (
+          <OfflineWorkspaceNotice lastSyncedAt={offlineState.lastSyncedAt} />
+        ) : null}
         {primaryError ? (
           <View
             style={{
@@ -278,17 +348,42 @@ export function CalendarScreen({ navigation, route }: Props) {
               paddingVertical: 12,
             }}
           >
-            <Text style={{ fontSize: 12, fontWeight: "700", color: theme.text }}>Calendar data is partially unavailable</Text>
-            <Text style={{ marginTop: 5, fontSize: 12, lineHeight: 18, color: theme.muted }}>{peekAppError(primaryError).message}</Text>
+            <Text
+              style={{ fontSize: 12, fontWeight: "700", color: theme.text }}
+            >
+              Calendar data is partially unavailable
+            </Text>
+            <Text
+              style={{
+                marginTop: 5,
+                fontSize: 12,
+                lineHeight: 18,
+                color: theme.muted,
+              }}
+            >
+              {peekAppError(primaryError).message}
+            </Text>
           </View>
         ) : null}
 
         {schoolYears.length > 1 ? (
           <View>
-            <Text style={{ fontSize: 10, fontWeight: "600", letterSpacing: 0.7, textTransform: "uppercase", color: theme.muted }}>
+            <Text
+              style={{
+                fontSize: 10,
+                fontWeight: "600",
+                letterSpacing: 0.7,
+                textTransform: "uppercase",
+                color: theme.muted,
+              }}
+            >
               School year
             </Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingTop: 8 }}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 8, paddingTop: 8 }}
+            >
               {schoolYears.map((schoolYear) => (
                 <FilterChip
                   key={schoolYear}
@@ -302,11 +397,27 @@ export function CalendarScreen({ navigation, route }: Props) {
         ) : null}
 
         <View>
-          <Text style={{ fontSize: 10, fontWeight: "600", letterSpacing: 0.7, textTransform: "uppercase", color: theme.muted }}>
+          <Text
+            style={{
+              fontSize: 10,
+              fontWeight: "600",
+              letterSpacing: 0.7,
+              textTransform: "uppercase",
+              color: theme.muted,
+            }}
+          >
             Class filter
           </Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingTop: 8 }}>
-            <FilterChip label="All classes" active={selectedClassId === "all"} onPress={() => setSelectedClassId("all")} />
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 8, paddingTop: 8 }}
+          >
+            <FilterChip
+              label="All classes"
+              active={selectedClassId === "all"}
+              onPress={() => setSelectedClassId("all")}
+            />
             {scopedClasses.map((classItem) => (
               <FilterChip
                 key={classItem.id}
@@ -338,10 +449,16 @@ export function CalendarScreen({ navigation, route }: Props) {
               borderBottomColor: theme.border,
             }}
           >
-            <Text style={{ fontSize: 14, fontWeight: "700", color: theme.text }}>{formatMonthLabel(calendarMonth)}</Text>
+            <Text
+              style={{ fontSize: 14, fontWeight: "700", color: theme.text }}
+            >
+              {formatMonthLabel(calendarMonth)}
+            </Text>
             <View style={{ flexDirection: "row", gap: 8 }}>
               <Pressable
-                onPress={() => setCalendarMonth((current) => shiftMonth(current, -1))}
+                onPress={() =>
+                  setCalendarMonth((current) => shiftMonth(current, -1))
+                }
                 style={{
                   width: 28,
                   height: 28,
@@ -351,10 +468,16 @@ export function CalendarScreen({ navigation, route }: Props) {
                   justifyContent: "center",
                 }}
               >
-                <MaterialCommunityIcons name="chevron-left" size={16} color={theme.text} />
+                <MaterialCommunityIcons
+                  name="chevron-left"
+                  size={16}
+                  color={theme.text}
+                />
               </Pressable>
               <Pressable
-                onPress={() => setCalendarMonth((current) => shiftMonth(current, 1))}
+                onPress={() =>
+                  setCalendarMonth((current) => shiftMonth(current, 1))
+                }
                 style={{
                   width: 28,
                   height: 28,
@@ -364,12 +487,18 @@ export function CalendarScreen({ navigation, route }: Props) {
                   justifyContent: "center",
                 }}
               >
-                <MaterialCommunityIcons name="chevron-right" size={16} color={theme.text} />
+                <MaterialCommunityIcons
+                  name="chevron-right"
+                  size={16}
+                  color={theme.text}
+                />
               </Pressable>
             </View>
           </View>
 
-          <View style={{ paddingHorizontal: 10, paddingTop: 10, paddingBottom: 12 }}>
+          <View
+            style={{ paddingHorizontal: 10, paddingTop: 10, paddingBottom: 12 }}
+          >
             <View style={{ flexDirection: "row", marginBottom: 8 }}>
               {WEEKDAY_LABELS.map((label) => (
                 <Text
@@ -411,9 +540,15 @@ export function CalendarScreen({ navigation, route }: Props) {
                         borderRadius: isToday || isSelected ? 14 : 10,
                         alignItems: "center",
                         justifyContent: "center",
-                        backgroundColor: isSelected ? theme.blueSoft : isToday ? theme.red : "transparent",
+                        backgroundColor: isSelected
+                          ? theme.blueSoft
+                          : isToday
+                            ? theme.red
+                            : "transparent",
                         borderWidth: isSelected ? 1 : 0,
-                        borderColor: isSelected ? theme.blueLine : "transparent",
+                        borderColor: isSelected
+                          ? theme.blueLine
+                          : "transparent",
                       }}
                     >
                       <Text
@@ -430,7 +565,9 @@ export function CalendarScreen({ navigation, route }: Props) {
                         {cell.date.getDate()}
                       </Text>
                       {markerKinds.length > 0 ? (
-                        <View style={{ flexDirection: "row", gap: 2, marginTop: 3 }}>
+                        <View
+                          style={{ flexDirection: "row", gap: 2, marginTop: 3 }}
+                        >
                           {markerKinds.slice(0, 3).map((kind) => (
                             <View
                               key={`${cell.dateKey}-${kind}`}
@@ -462,8 +599,18 @@ export function CalendarScreen({ navigation, route }: Props) {
             paddingVertical: 12,
           }}
         >
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text }}>{formatDateLabel(activeDateKey)}</Text>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <Text
+              style={{ fontSize: 13, fontWeight: "700", color: theme.text }}
+            >
+              {formatDateLabel(activeDateKey)}
+            </Text>
             <Tone
               label={`${selectedDayItems.length} item${selectedDayItems.length === 1 ? "" : "s"}`}
             />
@@ -471,19 +618,35 @@ export function CalendarScreen({ navigation, route }: Props) {
 
           {selectedDayItems.length === 0 ? (
             <View style={{ paddingVertical: 16 }}>
-              <Text style={{ fontSize: 12, fontWeight: "700", color: theme.text }}>Nothing scheduled</Text>
-              <Text style={{ marginTop: 4, fontSize: 12, lineHeight: 18, color: theme.muted }}>
-                Choose another day or switch the class filter to see more activity.
+              <Text
+                style={{ fontSize: 12, fontWeight: "700", color: theme.text }}
+              >
+                Nothing scheduled
+              </Text>
+              <Text
+                style={{
+                  marginTop: 4,
+                  fontSize: 12,
+                  lineHeight: 18,
+                  color: theme.muted,
+                }}
+              >
+                Choose another day or switch the class filter to see more
+                activity.
               </Text>
             </View>
           ) : (
             <View style={{ marginTop: 10, gap: 8 }}>
               {selectedDayItems.map((item) => {
-                const actionable = item.kind === "assessment" || item.kind === "announcement" || item.kind === "class_schedule";
+                const actionable =
+                  item.kind === "assessment" ||
+                  item.kind === "announcement" ||
+                  item.kind === "class_schedule";
                 return (
                   <Pressable
                     key={item.id}
-                    disabled={!actionable}
+                    accessibilityState={{ disabled: !actionable || offline }}
+                    disabled={!actionable || offline}
                     onPress={() => openFeedItem(item)}
                     style={{
                       borderRadius: 12,
@@ -495,7 +658,13 @@ export function CalendarScreen({ navigation, route }: Props) {
                       opacity: actionable ? 1 : 0.9,
                     }}
                   >
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 10,
+                      }}
+                    >
                       <View
                         style={{
                           width: 10,
@@ -505,8 +674,23 @@ export function CalendarScreen({ navigation, route }: Props) {
                         }}
                       />
                       <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                          <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text }}>{item.title}</Text>
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 6,
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 13,
+                              fontWeight: "700",
+                              color: theme.text,
+                            }}
+                          >
+                            {item.title}
+                          </Text>
                           <View
                             style={{
                               borderRadius: 4,
@@ -515,19 +699,47 @@ export function CalendarScreen({ navigation, route }: Props) {
                               paddingVertical: 2,
                             }}
                           >
-                            <Text style={{ fontSize: 10, fontWeight: "700", color: theme.muted }}>
+                            <Text
+                              style={{
+                                fontSize: 10,
+                                fontWeight: "700",
+                                color: theme.muted,
+                              }}
+                            >
                               {CALENDAR_KIND_LABEL[item.kind]}
                             </Text>
                           </View>
                         </View>
-                        <Text style={{ marginTop: 4, fontSize: 11, color: theme.muted }}>
-                          {formatTimeWindow(item)}{item.classId ? ` - ${getClassLabel(item.classId, classes)}` : ""}
+                        <Text
+                          style={{
+                            marginTop: 4,
+                            fontSize: 11,
+                            color: theme.muted,
+                          }}
+                        >
+                          {formatTimeWindow(item)}
+                          {item.classId
+                            ? ` - ${getClassLabel(item.classId, classes)}`
+                            : ""}
                         </Text>
-                        <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: theme.subtext }}>
+                        <Text
+                          style={{
+                            marginTop: 6,
+                            fontSize: 12,
+                            lineHeight: 18,
+                            color: theme.subtext,
+                          }}
+                        >
                           {getSupportingCopy(item)}
                         </Text>
                       </View>
-                      {actionable ? <MaterialCommunityIcons name="chevron-right" size={16} color={theme.dim} /> : null}
+                      {actionable ? (
+                        <MaterialCommunityIcons
+                          name="chevron-right"
+                          size={16}
+                          color={theme.dim}
+                        />
+                      ) : null}
                     </View>
                   </Pressable>
                 );
@@ -536,14 +748,23 @@ export function CalendarScreen({ navigation, route }: Props) {
           )}
         </View>
       </View>
-    </ScreenScroll>
+    </StudentScreen>
   );
 }
 
 function Tone({ label }: { label: string }) {
   return (
-    <View style={{ borderRadius: 999, backgroundColor: theme.blueSoft, paddingHorizontal: 10, paddingVertical: 6 }}>
-      <Text style={{ fontSize: 10, fontWeight: "700", color: theme.blue }}>{label}</Text>
+    <View
+      style={{
+        borderRadius: 999,
+        backgroundColor: theme.blueSoft,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+      }}
+    >
+      <Text style={{ fontSize: 10, fontWeight: "700", color: theme.blue }}>
+        {label}
+      </Text>
     </View>
   );
 }

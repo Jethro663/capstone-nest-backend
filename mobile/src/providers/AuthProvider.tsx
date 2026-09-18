@@ -46,8 +46,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const { state: updateState } = useUpdate();
   const bootstrapStarted = useRef(false);
   const bootstrapInterrupted = useRef(false);
+  const currentUserIdRef = useRef<string | null>(null);
 
   const persistSession = useCallback(async (next: AuthSession | null) => {
+    const previousUserId = currentUserIdRef.current;
+    const nextUserId = next?.user.id ?? null;
     if (
       next &&
       (next.user.isEmailVerified !== true || next.user.status !== "ACTIVE")
@@ -61,6 +64,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
           : "Account is not active. Contact administrator.",
       );
     }
+    if (previousUserId && previousUserId !== nextUserId) {
+      await import("../services/offline/workspace-snapshot")
+        .then(({ workspaceSnapshotStore }) =>
+          workspaceSnapshotStore.purgeUser(previousUserId),
+        )
+        .catch(() => undefined);
+    }
+    currentUserIdRef.current = nextUserId;
     setSession(next);
     await writeSessionSnapshot(next);
   }, []);
@@ -82,6 +93,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setLoading(true);
     const snapshot = await readSessionSnapshot();
     if (snapshot?.accessToken && snapshot?.refreshToken) {
+      currentUserIdRef.current = snapshot.user.id;
       setSession(snapshot);
     }
 
@@ -133,6 +145,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const logout = useCallback(async () => {
     try {
+      await import("../services/notifications/push-registration.runtime")
+        .then(({ revokeCurrentPushInstallation }) =>
+          revokeCurrentPushInstallation(),
+        )
+        .catch(() => undefined);
       await authApi.logout();
     } finally {
       await clearAuthSession();

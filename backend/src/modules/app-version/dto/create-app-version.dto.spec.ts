@@ -65,4 +65,23 @@ describe('CreateAppVersionDto', () => {
       }),
     ).resolves.toEqual([]);
   });
+
+  it('accepts platform-neutral SideStore IPA metadata without APK-named fields', async () => {
+    await expect(
+      propertiesWithErrors({
+        platform: 'ios',
+        versionCode: 46,
+        minSupportedVersionCode: 45,
+        nativeVersion: '0.1.45',
+        artifactKind: 'ipa',
+        artifactDownloadUrl: 'https://example.com/Nexora-iOS.ipa',
+        artifactSha256: 'b'.repeat(64),
+        artifactSizeBytes: 14_000_000,
+        distributionChannel: 'sidestore',
+        sourceRevision: 'a'.repeat(40),
+        requiresFullApk: true,
+        releaseNotes: 'Current iPhone acceptance build.',
+      }),
+    ).resolves.toEqual([]);
+  });
 });

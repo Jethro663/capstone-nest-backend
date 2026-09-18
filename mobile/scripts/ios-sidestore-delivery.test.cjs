@@ -22,10 +22,7 @@ test("the iOS workflow is deliberate, unsigned, verified, and publish-gated", as
     ".github/workflows/build-mobile-ios-sidestore.yml",
   );
   assert.match(workflow, /workflow_dispatch:/);
-  assert.match(
-    workflow,
-    /push:\n\s+tags:\n\s+- "ios-sidestore-build-\*"/,
-  );
+  assert.match(workflow, /push:\n\s+tags:\n\s+- "ios-sidestore-build-\*"/);
   assert.doesNotMatch(workflow, /^\s+branches:/m);
   assert.match(workflow, /runs-on: macos-26/);
   assert.match(workflow, /Xcode_26\.5\.app/);
@@ -34,15 +31,31 @@ test("the iOS workflow is deliberate, unsigned, verified, and publish-gated", as
   assert.match(workflow, /CODE_SIGNING_ALLOWED=NO/);
   assert.match(workflow, /verify-ios-sidestore-ipa\.sh/);
   assert.match(workflow, /^\s+npm run test$/m);
+  assert.match(
+    workflow,
+    /EXPO_PUBLIC_SOURCE_REVISION: \$\{\{ github\.sha \}\}/,
+  );
+  assert.match(
+    workflow,
+    /ios-sidestore-v\$\{VERSION\}-build\$\{BUILD\}-\$\{SHORT_SHA\}/,
+  );
+  assert.match(workflow, /ios-release-manifest\.cjs/);
+  assert.match(workflow, /register-mobile-release\.cjs/);
+  assert.match(
+    workflow,
+    /CI_ADMIN_SECRET: \$\{\{ secrets\.CI_ADMIN_SECRET \}\}/,
+  );
+  assert.match(workflow, /gh release create "\$IMMUTABLE_RELEASE_TAG"/);
+  assert.doesNotMatch(
+    workflow,
+    /git\/refs\/tags\/\$IMMUTABLE_RELEASE_TAG[\s\S]*?force=true/,
+  );
   assert.match(workflow, /ios-sidestore-latest/);
   assert.match(
     workflow,
     /github\.event_name == 'push' \|\| inputs\.publish == true/,
   );
-  assert.match(
-    workflow,
-    /git\/refs\/tags\/\$RELEASE_TAG[\s\S]*?force=true/,
-  );
+  assert.match(workflow, /git\/refs\/tags\/\$RELEASE_TAG[\s\S]*?force=true/);
   assert.match(
     workflow,
     /gh release edit "\$RELEASE_TAG" \\\n\s+--target "\$GITHUB_SHA"/,
@@ -54,9 +67,7 @@ test("the iOS workflow is deliberate, unsigned, verified, and publish-gated", as
 });
 
 test("the verifier enforces identity, ARM64, embedded JS, and no profile", async () => {
-  const verifier = await read(
-    "mobile/scripts/verify-ios-sidestore-ipa.sh",
-  );
+  const verifier = await read("mobile/scripts/verify-ios-sidestore-ipa.sh");
   for (const required of [
     "set -euo pipefail",
     "APP_JSON_INPUT",
@@ -69,8 +80,30 @@ test("the verifier enforces identity, ARM64, embedded JS, and no profile", async
     "embedded.mobileprovision",
     "codesign -dv",
     "Nexora-iOS-latest-unsigned.ipa.sha256",
+    "ipaSha256=",
   ]) {
-    assert.ok(verifier.includes(required), `missing verifier gate: ${required}`);
+    assert.ok(
+      verifier.includes(required),
+      `missing verifier gate: ${required}`,
+    );
+  }
+});
+
+test("the iOS manifest builder binds an immutable IPA to its exact source", async () => {
+  const builder = await read("mobile/scripts/ios-release-manifest.cjs");
+  for (const required of [
+    "artifactKind",
+    "artifactDownloadUrl",
+    "artifactSha256",
+    "artifactSizeBytes",
+    "sourceRevision",
+    "distributionChannel",
+    "sidestore",
+  ]) {
+    assert.ok(
+      builder.includes(required),
+      `missing manifest field: ${required}`,
+    );
   }
 });
 

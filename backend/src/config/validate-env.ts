@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import { validatePushEnvironment } from './push-notifications.config';
 
 const logger = new Logger('EnvironmentValidation');
 
@@ -133,6 +134,10 @@ export function validateEnvironment(): void {
       );
     }
   }
+
+  errors.push(
+    ...validatePushEnvironment(process.env).map((message) => `  ✗ ${message}`),
+  );
 
   if (warnings.length > 0) {
     logger.warn(

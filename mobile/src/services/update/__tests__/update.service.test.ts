@@ -20,9 +20,6 @@ jest.mock("expo-crypto", () => ({
     );
   }),
 }));
-let mockUpdatesEnabled = false;
-let mockRuntimeVersion: string | null = null;
-
 jest.mock("react-native", () => ({
   Platform: { OS: "android" },
 }));
@@ -55,18 +52,6 @@ jest.mock("expo-intent-launcher", () => ({
   },
 }));
 
-jest.mock("expo-updates", () => ({
-  checkForUpdateAsync: jest.fn(),
-  fetchUpdateAsync: jest.fn(),
-  get isEnabled() {
-    return mockUpdatesEnabled;
-  },
-  reloadAsync: jest.fn(),
-  get runtimeVersion() {
-    return mockRuntimeVersion;
-  },
-}));
-
 jest.mock("../../../api/client", () => ({
   publicClient: { get: mockPublicGet },
 }));
@@ -86,12 +71,19 @@ const noUpdatePolicy = {
   minSupportedVersionCode: 1,
   latestNativeVersion: "0.1.13",
   otaRuntimeVersion: "0.1.13",
+  artifactKind: "apk",
+  artifactDownloadUrl: "https://example.com/app.apk",
+  artifactSha256: null,
+  artifactSizeBytes: null,
+  sourceRevision: null,
+  distributionChannel: "website",
   apkDownloadUrl: "https://example.com/app.apk",
   apkSha256: null,
   apkSizeBytes: null,
   isForceUpdate: false,
   requiresFullApk: false,
   releaseNotes: null,
+  updateAction: "none",
   updateType: "none",
 };
 
@@ -99,12 +91,10 @@ describe("client version identity", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.requireMock("react-native").Platform.OS = "android";
-    mockUpdatesEnabled = false;
-    mockRuntimeVersion = null;
     mockPublicGet.mockResolvedValue({ data: noUpdatePolicy });
   });
 
-  it("omits OTA runtime when native Expo Updates is disabled", async () => {
+  it("uses binary-only identity without advertising an OTA runtime", async () => {
     expect(getClientVersionInfo()).toMatchObject({
       currentNativeVersion: "0.1.13",
       currentVersionCode: 14,
@@ -126,7 +116,7 @@ describe("client version identity", () => {
     try {
       expect(getClientVersionInfo().currentVersionCode).toBe(0);
       await expect(checkUpdatePolicy()).rejects.toThrow(
-        "installed Android build",
+        "installed mobile build",
       );
       expect(mockPublicGet).not.toHaveBeenCalled();
     } finally {
@@ -134,33 +124,48 @@ describe("client version identity", () => {
     }
   });
 
-  it("reports the exact Expo Updates runtime when OTA is enabled", async () => {
-    mockUpdatesEnabled = true;
-    mockRuntimeVersion = "0.1.13";
-
-    expect(getClientVersionInfo().currentRuntimeVersion).toBe("0.1.13");
-
-    await checkUpdatePolicy();
-
-    expect(mockPublicGet).toHaveBeenCalledWith("/app-version/check", {
-      params: expect.objectContaining({
-        currentOtaVersion: "0.1.13",
-      }),
-    });
-  });
-
-  it("never requests Android policy or touches APK storage on iOS", async () => {
+  it("checks iOS policy but never touches APK storage", async () => {
     jest.requireMock("react-native").Platform.OS = "ios";
+    mockPublicGet.mockResolvedValue({
+      data: {
+        platform: "ios",
+        latestVersionCode: 46,
+        minSupportedVersionCode: 46,
+        latestNativeVersion: "0.1.45",
+        otaRuntimeVersion: "",
+        artifactKind: "ipa",
+        artifactDownloadUrl: "https://example.com/Nexora-iOS.ipa",
+        artifactSha256: "b".repeat(64),
+        artifactSizeBytes: 14_000_000,
+        sourceRevision: "a".repeat(40),
+        distributionChannel: "sidestore",
+        apkDownloadUrl: "",
+        apkSha256: null,
+        apkSizeBytes: null,
+        isForceUpdate: true,
+        requiresFullApk: true,
+        releaseNotes: "Current iPhone acceptance build.",
+        updateAction: "binary_forced",
+        updateType: "none",
+      },
+    });
+
     await expect(checkUpdatePolicy()).resolves.toMatchObject({
       platform: "ios",
+      updateAction: "binary_forced",
       updateType: "none",
-      apkDownloadUrl: "",
+      artifactKind: "ipa",
     });
     await cleanOldApkFiles(3);
     await expect(
       downloadApk("https://example.com/app.apk", 20),
     ).rejects.toThrow("Android");
-    expect(mockPublicGet).not.toHaveBeenCalled();
+    expect(mockPublicGet).toHaveBeenCalledWith("/app-version/check", {
+      params: expect.objectContaining({
+        platform: "ios",
+        currentVersionCode: 14,
+      }),
+    });
     expect(mockGetInfoAsync).not.toHaveBeenCalled();
     jest.requireMock("react-native").Platform.OS = "android";
   });
@@ -184,8 +189,6 @@ describe("APK verification and installation", () => {
     jest.clearAllMocks();
     jest.requireMock("react-native").Platform.OS = "android";
     mockFileBytes.mockResolvedValue(new Uint8Array([1, 2, 3, 4]));
-    mockUpdatesEnabled = false;
-    mockRuntimeVersion = null;
     mockDeleteAsync.mockResolvedValue(undefined);
     mockGetContentUriAsync.mockResolvedValue(
       "content://com.nexora.lms.mobile/update.apk",

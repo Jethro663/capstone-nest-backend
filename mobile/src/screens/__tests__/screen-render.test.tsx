@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
-import { useQueries, useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { aiApi } from "../../api/services/ai";
 import { jaApi } from "../../api/services/ja";
 import { useAuth } from "../../providers/AuthProvider";
@@ -400,6 +400,7 @@ jest.mock("../../api/services/lessons", () => ({
 
 jest.mock("@tanstack/react-query", () => ({
   useQueries: jest.fn(),
+  useQuery: jest.fn(),
   useQueryClient: jest.fn(),
 }));
 
@@ -418,6 +419,14 @@ jest.mock("../../api/hooks", () => ({
       assessmentId,
     ],
     announcements: (classId: string) => ["announcements", classId],
+    mobileStudentOverview: ["mobile-workspace", "student", "overview"],
+    mobileCalendar: (role: string, from: string, to: string) => [
+      "mobile-workspace",
+      role,
+      "calendar",
+      from,
+      to,
+    ],
   },
   useStudentClasses: jest.fn(),
   useClassDetail: jest.fn(),
@@ -569,6 +578,36 @@ function createQueryState<T>(
     isRefetching: false,
     refetch: jest.fn().mockResolvedValue(undefined),
     ...overrides,
+  };
+}
+
+function buildStudentOverview(
+  courses: Array<Record<string, unknown>> = [
+    {
+      id: "class-1",
+      subjectName: "Mathematics",
+      subjectCode: "MATH-1",
+      subjectGradeLevel: "10",
+      schoolYear: "2025-2026",
+      sectionName: "Section A",
+      sectionGradeLevel: "10",
+      teacherName: "Teacher One",
+      totalLessons: 2,
+      completedLessonCount: 1,
+      totalAssessments: 1,
+      assessmentDueCount: 1,
+      announcementCount: 1,
+      classmateCount: 3,
+      progress: 50,
+      schedules: [],
+    },
+  ],
+) {
+  return {
+    courses,
+    generatedAt: new Date().toISOString(),
+    requestBudget: { clientRequests: 1, dbQueries: 1 },
+    offlineSnapshotReadsEnabled: true,
   };
 }
 
@@ -724,6 +763,7 @@ const mockedUseAssessmentSubmitMutation =
     typeof useAssessmentSubmitMutation
   >;
 const mockedUseQueries = useQueries as jest.Mock;
+const mockedUseQuery = useQuery as jest.Mock;
 const mockedUseQueryClient = useQueryClient as jest.Mock;
 const mockedAiApi = aiApi as jest.Mocked<typeof aiApi>;
 const mockedJaApi = jaApi as jest.Mocked<typeof jaApi>;
@@ -783,6 +823,55 @@ describe("mobile rendered screen flows", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+
+    mockedUseQuery.mockImplementation(
+      ({ queryKey }: { queryKey?: unknown[] }) => {
+        const kind = queryKey?.[2];
+        if (kind === "calendar") {
+          return createQueryState({
+            classes: [
+              {
+                id: "class-1",
+                sectionId: "section-1",
+                isActive: true,
+                subjectName: "Mathematics",
+                subjectCode: "MATH-1",
+                schoolYear: "2025-2026",
+                section: {
+                  id: "section-1",
+                  name: "Section A",
+                  gradeLevel: "10",
+                },
+                enrollmentCount: 2,
+                schedules: [],
+              },
+            ],
+            assessments: [
+              {
+                id: "assessment-1",
+                classId: "class-1",
+                title: "Calendar Quiz",
+                description: "Review the chapter notes.",
+                isPublished: true,
+                dueDate: new Date().toISOString(),
+              },
+            ],
+            announcements: [],
+            schoolEvents: [],
+            sections: {
+              classes: "ok",
+              assessments: "ok",
+              announcements: "ok",
+              schoolEvents: "ok",
+            },
+            generatedAt: new Date().toISOString(),
+            requestBudget: { clientRequests: 1, dbQueries: 4 },
+            offlineSnapshotReadsEnabled: true,
+          });
+        }
+        return createQueryState(buildStudentOverview());
+      },
+    );
 
     mockedUseAuth.mockReturnValue({
       user: {
@@ -1768,72 +1857,6 @@ describe("mobile rendered screen flows", () => {
     ).toBeTruthy();
   });
 
-  it("renders LXP screen and routes to tutor from quick launcher", () => {
-    const { LxpScreen } = require("../LxpScreen");
-    const navigate = jest.fn();
-    let testRenderer: TestRenderer.ReactTestRenderer;
-    act(() => {
-      testRenderer = TestRenderer.create(
-        React.createElement(LxpScreen, {
-          navigation: { navigate } as never,
-          route: { key: "LXP", name: "LXP" } as never,
-        }),
-      );
-    });
-
-    expect(
-      testRenderer!.root.find(
-        (node) =>
-          node.type === "Text" && flattenText(node).includes("LXP Dashboard"),
-      ),
-    ).toBeTruthy();
-
-    const openTutorButton = findPressableByText(
-      testRenderer!.root,
-      "Open Tutor",
-    );
-    act(() => {
-      openTutorButton.props.onPress();
-    });
-
-    const renderedLxpText = testRenderer!.root
-      .findAll((node) => node.type === "Text")
-      .map((node) => flattenText(node))
-      .join(" ");
-    expect(renderedLxpText).not.toContain("ðŸ");
-    expect(renderedLxpText).not.toContain("âœ");
-
-    expect(navigate).toHaveBeenCalledWith("AiTutor", { classId: "class-1" });
-  });
-
-  it("keeps LXP usable when tutor bootstrap is unavailable", () => {
-    mockedUseTutorBootstrap.mockReturnValue(
-      createQueryState(undefined, {
-        error: new Error("Tutor bootstrap offline"),
-      }) as ReturnType<typeof useTutorBootstrap>,
-    );
-
-    const { LxpScreen } = require("../LxpScreen");
-    let testRenderer: TestRenderer.ReactTestRenderer;
-    act(() => {
-      testRenderer = TestRenderer.create(
-        React.createElement(LxpScreen, {
-          navigation: { navigate: jest.fn() } as never,
-          route: { key: "LXP", name: "LXP" } as never,
-        }),
-      );
-    });
-
-    const renderedText = testRenderer!.root
-      .findAll((node) => node.type === "Text")
-      .map((node) => flattenText(node))
-      .join(" ");
-
-    expect(renderedText).toContain("LXP Dashboard");
-    expect(renderedText).toContain("Open Tutor");
-    expect(renderedText).not.toContain("LXP data is partially unavailable");
-  });
-
   it("renders the JA hub as an ask-first workspace with learning tools in the header menu", async () => {
     const { JaScreen } = require("../JaScreen");
     let testRenderer: TestRenderer.ReactTestRenderer;
@@ -2705,6 +2728,9 @@ describe("mobile rendered screen flows", () => {
         { refetch: classesRefetch },
       ) as ReturnType<typeof useStudentClasses>,
     );
+    mockedUseQuery.mockReturnValue(
+      createQueryState(buildStudentOverview(), { refetch: classesRefetch }),
+    );
 
     let useQueriesCall = 0;
     mockedUseQueries.mockImplementation(
@@ -2783,13 +2809,38 @@ describe("mobile rendered screen flows", () => {
     });
 
     expect(classesRefetch).toHaveBeenCalled();
-    expect(moduleRefetch).toHaveBeenCalled();
-    expect(completionRefetch).toHaveBeenCalled();
-    expect(assessmentRefetch).toHaveBeenCalled();
+    expect(moduleRefetch).not.toHaveBeenCalled();
+    expect(completionRefetch).not.toHaveBeenCalled();
+    expect(assessmentRefetch).not.toHaveBeenCalled();
   });
 
   it("derives course progress from visible module lessons instead of locked module content", () => {
     const { CoursesScreen } = require("../CoursesScreen");
+
+    mockedUseQuery.mockReturnValue(
+      createQueryState(
+        buildStudentOverview([
+          {
+            id: "class-1",
+            subjectName: "Mathematics",
+            subjectCode: "MATH-1",
+            subjectGradeLevel: "10",
+            schoolYear: "2025-2026",
+            sectionName: "Section A",
+            sectionGradeLevel: "10",
+            teacherName: "Teacher One",
+            totalLessons: 1,
+            completedLessonCount: 0,
+            totalAssessments: 1,
+            assessmentDueCount: 1,
+            announcementCount: 0,
+            classmateCount: 3,
+            progress: 0,
+            schedules: [],
+          },
+        ]),
+      ),
+    );
 
     let useQueriesCall = 0;
     mockedUseQueries.mockImplementation(
@@ -2912,6 +2963,18 @@ describe("mobile rendered screen flows", () => {
         },
       }) as ReturnType<typeof useStudentClasses>,
     );
+    mockedUseQuery.mockReturnValue(
+      createQueryState(buildStudentOverview([]), {
+        error: {
+          isAxiosError: true,
+          response: {
+            status: 503,
+            data: { message: "Courses API unavailable" },
+          },
+          message: "Request failed",
+        },
+      }),
+    );
 
     let testRenderer: TestRenderer.ReactTestRenderer;
     act(() => {
@@ -2936,6 +2999,49 @@ describe("mobile rendered screen flows", () => {
   it("renders Classes as web-derived mobile class cards", () => {
     const { LessonsScreen } = require("../LessonsScreen");
     const navigate = jest.fn();
+
+    mockedUseQuery.mockReturnValue(
+      createQueryState(
+        buildStudentOverview([
+          {
+            id: "class-1",
+            subjectName: "Mathematics",
+            subjectCode: "MATH-1",
+            subjectGradeLevel: "10",
+            schoolYear: "2025-2026",
+            sectionName: "Section A",
+            sectionGradeLevel: "10",
+            teacherName: "Teacher One",
+            totalLessons: 1,
+            completedLessonCount: 0,
+            totalAssessments: 1,
+            assessmentDueCount: 1,
+            announcementCount: 1,
+            classmateCount: 3,
+            progress: 0,
+            schedules: [],
+          },
+          {
+            id: "class-2",
+            subjectName: "English",
+            subjectCode: "ENG-1",
+            subjectGradeLevel: "10",
+            schoolYear: "2025-2026",
+            sectionName: "Section B",
+            sectionGradeLevel: "10",
+            teacherName: "Teacher Two",
+            totalLessons: 2,
+            completedLessonCount: 2,
+            totalAssessments: 0,
+            assessmentDueCount: 0,
+            announcementCount: 0,
+            classmateCount: 2,
+            progress: 100,
+            schedules: [],
+          },
+        ]),
+      ),
+    );
 
     mockedUseStudentClasses.mockReturnValue(
       createQueryState([
@@ -3176,10 +3282,7 @@ describe("mobile rendered screen flows", () => {
       source: "classes",
     });
 
-    const scheduleButton = findPressableByText(
-      testRenderer!.root,
-      "Schedule",
-    );
+    const scheduleButton = findPressableByText(testRenderer!.root, "Schedule");
     act(() => {
       scheduleButton.props.onPress();
     });
@@ -3217,6 +3320,31 @@ describe("mobile rendered screen flows", () => {
     const originalToLessonCards = mappers.toLessonCards.getMockImplementation();
     const originalFindContinueLearning =
       mappers.findContinueLearning.getMockImplementation();
+
+    mockedUseQuery.mockReturnValue(
+      createQueryState(
+        buildStudentOverview([
+          {
+            id: "class-1",
+            subjectName: "Mathematics",
+            subjectCode: "MATH-1",
+            subjectGradeLevel: "10",
+            schoolYear: "2025-2026",
+            sectionName: "Section A",
+            sectionGradeLevel: "10",
+            teacherName: "Teacher One",
+            totalLessons: 1,
+            completedLessonCount: 0,
+            totalAssessments: 0,
+            assessmentDueCount: 0,
+            announcementCount: 0,
+            classmateCount: 3,
+            progress: 0,
+            schedules: [],
+          },
+        ]),
+      ),
+    );
 
     mappers.toSubjectCard.mockImplementation(
       (
@@ -3443,6 +3571,49 @@ describe("mobile rendered screen flows", () => {
 
   it("filters redesigned Lessons screen by progress bucket and search input", () => {
     const { LessonsScreen } = require("../LessonsScreen");
+
+    mockedUseQuery.mockReturnValue(
+      createQueryState(
+        buildStudentOverview([
+          {
+            id: "class-1",
+            subjectName: "Mathematics",
+            subjectCode: "MATH-1",
+            subjectGradeLevel: "10",
+            schoolYear: "2025-2026",
+            sectionName: "Section A",
+            sectionGradeLevel: "10",
+            teacherName: "Teacher One",
+            totalLessons: 1,
+            completedLessonCount: 0,
+            totalAssessments: 0,
+            assessmentDueCount: 0,
+            announcementCount: 0,
+            classmateCount: 2,
+            progress: 0,
+            schedules: [],
+          },
+          {
+            id: "class-2",
+            subjectName: "English",
+            subjectCode: "ENG-1",
+            subjectGradeLevel: "10",
+            schoolYear: "2025-2026",
+            sectionName: "Section B",
+            sectionGradeLevel: "10",
+            teacherName: "Teacher Two",
+            totalLessons: 1,
+            completedLessonCount: 1,
+            totalAssessments: 0,
+            assessmentDueCount: 0,
+            announcementCount: 0,
+            classmateCount: 2,
+            progress: 100,
+            schedules: [],
+          },
+        ]),
+      ),
+    );
 
     mockedUseStudentClasses.mockReturnValue(
       createQueryState([
@@ -5473,716 +5644,6 @@ describe("mobile rendered screen flows", () => {
     });
   });
 
-  it("blocks tutor launch when no class is selected and shows guidance", () => {
-    mockedUseStudentClasses.mockReturnValue(
-      createQueryState([]) as ReturnType<typeof useStudentClasses>,
-    );
-    mockedUseLxpEligibility.mockReturnValue(
-      createQueryState({ eligibleClasses: [] }) as ReturnType<
-        typeof useLxpEligibility
-      >,
-    );
-    mockedUseTutorBootstrap.mockReturnValue(
-      createQueryState({
-        classes: [],
-        selectedClassId: undefined,
-        recommendations: [],
-        history: [],
-      }) as ReturnType<typeof useTutorBootstrap>,
-    );
-    mockedUseLxpPlaylist.mockReturnValue(
-      createQueryState({
-        progress: {
-          streakDays: 0,
-          xpTotal: 0,
-          completionPercent: 0,
-          checkpointsCompleted: 0,
-        },
-        checkpoints: [],
-      }) as ReturnType<typeof useLxpPlaylist>,
-    );
-
-    const { LxpScreen } = require("../LxpScreen");
-    const navigate = jest.fn();
-    let testRenderer: TestRenderer.ReactTestRenderer;
-    act(() => {
-      testRenderer = TestRenderer.create(
-        React.createElement(LxpScreen, {
-          navigation: { navigate } as never,
-          route: { key: "LXP", name: "LXP" } as never,
-        }),
-      );
-    });
-
-    const openTutorButton = findPressableByText(
-      testRenderer!.root,
-      "Open Tutor",
-    );
-    act(() => {
-      openTutorButton.props.onPress();
-    });
-
-    expect(navigate).not.toHaveBeenCalled();
-    expect(
-      testRenderer!.root.find(
-        (node) =>
-          node.type === "Text" &&
-          flattenText(node).includes("Select a class before opening the tutor"),
-      ),
-    ).toBeTruthy();
-  });
-
-  it("submits checkpoint completion from LXP recommendation action", async () => {
-    jest.useFakeTimers();
-    const { LxpScreen } = require("../LxpScreen");
-    let testRenderer: TestRenderer.ReactTestRenderer;
-    act(() => {
-      testRenderer = TestRenderer.create(
-        React.createElement(LxpScreen, {
-          navigation: { navigate: jest.fn() } as never,
-          route: { key: "LXP", name: "LXP" } as never,
-        }),
-      );
-    });
-
-    const completeAction = findPressableByIcon(
-      testRenderer!.root,
-      "chevron-right",
-    );
-    await act(async () => {
-      completeAction.props.onPress();
-      await Promise.resolve();
-    });
-    act(() => {
-      jest.runOnlyPendingTimers();
-    });
-    jest.useRealTimers();
-
-    expect(checkpointMutateAsync).toHaveBeenCalledWith({
-      assignmentId: "checkpoint-1",
-    });
-  });
-
-  it("surfaces checkpoint completion error when recommendation action fails", async () => {
-    checkpointMutateAsync.mockRejectedValueOnce({
-      isAxiosError: true,
-      response: {
-        status: 503,
-        data: {
-          message: "Unable to complete checkpoint right now",
-        },
-      },
-      message: "Request failed",
-    });
-
-    const { LxpScreen } = require("../LxpScreen");
-    let testRenderer: TestRenderer.ReactTestRenderer;
-    act(() => {
-      testRenderer = TestRenderer.create(
-        React.createElement(LxpScreen, {
-          navigation: { navigate: jest.fn() } as never,
-          route: { key: "LXP", name: "LXP" } as never,
-        }),
-      );
-    });
-
-    const completeAction = findPressableByIcon(
-      testRenderer!.root,
-      "chevron-right",
-    );
-    await act(async () => {
-      completeAction.props.onPress();
-      await Promise.resolve();
-    });
-
-    expect(
-      testRenderer!.root.find(
-        (node) =>
-          node.type === "Text" &&
-          flattenText(node).includes("Unable to complete checkpoint right now"),
-      ),
-    ).toBeTruthy();
-  });
-
-  it("starts a tutor session from recommendation card in AI Tutor screen", async () => {
-    const { AiTutorScreen } = require("../AiTutorScreen");
-    let testRenderer: TestRenderer.ReactTestRenderer;
-    await act(async () => {
-      testRenderer = TestRenderer.create(
-        React.createElement(AiTutorScreen, {
-          route: {
-            key: "AiTutor",
-            name: "AiTutor",
-            params: { classId: "class-1" },
-          } as never,
-          navigation: { goBack: jest.fn() } as never,
-        }),
-      );
-    });
-
-    const recommendationCard = findPressableByText(
-      testRenderer!.root,
-      "Fractions Foundation",
-    );
-    await act(async () => {
-      await recommendationCard.props.onPress();
-    });
-
-    expect(mockedAiApi.startTutorSession).toHaveBeenCalledWith({
-      classId: "class-1",
-      recommendation: {
-        id: "rec-1",
-        title: "Fractions Foundation",
-        reason: "Rebuild fundamentals",
-        focusText: "Fractions and equivalent values",
-      },
-    });
-  });
-
-  it("shows tutor-start guidance when no class is selected", async () => {
-    const { AiTutorScreen } = require("../AiTutorScreen");
-    mockedUseTutorBootstrap.mockReturnValue(
-      createQueryState({
-        classes: [],
-        selectedClassId: undefined,
-        recommendations: [
-          {
-            id: "rec-1",
-            title: "Fractions Foundation",
-            reason: "Rebuild fundamentals",
-            focusText: "Fractions and equivalent values",
-          },
-        ],
-        history: [],
-      }) as ReturnType<typeof useTutorBootstrap>,
-    );
-
-    let testRenderer: TestRenderer.ReactTestRenderer;
-    await act(async () => {
-      testRenderer = TestRenderer.create(
-        React.createElement(AiTutorScreen, {
-          route: { key: "AiTutor", name: "AiTutor", params: {} } as never,
-          navigation: { goBack: jest.fn() } as never,
-        }),
-      );
-    });
-
-    const recommendationCard = findPressableByText(
-      testRenderer!.root,
-      "Fractions Foundation",
-    );
-    await act(async () => {
-      await recommendationCard.props.onPress();
-    });
-
-    expect(mockedAiApi.startTutorSession).not.toHaveBeenCalled();
-    expect(
-      testRenderer!.root.find(
-        (node) =>
-          node.type === "Text" &&
-          flattenText(node).includes(
-            "Select a class before starting a tutor session",
-          ),
-      ),
-    ).toBeTruthy();
-  });
-
-  it("surfaces tutor-start errors when AI session bootstrap fails", async () => {
-    const { AiTutorScreen } = require("../AiTutorScreen");
-    mockedAiApi.startTutorSession.mockRejectedValueOnce({
-      isAxiosError: true,
-      response: {
-        status: 503,
-        data: {
-          message: "Tutor service unavailable",
-        },
-      },
-      message: "Request failed",
-    });
-
-    let testRenderer: TestRenderer.ReactTestRenderer;
-    await act(async () => {
-      testRenderer = TestRenderer.create(
-        React.createElement(AiTutorScreen, {
-          route: {
-            key: "AiTutor",
-            name: "AiTutor",
-            params: { classId: "class-1" },
-          } as never,
-          navigation: { goBack: jest.fn() } as never,
-        }),
-      );
-    });
-
-    const recommendationCard = findPressableByText(
-      testRenderer!.root,
-      "Fractions Foundation",
-    );
-    await act(async () => {
-      await recommendationCard.props.onPress();
-    });
-
-    expect(
-      testRenderer!.root.find(
-        (node) =>
-          node.type === "Text" &&
-          flattenText(node).includes("Tutor service unavailable"),
-      ),
-    ).toBeTruthy();
-  });
-
-  it("gates tutor message send on non-empty text and active session", async () => {
-    const { AiTutorScreen } = require("../AiTutorScreen");
-    const tutorSessionRefetch = jest.fn().mockResolvedValue(undefined);
-
-    mockedUseTutorBootstrap.mockReturnValue(
-      createQueryState({
-        classes: [
-          { id: "class-1", subjectName: "Mathematics", subjectCode: "MATH-1" },
-        ],
-        selectedClassId: "class-1",
-        recommendations: [
-          {
-            id: "rec-1",
-            title: "Fractions Foundation",
-            reason: "Rebuild fundamentals",
-            focusText: "Fractions and equivalent values",
-          },
-        ],
-        history: [
-          {
-            sessionId: "session-1",
-            title: "Recent tutor session",
-            preview: "Continue fractions review",
-          },
-        ],
-      }) as ReturnType<typeof useTutorBootstrap>,
-    );
-    mockedUseTutorSession.mockImplementation((sessionId?: string) => {
-      if (!sessionId) {
-        return createQueryState(undefined, { data: undefined }) as ReturnType<
-          typeof useTutorSession
-        >;
-      }
-
-      return createQueryState(
-        {
-          state: {
-            recommendation: { title: "Fractions Foundation" },
-            lessonBody: "Review lesson",
-            lessonPlan: [],
-            questions: [],
-          },
-          messages: [],
-        },
-        { refetch: tutorSessionRefetch },
-      ) as ReturnType<typeof useTutorSession>;
-    });
-
-    let testRenderer: TestRenderer.ReactTestRenderer;
-    await act(async () => {
-      testRenderer = TestRenderer.create(
-        React.createElement(AiTutorScreen, {
-          route: {
-            key: "AiTutor",
-            name: "AiTutor",
-            params: { classId: "class-1" },
-          } as never,
-          navigation: { goBack: jest.fn() } as never,
-        }),
-      );
-    });
-
-    const historyEntry = findPressableByText(
-      testRenderer!.root,
-      "Recent tutor session",
-    );
-    await act(async () => {
-      historyEntry.props.onPress();
-    });
-
-    const sendButton = findPressableByIcon(testRenderer!.root, "send");
-    await act(async () => {
-      await sendButton.props.onPress();
-    });
-    expect(mockedAiApi.sendTutorMessage).not.toHaveBeenCalled();
-
-    const messageInput = findTextInputByPlaceholder(
-      testRenderer!.root,
-      "Ask a follow-up question",
-    );
-    await act(async () => {
-      messageInput.props.onChangeText("Need help with fractions");
-    });
-    await act(async () => {
-      await sendButton.props.onPress();
-    });
-
-    expect(mockedAiApi.sendTutorMessage).toHaveBeenCalledWith(
-      "session-1",
-      "Need help with fractions",
-    );
-    expect(tutorSessionRefetch).toHaveBeenCalled();
-  });
-
-  it("surfaces tutor message-send error when follow-up request fails", async () => {
-    const { AiTutorScreen } = require("../AiTutorScreen");
-
-    mockedUseTutorBootstrap.mockReturnValue(
-      createQueryState({
-        classes: [
-          { id: "class-1", subjectName: "Mathematics", subjectCode: "MATH-1" },
-        ],
-        selectedClassId: "class-1",
-        recommendations: [],
-        history: [
-          {
-            sessionId: "session-1",
-            title: "Recent tutor session",
-            preview: "Continue fractions review",
-          },
-        ],
-      }) as ReturnType<typeof useTutorBootstrap>,
-    );
-    mockedUseTutorSession.mockImplementation((sessionId?: string) => {
-      if (!sessionId) {
-        return createQueryState(undefined, { data: undefined }) as ReturnType<
-          typeof useTutorSession
-        >;
-      }
-
-      return createQueryState({
-        state: {
-          recommendation: { title: "Fractions Foundation" },
-          lessonBody: "Review lesson",
-          lessonPlan: [],
-          questions: [],
-        },
-        messages: [],
-      }) as ReturnType<typeof useTutorSession>;
-    });
-    mockedAiApi.sendTutorMessage.mockRejectedValueOnce({
-      isAxiosError: true,
-      response: {
-        status: 503,
-        data: {
-          message: "Tutor message service is unavailable",
-        },
-      },
-      message: "Request failed",
-    });
-
-    let testRenderer: TestRenderer.ReactTestRenderer;
-    await act(async () => {
-      testRenderer = TestRenderer.create(
-        React.createElement(AiTutorScreen, {
-          route: {
-            key: "AiTutor",
-            name: "AiTutor",
-            params: { classId: "class-1" },
-          } as never,
-          navigation: { goBack: jest.fn() } as never,
-        }),
-      );
-    });
-
-    const historyEntry = findPressableByText(
-      testRenderer!.root,
-      "Recent tutor session",
-    );
-    await act(async () => {
-      historyEntry.props.onPress();
-    });
-
-    const messageInput = findTextInputByPlaceholder(
-      testRenderer!.root,
-      "Ask a follow-up question",
-    );
-    await act(async () => {
-      messageInput.props.onChangeText("Need another hint");
-    });
-
-    const sendButton = findPressableByIcon(testRenderer!.root, "send");
-    await act(async () => {
-      await sendButton.props.onPress();
-    });
-
-    expect(
-      testRenderer!.root.find(
-        (node) =>
-          node.type === "Text" &&
-          flattenText(node).includes("Tutor message service is unavailable"),
-      ),
-    ).toBeTruthy();
-  });
-
-  it("surfaces tutor answer-check error when submit answers fails", async () => {
-    const { AiTutorScreen } = require("../AiTutorScreen");
-
-    mockedUseTutorBootstrap.mockReturnValue(
-      createQueryState({
-        classes: [
-          { id: "class-1", subjectName: "Mathematics", subjectCode: "MATH-1" },
-        ],
-        selectedClassId: "class-1",
-        recommendations: [],
-        history: [
-          {
-            sessionId: "session-1",
-            title: "Recent tutor session",
-            preview: "Continue fractions review",
-          },
-        ],
-      }) as ReturnType<typeof useTutorBootstrap>,
-    );
-    mockedUseTutorSession.mockImplementation((sessionId?: string) => {
-      if (!sessionId) {
-        return createQueryState(undefined, { data: undefined }) as ReturnType<
-          typeof useTutorSession
-        >;
-      }
-
-      return createQueryState({
-        state: {
-          recommendation: { title: "Fractions Foundation" },
-          lessonBody: "Review lesson",
-          lessonPlan: [],
-          questions: [
-            {
-              id: "q-1",
-              question: "What is 1/2 + 1/4?",
-              hint: "Use common denominator",
-            },
-          ],
-        },
-        messages: [],
-      }) as ReturnType<typeof useTutorSession>;
-    });
-    mockedAiApi.submitTutorAnswers.mockRejectedValueOnce({
-      isAxiosError: true,
-      response: {
-        status: 503,
-        data: {
-          message: "Answer checking is unavailable right now",
-        },
-      },
-      message: "Request failed",
-    });
-
-    let testRenderer: TestRenderer.ReactTestRenderer;
-    await act(async () => {
-      testRenderer = TestRenderer.create(
-        React.createElement(AiTutorScreen, {
-          route: {
-            key: "AiTutor",
-            name: "AiTutor",
-            params: { classId: "class-1" },
-          } as never,
-          navigation: { goBack: jest.fn() } as never,
-        }),
-      );
-    });
-
-    const historyEntry = findPressableByText(
-      testRenderer!.root,
-      "Recent tutor session",
-    );
-    await act(async () => {
-      historyEntry.props.onPress();
-    });
-
-    const answerInput = findTextInputByPlaceholder(
-      testRenderer!.root,
-      "Use common denominator",
-    );
-    await act(async () => {
-      answerInput.props.onChangeText("3/4");
-    });
-
-    const checkAnswersButton = findPressableByText(
-      testRenderer!.root,
-      "Check Answers",
-    );
-    await act(async () => {
-      await checkAnswersButton.props.onPress();
-    });
-
-    expect(
-      testRenderer!.root.find(
-        (node) =>
-          node.type === "Text" &&
-          flattenText(node).includes(
-            "Answer checking is unavailable right now",
-          ),
-      ),
-    ).toBeTruthy();
-  });
-
-  it("blocks tutor answer submit when all answers are empty", async () => {
-    const { AiTutorScreen } = require("../AiTutorScreen");
-
-    mockedUseTutorBootstrap.mockReturnValue(
-      createQueryState({
-        classes: [
-          { id: "class-1", subjectName: "Mathematics", subjectCode: "MATH-1" },
-        ],
-        selectedClassId: "class-1",
-        recommendations: [],
-        history: [
-          {
-            sessionId: "session-1",
-            title: "Recent tutor session",
-            preview: "Continue fractions review",
-          },
-        ],
-      }) as ReturnType<typeof useTutorBootstrap>,
-    );
-    mockedUseTutorSession.mockImplementation((sessionId?: string) => {
-      if (!sessionId) {
-        return createQueryState(undefined, { data: undefined }) as ReturnType<
-          typeof useTutorSession
-        >;
-      }
-
-      return createQueryState({
-        state: {
-          recommendation: { title: "Fractions Foundation" },
-          lessonBody: "Review lesson",
-          lessonPlan: [],
-          questions: [
-            {
-              id: "q-1",
-              question: "What is 1/2 + 1/4?",
-              hint: "Use common denominator",
-            },
-          ],
-        },
-        messages: [],
-      }) as ReturnType<typeof useTutorSession>;
-    });
-
-    let testRenderer: TestRenderer.ReactTestRenderer;
-    await act(async () => {
-      testRenderer = TestRenderer.create(
-        React.createElement(AiTutorScreen, {
-          route: {
-            key: "AiTutor",
-            name: "AiTutor",
-            params: { classId: "class-1" },
-          } as never,
-          navigation: { goBack: jest.fn() } as never,
-        }),
-      );
-    });
-
-    const historyEntry = findPressableByText(
-      testRenderer!.root,
-      "Recent tutor session",
-    );
-    await act(async () => {
-      historyEntry.props.onPress();
-    });
-
-    const checkAnswersButton = findPressableByText(
-      testRenderer!.root,
-      "Check Answers",
-    );
-    await act(async () => {
-      await checkAnswersButton.props.onPress();
-    });
-
-    expect(mockedAiApi.submitTutorAnswers).not.toHaveBeenCalled();
-    expect(
-      testRenderer!.root.find(
-        (node) =>
-          node.type === "Text" &&
-          flattenText(node).includes(
-            "Provide at least one answer before checking",
-          ),
-      ),
-    ).toBeTruthy();
-  });
-
-  it("clears active tutor session when switching selected class", async () => {
-    const { AiTutorScreen } = require("../AiTutorScreen");
-
-    mockedUseTutorBootstrap.mockReturnValue(
-      createQueryState({
-        classes: [
-          { id: "class-1", subjectName: "Mathematics", subjectCode: "MATH-1" },
-          { id: "class-2", subjectName: "Science", subjectCode: "SCI-1" },
-        ],
-        selectedClassId: "class-1",
-        recommendations: [],
-        history: [
-          {
-            sessionId: "session-1",
-            title: "Recent tutor session",
-            preview: "Continue fractions review",
-          },
-        ],
-      }) as ReturnType<typeof useTutorBootstrap>,
-    );
-    mockedUseTutorSession.mockImplementation((sessionId?: string) => {
-      if (!sessionId) {
-        return createQueryState(undefined, { data: undefined }) as ReturnType<
-          typeof useTutorSession
-        >;
-      }
-
-      return createQueryState({
-        state: {
-          recommendation: { title: "Fractions Foundation" },
-          lessonBody: "Review lesson",
-          lessonPlan: [],
-          questions: [],
-        },
-        messages: [],
-      }) as ReturnType<typeof useTutorSession>;
-    });
-
-    let testRenderer: TestRenderer.ReactTestRenderer;
-    await act(async () => {
-      testRenderer = TestRenderer.create(
-        React.createElement(AiTutorScreen, {
-          route: {
-            key: "AiTutor",
-            name: "AiTutor",
-            params: { classId: "class-1" },
-          } as never,
-          navigation: { goBack: jest.fn() } as never,
-        }),
-      );
-    });
-
-    const historyEntry = findPressableByText(
-      testRenderer!.root,
-      "Recent tutor session",
-    );
-    await act(async () => {
-      historyEntry.props.onPress();
-    });
-
-    expect(
-      testRenderer!.root.find(
-        (node) =>
-          node.type === "Text" && flattenText(node).includes("Lesson packet"),
-      ),
-    ).toBeTruthy();
-
-    const switchClass = findPressableByText(testRenderer!.root, "Science");
-    await act(async () => {
-      switchClass.props.onPress();
-    });
-
-    expect(
-      testRenderer!.root.findAll(
-        (node) =>
-          node.type === "Text" && flattenText(node).includes("Lesson packet"),
-      ),
-    ).toHaveLength(0);
-  });
-
   it("renders Profile screen and saves profile details", async () => {
     const { ProfileScreen } = require("../ProfileScreen");
     let testRenderer: TestRenderer.ReactTestRenderer;
@@ -6317,42 +5778,10 @@ describe("mobile rendered screen flows", () => {
       .map((node) => flattenText(node))
       .join(" ");
 
-    expect(renderedText).toContain("Student records");
     expect(renderedText).toContain("Transcript");
     expect(renderedText).toContain("1 enrollment");
     expect(renderedText).toContain("Mathematics (MATH-1)");
     expect(renderedText).toContain("2025-2026");
-  });
-
-  it("renders Progress screen and surfaces backend error state", () => {
-    const { ProgressScreen } = require("../ProgressScreen");
-    mockedUsePerformanceSummary.mockReturnValue(
-      createQueryState(
-        {
-          overall: { averageBlendedScore: 0, atRiskClasses: 0 },
-          classes: [],
-        },
-        { error: { message: "Performance API unavailable" } },
-      ) as ReturnType<typeof usePerformanceSummary>,
-    );
-
-    let testRenderer: TestRenderer.ReactTestRenderer;
-    act(() => {
-      testRenderer = TestRenderer.create(
-        React.createElement(ProgressScreen, {
-          navigation: {} as never,
-          route: { key: "Progress", name: "Progress" } as never,
-        }),
-      );
-    });
-
-    expect(
-      testRenderer!.root.find(
-        (node) =>
-          node.type === "Text" &&
-          flattenText(node).includes("Progress data is partially unavailable"),
-      ),
-    ).toBeTruthy();
   });
 
   it("renders the performance parity screen", () => {

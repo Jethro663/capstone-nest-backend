@@ -31,4 +31,9 @@ describe("LiveNotificationProvider quiet presentation wiring", () => {
   it("does not under-report a burst while the unread count update is reconciling", () => {
     expect(providerSource).toContain("Math.max(unreadCount, quietPresentation.count)");
   });
+
+  it("keeps notification contents private on the Android lock screen", () => {
+    expect(providerSource).toContain("AndroidNotificationVisibility.PRIVATE");
+    expect(providerSource).not.toContain("AndroidNotificationVisibility.PUBLIC");
+  });
 });

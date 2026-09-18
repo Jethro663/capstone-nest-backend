@@ -11,6 +11,7 @@ import { CheckAppVersionDto } from './dto/check-app-version.dto';
 import { CreateAppVersionDto } from './dto/create-app-version.dto';
 
 export type UpdateType = 'none' | 'apk_optional' | 'apk_forced';
+export type UpdateAction = 'none' | 'binary_optional' | 'binary_forced';
 
 export interface AppVersionDecision {
   platform: string;
@@ -18,12 +19,19 @@ export interface AppVersionDecision {
   minSupportedVersionCode: number;
   latestNativeVersion: string;
   otaRuntimeVersion: string;
+  artifactKind: string;
+  artifactDownloadUrl: string;
+  artifactSha256: string | null;
+  artifactSizeBytes: number | null;
+  sourceRevision: string | null;
+  distributionChannel: string;
   apkDownloadUrl: string;
   apkSha256: string | null;
   apkSizeBytes: number | null;
   isForceUpdate: boolean;
   requiresFullApk: boolean;
   releaseNotes: string | null;
+  updateAction: UpdateAction;
   updateType: UpdateType;
 }
 
@@ -47,6 +55,30 @@ export class AppVersionService {
         'Minimum supported build cannot exceed the released build.',
       );
     }
+    const artifactKind =
+      dto.artifactKind ?? (dto.platform === 'ios' ? 'ipa' : 'apk');
+    const artifactDownloadUrl = dto.artifactDownloadUrl ?? dto.apkDownloadUrl;
+    const artifactSha256 = dto.artifactSha256 ?? dto.apkSha256 ?? null;
+    const artifactSizeBytes = dto.artifactSizeBytes ?? dto.apkSizeBytes ?? null;
+    const distributionChannel =
+      dto.distributionChannel ??
+      (dto.platform === 'ios' ? 'sidestore' : 'website');
+    if (!artifactDownloadUrl) {
+      throw new BadRequestException('A release artifact URL is required.');
+    }
+    if (
+      dto.requiresFullApk === true &&
+      (artifactSha256 === null || artifactSizeBytes === null)
+    ) {
+      throw new BadRequestException(
+        'A directly distributed binary requires its SHA-256 and byte size.',
+      );
+    }
+    if (dto.platform === 'ios' && !dto.sourceRevision) {
+      throw new BadRequestException(
+        'An iOS release requires the exact source revision.',
+      );
+    }
     // Guard against version regression: new versionCode must be >= existing latest
     const existing = await this.db.query.appVersions.findFirst({
       where: eq(appVersions.platform, dto.platform),
@@ -57,6 +89,33 @@ export class AppVersionService {
       throw new BadRequestException(
         `Version code regression: incoming ${dto.versionCode} is lower than current latest ${existing.versionCode} for platform "${dto.platform}".`,
       );
+    }
+    if (existing && dto.versionCode === existing.versionCode) {
+      const existingArtifactUrl =
+        existing.artifactDownloadUrl ?? existing.apkDownloadUrl;
+      const existingArtifactSha =
+        existing.artifactSha256 ?? existing.apkSha256 ?? null;
+      const existingArtifactSize =
+        existing.artifactSizeBytes ?? existing.apkSizeBytes ?? null;
+      const reusesBuildForDifferentArtifact =
+        existing.nativeVersion !== dto.nativeVersion ||
+        (existing.artifactKind ?? (dto.platform === 'ios' ? 'ipa' : 'apk')) !==
+          artifactKind ||
+        existingArtifactUrl !== artifactDownloadUrl ||
+        (existingArtifactSha !== null &&
+          artifactSha256 !== null &&
+          existingArtifactSha !== artifactSha256) ||
+        (existingArtifactSize !== null &&
+          artifactSizeBytes !== null &&
+          existingArtifactSize !== artifactSizeBytes) ||
+        (existing.sourceRevision != null &&
+          dto.sourceRevision !== undefined &&
+          existing.sourceRevision !== dto.sourceRevision);
+      if (reusesBuildForDifferentArtifact) {
+        throw new BadRequestException(
+          `Version code ${dto.versionCode} already belongs to a different immutable artifact. Advance the build number.`,
+        );
+      }
     }
 
     // Check if this exact platform + versionCode already exists (upsert)
@@ -76,11 +135,17 @@ export class AppVersionService {
           nativeVersion: dto.nativeVersion,
           otaRuntimeVersion:
             dto.otaRuntimeVersion ?? duplicate.otaRuntimeVersion,
-          apkDownloadUrl: dto.apkDownloadUrl,
+          artifactKind,
+          artifactDownloadUrl,
+          artifactSha256,
+          artifactSizeBytes,
+          sourceRevision: dto.sourceRevision ?? duplicate.sourceRevision,
+          distributionChannel,
+          apkDownloadUrl: artifactDownloadUrl,
           requiresFullApk: dto.requiresFullApk ?? duplicate.requiresFullApk,
           releaseNotes: dto.releaseNotes ?? duplicate.releaseNotes,
-          apkSha256: dto.apkSha256 ?? duplicate.apkSha256,
-          apkSizeBytes: dto.apkSizeBytes ?? duplicate.apkSizeBytes,
+          apkSha256: artifactSha256,
+          apkSizeBytes: artifactSizeBytes,
           updatedAt: new Date(),
         })
         .where(eq(appVersions.id, duplicate.id))
@@ -101,11 +166,17 @@ export class AppVersionService {
         minSupportedVersionCode: dto.minSupportedVersionCode,
         nativeVersion: dto.nativeVersion,
         otaRuntimeVersion: dto.otaRuntimeVersion ?? '1',
-        apkDownloadUrl: dto.apkDownloadUrl,
+        artifactKind,
+        artifactDownloadUrl,
+        artifactSha256,
+        artifactSizeBytes,
+        sourceRevision: dto.sourceRevision ?? null,
+        distributionChannel,
+        apkDownloadUrl: artifactDownloadUrl,
         requiresFullApk: dto.requiresFullApk ?? false,
         releaseNotes: dto.releaseNotes ?? null,
-        apkSha256: dto.apkSha256 ?? null,
-        apkSizeBytes: dto.apkSizeBytes ?? null,
+        apkSha256: artifactSha256,
+        apkSizeBytes: artifactSizeBytes,
       })
       .returning();
 
@@ -120,42 +191,27 @@ export class AppVersionService {
     const clientVersionCode = query.currentVersionCode ?? 0;
     const clientOtaVersion = query.currentOtaVersion ?? '';
 
-    // iOS releases have an independent distribution lifecycle. Never return an
-    // Android package action, even if a legacy iOS row contains APK metadata.
-    if (platform === 'ios') {
-      return {
-        platform: 'ios',
-        latestVersionCode:
-          Number.isSafeInteger(clientVersionCode) && clientVersionCode > 0
-            ? clientVersionCode
-            : 1,
-        minSupportedVersionCode: 1,
-        latestNativeVersion: query.currentNativeVersion ?? '0.1.0',
-        otaRuntimeVersion: clientOtaVersion,
-        apkDownloadUrl: '',
-        apkSha256: null,
-        apkSizeBytes: null,
-        isForceUpdate: false,
-        requiresFullApk: false,
-        releaseNotes: null,
-        updateType: 'none',
-      };
-    }
-
     if (!Number.isSafeInteger(clientVersionCode) || clientVersionCode < 1) {
       throw new BadRequestException(
-        'A valid installed Android build is required to check for updates.',
+        'A valid installed mobile build is required to check for updates.',
       );
     }
 
-    const policy = await this.db.query.appVersions.findFirst({
-      where: eq(appVersions.platform, platform),
-      orderBy: [desc(appVersions.versionCode)],
-    });
+    let policy: typeof appVersions.$inferSelect | undefined;
+    try {
+      policy = await this.db.query.appVersions.findFirst({
+        where: eq(appVersions.platform, platform),
+        orderBy: [desc(appVersions.versionCode)],
+      });
+    } catch {
+      throw new ServiceUnavailableException(
+        `The ${platform} release policy is not available. Please retry.`,
+      );
+    }
 
     if (!policy) {
       throw new ServiceUnavailableException(
-        'The Android release policy is not available. Please retry.',
+        `The ${platform} release policy is not available. Please retry.`,
       );
     }
     if (
@@ -170,8 +226,7 @@ export class AppVersionService {
       );
     }
 
-    let updateType: UpdateType = 'none';
-    let isForceUpdate = false;
+    let updateAction: UpdateAction = 'none';
 
     const hasRuntimeMismatch =
       Boolean(clientOtaVersion) &&
@@ -185,23 +240,33 @@ export class AppVersionService {
       clientVersionCode > 0 &&
       clientVersionCode < policy.minSupportedVersionCode
     ) {
-      updateType = 'apk_forced';
-      isForceUpdate = true;
+      updateAction = 'binary_forced';
     }
     // 2. Optional APK update only when a newer binary exists and either the
     //    release requires a full APK or the client's OTA runtime is incompatible.
     else if (
       isBehindLatestVersion &&
-      (policy.requiresFullApk || hasRuntimeMismatch)
+      (policy.requiresFullApk || platform === 'ios' || hasRuntimeMismatch)
     ) {
-      updateType = 'apk_optional';
-      isForceUpdate = false;
+      updateAction = 'binary_optional';
     }
-    // 3. Otherwise proceed normally and let OTA availability be checked on-device
-    else {
-      updateType = 'none';
-      isForceUpdate = false;
-    }
+
+    const isForceUpdate = updateAction === 'binary_forced';
+    const updateType: UpdateType =
+      platform !== 'android'
+        ? 'none'
+        : updateAction === 'binary_forced'
+          ? 'apk_forced'
+          : updateAction === 'binary_optional'
+            ? 'apk_optional'
+            : 'none';
+    const artifactKind =
+      policy.artifactKind ?? (platform === 'ios' ? 'ipa' : 'apk');
+    const artifactDownloadUrl =
+      policy.artifactDownloadUrl ?? policy.apkDownloadUrl ?? '';
+    const artifactSha256 = policy.artifactSha256 ?? policy.apkSha256 ?? null;
+    const artifactSizeBytes =
+      policy.artifactSizeBytes ?? policy.apkSizeBytes ?? null;
 
     return {
       platform: policy.platform,
@@ -209,12 +274,21 @@ export class AppVersionService {
       minSupportedVersionCode: policy.minSupportedVersionCode,
       latestNativeVersion: policy.nativeVersion,
       otaRuntimeVersion: policy.otaRuntimeVersion,
-      apkDownloadUrl: policy.apkDownloadUrl,
-      apkSha256: policy.apkSha256,
-      apkSizeBytes: policy.apkSizeBytes,
+      artifactKind,
+      artifactDownloadUrl,
+      artifactSha256,
+      artifactSizeBytes,
+      sourceRevision: policy.sourceRevision ?? null,
+      distributionChannel:
+        policy.distributionChannel ??
+        (platform === 'ios' ? 'sidestore' : 'website'),
+      apkDownloadUrl: platform === 'android' ? artifactDownloadUrl : '',
+      apkSha256: platform === 'android' ? artifactSha256 : null,
+      apkSizeBytes: platform === 'android' ? artifactSizeBytes : null,
       isForceUpdate,
       requiresFullApk: policy.requiresFullApk,
       releaseNotes: policy.releaseNotes,
+      updateAction,
       updateType,
     };
   }

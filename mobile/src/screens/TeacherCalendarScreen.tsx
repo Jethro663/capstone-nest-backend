@@ -1,22 +1,29 @@
 import { useMemo, useState } from "react";
-import { useQueries } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Pressable, Text, View } from "react-native";
-import { queryKeys, useSchoolEvents, useTeacherClasses } from "../api/hooks";
-import { announcementsApi } from "../api/services/announcements";
-import { assessmentsApi } from "../api/services/assessments";
+import { queryKeys } from "../api/hooks";
+import { mobileWorkspaceApi } from "../api/services/mobile-workspace";
 import type { TeacherDrawerScreenProps } from "../navigation/types";
-import { useAuth } from "../providers/AuthProvider";
 import {
   TeacherChip,
   TeacherEmpty,
-  TeacherPanel,
   TeacherRow,
   TeacherScreen,
   teacherTheme as theme,
 } from "../components/teacher/TeacherMobilePrimitives";
+import { useAuth } from "../providers/AuthProvider";
+import { OfflineWorkspaceNotice } from "../components/offline/OfflineWorkspaceNotice";
+import {
+  TeacherContextStrip,
+  TeacherFlatSection,
+} from "../components/teacher/TeacherWorkspacePrimitives";
 
 type Props = TeacherDrawerScreenProps<"TeacherCalendar">;
-type FeedItemKind = "assessment" | "announcement" | "school_event" | "class_schedule";
+type FeedItemKind =
+  | "assessment"
+  | "announcement"
+  | "school_event"
+  | "class_schedule";
 type FeedItem = {
   id: string;
   dateKey: string;
@@ -83,7 +90,9 @@ function getScheduleDates(month: Date, days: string[]) {
   const dates: string[] = [];
   while (cursor.getMonth() === targetMonth) {
     const dayIndex = cursor.getDay();
-    const matches = days.some((entry) => dayMap[entry.trim().toUpperCase()] === dayIndex);
+    const matches = days.some(
+      (entry) => dayMap[entry.trim().toUpperCase()] === dayIndex,
+    );
     if (matches) {
       dates.push(toDateKey(cursor));
     }
@@ -94,38 +103,66 @@ function getScheduleDates(month: Date, days: string[]) {
 
 export function TeacherCalendarScreen({ navigation, route }: Props) {
   const { user } = useAuth();
-  const teacherId = user?.userId || user?.id;
-  const classesQuery = useTeacherClasses(teacherId);
-  const [month, setMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
-  const [selectedClassId, setSelectedClassId] = useState<string>(route.params?.classId || "all");
-  const [selectedDateKey, setSelectedDateKey] = useState<string>(toDateKey(new Date()));
-  const schoolEventsQuery = useSchoolEvents();
+  const [month, setMonth] = useState(
+    () => new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+  );
+  const [selectedClassId, setSelectedClassId] = useState<string>(
+    route.params?.classId || "all",
+  );
+  const [selectedDateKey, setSelectedDateKey] = useState<string>(
+    toDateKey(new Date()),
+  );
+  const calendarRange = useMemo(() => {
+    const cells = buildMonthCells(month);
+    const first = new Date(cells[0].date);
+    first.setHours(0, 0, 0, 0);
+    const last = new Date(cells[cells.length - 1].date);
+    last.setHours(23, 59, 59, 999);
+    return { from: first.toISOString(), to: last.toISOString() };
+  }, [month]);
+  const workspaceQuery = useQuery({
+    queryKey: [
+      ...queryKeys.mobileCalendar(
+        "teacher",
+        calendarRange.from,
+        calendarRange.to,
+      ),
+      user?.id,
+    ],
+    queryFn: () =>
+      mobileWorkspaceApi.getCalendarForUser(user!.id, "teacher", calendarRange),
+    enabled: !!user?.id,
+  });
+  const offlineState = workspaceQuery.data?.offlineState;
+  const offline = !!offlineState;
+  const classesQuery = { data: workspaceQuery.data?.classes };
+  const schoolEventsQuery = { data: workspaceQuery.data?.schoolEvents };
 
   const classIds = (classesQuery.data ?? [])
-    .filter((entry) => selectedClassId === "all" || entry.id === selectedClassId)
+    .filter(
+      (entry) => selectedClassId === "all" || entry.id === selectedClassId,
+    )
     .map((entry) => entry.id);
 
-  const assessmentQueries = useQueries({
-    queries: classIds.map((classId) => ({
-      queryKey: queryKeys.assessments(classId),
-      queryFn: () => assessmentsApi.getByClass(classId),
-      enabled: classIds.length > 0,
-    })),
-  });
+  const assessmentQueries = classIds.map((classId) => ({
+    data: workspaceQuery.data?.assessments.filter(
+      (assessment) => assessment.classId === classId,
+    ),
+  }));
 
-  const announcementQueries = useQueries({
-    queries: classIds.map((classId) => ({
-      queryKey: queryKeys.announcements(classId),
-      queryFn: () => announcementsApi.getByClass(classId),
-      enabled: classIds.length > 0,
-    })),
-  });
+  const announcementQueries = classIds.map((classId) => ({
+    data: workspaceQuery.data?.announcements.filter(
+      (announcement) => announcement.classId === classId,
+    ),
+  }));
 
   const feedItems = useMemo<FeedItem[]>(() => {
     const items: FeedItem[] = [];
 
     (classesQuery.data ?? [])
-      .filter((entry) => selectedClassId === "all" || entry.id === selectedClassId)
+      .filter(
+        (entry) => selectedClassId === "all" || entry.id === selectedClassId,
+      )
       .forEach((classItem) => {
         (classItem.schedules ?? []).forEach((slot) => {
           getScheduleDates(month, slot.days).forEach((dateKey) => {
@@ -135,14 +172,21 @@ export function TeacherCalendarScreen({ navigation, route }: Props) {
               title: `${classItem.subjectCode} class`,
               subtitle: `${slot.startTime} - ${slot.endTime}${classItem.room ? ` | ${classItem.room}` : ""}`,
               kind: "class_schedule",
-              action: () => navigation.navigate("TeacherClassDetail", { classId: classItem.id, initialTab: "calendar", source: "calendar" }),
+              action: () =>
+                navigation.navigate("TeacherClassDetail", {
+                  classId: classItem.id,
+                  initialTab: "calendar",
+                  source: "calendar",
+                }),
             });
           });
         });
       });
 
     assessmentQueries.forEach((query, index) => {
-      const classItem = classesQuery.data?.find((entry) => entry.id === classIds[index]);
+      const classItem = classesQuery.data?.find(
+        (entry) => entry.id === classIds[index],
+      );
       if (!classItem || !query.data) return;
       query.data.forEach((assessment) => {
         if (!assessment.dueDate) return;
@@ -154,13 +198,18 @@ export function TeacherCalendarScreen({ navigation, route }: Props) {
           subtitle: `${classItem.subjectCode} | Assessment`,
           kind: "assessment",
           action: () =>
-            navigation.navigate("TeacherAssessmentDetail", { assessmentId: assessment.id, classId: classItem.id }),
+            navigation.navigate("TeacherAssessmentDetail", {
+              assessmentId: assessment.id,
+              classId: classItem.id,
+            }),
         });
       });
     });
 
     announcementQueries.forEach((query, index) => {
-      const classItem = classesQuery.data?.find((entry) => entry.id === classIds[index]);
+      const classItem = classesQuery.data?.find(
+        (entry) => entry.id === classIds[index],
+      );
       if (!classItem || !query.data) return;
       query.data.forEach((announcement) => {
         const createdAt = announcement.scheduledAt || announcement.createdAt;
@@ -181,18 +230,33 @@ export function TeacherCalendarScreen({ navigation, route }: Props) {
         id: `school-event-${entry.id}`,
         dateKey: toDateKey(new Date(entry.startsAt)),
         title: entry.title,
-        subtitle: entry.eventType === "holiday_break" ? "Holiday break" : "School event",
+        subtitle:
+          entry.eventType === "holiday_break"
+            ? "Holiday break"
+            : "School event",
         kind: "school_event",
       });
     });
 
     return items;
-  }, [announcementQueries, assessmentQueries, classIds, classesQuery.data, month, navigation, schoolEventsQuery.data, selectedClassId]);
+  }, [
+    announcementQueries,
+    assessmentQueries,
+    classIds,
+    classesQuery.data,
+    month,
+    navigation,
+    schoolEventsQuery.data,
+    selectedClassId,
+  ]);
 
   const feedByDate = useMemo(
     () =>
       feedItems.reduce<Record<string, FeedItem[]>>((accumulator, item) => {
-        accumulator[item.dateKey] = [...(accumulator[item.dateKey] ?? []), item];
+        accumulator[item.dateKey] = [
+          ...(accumulator[item.dateKey] ?? []),
+          item,
+        ];
         return accumulator;
       }, {}),
     [feedItems],
@@ -207,41 +271,92 @@ export function TeacherCalendarScreen({ navigation, route }: Props) {
       subtitle="Unified feed from class schedules, assessments, announcements, and school events."
       icon="calendar-month-outline"
       onBackPress={() => navigation.goBack()}
-      refreshing={classesQuery.isRefetching || schoolEventsQuery.isRefetching}
+      refreshing={workspaceQuery.isRefetching}
       onRefresh={() => {
-        void Promise.all([
-          classesQuery.refetch(),
-          schoolEventsQuery.refetch(),
-          ...assessmentQueries.map((query) => query.refetch()),
-          ...announcementQueries.map((query) => query.refetch()),
-        ]);
+        void workspaceQuery.refetch();
       }}
     >
-      <View style={{ marginHorizontal: 16, marginTop: 10, flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
-        <TeacherChip label="All classes" active={selectedClassId === "all"} onPress={() => setSelectedClassId("all")} />
+      <TeacherContextStrip
+        title={formatDateLabel(month)}
+        subtitle="Class schedules, assessments, announcements, and school events."
+        status={selectedClassId === "all" ? "All classes" : "Filtered"}
+        icon="calendar-month-outline"
+      />
+      {offlineState ? (
+        <View style={{ marginHorizontal: 16, marginTop: 12 }}>
+          <OfflineWorkspaceNotice lastSyncedAt={offlineState.lastSyncedAt} />
+        </View>
+      ) : null}
+      <View
+        style={{
+          marginHorizontal: 16,
+          marginTop: 10,
+          flexDirection: "row",
+          gap: 6,
+          flexWrap: "wrap",
+        }}
+      >
+        <TeacherChip
+          label="All classes"
+          active={selectedClassId === "all"}
+          onPress={() => setSelectedClassId("all")}
+        />
         {(classesQuery.data ?? []).slice(0, 5).map((entry) => (
-          <TeacherChip key={entry.id} label={entry.subjectCode} active={selectedClassId === entry.id} onPress={() => setSelectedClassId(entry.id)} />
+          <TeacherChip
+            key={entry.id}
+            label={entry.subjectCode}
+            active={selectedClassId === entry.id}
+            onPress={() => setSelectedClassId(entry.id)}
+          />
         ))}
       </View>
 
-      <TeacherPanel
+      <TeacherFlatSection
         title={formatDateLabel(month)}
         subtitle="Select a day to inspect the mixed feed."
         action={
           <View style={{ flexDirection: "row", gap: 8 }}>
-            <Pressable onPress={() => setMonth((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))}>
+            <Pressable
+              onPress={() =>
+                setMonth(
+                  (current) =>
+                    new Date(current.getFullYear(), current.getMonth() - 1, 1),
+                )
+              }
+            >
               <Text style={{ color: theme.red, fontSize: 16 }}>{"<"}</Text>
             </Pressable>
-            <Pressable onPress={() => setMonth((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))}>
+            <Pressable
+              onPress={() =>
+                setMonth(
+                  (current) =>
+                    new Date(current.getFullYear(), current.getMonth() + 1, 1),
+                )
+              }
+            >
               <Text style={{ color: theme.red, fontSize: 16 }}>{">"}</Text>
             </Pressable>
           </View>
         }
       >
         <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 10 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              marginBottom: 10,
+            }}
+          >
             {weekdayLabels.map((label) => (
-              <Text key={label} style={{ width: `${100 / 7}%`, textAlign: "center", fontSize: 10, color: theme.muted }}>
+              <Text
+                key={label}
+                style={{
+                  width: `${100 / 7}%`,
+                  textAlign: "center",
+                  fontSize: 10,
+                  color: theme.muted,
+                }}
+              >
                 {label}
               </Text>
             ))}
@@ -271,26 +386,45 @@ export function TeacherCalendarScreen({ navigation, route }: Props) {
                       justifyContent: "center",
                     }}
                   >
-                    <Text style={{ color: cell.inMonth ? theme.text : theme.dim, fontSize: 12, fontWeight: active ? "800" : "600" }}>
+                    <Text
+                      style={{
+                        color: cell.inMonth ? theme.text : theme.dim,
+                        fontSize: 12,
+                        fontWeight: active ? "800" : "600",
+                      }}
+                    >
                       {cell.label}
                     </Text>
-                    {hasItems ? <View style={{ marginTop: 4, width: 6, height: 6, borderRadius: 999, backgroundColor: theme.red }} /> : null}
+                    {hasItems ? (
+                      <View
+                        style={{
+                          marginTop: 4,
+                          width: 6,
+                          height: 6,
+                          borderRadius: 999,
+                          backgroundColor: theme.red,
+                        }}
+                      />
+                    ) : null}
                   </View>
                 </Pressable>
               );
             })}
           </View>
         </View>
-      </TeacherPanel>
+      </TeacherFlatSection>
 
-      <TeacherPanel title={`Selected day | ${formatShortDate(selectedDateKey)}`} subtitle="Tap a feed item to open the linked mobile route when it exists.">
+      <TeacherFlatSection
+        title={`Selected day | ${formatShortDate(selectedDateKey)}`}
+        subtitle="Open a linked class, assessment, or announcement."
+      >
         {selectedItems.length ? (
           selectedItems.map((item) => (
             <TeacherRow
               key={item.id}
               title={item.title}
               subtitle={item.subtitle}
-              onPress={item.action}
+              onPress={offline ? undefined : item.action}
               right={
                 <View
                   style={{
@@ -328,9 +462,13 @@ export function TeacherCalendarScreen({ navigation, route }: Props) {
             />
           ))
         ) : (
-          <TeacherEmpty title="No scheduled items" subtitle="This day does not currently have linked classes, assessments, announcements, or school events." icon="calendar-remove-outline" />
+          <TeacherEmpty
+            title="No scheduled items"
+            subtitle="This day does not currently have linked classes, assessments, announcements, or school events."
+            icon="calendar-remove-outline"
+          />
         )}
-      </TeacherPanel>
+      </TeacherFlatSection>
     </TeacherScreen>
   );
 }

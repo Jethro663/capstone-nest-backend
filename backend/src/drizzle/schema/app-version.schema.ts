@@ -17,6 +17,14 @@ export const appVersions = pgTable(
     minSupportedVersionCode: integer('min_supported_version_code').notNull(),
     nativeVersion: text('native_version').notNull(),
     otaRuntimeVersion: text('ota_runtime_version').notNull(),
+    artifactKind: text('artifact_kind').notNull().default('apk'),
+    artifactDownloadUrl: text('artifact_download_url').notNull(),
+    artifactSha256: text('artifact_sha256'),
+    artifactSizeBytes: integer('artifact_size_bytes'),
+    sourceRevision: text('source_revision'),
+    distributionChannel: text('distribution_channel')
+      .notNull()
+      .default('website'),
     apkDownloadUrl: text('apk_download_url').notNull(),
     apkSha256: text('apk_sha256'),
     apkSizeBytes: integer('apk_size_bytes'),

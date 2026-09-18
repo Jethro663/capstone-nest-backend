@@ -22,6 +22,7 @@ import {
 } from "../components/teacher/TeacherMobilePrimitives";
 import { PasswordChangeForm } from "../components/account/PasswordChangeForm";
 import { AppVersionInfo } from "../components/AppVersionInfo";
+import { TeacherContextStrip } from "../components/teacher/TeacherWorkspacePrimitives";
 
 type Props = BottomTabScreenProps<MainTabParamList, "Profile">;
 
@@ -37,7 +38,9 @@ export function TeacherProfileScreen(_: Props) {
   const { user, logout } = useAuth();
   const profileQuery = useTeacherProfile();
   const profile = profileQuery.data;
-  const updateMutation = useTeacherProfileUpdateMutation(user?.userId || user?.id);
+  const updateMutation = useTeacherProfileUpdateMutation(
+    user?.userId || user?.id,
+  );
   const avatarMutation = useTeacherProfileAvatarMutation();
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
@@ -54,19 +57,33 @@ export function TeacherProfileScreen(_: Props) {
     setDepartment(profile?.department ?? "");
     setSpecialization(profile?.specialization ?? "");
     setEmployeeId(profile?.employeeId ?? "");
-  }, [profile?.address, profile?.contactNumber, profile?.department, profile?.employeeId, profile?.phone, profile?.specialization]);
+  }, [
+    profile?.address,
+    profile?.contactNumber,
+    profile?.department,
+    profile?.employeeId,
+    profile?.phone,
+    profile?.specialization,
+  ]);
 
   const fullName = useMemo(
-    () => [user?.firstName, user?.lastName].filter(Boolean).join(" ").trim() || user?.email || "Teacher",
+    () =>
+      [user?.firstName, user?.lastName].filter(Boolean).join(" ").trim() ||
+      user?.email ||
+      "Teacher",
     [user?.email, user?.firstName, user?.lastName],
   );
-  const avatarUri = resolveImageUri(profile?.profilePicture || user?.profilePicture);
+  const avatarUri = resolveImageUri(
+    profile?.profilePicture || user?.profilePicture,
+  );
 
   const saveProfile = async () => {
     try {
       const trimmedPhone = phone.trim();
-      const normPhone = trimmedPhone ? normalizePhilippinePhone(trimmedPhone) : undefined;
-      
+      const normPhone = trimmedPhone
+        ? normalizePhilippinePhone(trimmedPhone)
+        : undefined;
+
       if (trimmedPhone && !normPhone) {
         Alert.alert("Invalid Phone", "Use 09XXXXXXXXX or +639XXXXXXXXX.");
         return;
@@ -116,13 +133,18 @@ export function TeacherProfileScreen(_: Props) {
   return (
     <TeacherScreen
       title="Profile"
-      subtitle="Teacher profile fields now use the teacher profile API instead of the student endpoint."
       icon="account-circle-outline"
       refreshing={profileQuery.isRefetching}
       onRefresh={() => {
         void profileQuery.refetch();
       }}
     >
+      <TeacherContextStrip
+        title={fullName}
+        subtitle={user?.email}
+        status="Teacher"
+        icon="account-circle-outline"
+      />
       <View
         style={{
           marginHorizontal: 16,
@@ -136,7 +158,13 @@ export function TeacherProfileScreen(_: Props) {
         }}
       >
         <View style={{ height: 5, backgroundColor: theme.red }} />
-        <View style={{ paddingHorizontal: 18, paddingVertical: 18, alignItems: "center" }}>
+        <View
+          style={{
+            paddingHorizontal: 18,
+            paddingVertical: 18,
+            alignItems: "center",
+          }}
+        >
           <View
             style={{
               width: 84,
@@ -152,15 +180,39 @@ export function TeacherProfileScreen(_: Props) {
             }}
           >
             {avatarUri ? (
-              <Image source={{ uri: avatarUri }} style={{ width: "100%", height: "100%" }} />
+              <Image
+                source={{ uri: avatarUri }}
+                style={{ width: "100%", height: "100%" }}
+              />
             ) : (
-              <Text style={{ fontSize: 26, fontWeight: "800", color: theme.text }}>{fullName.slice(0, 2).toUpperCase()}</Text>
+              <Text
+                style={{ fontSize: 26, fontWeight: "800", color: theme.text }}
+              >
+                {fullName.slice(0, 2).toUpperCase()}
+              </Text>
             )}
           </View>
-          <Text style={{ marginTop: 12, fontSize: 16, fontWeight: "800", color: theme.text }}>{fullName}</Text>
-          <Text style={{ marginTop: 4, fontSize: 12, color: theme.muted }}>{user?.email}</Text>
+          <Text
+            style={{
+              marginTop: 12,
+              fontSize: 16,
+              fontWeight: "800",
+              color: theme.text,
+            }}
+          >
+            {fullName}
+          </Text>
+          <Text style={{ marginTop: 4, fontSize: 12, color: theme.muted }}>
+            {user?.email}
+          </Text>
           <View style={{ marginTop: 12 }}>
-            <TeacherActionButton label="Change photo" icon="image-edit-outline" tone="red" onPress={() => void uploadAvatar()} disabled={avatarMutation.isPending} />
+            <TeacherActionButton
+              label="Change photo"
+              icon="image-edit-outline"
+              tone="red"
+              onPress={() => void uploadAvatar()}
+              disabled={avatarMutation.isPending}
+            />
           </View>
         </View>
       </View>
@@ -171,14 +223,34 @@ export function TeacherProfileScreen(_: Props) {
         icon="card-account-phone-outline"
         expanded={expandedSection === "contact"}
         onToggle={() =>
-          setExpandedSection((current) => (current === "contact" ? null : "contact"))
+          setExpandedSection((current) =>
+            current === "contact" ? null : "contact",
+          )
         }
       >
         <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
-          <TeacherInlineField label="Phone" value={phone} onChangeText={setPhone} placeholder="09XXXXXXXXX" maxLength={13} />
-          <TeacherInlineField label="Address" value={address} onChangeText={setAddress} placeholder="Home address" multiline />
+          <TeacherInlineField
+            label="Phone"
+            value={phone}
+            onChangeText={setPhone}
+            placeholder="09XXXXXXXXX"
+            maxLength={13}
+          />
+          <TeacherInlineField
+            label="Address"
+            value={address}
+            onChangeText={setAddress}
+            placeholder="Home address"
+            multiline
+          />
           <View style={{ marginTop: 12, alignItems: "flex-start" }}>
-            <TeacherActionButton label="Save contact details" icon="content-save-outline" tone="red" onPress={() => void saveProfile()} disabled={updateMutation.isPending} />
+            <TeacherActionButton
+              label="Save contact details"
+              icon="content-save-outline"
+              tone="red"
+              onPress={() => void saveProfile()}
+              disabled={updateMutation.isPending}
+            />
           </View>
         </View>
       </TeacherAccordionSection>
@@ -195,11 +267,32 @@ export function TeacherProfileScreen(_: Props) {
         }
       >
         <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
-          <TeacherInlineField label="Department" value={department} onChangeText={setDepartment} placeholder="Department" />
-          <TeacherInlineField label="Specialization" value={specialization} onChangeText={setSpecialization} placeholder="Specialization" />
-          <TeacherInlineField label="Employee ID" value={employeeId} onChangeText={setEmployeeId} placeholder="Employee ID" />
+          <TeacherInlineField
+            label="Department"
+            value={department}
+            onChangeText={setDepartment}
+            placeholder="Department"
+          />
+          <TeacherInlineField
+            label="Specialization"
+            value={specialization}
+            onChangeText={setSpecialization}
+            placeholder="Specialization"
+          />
+          <TeacherInlineField
+            label="Employee ID"
+            value={employeeId}
+            onChangeText={setEmployeeId}
+            placeholder="Employee ID"
+          />
           <View style={{ marginTop: 12, alignItems: "flex-start" }}>
-            <TeacherActionButton label="Save professional details" icon="content-save-outline" tone="red" onPress={() => void saveProfile()} disabled={updateMutation.isPending} />
+            <TeacherActionButton
+              label="Save professional details"
+              icon="content-save-outline"
+              tone="red"
+              onPress={() => void saveProfile()}
+              disabled={updateMutation.isPending}
+            />
           </View>
         </View>
       </TeacherAccordionSection>
@@ -210,7 +303,9 @@ export function TeacherProfileScreen(_: Props) {
         icon="shield-lock-outline"
         expanded={expandedSection === "security"}
         onToggle={() =>
-          setExpandedSection((current) => (current === "security" ? null : "security"))
+          setExpandedSection((current) =>
+            current === "security" ? null : "security",
+          )
         }
       >
         <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
