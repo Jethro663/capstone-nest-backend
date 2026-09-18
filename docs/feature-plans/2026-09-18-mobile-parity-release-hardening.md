@@ -2,7 +2,7 @@
 
 Date: 2026-09-18
 
-Plan status: implementation source-complete; signed artifact, deployment, and physical-device evidence in progress
+Plan status: source and local Android artifact complete; CI, deployment, iOS publication, and physical-device evidence in progress
 
 Authoritative evidence: `docs/feature-analysis/2026-09-18-mobile-web-parity-design-release-audit.md`
 
@@ -18,8 +18,8 @@ The approved source work now covers every audit row. Automated source gates are 
 |---|---|---|
 | Governance and design truth | Source complete | Typed design registry accounts for all 72 reachable routes; administrator/teacher mappings no longer manufacture blanket alignment. Device visual acceptance is pending. |
 | Rich-text dependency | Source complete | Tiptap is upgraded to `3.31.3`, the generated editor is rebuilt, and its build/tests pass. Physical WebView authoring remains a device gate. |
-| Android trust and hardening | Source complete | Release signing fails closed, debug signing is rejected, cleartext and backup are disabled, and broad permissions/Expo OTA residue are removed. Signed build inspection and upgrade testing remain release gates. |
-| Platform-neutral releases | Source complete | Additive migration, Android aliases, real iOS decisions, monotonic build identity, immutable artifact rules, and workflow tests are implemented. Public registration is pending the artifacts. |
+| Android trust and hardening | Local artifact verified | Release signing fails closed, debug signing is rejected, cleartext and backup are disabled, and broad permissions/Expo OTA residue are removed. Build 47 is signed, aligned, arm64-only, and recorded in `docs/operations/mobile-release-evidence-2026-09-18.md`; public-byte and physical upgrade checks remain. |
+| Platform-neutral releases | Android artifact ready | Additive migration, Android aliases, real iOS decisions, monotonic build identity, immutable artifact rules, and workflow tests are implemented. Android registration waits for deployment/public-byte equality; iOS publication remains pending. |
 | Push and deep links | Source complete | Per-installation encrypted token lifecycle, queued delivery/receipts, kill switch, role-aware allowlist, deferred-auth routing, and private Android lock-screen presentation are implemented and tested. Terminated-device delivery remains a physical/runtime gate. |
 | Bounded reads and offline snapshots | Source complete | Student/teacher overview, calendar, and teacher-library read models replace audited fan-out paths; snapshots are read-only, allowlisted, user-scoped, stale-labeled, and purged on logout/account switch. The aggregate clients intentionally cut over directly rather than retain a dormant fan-out fallback that could recreate F-06; rollback is by deployment. |
 | Active design migration and cleanup | Source complete | The audited student deep-route family and teacher root family use current shared workspaces; constant old trees and proven-dormant screens are removed. Visual/device acceptance remains pending. |
