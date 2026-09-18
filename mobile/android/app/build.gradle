@@ -223,7 +223,7 @@ def verifyNexoraReleaseSigner = tasks.register("verifyNexoraReleaseSigner") {
     }
 }
 
-tasks.named("preReleaseBuild").configure {
+tasks.matching { task -> task.name == "preReleaseBuild" }.configureEach {
     dependsOn(verifyNexoraReleaseSigner)
 }
 

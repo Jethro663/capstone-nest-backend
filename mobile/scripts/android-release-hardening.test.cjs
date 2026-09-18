@@ -42,6 +42,8 @@ test("release signing fails closed instead of using the Android debug key", asyn
   assert.match(gradle, /debug\.keystore/);
   assert.match(gradle, /certificate-sha256/);
   assert.match(gradle, /GradleException/);
+  assert.doesNotMatch(gradle, /tasks\.named\(["']preReleaseBuild["']\)/);
+  assert.match(gradle, /tasks\.matching/);
 });
 
 test("binary release policy does not advertise an unowned Expo OTA channel", async () => {
