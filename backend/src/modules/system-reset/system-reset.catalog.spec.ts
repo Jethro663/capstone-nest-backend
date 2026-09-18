@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { getTableName, is, Table } from 'drizzle-orm';
 import * as schema from '../../drizzle/schema';
 import {
@@ -8,6 +10,22 @@ import {
 import { getDefaultAcademicPolicy } from '../academic-state/academic-policy';
 
 describe('system reset preservation contract', () => {
+  it('forward-migrates mobile tables with reset and legacy-release compatibility', () => {
+    const migration = readFileSync(
+      path.resolve(
+        __dirname,
+        '../../../drizzle/0036_mobile_release_reset_compatibility.sql',
+      ),
+      'utf8',
+    );
+
+    expect(migration).toContain('ON public.notification_devices');
+    expect(migration).toContain('nexora_reset_write_barrier');
+    expect(migration).toContain('sync_app_version_artifact_aliases');
+    expect(migration).toContain('NEW.apk_download_url');
+    expect(migration).toContain('NEW.artifact_download_url');
+  });
+
   it('classifies every schema table and migration ledger explicitly', () => {
     const names = Object.values(schema)
       .filter((value) => is(value, Table))

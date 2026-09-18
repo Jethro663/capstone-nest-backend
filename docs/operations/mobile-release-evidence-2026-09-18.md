@@ -50,13 +50,14 @@ The production keystore and credentials remain outside the repository with owner
 | Gate | Result |
 |---|---|
 | Mobile Jest | 141 suites, 802 tests passed |
-| Backend Jest | 178 suites, 1,796 tests passed |
+| Backend Jest | 178 suites, 1,797 tests passed |
 | Mobile typecheck/admin contract gate | Passed; 19 contracts across 57 layer checks |
-| Backend build | Passed; migration integrity reports 36 linear active migrations |
+| Backend build | Passed; migration integrity reports 37 linear active migrations |
 | Backend lint | Passed; 0 errors and 2,297 warnings under the 2,300 ceiling |
 | Expo dependency alignment | Passed |
 | Release/workflow Node tests | Passed, including signing, immutable Android manifest, iOS manifest/workflow, and rich-text generation contracts |
 | Migration forward/rollback | Passed in a disposable PostgreSQL database; platform-neutral backfill and `notification_devices` creation/removal verified |
+| System-reset integration | Passed after all 37 migrations; reset coordinator, write barriers, and admin erasure completed across 3 suites / 31 tests |
 | Production dependency audit | 24 remaining: 0 critical, 9 high, 15 moderate; breaking React Navigation 7 and Expo 57 paths remain separately documented |
 
 Expected error/warning logs emitted by failure-path unit tests and upstream Android deprecation warnings are not test failures. The build completed successfully.
@@ -81,4 +82,3 @@ These gates require CI/deployed state, service credentials, or physical hardware
 - Keep the prior artifact and policy record available; do not overwrite an existing build number with different bytes.
 - Backend push and offline snapshot behavior have server/client kill switches; durable inbox notifications remain authoritative if push is disabled.
 - Aggregate read models can be rolled back by deployment while the existing focused detail/mutation endpoints remain intact. The audited overview clients do not retain a hidden fan-out fallback that could recreate the request-burst problem.
-

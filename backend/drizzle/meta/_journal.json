@@ -253,6 +253,13 @@
       "when": 1789728060000,
       "tag": "0035_notification_devices",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1789743000000,
+      "tag": "0036_mobile_release_reset_compatibility",
+      "breakpoints": true
     }
   ]
 }
