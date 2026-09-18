@@ -1,8 +1,10 @@
 // @ts-nocheck
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
+import { Text } from "react-native";
 import {
   TeacherActionSheet,
+  TeacherCenteredDialog,
   TeacherBottomActionBar,
   TeacherContextStrip,
   TeacherFlatSection,
@@ -28,6 +30,8 @@ jest.mock("react-native", () => {
     ScrollView: component("ScrollView"),
     Text: component("Text"),
     View: component("View"),
+    KeyboardAvoidingView: component("KeyboardAvoidingView"),
+    Platform: { OS: "android" },
   };
 });
 
@@ -141,6 +145,24 @@ describe("teacher workspace primitives", () => {
     expect(renderer!.root.findByProps({ testID: "teacher-bottom-action-bar" }).props.style.paddingBottom).toBe(18);
     act(() => primary.props.onPress());
     expect(onPrimary).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders a centered scrollable dialog with accessible close and footer actions", () => {
+    const onClose = jest.fn();
+    let renderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        <TeacherCenteredDialog visible title="Review version" subtitle="Inspect before restore" onClose={onClose} footer={<Text>Restore version</Text>}>
+          <Text>Snapshot content</Text>
+        </TeacherCenteredDialog>,
+      );
+    });
+    expect(flattenText(renderer!.toJSON())).toContain("Snapshot content");
+    expect(flattenText(renderer!.toJSON())).toContain("Restore version");
+    const close = renderer!.root.findByProps({ accessibilityLabel: "Close Review version" });
+    expect(close.props.style.width).toBe(44);
+    act(() => close.props.onPress());
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it("switches accessible workspace tabs and renders one flat summary strip", () => {

@@ -12,6 +12,7 @@ import {
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { StudentRecentLessonsQueryDto } from './DTO/student-recent-lessons-query.dto';
+import { StorageService } from '../file-upload/storage/storage.service';
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -69,6 +70,16 @@ const mockLessonsService = {
   markLessonComplete: jest.fn(),
   isLessonCompleted: jest.fn(),
   getCompletedLessonsForClass: jest.fn(),
+  getLessonVersions: jest.fn(),
+  createManualVersion: jest.fn(),
+  getLessonVersionDetail: jest.fn(),
+  restoreLessonVersion: jest.fn(),
+  createLessonPreviewSession: jest.fn(),
+  getLessonByPreviewToken: jest.fn(),
+  getLessonPreviewFile: jest.fn(),
+};
+const mockStorageService = {
+  serveOrRedirect: jest.fn(),
 };
 
 // ─── Test suite ───────────────────────────────────────────────────────────────
@@ -81,7 +92,10 @@ describe('LessonsController', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [LessonsController],
-      providers: [{ provide: LessonsService, useValue: mockLessonsService }],
+      providers: [
+        { provide: LessonsService, useValue: mockLessonsService },
+        { provide: StorageService, useValue: mockStorageService },
+      ],
     }).compile();
 
     controller = module.get<LessonsController>(LessonsController);
@@ -252,10 +266,13 @@ describe('LessonsController', () => {
       expect(dto.limit).toBe(expected);
     });
 
-    it.each([0, 21, 1.5, 'not-a-number'])('rejects invalid limit %p', async (limit) => {
-      const dto = plainToInstance(StudentRecentLessonsQueryDto, { limit });
-      expect(await validate(dto)).not.toHaveLength(0);
-    });
+    it.each([0, 21, 1.5, 'not-a-number'])(
+      'rejects invalid limit %p',
+      async (limit) => {
+        const dto = plainToInstance(StudentRecentLessonsQueryDto, { limit });
+        expect(await validate(dto)).not.toHaveLength(0);
+      },
+    );
   });
 
   // ─── getDraftLessons ────────────────────────────────────────────────────────
@@ -322,6 +339,43 @@ describe('LessonsController', () => {
 
       expect(mockLessonsService.getLessonById).toHaveBeenCalledWith(LESSON_ID);
       expect(mockLessonsService.getLessonByIdForStudent).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('downloadLessonPreviewFile', () => {
+    it('serves only the scoped file returned by the lesson service', async () => {
+      const record = {
+        id: BLOCK_ID,
+        originalName: 'lesson\r\n-"diagram".png',
+        mimeType: 'image/png',
+        filePath: 'uploads/lesson-diagram.png',
+      };
+      mockLessonsService.getLessonPreviewFile.mockResolvedValue(record);
+      const response = { setHeader: jest.fn() };
+
+      await controller.downloadLessonPreviewFile(
+        'preview-token',
+        BLOCK_ID,
+        response as never,
+      );
+
+      expect(mockLessonsService.getLessonPreviewFile).toHaveBeenCalledWith(
+        'preview-token',
+        BLOCK_ID,
+      );
+      expect(response.setHeader).toHaveBeenCalledWith(
+        'Cache-Control',
+        'private, no-store',
+      );
+      expect(response.setHeader).toHaveBeenCalledWith(
+        'Content-Disposition',
+        'inline; filename="lesson-diagram.png"',
+      );
+      expect(mockStorageService.serveOrRedirect).toHaveBeenCalledWith(
+        response,
+        record,
+        'lesson-diagram.png',
+      );
     });
   });
 

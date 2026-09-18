@@ -139,3 +139,22 @@ export interface LessonVersion {
   createdByName?: string | null;
   createdAt: string;
 }
+
+export interface LessonVersionDetail extends LessonVersion {
+  snapshot: {
+    title?: string;
+    description?: string | null;
+    order?: number;
+    isDraft?: boolean;
+    classId?: string;
+    contentBlocks?: Array<Omit<ContentBlock, 'id' | 'lessonId'>>;
+  };
+  inspectedLessonUpdatedAt: string;
+  summary: {
+    titleChanged: boolean;
+    descriptionChanged: boolean;
+    publicationChanged: boolean;
+    currentBlockCount: number;
+    snapshotBlockCount: number;
+  };
+}

@@ -2,7 +2,9 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ConflictException,
   ForbiddenException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import {
   eq,
@@ -39,9 +41,12 @@ import {
   ReorderBlocksDto,
   ReorderLessonsDto,
 } from './DTO/lesson.dto';
+import { createCanonicalLessonBlock } from './lesson-block-defaults';
 import { RoleName } from '../auth/decorators/roles.decorator';
 import { sanitizeRichTextHtml } from '../../common/utils/rich-text-sanitizer';
 import { StudentLessonAccessService } from './student-lesson-access.service';
+import { LessonPreviewTokenService } from './lesson-preview-token.service';
+import { FileUploadService } from '../file-upload/file-upload.service';
 
 type LessonStatusFilter = 'all' | 'draft' | 'published';
 type GetLessonsByClassOptions = {
@@ -60,6 +65,8 @@ export class LessonsService {
     private readonly auditService: AuditService,
     private readonly ragIndexingService: RagIndexingService,
     private readonly studentLessonAccessService: StudentLessonAccessService,
+    private readonly lessonPreviewTokenService: LessonPreviewTokenService,
+    private readonly fileUploadService: FileUploadService,
   ) {}
 
   private get db() {
@@ -341,8 +348,9 @@ export class LessonsService {
     userId: string,
     type: 'auto' | 'manual' | 'restore',
     label?: string,
+    database: Pick<DatabaseService['db'], 'query' | 'insert'> = this.db,
   ) {
-    const lesson = await this.db.query.lessons.findFirst({
+    const lesson = await database.query.lessons.findFirst({
       where: eq(lessons.id, lessonId),
       with: {
         contentBlocks: {
@@ -355,14 +363,14 @@ export class LessonsService {
       throw new NotFoundException(`Lesson with ID "${lessonId}" not found`);
     }
 
-    const latestVersion = await this.db.query.lessonVersions?.findFirst?.({
+    const latestVersion = await database.query.lessonVersions?.findFirst?.({
       where: eq(lessonVersions.lessonId, lessonId),
       columns: { versionNumber: true },
       orderBy: (versions, { desc: byDesc }) => [byDesc(versions.versionNumber)],
     });
     const versionNumber = (latestVersion?.versionNumber ?? 0) + 1;
 
-    const insertBuilder = this.db.insert?.(lessonVersions);
+    const insertBuilder = database.insert?.(lessonVersions);
     if (!insertBuilder?.values) {
       return;
     }
@@ -677,7 +685,7 @@ export class LessonsService {
     return this.getLessonVersions(lessonId, userId, userRoles);
   }
 
-  async restoreLessonVersion(
+  async getLessonVersionDetail(
     lessonId: string,
     versionId: string,
     userId: string,
@@ -685,6 +693,118 @@ export class LessonsService {
   ) {
     const lesson = await this.getLessonById(lessonId);
     await this.assertTeacherOwnership(lesson.classId, userId, userRoles);
+    const version = await this.db.query.lessonVersions.findFirst({
+      where: and(
+        eq(lessonVersions.id, versionId),
+        eq(lessonVersions.lessonId, lessonId),
+      ),
+    });
+    if (!version) {
+      throw new NotFoundException(
+        `Lesson version "${versionId}" not found for lesson "${lessonId}"`,
+      );
+    }
+    const snapshot = (version.snapshot ?? {}) as {
+      title?: string;
+      description?: string | null;
+      isDraft?: boolean;
+      contentBlocks?: unknown[];
+    };
+    return {
+      ...version,
+      snapshot,
+      inspectedLessonUpdatedAt: new Date(lesson.updatedAt).toISOString(),
+      summary: {
+        titleChanged:
+          snapshot.title !== undefined && snapshot.title !== lesson.title,
+        descriptionChanged:
+          snapshot.description !== undefined &&
+          snapshot.description !== lesson.description,
+        publicationChanged:
+          snapshot.isDraft !== undefined && snapshot.isDraft !== lesson.isDraft,
+        currentBlockCount: lesson.contentBlocks?.length ?? 0,
+        snapshotBlockCount: snapshot.contentBlocks?.length ?? 0,
+      },
+    };
+  }
+
+  async createLessonPreviewSession(
+    lessonId: string,
+    userId: string,
+    userRoles: string[],
+  ) {
+    const lesson = await this.getLessonById(lessonId);
+    await this.assertTeacherOwnership(lesson.classId, userId, userRoles);
+    const frontendUrl = process.env.FRONTEND_URL?.trim().replace(/\/$/, '');
+    if (!frontendUrl || !/^https?:\/\//i.test(frontendUrl)) {
+      throw new ServiceUnavailableException(
+        'Lesson web preview is not configured',
+      );
+    }
+    const issued = this.lessonPreviewTokenService.issue({
+      lessonId,
+      userId,
+      roles: userRoles,
+    });
+    await this.auditService.log({
+      actorId: userId,
+      action: 'lesson.preview.session_created',
+      targetType: 'lesson',
+      targetId: lessonId,
+      metadata: { expiresAt: issued.expiresAt },
+    });
+    return {
+      url: `${frontendUrl}/lesson-preview/${encodeURIComponent(issued.token)}`,
+      expiresAt: issued.expiresAt,
+    };
+  }
+
+  async getLessonByPreviewToken(token: string) {
+    const payload = this.lessonPreviewTokenService.verify(token);
+    return this.getLessonById(payload.lessonId);
+  }
+
+  async getLessonPreviewFile(token: string, fileId: string) {
+    const payload = this.lessonPreviewTokenService.verify(token);
+    const lesson = await this.getLessonById(payload.lessonId);
+    const isReferenced = (lesson.contentBlocks ?? []).some((block) => {
+      const content =
+        block.content && typeof block.content === 'object'
+          ? (block.content as Record<string, unknown>)
+          : {};
+      const metadata =
+        block.metadata && typeof block.metadata === 'object'
+          ? (block.metadata as Record<string, unknown>)
+          : {};
+      return content.fileId === fileId || metadata.fileId === fileId;
+    });
+    if (!isReferenced) {
+      throw new NotFoundException('Lesson preview file not found');
+    }
+    return this.fileUploadService.getFileForDownload(fileId, {
+      id: payload.userId,
+      email: '',
+      roles: payload.roles,
+    });
+  }
+
+  async restoreLessonVersion(
+    lessonId: string,
+    versionId: string,
+    userId: string,
+    userRoles: string[],
+    expectedLessonUpdatedAt: string,
+  ) {
+    const lesson = await this.getLessonById(lessonId);
+    await this.assertTeacherOwnership(lesson.classId, userId, userRoles);
+    if (
+      new Date(lesson.updatedAt).getTime() !==
+      new Date(expectedLessonUpdatedAt).getTime()
+    ) {
+      throw new ConflictException(
+        'Lesson changed after this version was inspected. Refresh and review it again.',
+      );
+    }
 
     const version = await this.db.query.lessonVersions.findFirst({
       where: and(
@@ -712,14 +832,30 @@ export class LessonsService {
       }>;
     };
 
-    await this.createLessonVersionSnapshot(
-      lessonId,
-      userId,
-      'restore',
-      `Before restore to v${version.versionNumber}`,
-    );
-
     await this.db.transaction(async (tx) => {
+      const [lockedLesson] = await tx
+        .select({ updatedAt: lessons.updatedAt })
+        .from(lessons)
+        .where(eq(lessons.id, lessonId))
+        .for('update');
+      if (
+        !lockedLesson ||
+        new Date(lockedLesson.updatedAt).getTime() !==
+          new Date(expectedLessonUpdatedAt).getTime()
+      ) {
+        throw new ConflictException(
+          'Lesson changed after this version was inspected. Refresh and review it again.',
+        );
+      }
+
+      await this.createLessonVersionSnapshot(
+        lessonId,
+        userId,
+        'restore',
+        `Before restore to v${version.versionNumber}`,
+        tx,
+      );
+
       await tx
         .update(lessons)
         .set({
@@ -1106,11 +1242,20 @@ export class LessonsService {
       'auto',
       'Auto snapshot before block add',
     );
+    const canonical = createCanonicalLessonBlock(createBlockDto.type);
+    const content =
+      createBlockDto.content === undefined
+        ? canonical.content
+        : createBlockDto.content;
+    const metadata = {
+      ...canonical.metadata,
+      ...(createBlockDto.metadata ?? {}),
+    };
     const { sanitizedContent, sanitizedMetadata } =
       this.sanitizeLessonBlockForStorage(
         createBlockDto.type,
-        createBlockDto.content,
-        createBlockDto.metadata,
+        content,
+        metadata,
       );
 
     const [newBlock] = await this.db

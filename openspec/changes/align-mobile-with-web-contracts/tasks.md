@@ -83,3 +83,14 @@
 - 11.3 remains open only for authenticated/smoke/e2e evidence: web TypeScript, lint, production build, and all 157 suites / 660 tests passed, but `127.0.0.1:3000/api/health/live` was unavailable.
 - 11.4 remains open only for authenticated device coverage: mobile TypeScript, Android Expo production export, and all 57 suites / 291 tests passed. Mobile has no repository lint script.
 - 11.5 remains open because no disposable backend/Redis stack, authenticated device session, or live AI provider/worker was available for a fresh cross-client run. This is an evidence gate, not a known contract failure.
+
+## 12. Teacher module and lesson authoring parity
+
+- [x] 12.1 Add canonical backend and web lesson-block defaults, accept omitted create content, and prove Video/Divider no longer fail validation.
+- [x] 12.2 Add owned version-detail, atomic stale-safe restore, and five-minute lesson/file-scoped exact-web-preview contracts with security and failure tests.
+- [x] 12.3 Add the Next.js preview route using the existing student lesson renderer with loading, expiry, protected-asset, and failure coverage.
+- [x] 12.4 Add typed mobile block models, shared rich-text editing, and one native renderer used by both student and teacher surfaces.
+- [x] 12.5 Replace the legacy mobile editor with Details/Content workspaces, all eleven palette choices, typed focused editing, and boundary insertion.
+- [x] 12.6 Add Mobile/Web/Compare teacher preview and inspected confirmation-first version restoration.
+- [x] 12.7 Redesign module detail around the outline with visible Settings, Manage, per-section Add content, Arrange, and centered dialogs.
+- [ ] 12.8 Run affected backend/web/mobile verification, package Android `0.1.45` / `46`, and record exact-SHA CI, deployment, live artifact, and device evidence boundaries.

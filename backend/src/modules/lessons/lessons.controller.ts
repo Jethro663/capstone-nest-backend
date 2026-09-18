@@ -10,7 +10,11 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Header,
+  ParseUUIDPipe,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { LessonsService } from './lessons.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -27,8 +31,11 @@ import {
   BulkLessonDraftStateDto,
   BulkLessonIdsDto,
   CreateLessonVersionDto,
+  RestoreLessonVersionDto,
 } from './DTO/lesson.dto';
 import { StudentRecentLessonsQueryDto } from './DTO/student-recent-lessons-query.dto';
+import { Public } from '../auth/decorators/public.decorator';
+import { StorageService } from '../file-upload/storage/storage.service';
 
 function isStudentOnly(roles: RoleName[] = []) {
   return (
@@ -43,7 +50,10 @@ function isStudentOnly(roles: RoleName[] = []) {
 @Controller('lessons')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class LessonsController {
-  constructor(private lessonsService: LessonsService) {}
+  constructor(
+    private lessonsService: LessonsService,
+    private readonly storageService: StorageService,
+  ) {}
 
   /**
    * Get all lessons for a class (ordered).
@@ -252,11 +262,80 @@ export class LessonsController {
     };
   }
 
+  @Get(':id/versions/:versionId')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  async getLessonVersionDetail(
+    @Param('id') lessonId: string,
+    @Param('versionId') versionId: string,
+    @CurrentUser() user: any,
+  ) {
+    const data = await this.lessonsService.getLessonVersionDetail(
+      lessonId,
+      versionId,
+      user.userId,
+      user.roles ?? [],
+    );
+    return {
+      success: true,
+      message: 'Lesson version retrieved successfully',
+      data,
+    };
+  }
+
+  @Post(':id/preview-session')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  async createLessonPreviewSession(
+    @Param('id') lessonId: string,
+    @CurrentUser() user: any,
+  ) {
+    const data = await this.lessonsService.createLessonPreviewSession(
+      lessonId,
+      user.userId,
+      user.roles ?? [],
+    );
+    return {
+      success: true,
+      message: 'Lesson preview session created successfully',
+      data,
+    };
+  }
+
+  @Get('preview/:token')
+  @Public()
+  @Header('Cache-Control', 'no-store')
+  async getLessonPreview(@Param('token') token: string) {
+    const data = await this.lessonsService.getLessonByPreviewToken(token);
+    return {
+      success: true,
+      message: 'Lesson preview retrieved successfully',
+      data,
+    };
+  }
+
+  @Get('preview/:token/files/:fileId')
+  @Public()
+  async downloadLessonPreviewFile(
+    @Param('token') token: string,
+    @Param('fileId', ParseUUIDPipe) fileId: string,
+    @Res() res: Response,
+  ) {
+    const record = await this.lessonsService.getLessonPreviewFile(
+      token,
+      fileId,
+    );
+    const safeName = record.originalName.replace(/[\r\n"]/g, '');
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('Content-Type', record.mimeType);
+    res.setHeader('Content-Disposition', `inline; filename="${safeName}"`);
+    await this.storageService.serveOrRedirect(res, record, safeName);
+  }
+
   @Post(':id/versions/:versionId/restore')
   @Roles(RoleName.Admin, RoleName.Teacher)
   async restoreLessonVersion(
     @Param('id') lessonId: string,
     @Param('versionId') versionId: string,
+    @Body() dto: RestoreLessonVersionDto,
     @CurrentUser() user: any,
   ) {
     const data = await this.lessonsService.restoreLessonVersion(
@@ -264,6 +343,7 @@ export class LessonsController {
       versionId,
       user.userId,
       user.roles ?? [],
+      dto.expectedLessonUpdatedAt,
     );
     return {
       success: true,

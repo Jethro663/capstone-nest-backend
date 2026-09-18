@@ -64,13 +64,18 @@ function SecureLessonImage({
   fallbackUrl,
   alt,
   displayScale = 100,
+  previewFileUrl,
 }: {
   fileId?: string;
   fallbackUrl?: string;
   alt: string;
   displayScale?: number;
+  previewFileUrl?: string;
 }) {
-  const { objectUrl, loading, failed } = useLibraryFileObjectUrl(fileId);
+  const { objectUrl, loading, failed } = useLibraryFileObjectUrl(
+    fileId,
+    previewFileUrl,
+  );
 
   if (fileId && loading) {
     return (
@@ -283,7 +288,13 @@ function LessonCheckpoint({
   );
 }
 
-function LessonFileBlockCard({ block }: { block: ContentBlock }) {
+function LessonFileBlockCard({
+  block,
+  previewFileUrl,
+}: {
+  block: ContentBlock;
+  previewFileUrl?: string;
+}) {
   const [viewerOpen, setViewerOpen] = useState(false);
   const file = getLessonFileBlockModel(block);
   const isDeck = isPptxFile({
@@ -291,12 +302,15 @@ function LessonFileBlockCard({ block }: { block: ContentBlock }) {
     mimeType: file.mimeType,
   });
 
-  const loadDeck = useCallback(async () => {
+  const loadFile = useCallback(async () => {
     if (!file.fileId) {
       throw new Error('PowerPoint file is unavailable.');
     }
-    return fileService.download(file.fileId);
-  }, [file.fileId]);
+    if (!previewFileUrl) return fileService.download(file.fileId);
+    const response = await fetch(previewFileUrl, { cache: 'no-store' });
+    if (!response.ok) throw new Error('Preview file unavailable');
+    return response.blob();
+  }, [file.fileId, previewFileUrl]);
 
   const downloadFile = useCallback(
     async (mode: 'preview' | 'download') => {
@@ -311,7 +325,7 @@ function LessonFileBlockCard({ block }: { block: ContentBlock }) {
         return;
       }
       try {
-        const blob = await fileService.download(file.fileId);
+        const blob = await loadFile();
         const url = URL.createObjectURL(blob);
         if (mode === 'preview') {
           window.open(url, '_blank', 'noopener,noreferrer');
@@ -329,7 +343,7 @@ function LessonFileBlockCard({ block }: { block: ContentBlock }) {
         toast.error('Unable to open this lesson file.');
       }
     },
-    [file.fileId, file.fileName, file.legacyUrl, isDeck],
+    [file.fileId, file.fileName, file.legacyUrl, isDeck, loadFile],
   );
 
   return (
@@ -363,7 +377,7 @@ function LessonFileBlockCard({ block }: { block: ContentBlock }) {
           <PptxDeckViewer
             title={file.fileName || 'PowerPoint deck'}
             subtitle="Lesson PowerPoint"
-            loadFile={loadDeck}
+            loadFile={loadFile}
             onDownload={() => downloadFile('download')}
           />
         </div>
@@ -377,11 +391,13 @@ export function LessonBlockStudentRenderer({
   checkpointSelections = {},
   checkpointResults = {},
   onCheckpointAnswer,
+  previewFileBaseUrl,
 }: {
   block: ContentBlock;
   checkpointSelections?: LessonCheckpointSelections;
   checkpointResults?: LessonCheckpointResults;
   onCheckpointAnswer?: (blockId: string, selectedChoiceIds: string[], isCorrect: boolean) => void;
+  previewFileBaseUrl?: string;
 }) {
   const normalizedBlock = normalizeStructuredLessonBlock(block);
   const heading = getStructuredLessonBlockHeading(normalizedBlock);
@@ -512,6 +528,11 @@ export function LessonBlockStudentRenderer({
           fallbackUrl={image.legacyUrl}
           alt={image.caption || image.fileName || 'Lesson image'}
           displayScale={image.displayScale}
+          previewFileUrl={
+            image.fileId && previewFileBaseUrl
+              ? `${previewFileBaseUrl}/${encodeURIComponent(image.fileId)}`
+              : undefined
+          }
         />
         {image.caption ? (
           <figcaption className="mt-3 text-center text-sm font-semibold text-[var(--student-text-muted)]">{image.caption}</figcaption>
@@ -549,7 +570,17 @@ export function LessonBlockStudentRenderer({
   }
 
   if (normalizedBlock.type === 'file') {
-    return <LessonFileBlockCard block={normalizedBlock} />;
+    const file = getLessonFileBlockModel(normalizedBlock);
+    return (
+      <LessonFileBlockCard
+        block={normalizedBlock}
+        previewFileUrl={
+          file.fileId && previewFileBaseUrl
+            ? `${previewFileBaseUrl}/${encodeURIComponent(file.fileId)}`
+            : undefined
+        }
+      />
+    );
   }
 
   if (normalizedBlock.type === 'divider') {

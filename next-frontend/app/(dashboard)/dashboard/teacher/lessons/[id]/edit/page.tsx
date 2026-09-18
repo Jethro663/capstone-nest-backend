@@ -803,25 +803,40 @@ export default function LessonEditorPage() {
 
   const handleRestoreVersion = async () => {
     if (!selectedVersionId) return;
-    setConfirmation({
-      title: 'Restore selected lesson snapshot?',
-      description:
-        'This will replace current lesson details and content blocks with the selected snapshot.',
-      confirmLabel: 'Restore Snapshot',
-      tone: 'danger',
-      onConfirm: async () => {
-        try {
-          setRestoringVersion(true);
-          await lessonService.restoreVersion(lessonId, selectedVersionId);
-          await fetchData();
-          toast.success('Lesson restored from snapshot');
-        } catch {
-          toast.error('Failed to restore lesson snapshot');
-        } finally {
-          setRestoringVersion(false);
-        }
-      },
-    });
+    try {
+      setRestoringVersion(true);
+      const detailResponse = await lessonService.getVersionDetail(lessonId, selectedVersionId);
+      const detail = detailResponse.data;
+      const changed = [
+        detail.summary.titleChanged ? 'title' : null,
+        detail.summary.descriptionChanged ? 'description' : null,
+        detail.summary.publicationChanged ? 'publication state' : null,
+      ].filter(Boolean);
+      setConfirmation({
+        title: `Restore version ${detail.versionNumber}?`,
+        description: `${changed.length ? `This changes the ${changed.join(', ')}. ` : ''}${detail.summary.currentBlockCount} current blocks will be replaced by ${detail.summary.snapshotBlockCount} snapshot blocks.`,
+        confirmLabel: 'Restore Reviewed Snapshot',
+        tone: 'danger',
+        onConfirm: async () => {
+          try {
+            setRestoringVersion(true);
+            await lessonService.restoreVersion(lessonId, selectedVersionId, {
+              expectedLessonUpdatedAt: detail.inspectedLessonUpdatedAt,
+            });
+            await fetchData();
+            toast.success('Lesson restored from snapshot');
+          } catch {
+            toast.error('Lesson changed or the snapshot could not be restored. Refresh and review it again.');
+          } finally {
+            setRestoringVersion(false);
+          }
+        },
+      });
+    } catch {
+      toast.error('Failed to inspect lesson snapshot');
+    } finally {
+      setRestoringVersion(false);
+    }
   };
 
   if (loading) {
@@ -1377,5 +1392,4 @@ export default function LessonEditorPage() {
     </>
   );
 }
-
 

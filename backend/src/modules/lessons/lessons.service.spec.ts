@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
@@ -10,6 +11,8 @@ import { RoleName } from '../auth/decorators/roles.decorator';
 import { AuditService } from '../audit/audit.service';
 import { RagIndexingService } from '../rag/rag-indexing.service';
 import { StudentLessonAccessService } from './student-lesson-access.service';
+import { LessonPreviewTokenService } from './lesson-preview-token.service';
+import { FileUploadService } from '../file-upload/file-upload.service';
 
 // ─── Fixture data ────────────────────────────────────────────────────────────
 
@@ -132,6 +135,14 @@ function mockSelectWhere(db: any, rows: any[]) {
   db.select.mockReturnValueOnce({ from });
 }
 
+/** Chains select({}).from().where().for('update') → resolves with `rows`. */
+function mockSelectForUpdate(db: any, rows: any[]) {
+  const lock = jest.fn().mockResolvedValue(rows);
+  const where = jest.fn().mockReturnValue({ for: lock });
+  const from = jest.fn().mockReturnValue({ where });
+  db.select.mockReturnValueOnce({ from });
+}
+
 // ─── Test suite ──────────────────────────────────────────────────────────────
 
 describe('LessonsService', () => {
@@ -145,6 +156,13 @@ describe('LessonsService', () => {
     getAccessibleLessonIdsForClass: jest.fn(),
     getRecentLessons: jest.fn(),
   };
+  const mockLessonPreviewTokenService = {
+    issue: jest.fn(),
+    verify: jest.fn(),
+  };
+  const mockFileUploadService = {
+    getFileForDownload: jest.fn(),
+  };
 
   beforeEach(async () => {
     db = buildMockDb();
@@ -153,9 +171,9 @@ describe('LessonsService', () => {
       classId: CLASS_ID,
       moduleId: 'module-1',
     });
-    mockStudentLessonAccessService.getAccessibleLessonIdsForClass.mockResolvedValue([
-      LESSON_ID,
-    ]);
+    mockStudentLessonAccessService.getAccessibleLessonIdsForClass.mockResolvedValue(
+      [LESSON_ID],
+    );
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -177,6 +195,14 @@ describe('LessonsService', () => {
         {
           provide: StudentLessonAccessService,
           useValue: mockStudentLessonAccessService,
+        },
+        {
+          provide: LessonPreviewTokenService,
+          useValue: mockLessonPreviewTokenService,
+        },
+        {
+          provide: FileUploadService,
+          useValue: mockFileUploadService,
         },
       ],
     }).compile();
@@ -282,13 +308,16 @@ describe('LessonsService', () => {
           updatedAt: '2026-08-29T04:00:00.000Z',
         },
       ];
-      mockStudentLessonAccessService.getRecentLessons.mockResolvedValueOnce(rows);
-
-      await expect(service.getRecentLessons(STUDENT_ID, 4)).resolves.toEqual(rows);
-      expect(mockStudentLessonAccessService.getRecentLessons).toHaveBeenCalledWith(
-        STUDENT_ID,
-        4,
+      mockStudentLessonAccessService.getRecentLessons.mockResolvedValueOnce(
+        rows,
       );
+
+      await expect(service.getRecentLessons(STUDENT_ID, 4)).resolves.toEqual(
+        rows,
+      );
+      expect(
+        mockStudentLessonAccessService.getRecentLessons,
+      ).toHaveBeenCalledWith(STUDENT_ID, 4);
     });
   });
 
@@ -609,6 +638,39 @@ describe('LessonsService', () => {
         }),
       );
     });
+
+    it('fills omitted video content with the canonical storage shape', async () => {
+      db.query.lessons.findFirst.mockResolvedValue(MOCK_LESSON);
+      db.query.classes.findFirst.mockResolvedValue(MOCK_CLASS);
+
+      const snapshotReturning = jest.fn().mockResolvedValue([]);
+      const snapshotValues = jest
+        .fn()
+        .mockReturnValue({ returning: snapshotReturning });
+      const blockReturning = jest
+        .fn()
+        .mockResolvedValue([{ ...MOCK_BLOCK, type: 'video' }]);
+      const blockValues = jest
+        .fn()
+        .mockReturnValue({ returning: blockReturning });
+      db.insert
+        .mockReturnValueOnce({ values: snapshotValues })
+        .mockReturnValueOnce({ values: blockValues });
+
+      await service.addContentBlock(
+        { lessonId: LESSON_ID, type: 'video', order: 2 } as any,
+        TEACHER_ID,
+        [RoleName.Teacher],
+      );
+
+      expect(blockValues).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'video',
+          content: { url: '', caption: '' },
+          metadata: {},
+        }),
+      );
+    });
   });
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -715,6 +777,91 @@ describe('LessonsService', () => {
   });
 
   describe('restoreLessonVersion', () => {
+    it('rejects a stale inspected timestamp before creating any snapshot or write', async () => {
+      db.query.lessons.findFirst.mockResolvedValue(MOCK_LESSON);
+      db.query.classes.findFirst.mockResolvedValue(MOCK_CLASS);
+
+      await expect(
+        service.restoreLessonVersion(
+          LESSON_ID,
+          'version-1',
+          TEACHER_ID,
+          [RoleName.Teacher],
+          '2025-12-31T23:59:59.000Z',
+        ),
+      ).rejects.toThrow(ConflictException);
+
+      expect(db.query.lessonVersions.findFirst).not.toHaveBeenCalled();
+      expect(db.transaction).not.toHaveBeenCalled();
+      expect(db.insert).not.toHaveBeenCalled();
+    });
+
+    it('rejects a concurrent edit that lands after the initial version review', async () => {
+      db.query.lessons.findFirst.mockResolvedValue(MOCK_LESSON);
+      db.query.classes.findFirst.mockResolvedValue(MOCK_CLASS);
+      db.query.lessonVersions.findFirst.mockResolvedValue({
+        id: 'version-1',
+        lessonId: LESSON_ID,
+        versionNumber: 2,
+        snapshot: { title: 'Earlier title', contentBlocks: [] },
+      });
+      mockSelectForUpdate(db, [
+        { updatedAt: new Date('2026-01-01T00:00:01.000Z') },
+      ]);
+
+      await expect(
+        service.restoreLessonVersion(
+          LESSON_ID,
+          'version-1',
+          TEACHER_ID,
+          [RoleName.Teacher],
+          MOCK_LESSON.updatedAt.toISOString(),
+        ),
+      ).rejects.toThrow(ConflictException);
+
+      expect(db.insert).not.toHaveBeenCalled();
+      expect(db.delete).not.toHaveBeenCalled();
+    });
+
+    it('returns the selected snapshot with a change summary before restore', async () => {
+      db.query.lessons.findFirst.mockResolvedValue(MOCK_LESSON);
+      db.query.classes.findFirst.mockResolvedValue(MOCK_CLASS);
+      db.query.lessonVersions.findFirst.mockResolvedValue({
+        id: 'version-1',
+        lessonId: LESSON_ID,
+        versionNumber: 2,
+        type: 'manual',
+        label: 'Before rewrite',
+        createdBy: TEACHER_ID,
+        createdAt: new Date('2026-01-02T00:00:00.000Z'),
+        snapshot: {
+          title: 'Earlier title',
+          description: 'Earlier description',
+          isDraft: true,
+          contentBlocks: [],
+        },
+      });
+
+      const detail = await service.getLessonVersionDetail(
+        LESSON_ID,
+        'version-1',
+        TEACHER_ID,
+        [RoleName.Teacher],
+      );
+
+      expect(detail).toMatchObject({
+        id: 'version-1',
+        inspectedLessonUpdatedAt: '2026-01-01T00:00:00.000Z',
+        summary: {
+          titleChanged: true,
+          descriptionChanged: true,
+          publicationChanged: true,
+          currentBlockCount: 1,
+          snapshotBlockCount: 0,
+        },
+      });
+    });
+
     it('restores structured lesson block snapshots with content and metadata intact', async () => {
       const snapshot = {
         title: 'Restored Lesson',
@@ -772,6 +919,7 @@ describe('LessonsService', () => {
       db.insert
         .mockReturnValueOnce({ values: snapshotValues })
         .mockReturnValueOnce({ values: restoredBlocksValues });
+      mockSelectForUpdate(db, [{ updatedAt: MOCK_LESSON.updatedAt }]);
       mockUpdate(db);
       mockDelete(db);
 
@@ -780,6 +928,7 @@ describe('LessonsService', () => {
         'version-1',
         TEACHER_ID,
         [RoleName.Teacher],
+        MOCK_LESSON.updatedAt.toISOString(),
       );
 
       expect(restoredBlocksValues).toHaveBeenCalledWith(
@@ -795,6 +944,60 @@ describe('LessonsService', () => {
         ]),
       );
       expect(result.contentBlocks).toEqual(snapshot.contentBlocks);
+    });
+  });
+
+  describe('getLessonPreviewFile', () => {
+    it('only downloads a file referenced by the scoped preview lesson', async () => {
+      mockLessonPreviewTokenService.verify.mockReturnValue({
+        lessonId: LESSON_ID,
+        userId: TEACHER_ID,
+        roles: [RoleName.Teacher],
+      });
+      db.query.lessons.findFirst.mockResolvedValue({
+        ...MOCK_LESSON,
+        contentBlocks: [
+          {
+            ...MOCK_BLOCK,
+            type: 'image',
+            content: { fileId: '00000000-0000-0000-0000-000000000099' },
+          },
+        ],
+      });
+      const fileRecord = {
+        id: '00000000-0000-0000-0000-000000000099',
+        originalName: 'diagram.png',
+        mimeType: 'image/png',
+      };
+      mockFileUploadService.getFileForDownload.mockResolvedValue(fileRecord);
+
+      await expect(
+        service.getLessonPreviewFile(
+          'preview-token',
+          '00000000-0000-0000-0000-000000000099',
+        ),
+      ).resolves.toEqual(fileRecord);
+      expect(mockFileUploadService.getFileForDownload).toHaveBeenCalledWith(
+        '00000000-0000-0000-0000-000000000099',
+        { id: TEACHER_ID, email: '', roles: [RoleName.Teacher] },
+      );
+    });
+
+    it('rejects an arbitrary file that is not referenced by the preview lesson', async () => {
+      mockLessonPreviewTokenService.verify.mockReturnValue({
+        lessonId: LESSON_ID,
+        userId: TEACHER_ID,
+        roles: [RoleName.Teacher],
+      });
+      db.query.lessons.findFirst.mockResolvedValue(MOCK_LESSON);
+
+      await expect(
+        service.getLessonPreviewFile(
+          'preview-token',
+          '00000000-0000-0000-0000-000000000099',
+        ),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockFileUploadService.getFileForDownload).not.toHaveBeenCalled();
     });
   });
 

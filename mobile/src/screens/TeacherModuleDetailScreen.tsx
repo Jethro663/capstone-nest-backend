@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useEffect, useState } from "react";
 import * as ImagePicker from "expo-image-picker";
 import {
@@ -36,9 +36,9 @@ import {
 import {
   TeacherActionSheet,
   TeacherBottomActionBar,
+  TeacherCenteredDialog,
   TeacherContextStrip,
   TeacherFlatSection,
-  TeacherQuickActionRail,
 } from "../components/teacher/TeacherWorkspacePrimitives";
 
 type Props = NativeStackScreenProps<RootStackParamList, "TeacherModuleDetail">;
@@ -63,6 +63,7 @@ export function TeacherModuleDetailScreen({ navigation, route }: Props) {
   const [expandedSectionIds, setExpandedSectionIds] = useState<string[]>([]);
   const [managingSection, setManagingSection] = useState<{ id: string; title: string; index: number } | null>(null);
   const [managingItem, setManagingItem] = useState<{ id: string; sectionId: string; title: string; index: number } | null>(null);
+  const [arrangeMode, setArrangeMode] = useState(false);
 
   const moduleQuery = useModuleDetail(classId, moduleId);
   const moduleUpdateMutation = useTeacherModuleUpdateMutation(classId, moduleId);
@@ -304,14 +305,11 @@ export function TeacherModuleDetailScreen({ navigation, route }: Props) {
             title={module.title}
             subtitle={`${module.sections?.length ?? 0} sections · ${module.isVisible === false ? "Hidden" : "Visible"}`}
             status={module.isLocked ? "Locked" : "Open"}
+            statusPlacement="leading"
             icon="view-module-outline"
+            action={<TeacherActionButton label="Module settings" icon="tune-variant" tone="blue" onPress={() => setModuleControlsVisible(true)} />}
           />
-          <TeacherQuickActionRail
-            actions={[
-              { label: "Module settings", icon: "tune-variant", tone: "blue", onPress: () => setModuleControlsVisible(true) },
-            ]}
-          />
-          <TeacherFlatSection title="Module outline" subtitle="Expand a section to open its lessons, assessments, and files.">
+          <TeacherFlatSection title="Module outline" subtitle="Expand a section to open its lessons, assessments, and files." action={<TeacherActionButton label={arrangeMode ? "Done arranging" : "Arrange"} icon={arrangeMode ? "check" : "sort"} tone={arrangeMode ? "green" : "neutral"} onPress={() => setArrangeMode((current) => !current)} />}>
             {module.sections?.length ? (
               module.sections.map((section, sIndex) => (
                 <TeacherAccordionSection
@@ -323,14 +321,8 @@ export function TeacherModuleDetailScreen({ navigation, route }: Props) {
                   expanded={expandedSectionIds.includes(section.id)}
                   onToggle={() => setExpandedSectionIds((current) => current.includes(section.id) ? current.filter((id) => id !== section.id) : [...current, section.id])}
                   action={
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={`Manage ${section.title}`}
-                      onPress={() => setManagingSection({ id: section.id, title: section.title, index: sIndex })}
-                      style={{ width: 44, height: 44, borderRadius: 10, alignItems: "center", justifyContent: "center" }}
-                    >
-                      <MaterialCommunityIcons name="dots-horizontal" size={20} color={theme.muted} />
-                    </Pressable>
+                    arrangeMode ? <View style={{ flexDirection: "row", gap: 4 }}><Pressable accessibilityRole="button" accessibilityLabel={`Move ${section.title} up`} disabled={sIndex === 0} onPress={() => void moveSection(sIndex, "up")} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center", opacity: sIndex === 0 ? 0.35 : 1 }}><MaterialCommunityIcons name="arrow-up" size={19} color={theme.muted} /></Pressable><Pressable accessibilityRole="button" accessibilityLabel={`Move ${section.title} down`} disabled={sIndex === module.sections.length - 1} onPress={() => void moveSection(sIndex, "down")} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center", opacity: sIndex === module.sections.length - 1 ? 0.35 : 1 }}><MaterialCommunityIcons name="arrow-down" size={19} color={theme.muted} /></Pressable></View>
+                      : <TeacherActionButton label="Manage section" icon="pencil-outline" tone="neutral" onPress={() => setManagingSection({ id: section.id, title: section.title, index: sIndex })} />
                   }
                 >
                   {section.items.length ? (
@@ -353,21 +345,16 @@ export function TeacherModuleDetailScreen({ navigation, route }: Props) {
                           subtitle={`${itemSubtitle} · ${item.isVisible === false ? "Hidden" : "Visible"}`}
                           onPress={() => void openItem(item)}
                           right={
-                            <Pressable
-                              accessibilityRole="button"
-                              accessibilityLabel={`Manage ${itemTitle}`}
-                              onPress={() => setManagingItem({ id: item.id, sectionId: section.id, title: itemTitle, index: iIndex })}
-                              style={{ width: 44, height: 44, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: theme.active }}
-                            >
-                              <MaterialCommunityIcons name="dots-horizontal" size={18} color={theme.muted} />
-                            </Pressable>
+                            arrangeMode ? <View style={{ flexDirection: "row" }}><Pressable accessibilityRole="button" accessibilityLabel={`Move ${itemTitle} up`} disabled={iIndex === 0} onPress={() => void moveItem(section.id, section.items, iIndex, "up")} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center", opacity: iIndex === 0 ? 0.35 : 1 }}><MaterialCommunityIcons name="arrow-up" size={18} color={theme.muted} /></Pressable><Pressable accessibilityRole="button" accessibilityLabel={`Move ${itemTitle} down`} disabled={iIndex === section.items.length - 1} onPress={() => void moveItem(section.id, section.items, iIndex, "down")} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center", opacity: iIndex === section.items.length - 1 ? 0.35 : 1 }}><MaterialCommunityIcons name="arrow-down" size={18} color={theme.muted} /></Pressable></View>
+                              : <TeacherActionButton label="Manage item" icon="pencil-outline" tone="neutral" onPress={() => setManagingItem({ id: item.id, sectionId: section.id, title: itemTitle, index: iIndex })} />
                           }
                         />
                       );
                     })
                   ) : (
-                    <TeacherEmpty title="No items here" subtitle="Tap the '+' button above to attach an assessment, lesson, or file." icon="playlist-remove" />
+                    <TeacherEmpty title="No items here" subtitle="Add a lesson, assessment, or file below." icon="playlist-remove" />
                   )}
+                  <View style={{ paddingHorizontal: 14, paddingVertical: 10, borderTopWidth: 1, borderTopColor: theme.border }}><TeacherActionButton label="Add content" icon="plus" tone="blue" onPress={() => setAttachingSectionId(section.id)} /></View>
                 </TeacherAccordionSection>
               ))
             ) : (
@@ -398,7 +385,7 @@ export function TeacherModuleDetailScreen({ navigation, route }: Props) {
         </TeacherActionSheet>
       ) : null}
 
-      <TeacherActionSheet visible={addMenuVisible} title="Add to module" subtitle="Create a section or choose where to attach content." onClose={() => setAddMenuVisible(false)}>
+      <TeacherCenteredDialog visible={addMenuVisible} title="Add to module" subtitle="Create a section or choose where to attach content." onClose={() => setAddMenuVisible(false)}>
         <View style={{ paddingVertical: 10, flexDirection: "row", gap: 8 }}>
           <TextInput style={{ flex: 1, minHeight: 44, backgroundColor: theme.active, borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingHorizontal: 12, fontSize: 13, color: theme.text }} placeholder="New section title" placeholderTextColor={theme.muted} value={newSectionTitle} onChangeText={setNewSectionTitle} />
           <TeacherActionButton label="Add section" icon="plus" tone="green" onPress={() => { void handleAddSection(); setAddMenuVisible(false); }} disabled={sectionCreateMutation.isPending || !newSectionTitle.trim()} />
@@ -411,7 +398,7 @@ export function TeacherModuleDetailScreen({ navigation, route }: Props) {
             <MaterialCommunityIcons name="chevron-right" size={18} color={theme.dim} />
           </Pressable>
         ))}
-      </TeacherActionSheet>
+      </TeacherCenteredDialog>
 
       <TeacherActionSheet visible={Boolean(managingSection)} title={managingSection?.title || "Section actions"} subtitle="Manage this section without crowding the outline." onClose={() => setManagingSection(null)}>
         <View style={{ paddingVertical: 10, gap: 8 }}>
@@ -433,16 +420,12 @@ export function TeacherModuleDetailScreen({ navigation, route }: Props) {
         </View>
       </TeacherActionSheet>
 
-      <Modal visible={Boolean(editingSection)} transparent animationType="fade" onRequestClose={() => setEditingSection(null)}>
-        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.65)", justifyContent: "center", alignItems: "center", padding: 20 }} onPress={() => setEditingSection(null)}>
-          <Pressable style={{ width: "100%", maxWidth: 420, backgroundColor: theme.surface, borderRadius: 16, borderWidth: 1, borderColor: theme.border, padding: 20, gap: 10 }} onPress={(event) => event.stopPropagation()}>
-            <Text style={{ fontSize: 16, fontWeight: "800", color: theme.text }}>Edit module section</Text>
+      <TeacherCenteredDialog visible={Boolean(editingSection)} title="Edit module section" subtitle="Keep the outline label clear and useful." onClose={() => setEditingSection(null)} footer={<View style={{ flexDirection: "row", gap: 8 }}><TeacherActionButton label="Cancel" tone="neutral" onPress={() => setEditingSection(null)} /><TeacherActionButton label="Save section" tone="green" onPress={() => void saveSection()} disabled={savingExtendedControl || !editingSection?.title.trim()} /></View>}>
+          <View style={{ gap: 10 }}>
             <TextInput accessibilityLabel="Section title" value={editingSection?.title ?? ""} onChangeText={(title) => setEditingSection((current) => current ? { ...current, title } : current)} placeholder="Section title" placeholderTextColor={theme.muted} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 8, padding: 11, color: theme.text }} />
             <TextInput accessibilityLabel="Section description" multiline value={editingSection?.description ?? ""} onChangeText={(description) => setEditingSection((current) => current ? { ...current, description } : current)} placeholder="Section description" placeholderTextColor={theme.muted} style={{ minHeight: 80, textAlignVertical: "top", borderWidth: 1, borderColor: theme.border, borderRadius: 8, padding: 11, color: theme.text }} />
-            <View style={{ flexDirection: "row", gap: 8 }}><TeacherActionButton label="Cancel" tone="neutral" onPress={() => setEditingSection(null)} /><TeacherActionButton label="Save section" tone="green" onPress={() => void saveSection()} disabled={savingExtendedControl || !editingSection?.title.trim()} /></View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+          </View>
+      </TeacherCenteredDialog>
 
       {/* Delete Section Modal */}
       <TeacherConfirmModal
@@ -481,21 +464,7 @@ export function TeacherModuleDetailScreen({ navigation, route }: Props) {
       />
 
       {/* Attach Item Modal */}
-      <Modal visible={Boolean(attachingSectionId)} transparent animationType="fade" onRequestClose={() => setAttachingSectionId(null)}>
-        <Pressable
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.65)", justifyContent: "center", alignItems: "center", padding: 20 }}
-          onPress={() => setAttachingSectionId(null)}
-        >
-          <Pressable
-            style={{ width: "100%", maxWidth: 420, backgroundColor: theme.surface, borderRadius: 16, borderWidth: 1, borderColor: theme.border, padding: 20 }}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <Text style={{ fontSize: 16, fontWeight: "800", color: theme.text }}>Attach Item to Section</Text>
-              <Pressable onPress={() => setAttachingSectionId(null)}>
-                <MaterialCommunityIcons name="close" size={20} color={theme.text} />
-              </Pressable>
-            </View>
+      <TeacherCenteredDialog visible={Boolean(attachingSectionId)} title="Add content" subtitle="Choose a lesson, assessment, or file for this section." onClose={() => setAttachingSectionId(null)} footer={<View style={{ flexDirection: "row", gap: 10 }}><TeacherActionButton label="Cancel" tone="neutral" onPress={() => setAttachingSectionId(null)} /><View style={{ flex: 1 }}><TeacherActionButton label={itemAttachMutation.isPending ? "Attaching…" : "Attach selected"} tone="blue" disabled={itemAttachMutation.isPending || !attachTargetId.trim()} onPress={() => void handleAttachItem()} /></View></View>}>
 
             <Text style={{ fontSize: 12, fontWeight: "700", color: theme.muted, marginBottom: 6 }}>Select Item Type</Text>
             <View style={{ flexDirection: "row", gap: 8, marginBottom: 16 }}>
@@ -655,26 +624,7 @@ export function TeacherModuleDetailScreen({ navigation, route }: Props) {
               </View>
             )}
 
-            <View style={{ flexDirection: "row", gap: 10, marginTop: 8 }}>
-              <Pressable
-                onPress={() => setAttachingSectionId(null)}
-                style={{ flex: 1, height: 42, borderRadius: 8, borderWidth: 1, borderColor: theme.border, alignItems: "center", justifyContent: "center" }}
-              >
-                <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text }}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => void handleAttachItem()}
-                disabled={itemAttachMutation.isPending || !attachTargetId.trim()}
-                style={{ flex: 1, height: 42, borderRadius: 8, backgroundColor: theme.blue, alignItems: "center", justifyContent: "center", opacity: !attachTargetId.trim() ? 0.5 : 1 }}
-              >
-                <Text style={{ fontSize: 13, fontWeight: "700", color: "#ffffff" }}>
-                  {itemAttachMutation.isPending ? "Attaching..." : "Attach"}
-                </Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      </TeacherCenteredDialog>
     </TeacherScreen>
   );
 }

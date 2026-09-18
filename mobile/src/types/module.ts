@@ -1,7 +1,9 @@
+export type ModuleItemType = "lesson" | "assessment" | "file";
+
 export interface ModuleItem {
   id: string;
   moduleSectionId?: string;
-  itemType: "lesson" | "assessment" | "file" | string;
+  itemType: ModuleItemType;
   lessonId?: string | null;
   assessmentId?: string | null;
   fileId?: string | null;

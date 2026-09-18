@@ -219,6 +219,14 @@ export function createStructuredLessonBlockContent(
     return { fileId: '', fileName: '', mimeType: '' };
   }
 
+  if (type === 'video') {
+    return { url: '', caption: '' };
+  }
+
+  if (type === 'divider') {
+    return { style: 'line' };
+  }
+
   if (type !== 'text') {
     return '';
   }

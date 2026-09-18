@@ -5,8 +5,8 @@ export {
   TeacherClassStudentOverviewScreen,
   TeacherExtractionDetailScreen,
   TeacherInterventionDetailScreen,
-  TeacherLessonEditorScreen,
   TeacherModuleFileDetailScreen,
   TeacherSectionAddStudentsScreen,
   TeacherSectionStudentProfileScreen,
 } from "./TeacherDeepParityScreens";
+export { TeacherLessonEditorScreen } from "./TeacherLessonEditorScreen";

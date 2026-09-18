@@ -13,6 +13,7 @@ import type {
   LessonCompletion,
   LessonCompleteResponseData,
   LessonVersion,
+  LessonVersionDetail,
   LessonsResponse,
   LessonListQuery,
   StudentRecentLessonsResponse,
@@ -155,12 +156,22 @@ export const lessonService = {
     return data;
   },
 
+  /** GET /lessons/:id/versions/:versionId — Admin, Teacher */
+  async getVersionDetail(
+    lessonId: string,
+    versionId: string,
+  ): Promise<{ success: boolean; message: string; data: LessonVersionDetail }> {
+    const { data } = await api.get(`/lessons/${lessonId}/versions/${versionId}`);
+    return data;
+  },
+
   /** POST /lessons/:id/versions/:versionId/restore — Admin, Teacher */
   async restoreVersion(
     lessonId: string,
     versionId: string,
+    dto: { expectedLessonUpdatedAt: string },
   ): Promise<{ success: boolean; message: string; data: Lesson }> {
-    const { data } = await api.post(`/lessons/${lessonId}/versions/${versionId}/restore`);
+    const { data } = await api.post(`/lessons/${lessonId}/versions/${versionId}/restore`, dto);
     return data;
   },
 };

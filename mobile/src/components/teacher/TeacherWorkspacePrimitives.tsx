@@ -1,6 +1,6 @@
 import { type PropsWithChildren, type ReactNode, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { teacherTheme as theme } from "../../theme/teacher";
 
@@ -29,26 +29,36 @@ export function TeacherContextStrip({
   subtitle,
   status,
   icon = "google-classroom",
+  statusPlacement = "trailing",
+  action,
 }: {
   title: string;
   subtitle?: string;
   status?: string;
   icon?: IconName;
+  statusPlacement?: "leading" | "trailing";
+  action?: ReactNode;
 }) {
   return (
     <View style={{ paddingHorizontal: 16, paddingVertical: 14, flexDirection: "row", alignItems: "center", gap: 12, borderBottomWidth: 1, borderBottomColor: theme.border }}>
       <View style={{ width: 40, height: 40, borderRadius: 13, alignItems: "center", justifyContent: "center", backgroundColor: theme.redSoft }}>
         <MaterialCommunityIcons name={icon} size={20} color={theme.redText} />
       </View>
-      <View style={{ flex: 1 }}>
-        <Text numberOfLines={1} style={{ fontSize: 15, fontWeight: "900", color: theme.text }}>{title}</Text>
-        {subtitle ? <Text numberOfLines={1} style={{ marginTop: 3, fontSize: 11, color: theme.muted }}>{subtitle}</Text> : null}
-      </View>
-      {status ? (
+      {status && statusPlacement === "leading" ? (
         <View style={{ borderRadius: 999, backgroundColor: theme.redSoft, paddingHorizontal: 9, paddingVertical: 5 }}>
           <Text style={{ fontSize: 10, fontWeight: "800", color: theme.redText }}>{status}</Text>
         </View>
       ) : null}
+      <View style={{ flex: 1 }}>
+        <Text numberOfLines={1} style={{ fontSize: 15, fontWeight: "900", color: theme.text }}>{title}</Text>
+        {subtitle ? <Text numberOfLines={1} style={{ marginTop: 3, fontSize: 11, color: theme.muted }}>{subtitle}</Text> : null}
+      </View>
+      {status && statusPlacement === "trailing" ? (
+        <View style={{ borderRadius: 999, backgroundColor: theme.redSoft, paddingHorizontal: 9, paddingVertical: 5 }}>
+          <Text style={{ fontSize: 10, fontWeight: "800", color: theme.redText }}>{status}</Text>
+        </View>
+      ) : null}
+      {action}
     </View>
   );
 }
@@ -181,6 +191,46 @@ export function TeacherActionSheet({
           <ScrollView showsVerticalScrollIndicator={false}>{children}</ScrollView>
         </View>
       </View>
+    </Modal>
+  );
+}
+
+export function TeacherCenteredDialog({
+  visible,
+  title,
+  subtitle,
+  onClose,
+  children,
+  footer,
+}: PropsWithChildren<{
+  visible: boolean;
+  title: string;
+  subtitle?: string;
+  onClose: () => void;
+  footer?: ReactNode;
+}>) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={{ flex: 1, justifyContent: "center", paddingHorizontal: 16, paddingVertical: 28, backgroundColor: "rgba(15,23,42,0.42)" }}
+      >
+        <View accessibilityViewIsModal style={{ width: "100%", maxWidth: 560, maxHeight: "88%", alignSelf: "center", overflow: "hidden", borderRadius: 18, backgroundColor: theme.surface }}>
+          <View style={{ minHeight: 58, paddingLeft: 16, paddingRight: 8, borderBottomWidth: 1, borderBottomColor: theme.border, flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <View style={{ flex: 1, paddingVertical: 10 }}>
+              <Text style={{ fontSize: 17, fontWeight: "900", color: theme.text }}>{title}</Text>
+              {subtitle ? <Text style={{ marginTop: 3, fontSize: 11, lineHeight: 16, color: theme.muted }}>{subtitle}</Text> : null}
+            </View>
+            <Pressable accessibilityRole="button" accessibilityLabel={`Close ${title}`} onPress={onClose} style={{ width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: theme.active }}>
+              <MaterialCommunityIcons name="close" size={20} color={theme.text} />
+            </Pressable>
+          </View>
+          <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16 }}>
+            {children}
+          </ScrollView>
+          {footer ? <View style={{ padding: 12, borderTopWidth: 1, borderTopColor: theme.border, backgroundColor: theme.surface }}>{footer}</View> : null}
+        </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

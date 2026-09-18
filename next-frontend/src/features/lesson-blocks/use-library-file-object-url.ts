@@ -3,7 +3,10 @@
 import { useEffect, useState } from 'react';
 import { fileService } from '@/services/file-service';
 
-export function useLibraryFileObjectUrl(fileId?: string | null) {
+export function useLibraryFileObjectUrl(
+  fileId?: string | null,
+  previewFileUrl?: string,
+) {
   const [objectUrl, setObjectUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -23,7 +26,14 @@ export function useLibraryFileObjectUrl(fileId?: string | null) {
       try {
         setLoading(true);
         setFailed(false);
-        const blob = await fileService.download(fileId);
+        const blob = previewFileUrl
+          ? await fetch(previewFileUrl, { cache: 'no-store' }).then(
+              async (response) => {
+                if (!response.ok) throw new Error('Preview file unavailable');
+                return response.blob();
+              },
+            )
+          : await fileService.download(fileId);
         if (cancelled) return;
         url = URL.createObjectURL(blob);
         setObjectUrl(url);
@@ -47,7 +57,7 @@ export function useLibraryFileObjectUrl(fileId?: string | null) {
         URL.revokeObjectURL(url);
       }
     };
-  }, [fileId]);
+  }, [fileId, previewFileUrl]);
 
   return { objectUrl, loading, failed };
 }

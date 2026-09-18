@@ -28,6 +28,16 @@ describe('structured lesson block helpers', () => {
     });
   });
 
+  it('creates valid structured defaults for video and divider blocks', () => {
+    expect(createStructuredLessonBlockContent('video')).toEqual({
+      url: '',
+      caption: '',
+    });
+    expect(createStructuredLessonBlockContent('divider')).toEqual({
+      style: 'line',
+    });
+  });
+
   it('normalizes legacy string text blocks into structured content with a body variant', () => {
     const block = normalizeStructuredLessonBlock({
       id: 'block-1',

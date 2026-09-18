@@ -11,6 +11,7 @@ import {
   ArrayNotEmpty,
   ValidateNested,
   MaxLength,
+  IsISO8601,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -90,9 +91,9 @@ export class CreateContentBlockDto {
   @IsInt()
   order: number;
 
-  /** Must be present — matches the NOT NULL constraint in the schema */
-  @IsNotEmpty()
-  content: any;
+  /** Omitted content is filled with a canonical type-specific value. */
+  @IsOptional()
+  content?: any;
 
   @IsOptional()
   @IsObject()
@@ -150,4 +151,9 @@ export class CreateLessonVersionDto {
   @IsString()
   @MaxLength(80)
   label?: string;
+}
+
+export class RestoreLessonVersionDto {
+  @IsISO8601({ strict: true })
+  expectedLessonUpdatedAt: string;
 }

@@ -125,6 +125,15 @@ export function validateEnvironment(): void {
     }
   }
 
+  if (process.env.NODE_ENV === 'production') {
+    const previewSecret = process.env.LESSON_PREVIEW_SECRET;
+    if (!previewSecret || previewSecret.length < 32) {
+      errors.push(
+        '  ✗ LESSON_PREVIEW_SECRET — Required in production and must be at least 32 characters',
+      );
+    }
+  }
+
   if (warnings.length > 0) {
     logger.warn(
       `Environment warnings (${warnings.length}):\n${warnings.join('\n')}`,

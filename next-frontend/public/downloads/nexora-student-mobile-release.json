@@ -1,12 +1,12 @@
 {
   "platform": "android",
-  "versionCode": 45,
-  "minSupportedVersionCode": 45,
-  "nativeVersion": "0.1.44",
-  "otaRuntimeVersion": "0.1.44",
+  "versionCode": 46,
+  "minSupportedVersionCode": 46,
+  "nativeVersion": "0.1.45",
+  "otaRuntimeVersion": "0.1.45",
   "apkDownloadUrl": "https://next-frontend-v2-production.up.railway.app/downloads/nexora-student-mobile-release.apk",
   "requiresFullApk": true,
-  "releaseNotes": "Redesigns student and teacher mobile workspaces with responsive class actions, guided tabs, clearer submissions, stronger navigation, and compact teacher controls.",
-  "apkSha256": "2d0f8532ddf3323b5ec9a88357492a96939d3004947be77f1e6770d2c325d06f",
-  "apkSizeBytes": 41086479
+  "releaseNotes": "Teacher lesson authoring parity: compact module controls, complete structured block editing and rendering, secure Mobile/Web comparison preview, protected lesson assets, and reviewed concurrency-safe version restore.",
+  "apkSha256": "72bde7c7ed2c0cb1efeaa1905f89f4c069d994ddedb3ad8433197aa2cc8f2c08",
+  "apkSizeBytes": 41119367
 }

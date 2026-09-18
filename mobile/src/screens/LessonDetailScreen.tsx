@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Image, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { EmptyState, ScreenScroll } from "../components/ui/primitives";
 import {
   StudentBottomActionBar,
@@ -15,21 +15,15 @@ import { useLessonCompleteMutation, useLessonCompletionStatus, useLessonDetail }
 import { navigateStudentDetailBack } from "../navigation/student-detail-back";
 import type { RootStackParamList } from "../navigation/types";
 import { studentDarkTheme as theme, stripRichText } from "../theme/studentDark";
-import type { ContentBlock } from "../types/lesson";
-import { extractLessonBlockText, resolveLessonBlockMeta } from "../utils/lessonBlocks";
+import { resolveLessonBlockMeta } from "../utils/lessonBlocks";
+import { LessonBlockRenderer } from "../components/lesson/LessonBlockRenderer";
+import { RichTextContent } from "../components/ui/RichTextContent";
+import { fileUploadApi } from "../api/services/file-upload";
 
 type Props = NativeStackScreenProps<RootStackParamList, "LessonDetail">;
 
 function isNotFoundError(error: unknown) {
   return peekAppError(error).status === 404;
-}
-
-function extractBlockUrl(block: ContentBlock) {
-  if (block.content && typeof block.content === "object") {
-    const url = (block.content as Record<string, unknown>).url;
-    if (typeof url === "string" && url.trim()) return url.trim();
-  }
-  return "";
 }
 
 export function LessonDetailScreen({ route, navigation }: Props) {
@@ -46,7 +40,7 @@ export function LessonDetailScreen({ route, navigation }: Props) {
   const refreshing = lessonQuery.isRefetching || completionStatusQuery.isRefetching;
   const primaryError = lessonQuery.error || completionStatusQuery.error;
   const lessonNotFound = !lesson && isNotFoundError(lessonQuery.error);
-  const description = stripRichText(lesson?.description);
+  const description = lesson?.description?.trim() || "";
   const understoodCount = blocks.filter((block) => understoodBlocks[block.id]).length;
 
   const handleRefresh = () => {
@@ -107,7 +101,7 @@ export function LessonDetailScreen({ route, navigation }: Props) {
       {description ? (
         <StudentFlatSection title="Lesson overview" subtitle="Teacher-provided introduction">
           <View style={{ paddingHorizontal: 16, paddingVertical: 13, borderTopWidth: 1, borderTopColor: theme.border, backgroundColor: theme.surface }}>
-            <Text style={{ fontSize: 13, lineHeight: 21, color: theme.subtext }}>{description}</Text>
+            <RichTextContent html={description} color={theme.subtext} mutedColor={theme.muted} accentColor={theme.redText} />
           </View>
         </StudentFlatSection>
       ) : null}
@@ -121,17 +115,15 @@ export function LessonDetailScreen({ route, navigation }: Props) {
         </StudentFlatSection>
       ) : blocks.map((block, index) => {
         const meta = resolveLessonBlockMeta(block.type);
-        const text = extractLessonBlockText(block);
-        const url = extractBlockUrl(block);
         const understood = Boolean(understoodBlocks[block.id]);
         const toneColor = meta.tone === "amber" ? theme.amber : meta.tone === "green" ? theme.green : meta.tone === "purple" ? theme.purple : theme.redText;
         return (
           <StudentFlatSection key={block.id} title={`${index + 1}. ${meta.label}`} subtitle={`Section ${index + 1} of ${blocks.length}`}>
             <View style={{ paddingHorizontal: 16, paddingVertical: 14, borderTopWidth: 1, borderTopColor: theme.border, backgroundColor: theme.surface }}>
-              {block.type === "image" && url ? <Image source={{ uri: url }} resizeMode="cover" style={{ width: "100%", height: 190, marginBottom: 12, backgroundColor: theme.active }} /> : null}
-              <Text style={{ fontSize: 14, lineHeight: 23, color: theme.subtext }}>
-                {text || (url ? "Open this resource from the linked material above." : "This content block does not contain text that can be rendered in mobile yet.")}
-              </Text>
+              <LessonBlockRenderer
+                block={block}
+                onOpenFile={(fileId, fileName) => void fileUploadApi.open(fileId, fileName)}
+              />
               {meta.interactive ? (
                 <Pressable accessibilityRole="button" onPress={() => setUnderstoodBlocks((current) => ({ ...current, [block.id]: !current[block.id] }))} style={{ alignSelf: "flex-start", minHeight: 44, marginTop: 12, borderRadius: 10, borderWidth: 1, borderColor: understood ? theme.greenLine : theme.border, backgroundColor: understood ? theme.greenSoft : theme.bg, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", gap: 7 }}>
                   <MaterialCommunityIcons name={understood ? "check-circle" : "check-circle-outline"} size={17} color={understood ? theme.green : toneColor} />

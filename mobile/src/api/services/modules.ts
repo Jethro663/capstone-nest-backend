@@ -7,6 +7,7 @@ import type {
   CreateClassModuleDto,
   CreateModuleSectionDto,
   ModuleItem,
+  ModuleItemType,
   ModuleSection,
   ReplaceModuleGradingScaleDto,
   UpdateClassModuleDto,
@@ -101,7 +102,7 @@ export const modulesApi = {
     return normalizeArray<ModuleItem>(unwrapEnvelope(response.data));
   },
 
-  async attachItem(sectionId: string, payload: { itemType: string; lessonId?: string; assessmentId?: string; fileId?: string; isVisible?: boolean }) {
+  async attachItem(sectionId: string, payload: { itemType: ModuleItemType; lessonId?: string; assessmentId?: string; fileId?: string; isVisible?: boolean }) {
     const response = await apiClient.post<ApiEnvelope<ModuleItem>>(`/modules/sections/${sectionId}/items`, payload);
     return unwrapEnvelope(response.data);
   },

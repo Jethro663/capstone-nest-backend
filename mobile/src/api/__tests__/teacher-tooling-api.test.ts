@@ -16,11 +16,15 @@ describe("teacher lifecycle contract adapters", () => {
     (apiClient.delete as jest.Mock).mockResolvedValue({});
     await lessonsApi.getVersions("l");
     await lessonsApi.createVersion("l", { label: "Before edit" });
-    await lessonsApi.restoreVersion("l", "v");
+    await lessonsApi.getVersionDetail("l", "v");
+    await lessonsApi.restoreVersion("l", "v", { expectedLessonUpdatedAt: "2026-09-18T10:00:00.000Z" });
+    await lessonsApi.createPreviewSession("l");
     await lessonsApi.bulkDelete("c", { lessonIds: ["l"] });
     await lessonsApi.reorderByClass("c", { lessons: [{ id: "l", order: 1 }] });
     await lessonsApi.delete("l");
-    expect(apiClient.post).toHaveBeenCalledWith("/lessons/l/versions/v/restore", {});
+    expect(apiClient.get).toHaveBeenCalledWith("/lessons/l/versions/v");
+    expect(apiClient.post).toHaveBeenCalledWith("/lessons/l/versions/v/restore", { expectedLessonUpdatedAt: "2026-09-18T10:00:00.000Z" });
+    expect(apiClient.post).toHaveBeenCalledWith("/lessons/l/preview-session", {});
     expect(apiClient.delete).toHaveBeenCalledWith("/lessons/l");
   });
 

@@ -1,7 +1,7 @@
 import { apiClient } from "../client";
 import { normalizeArray, unwrapEnvelope } from "../http";
 import type { ApiEnvelope } from "../../types/api";
-import type { BulkLessonDraftStateDto, BulkLessonIdsDto, ContentBlock, ContentBlockType, Lesson, LessonCompletion, LessonListQuery, LessonVersion, ReorderLessonsDto } from "../../types/lesson";
+import type { BulkLessonDraftStateDto, BulkLessonIdsDto, ContentBlock, ContentBlockType, Lesson, LessonCompletion, LessonListQuery, LessonPreviewSession, LessonVersion, LessonVersionDetail, ReorderLessonsDto } from "../../types/lesson";
 
 export type LessonDetail = Lesson;
 export type LessonCompletionStatus = {
@@ -67,8 +67,18 @@ export const lessonsApi = {
     return normalizeArray<LessonVersion>(unwrapEnvelope(response.data));
   },
 
-  async restoreVersion(lessonId: string, versionId: string) {
-    const response = await apiClient.post<ApiEnvelope<Lesson>>(`/lessons/${lessonId}/versions/${versionId}/restore`, {});
+  async getVersionDetail(lessonId: string, versionId: string) {
+    const response = await apiClient.get<ApiEnvelope<LessonVersionDetail>>(`/lessons/${lessonId}/versions/${versionId}`);
+    return unwrapEnvelope(response.data);
+  },
+
+  async restoreVersion(lessonId: string, versionId: string, payload: { expectedLessonUpdatedAt: string }) {
+    const response = await apiClient.post<ApiEnvelope<Lesson>>(`/lessons/${lessonId}/versions/${versionId}/restore`, payload);
+    return unwrapEnvelope(response.data);
+  },
+
+  async createPreviewSession(lessonId: string) {
+    const response = await apiClient.post<ApiEnvelope<LessonPreviewSession>>(`/lessons/${lessonId}/preview-session`, {});
     return unwrapEnvelope(response.data);
   },
 
