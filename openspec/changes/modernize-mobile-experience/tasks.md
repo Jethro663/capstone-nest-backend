@@ -37,8 +37,8 @@
 
 ## 7. Android signer migration
 
-- [ ] 7.1 Add failing updater tests proving legacy builds open the immutable APK externally and never use app-private download/install flow.
-- [ ] 7.2 Implement explicit external-download/uninstall/reinstall guidance for version codes 46 and earlier while preserving build 47+ updates.
+- [x] 7.1 Add failing updater tests proving legacy builds open the immutable APK externally and never use app-private download/install flow.
+- [x] 7.2 Implement explicit external-download/uninstall/reinstall guidance for version codes 46 and earlier while preserving build 47+ updates.
 
 ## 8. Verification and release
 

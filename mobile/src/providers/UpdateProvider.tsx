@@ -574,10 +574,49 @@ function AndroidUpdateProvider({ children }: PropsWithChildren) {
     [],
   );
 
+  const openLegacyMigrationDownload = useCallback(
+    async (decision: NonNullable<UpdateState["decision"]>) => {
+      const externalUrl =
+        decision.artifactDownloadUrl || decision.apkDownloadUrl;
+      if (!externalUrl?.startsWith("https://")) {
+        setState((prev) => ({
+          ...prev,
+          status: "error",
+          errorMessage:
+            "The school APK download link is not secure. Contact the Nexora administrator before uninstalling this app.",
+          failureStage: "download",
+        }));
+        return;
+      }
+      try {
+        await Linking.openURL(externalUrl);
+      } catch (err: unknown) {
+        setState((prev) => ({
+          ...prev,
+          status: "error",
+          errorMessage: errorMessage(
+            err,
+            "Unable to open the school APK download in your browser.",
+          ),
+          failureStage: "download",
+        }));
+      }
+    },
+    [],
+  );
+
   const startApkDownload = useCallback(async () => {
     if (!state.decision?.apkDownloadUrl) return;
+    const { currentVersionCode } = getClientVersionInfo();
+    if (
+      currentVersionCode <= 46 &&
+      state.decision.latestVersionCode >= 47
+    ) {
+      await openLegacyMigrationDownload(state.decision);
+      return;
+    }
     await downloadDecision(state.decision);
-  }, [downloadDecision, state.decision]);
+  }, [downloadDecision, openLegacyMigrationDownload, state.decision]);
 
   const retryApkDownload = useCallback(async () => {
     await checkForUpdates();
@@ -1013,11 +1052,18 @@ function AndroidUpdateProvider({ children }: PropsWithChildren) {
                             marginTop: 4,
                           }}
                         >
-                          Builds 46 and earlier used the legacy test signature.
-                          Finish any active work while online, then uninstall
-                          the old Nexora app and install this school release.
-                          Local offline snapshots will be removed; official
-                          synced school records remain on the server.
+                          Builds 46 and earlier used the legacy test signature,
+                          so Android cannot install the production-signed app on
+                          top of this copy. Download first, then uninstall.
+                        </Text>
+                        <View style={{ marginTop: 10, gap: 6 }}>
+                          <Text style={{ color: colors.text, fontSize: 12, lineHeight: 18 }}>1. Finish active work while online so official records are synced.</Text>
+                          <Text style={{ color: colors.text, fontSize: 12, lineHeight: 18 }}>2. Open the school APK download and wait until the browser finishes.</Text>
+                          <Text style={{ color: colors.text, fontSize: 12, lineHeight: 18 }}>3. Only then uninstall the old Nexora app.</Text>
+                          <Text style={{ color: colors.text, fontSize: 12, lineHeight: 18 }}>4. Open the downloaded APK, install it, and sign in again.</Text>
+                        </View>
+                        <Text style={{ color: colors.textSecondary, fontSize: 11, lineHeight: 17, marginTop: 8 }}>
+                          Uninstalling removes local offline snapshots. Official synced school records remain on the server.
                         </Text>
                       </View>
                     ) : null}
@@ -1245,7 +1291,19 @@ function AndroidUpdateProvider({ children }: PropsWithChildren) {
                 <View style={{ marginTop: 24, gap: 10 }}>
                   {state.status === "apk_required" && (
                     <Pressable
-                      onPress={startApkDownload}
+                      accessibilityLabel={
+                        requiresLegacySignerMigration
+                          ? "Open school APK download"
+                          : "Download and install update"
+                      }
+                      onPress={
+                        requiresLegacySignerMigration
+                          ? () =>
+                              state.decision
+                                ? void openLegacyMigrationDownload(state.decision)
+                                : undefined
+                          : startApkDownload
+                      }
                       style={{
                         alignItems: "center",
                         borderRadius: radii.md,
@@ -1260,7 +1318,9 @@ function AndroidUpdateProvider({ children }: PropsWithChildren) {
                           color: colors.white,
                         }}
                       >
-                        Download & Install Update
+                        {requiresLegacySignerMigration
+                          ? "Open school APK download"
+                          : "Download & Install Update"}
                       </Text>
                     </Pressable>
                   )}

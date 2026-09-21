@@ -306,6 +306,17 @@ describe("UpdateProvider", () => {
     expect(flattenText(renderer.toJSON())).toContain(
       "uninstall the old Nexora app",
     );
+    expect(flattenText(renderer.toJSON())).toContain(
+      "Download first, then uninstall",
+    );
+
+    await press(renderer, "Open school APK download");
+
+    expect(Linking.openURL).toHaveBeenCalledWith(
+      "https://next-frontend-v2-production.up.railway.app/downloads/nexora-student-mobile-release.apk",
+    );
+    expect(mockDownloadApk).not.toHaveBeenCalled();
+    expect(mockInstallApk).not.toHaveBeenCalled();
   });
 
   it("admits the app only after the installed build and fresh policy confirm the upgrade", async () => {
