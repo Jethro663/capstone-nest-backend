@@ -6,8 +6,8 @@
 
 ## 2. Shared mobile interface system
 
-- [ ] 2.1 Add failing tests for semantic navy/red tokens, shared app-bar behavior, four action variants, the filter bottom sheet, segmented tabs, overflow actions, and score states.
-- [ ] 2.2 Implement the role-neutral mobile brand tokens and shared presentation primitives until the focused tests pass.
+- [x] 2.1 Add failing tests for semantic navy/red tokens, shared app-bar behavior, four action variants, the filter bottom sheet, segmented tabs, overflow actions, and score states.
+- [x] 2.2 Implement the role-neutral mobile brand tokens and shared presentation primitives until the focused tests pass.
 - [ ] 2.3 Adapt teacher, student, and admin presentation wrappers to the shared system without changing their domain-facing behavior.
 - [ ] 2.4 Replace remaining record-filter button rows with the shared filter selector while retaining chips only for selection, tagging, and non-filter toggles.
 
