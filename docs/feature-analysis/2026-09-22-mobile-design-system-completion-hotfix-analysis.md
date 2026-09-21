@@ -1,8 +1,8 @@
 # Mobile Design-System Completion Hotfix — Isolation Analysis
 
-**Date:** 2026-09-22  
-**Scope:** `mobile/` presentation, native Android chrome, and mobile release packaging  
-**Authority:** analysis first, followed by separately ordered planning and finish-and-ship execution in the same user request  
+**Date:** 2026-09-22
+**Scope:** `mobile/` presentation, native Android chrome, and mobile release packaging
+**Authority:** analysis first, followed by separately ordered planning and finish-and-ship execution in the same user request
 **Coverage boundary:** current tracked source, the committed build-48 APK, the two supplied screenshots, focused Jest contracts, and focused repository searches. Generated dependencies and unrelated backend/web behavior were not inspected.
 
 ## 1. Executive verdict

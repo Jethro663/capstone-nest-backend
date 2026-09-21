@@ -1,7 +1,7 @@
 # Mobile Design-System Completion Hotfix — Feature Impact Plan
 
-**Date:** 2026-09-22  
-**Decision status:** approved for implementation by the requesting user  
+**Date:** 2026-09-22
+**Decision status:** approved for implementation by the requesting user
 **Inputs:** supplied Student Home and Student Classes screenshots, current mobile source, committed build-48 APK, focused Jest results, and the 2026-09-22 isolation/design reports
 
 ## 1. Executive summary
