@@ -16,7 +16,6 @@ describe("active mobile design generation", () => {
   });
 
   it.each([
-    "TeacherHomeScreen",
     "TeacherClassesScreen",
     "TeacherSectionsScreen",
     "TeacherAssessmentsScreen",
@@ -24,6 +23,11 @@ describe("active mobile design generation", () => {
     "TeacherProfileScreen",
   ])("composes current teacher workspace primitives in %s", (name) => {
     expect(screen(name)).toContain("TeacherWorkspacePrimitives");
+  });
+
+  it("composes Teacher Home from the shared navy brand system", () => {
+    expect(screen("TeacherHomeScreen")).toContain("mobileBrand");
+    expect(screen("TeacherHomeScreen")).toContain('testID="teacher-next-up"');
   });
 
   it.each([

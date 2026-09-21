@@ -2,25 +2,28 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Pressable, Text, TextInput, View } from "react-native";
 import { Refreshable, ScreenScroll } from "../components/ui/primitives";
+import { MobileAppBar } from "../components/ui/MobileAppBar";
+import { MobileFilterSheet } from "../components/ui/MobileFilterSheet";
 import { notificationsApi } from "../api/services/notifications";
 import type { RootStackParamList } from "../navigation/types";
 import { resolveMobileRole } from "../navigation/role-resolver";
 import { useAuth } from "../providers/AuthProvider";
 import { studentDarkTheme as theme, stripRichText } from "../theme/studentDark";
-import { colors, hexToRgba, shadow } from "../theme/tokens";
+import { colors, shadow } from "../theme/tokens";
 import type { MobileNotification } from "../types/notification";
 import { openMobileNotification } from "../utils/mobile-notification-routing";
+import { mobileBrand } from "../theme/mobileBrand";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Notifications">;
 type FilterMode = "all" | "unread" | "interventions" | "assessments";
 
-const FILTERS: Array<{ id: FilterMode; label: string }> = [
-  { id: "all", label: "All" },
-  { id: "unread", label: "Unread" },
-  { id: "interventions", label: "Interventions" },
-  { id: "assessments", label: "Assessments" },
+const FILTER_OPTIONS: Array<{ key: FilterMode; label: string }> = [
+  { key: "all", label: "All" },
+  { key: "unread", label: "Unread" },
+  { key: "interventions", label: "Interventions" },
+  { key: "assessments", label: "Assessments" },
 ];
 
 function formatDate(value?: string | null) {
@@ -90,26 +93,14 @@ function matchesFilter(notification: MobileNotification, mode: FilterMode) {
   return true;
 }
 
-function CountPill({ label, value, color = colors.primary }: { label: string; value: string | number; color?: string }) {
+function CountFact({ emoji, label, value }: { emoji: string; label: string; value: string | number }) {
   return (
-    <View
-      style={[
-        {
-          flex: 1,
-          borderRadius: 18,
-          borderWidth: 1,
-          borderColor: hexToRgba(color, 0.22),
-          backgroundColor: colors.white,
-          paddingHorizontal: 12,
-          paddingVertical: 12,
-        },
-        shadow.card,
-      ]}
-    >
-      <Text style={{ fontSize: 10, fontWeight: "900", letterSpacing: 0.6, textTransform: "uppercase", color: theme.muted }}>
-        {label}
-      </Text>
-      <Text style={{ marginTop: 4, fontSize: 20, fontWeight: "900", color }}>{value}</Text>
+    <View style={{ flex: 1, minHeight: 54, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 8 }}>
+      <Text accessibilityElementsHidden style={{ fontSize: 22 }}>{emoji}</Text>
+      <View>
+        <Text style={{ fontSize: 17, fontWeight: "900", color: mobileBrand.navy }}>{value}</Text>
+        <Text style={{ fontSize: 10, fontWeight: "700", color: theme.muted }}>{label}</Text>
+      </View>
     </View>
   );
 }
@@ -118,6 +109,7 @@ export function NotificationsInboxScreen({ navigation }: Props) {
   const { user } = useAuth();
   const role = resolveMobileRole(user?.roles);
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
+  const [search, setSearch] = useState("");
   const [markingAll, setMarkingAll] = useState(false);
   const [clearingAll, setClearingAll] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -140,7 +132,12 @@ export function NotificationsInboxScreen({ navigation }: Props) {
   const unreadCount = Number(unreadQuery.data?.count ?? notifications.filter((entry) => !entry.isRead).length);
   const interventionCount = notifications.filter((entry) => toneForNotification(entry).label === "Intervention").length;
   const assessmentCount = notifications.filter((entry) => toneForNotification(entry).label === "Assessment").length;
-  const filteredNotifications = notifications.filter((entry) => matchesFilter(entry, filterMode));
+  const normalizedSearch = search.trim().toLowerCase();
+  const filteredNotifications = notifications.filter((entry) => {
+    if (!matchesFilter(entry, filterMode)) return false;
+    if (!normalizedSearch) return true;
+    return `${entry.title} ${notificationBody(entry)} ${toneForNotification(entry).label}`.toLowerCase().includes(normalizedSearch);
+  });
   const refreshing = notificationsQuery.isRefetching || unreadQuery.isRefetching;
 
   const returnFromNotifications = () => {
@@ -234,50 +231,34 @@ export function NotificationsInboxScreen({ navigation }: Props) {
         />
       }
     >
-      <View style={{ backgroundColor: "#071832", borderBottomWidth: 1, borderBottomColor: hexToRgba(colors.primary, 0.22) }}>
-        <View style={{ paddingHorizontal: 16, paddingTop: 44, paddingBottom: 20 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+      <MobileAppBar
+        title="Notifications"
+        navigationLabel="Back"
+        navigationIcon="arrow-left"
+        onNavigationPress={returnFromNotifications}
+        rightAction={
+          <View style={{ flexDirection: "row", gap: 6 }}>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Back"
-              onPress={returnFromNotifications}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 16,
-                alignItems: "center",
-                justifyContent: "center",
-                borderWidth: 1,
-                borderColor: "rgba(255,255,255,0.36)",
-                backgroundColor: "rgba(255,255,255,0.12)",
-              }}
+              accessibilityLabel="Mark all notifications as read"
+              disabled={markingAll || unreadCount === 0}
+              onPress={() => void markAllRead()}
+              style={{ width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.10)", opacity: markingAll || unreadCount === 0 ? 0.5 : 1 }}
             >
-              <MaterialCommunityIcons name="arrow-left" size={22} color="#FFFFFF" />
-            </Pressable>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 10, fontWeight: "900", letterSpacing: 1, textTransform: "uppercase", color: "#93C5FD" }}>
-                Notification Center
-              </Text>
-              <Text style={{ marginTop: 4, fontSize: 25, fontWeight: "900", color: colors.white }}>Notifications</Text>
-            </View>
-            <Pressable accessibilityRole="button" disabled={markingAll || unreadCount === 0} onPress={() => void markAllRead()} style={{ borderRadius: 10, borderWidth: 1, borderColor: "rgba(255,255,255,0.4)", paddingHorizontal: 10, paddingVertical: 8, opacity: markingAll || unreadCount === 0 ? 0.5 : 1 }}>
-              <Text style={{ color: colors.white, fontSize: 10, fontWeight: "900" }}>{markingAll ? "Updating..." : "Read all"}</Text>
+              <MaterialCommunityIcons name={markingAll ? "progress-clock" : "email-check-outline"} size={20} color={mobileBrand.white} />
             </Pressable>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Clear all notifications"
               disabled={clearingAll || notifications.length === 0}
               onPress={confirmDismissAll}
-              style={{ width: 40, height: 40, borderRadius: 10, borderWidth: 1, borderColor: "rgba(255,255,255,0.4)", alignItems: "center", justifyContent: "center", opacity: clearingAll || notifications.length === 0 ? 0.5 : 1 }}
+              style={{ width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.10)", opacity: clearingAll || notifications.length === 0 ? 0.5 : 1 }}
             >
-              <MaterialCommunityIcons name={clearingAll ? "progress-clock" : "delete-sweep-outline"} size={19} color={colors.white} />
+              <MaterialCommunityIcons name={clearingAll ? "progress-clock" : "delete-sweep-outline"} size={20} color={mobileBrand.white} />
             </Pressable>
           </View>
-          <Text style={{ marginTop: 12, fontSize: 13, lineHeight: 20, color: "rgba(255,255,255,0.78)" }}>
-            All notifications appear here: announcements, pending assessments, Learners Path alerts, and class updates.
-          </Text>
-        </View>
-      </View>
+        }
+      />
 
       {actionError ? (
         <View style={{ marginHorizontal: 16, marginTop: 12, borderRadius: 12, backgroundColor: "#FFF1F2", padding: 12 }}>
@@ -285,33 +266,20 @@ export function NotificationsInboxScreen({ navigation }: Props) {
         </View>
       ) : null}
 
-      <View style={{ marginHorizontal: 16, marginTop: 14, flexDirection: "row", gap: 8 }}>
-        <CountPill label="Unread" value={unreadCount} color="#1D4ED8" />
-        <CountPill label="Intervention" value={interventionCount} color="#BE123C" />
-        <CountPill label="Tasks" value={assessmentCount} color="#B45309" />
+      <View testID="notification-count-facts" style={{ marginHorizontal: 16, marginTop: 12, flexDirection: "row", borderRadius: 16, borderWidth: 1, borderColor: mobileBrand.border, backgroundColor: mobileBrand.surface }}>
+        <CountFact emoji="🔔" label="Unread" value={unreadCount} />
+        <CountFact emoji="🧭" label="Interventions" value={interventionCount} />
+        <CountFact emoji="📝" label="Tasks" value={assessmentCount} />
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 14, gap: 8 }}>
-        {FILTERS.map((filter) => {
-          const active = filterMode === filter.id;
-          return (
-            <Pressable
-              key={filter.id}
-              onPress={() => setFilterMode(filter.id)}
-              style={{
-                borderRadius: 999,
-                borderWidth: 1,
-                borderColor: active ? colors.primary : "#CBD5E1",
-                backgroundColor: active ? "#DBEAFE" : colors.white,
-                paddingHorizontal: 14,
-                paddingVertical: 9,
-              }}
-            >
-              <Text style={{ fontSize: 12, fontWeight: "900", color: active ? colors.primary : theme.muted }}>{filter.label}</Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+      <View style={{ marginHorizontal: 16, marginTop: 12, gap: 10 }}>
+        <View style={{ minHeight: 48, borderRadius: 12, borderWidth: 1, borderColor: mobileBrand.borderStrong, backgroundColor: mobileBrand.surface, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <MaterialCommunityIcons name="magnify" size={19} color={mobileBrand.muted} />
+          <TextInput accessibilityLabel="Search notifications" value={search} onChangeText={setSearch} placeholder="Search notifications" placeholderTextColor={mobileBrand.dim} style={{ flex: 1, color: mobileBrand.text, fontSize: 13, paddingVertical: 10 }} />
+          {search ? <Pressable accessibilityRole="button" accessibilityLabel="Clear notification search" onPress={() => setSearch("")} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}><MaterialCommunityIcons name="close-circle" size={18} color={mobileBrand.muted} /></Pressable> : null}
+        </View>
+        <MobileFilterSheet label="Filter notifications" activeKey={filterMode} options={FILTER_OPTIONS} onSelect={setFilterMode} resultCount={filteredNotifications.length} compact />
+      </View>
 
       {filteredNotifications.length === 0 ? (
         <View style={[{ marginHorizontal: 16, marginTop: 14, borderRadius: 24, backgroundColor: colors.white, padding: 22, alignItems: "center" }, shadow.card]}>

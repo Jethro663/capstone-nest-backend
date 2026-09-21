@@ -20,7 +20,7 @@ import {
   selectTeacherHomePriority,
 } from "./teacher-home/model";
 import { OfflineWorkspaceNotice } from "../components/offline/OfflineWorkspaceNotice";
-import { TeacherContextStrip } from "../components/teacher/TeacherWorkspacePrimitives";
+import { mobileBrand } from "../theme/mobileBrand";
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, "Home">,
@@ -232,8 +232,8 @@ export function TeacherHomeScreen({ navigation }: Props) {
             height: 44,
             borderRadius: 12,
             borderWidth: 1,
-            borderColor: theme.border,
-            backgroundColor: theme.surface,
+              borderColor: "rgba(255,255,255,0.22)",
+              backgroundColor: "rgba(255,255,255,0.10)",
             alignItems: "center",
             justifyContent: "center",
           }}
@@ -241,7 +241,7 @@ export function TeacherHomeScreen({ navigation }: Props) {
           <MaterialCommunityIcons
             name="bell-outline"
             size={19}
-            color={theme.text}
+            color={mobileBrand.white}
           />
           {unreadCount > 0 ? (
             <View
@@ -274,12 +274,6 @@ export function TeacherHomeScreen({ navigation }: Props) {
         void overviewQuery.refetch();
       }}
     >
-      <TeacherContextStrip
-        title="Teaching workspace"
-        subtitle={formatTeacherHomeDate(now)}
-        status={`${classesQuery.data?.length ?? 0} classes`}
-        icon="view-dashboard-outline"
-      />
       <View
         style={{
           paddingHorizontal: 18,
@@ -316,9 +310,9 @@ export function TeacherHomeScreen({ navigation }: Props) {
         </View>
 
         <View>
-          <SectionHeading title="Next up" />
           {nextClass ? (
             <Pressable
+              testID="teacher-next-up"
               accessibilityRole="button"
               accessibilityLabel={`Open class ${nextClass.classItem.subjectCode}`}
               accessibilityState={{ disabled: offline }}
@@ -331,13 +325,12 @@ export function TeacherHomeScreen({ navigation }: Props) {
               }
               style={{
                 minHeight: 112,
-                borderRadius: 18,
-                borderWidth: 1,
-                borderColor: theme.border,
-                backgroundColor: theme.surface,
-                padding: 16,
+                borderRadius: 20,
+                backgroundColor: mobileBrand.navy,
+                padding: 18,
               }}
             >
+              <Text style={{ marginBottom: 10, fontSize: 10, fontWeight: "900", letterSpacing: 0.9, textTransform: "uppercase", color: "rgba(255,255,255,0.72)" }}>Next up</Text>
               <View
                 style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
               >
@@ -348,13 +341,13 @@ export function TeacherHomeScreen({ navigation }: Props) {
                     borderRadius: 12,
                     alignItems: "center",
                     justifyContent: "center",
-                    backgroundColor: theme.redSoft,
+                    backgroundColor: "rgba(220,38,38,0.92)",
                   }}
                 >
                   <MaterialCommunityIcons
                     name="clock-outline"
                     size={19}
-                    color={theme.redText}
+                    color={mobileBrand.white}
                   />
                 </View>
                 <View style={{ flex: 1 }}>
@@ -362,7 +355,7 @@ export function TeacherHomeScreen({ navigation }: Props) {
                     style={{
                       fontSize: 12,
                       fontWeight: "800",
-                      color: theme.redText,
+                      color: "rgba(255,255,255,0.78)",
                     }}
                   >
                     {nextClass.timeLabel}
@@ -372,7 +365,7 @@ export function TeacherHomeScreen({ navigation }: Props) {
                       marginTop: 3,
                       fontSize: 16,
                       fontWeight: "900",
-                      color: theme.text,
+                      color: mobileBrand.white,
                     }}
                   >
                     {classTitle(nextClass.classItem)}
@@ -381,10 +374,10 @@ export function TeacherHomeScreen({ navigation }: Props) {
                 <MaterialCommunityIcons
                   name="chevron-right"
                   size={22}
-                  color={theme.dim}
+                  color="rgba(255,255,255,0.68)"
                 />
               </View>
-              <Text style={{ marginTop: 10, fontSize: 12, color: theme.muted }}>
+              <Text style={{ marginTop: 10, fontSize: 12, color: "rgba(255,255,255,0.72)" }}>
                 {nextClass.classItem.section?.name || "Section pending"}
                 {nextClass.classItem.room
                   ? ` · ${nextClass.classItem.room}`
@@ -392,11 +385,10 @@ export function TeacherHomeScreen({ navigation }: Props) {
               </Text>
             </Pressable>
           ) : (
-            <QuietMessage>
-              {schedule.length
-                ? "No more classes are scheduled today."
-                : "No classes are scheduled today."}
-            </QuietMessage>
+            <View testID="teacher-next-up" style={{ minHeight: 96, borderRadius: 20, backgroundColor: mobileBrand.navy, padding: 18, justifyContent: "center" }}>
+              <Text style={{ fontSize: 10, fontWeight: "900", letterSpacing: 0.9, textTransform: "uppercase", color: "rgba(255,255,255,0.72)" }}>Next up</Text>
+              <Text style={{ marginTop: 8, fontSize: 15, fontWeight: "800", color: mobileBrand.white }}>{schedule.length ? "No more classes are scheduled today." : "No classes are scheduled today."}</Text>
+            </View>
           )}
         </View>
 

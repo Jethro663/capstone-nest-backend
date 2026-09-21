@@ -9,7 +9,8 @@ describe("teacher guided workbench layout contracts", () => {
   it("keeps Teacher Home task-oriented without stat cards", () => {
     const source = read("TeacherHomeScreen.tsx");
     expect(source).not.toContain("TeacherStats");
-    for (const label of ["Next up", "Today", "Priority", "Your classes", "Recent update"]) {
+    expect(source).toContain(">Next up</Text>");
+    for (const label of ["Today", "Priority", "Your classes", "Recent update"]) {
       expect(source).toContain(`title=\"${label}\"`);
     }
   });

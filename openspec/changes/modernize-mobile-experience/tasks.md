@@ -13,9 +13,9 @@
 
 ## 3. Teacher home and notification workspaces
 
-- [ ] 3.1 Add failing layout/interaction tests for the approved Teacher Home and Notification Center hierarchy.
-- [ ] 3.2 Redesign Teacher Home around Next Up, compact attention, and today's agenda without duplicate page identity.
-- [ ] 3.3 Redesign Notification Center with a single navy app bar, compact count summary, search, and the shared filter selector.
+- [x] 3.1 Add failing layout/interaction tests for the approved Teacher Home and Notification Center hierarchy.
+- [x] 3.2 Redesign Teacher Home around Next Up, compact attention, and today's agenda without duplicate page identity.
+- [x] 3.3 Redesign Notification Center with a single navy app bar, compact count summary, search, and the shared filter selector.
 
 ## 4. Module and lesson workspaces
 
