@@ -571,12 +571,11 @@ export function JaScreen({ navigation, route, preferBackNavigation = false }: Pr
         <JaChatWorkspace
           leadingAction={
             <RoleHeaderNavigationButton
-              color={dark.redText}
               onBackPress={navigation.goBack}
               preferBack={preferBackNavigation}
             />
           }
-          navigationAction={preferBackNavigation ? <RoleMenuButton color={dark.redText} /> : undefined}
+          navigationAction={preferBackNavigation ? <RoleMenuButton /> : undefined}
           classLabel={selectedClassText}
           entryState={askEntryState}
           lessonSelection={lessonSelection}
@@ -629,7 +628,7 @@ export function JaScreen({ navigation, route, preferBackNavigation = false }: Pr
     >
       <View style={{ backgroundColor: dark.header, borderBottomWidth: 1, borderBottomColor: dark.border }}>
         <View style={{ paddingHorizontal: 16, paddingTop: 13, paddingBottom: 10, flexDirection: "row", alignItems: "center", gap: 10 }}>
-          <RoleHeaderNavigationButton color={dark.redText} onBackPress={navigation.goBack} preferBack={preferBackNavigation} />
+          <RoleHeaderNavigationButton onBackPress={navigation.goBack} preferBack={preferBackNavigation} />
           <View style={{ flex: 1 }}>
             <Text style={{ color: dark.muted, fontSize: 9, fontWeight: "900", textTransform: "uppercase", letterSpacing: 1 }}>JA Hub</Text>
             <Text style={{ color: dark.text, fontSize: 14, fontWeight: "800" }}>{panel === "review" ? "Replay" : "Learner's Path"}</Text>

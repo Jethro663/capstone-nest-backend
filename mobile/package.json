@@ -17,6 +17,7 @@
     "test": "jest --runInBand",
     "test:ios-sidestore": "node --test scripts/ios-sidestore-delivery.test.cjs scripts/ios-release-manifest.test.cjs",
     "test:release": "node --test scripts/app-version-release.test.cjs",
+    "audit:design": "node scripts/check-mobile-design-system.cjs",
     "release:bump": "node scripts/app-version-release.cjs bump",
     "release:prepare": "node scripts/app-version-release.cjs prepare",
     "release:verify": "node scripts/app-version-release.cjs verify",

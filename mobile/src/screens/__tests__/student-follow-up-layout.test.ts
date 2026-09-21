@@ -22,9 +22,9 @@ describe("student mobile follow-up layout contracts", () => {
     expect(source).toContain("styles.followUpRail");
     expect(source).toContain("styles.momentumCard");
     expect(source).toContain("styles.updateBody");
+    expect(source).toContain("StudentNextMoveRow");
     expect(source).not.toContain("styles.moveGrid");
-    expect(source).toMatch(/moveTile:\s*\{[^}]*flexDirection:\s*"row"/);
-    expect(source).toMatch(/moveCopy:\s*\{[^}]*flex:\s*1[^}]*minWidth:\s*0/);
+    expect(source).not.toContain("function MoveTile");
     expect(source).not.toContain('priorityKicker: { color: "#FECACA"');
     expect(source).not.toContain(
       'priorityTitle: { marginTop: 15, color: "#FFFFFF"',

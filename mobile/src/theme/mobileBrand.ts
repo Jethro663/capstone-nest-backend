@@ -3,6 +3,7 @@ import type { ViewStyle } from "react-native";
 export const mobileBrand = {
   navy: "#0C1D3A",
   navyRaised: "#14294B",
+  navySoft: "#E8EDF5",
   red: "#DC2626",
   redPressed: "#B91C1C",
   redSoft: "#FEE2E2",
@@ -20,6 +21,19 @@ export const mobileBrand = {
   warningSoft: "#FEF3C7",
   danger: "#B42318",
   dangerSoft: "#FEE4E2",
+  info: "#175CD3",
+  infoSoft: "#EFF8FF",
+  infoBorder: "#B2DDFF",
+  successBorder: "#86EFAC",
+  warningBorder: "#FCD34D",
+  dangerBorder: "#FDA29B",
+  inverseSurface: "rgba(255,255,255,0.12)",
+  inverseSurfacePressed: "rgba(255,255,255,0.20)",
+  inverseBorder: "rgba(255,255,255,0.24)",
+  inverseForeground: "#FFFFFF",
+  inverseMuted: "#D7E0EB",
+  scrim: "rgba(12,29,58,0.48)",
+  transparent: "transparent",
   white: "#FFFFFF",
   minTarget: 44,
 } as const;
@@ -50,4 +64,3 @@ export const mobileShadows = {
     elevation: 2,
   } satisfies ViewStyle,
 } as const;
-

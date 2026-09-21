@@ -48,7 +48,7 @@ export function TeacherScreen({
       navigationLabel={canGoBack ? backLabel : "Open navigation menu"}
       navigationIcon={canGoBack ? "arrow-left" : "menu"}
       onNavigationPress={canGoBack ? onBackPress : undefined}
-      navigationAction={canGoBack ? undefined : <RoleHeaderNavigationButton color={mobileBrand.white} onBackPress={onBackPress} />}
+      navigationAction={canGoBack ? undefined : <RoleHeaderNavigationButton onBackPress={onBackPress} />}
       rightAction={rightAction}
       onRefresh={onRefresh}
       refreshing={Boolean(refreshing)}

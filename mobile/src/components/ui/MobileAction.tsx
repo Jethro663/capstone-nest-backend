@@ -3,11 +3,11 @@ import { Pressable, Text } from "react-native";
 import { mobileBrand, mobileRadii } from "../../theme/mobileBrand";
 
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>["name"];
-export type MobileActionVariant = "primary" | "secondary" | "tertiary" | "icon";
+export type MobileActionVariant = "primary" | "secondary" | "tertiary" | "icon" | "inverse";
 export type MobileActionTone = "red" | "navy" | "success" | "warning" | "danger" | "neutral";
 
 function toneColors(tone: MobileActionTone) {
-  if (tone === "navy") return { strong: mobileBrand.navy, soft: "#E8EDF5" };
+  if (tone === "navy") return { strong: mobileBrand.navy, soft: mobileBrand.navySoft };
   if (tone === "success") return { strong: mobileBrand.success, soft: mobileBrand.successSoft };
   if (tone === "warning") return { strong: mobileBrand.warning, soft: mobileBrand.warningSoft };
   if (tone === "danger") return { strong: mobileBrand.danger, soft: mobileBrand.dangerSoft };
@@ -36,8 +36,13 @@ export function MobileAction({
 }) {
   const colors = toneColors(tone);
   const filled = variant === "primary";
-  const iconOnly = variant === "icon";
-  const color = filled ? mobileBrand.white : colors.strong;
+  const inverse = variant === "inverse";
+  const iconOnly = variant === "icon" || inverse;
+  const color = inverse
+    ? mobileBrand.inverseForeground
+    : filled
+      ? mobileBrand.white
+      : colors.strong;
   return (
     <Pressable
       accessibilityRole="button"
@@ -51,8 +56,20 @@ export function MobileAction({
         opacity: disabled ? 0.45 : 1,
         borderRadius: mobileRadii.control,
         borderWidth: variant === "tertiary" ? 0 : 1,
-        borderColor: filled ? colors.strong : variant === "tertiary" ? "transparent" : mobileBrand.borderStrong,
-        backgroundColor: filled ? colors.strong : variant === "tertiary" ? "transparent" : colors.soft,
+        borderColor: inverse
+          ? mobileBrand.inverseBorder
+          : filled
+            ? colors.strong
+            : variant === "tertiary"
+              ? mobileBrand.transparent
+              : mobileBrand.borderStrong,
+        backgroundColor: inverse
+          ? mobileBrand.inverseSurface
+          : filled
+            ? colors.strong
+            : variant === "tertiary"
+              ? mobileBrand.transparent
+              : colors.soft,
         paddingHorizontal: iconOnly ? 10 : 14,
         paddingVertical: 10,
         flexDirection: "row",
@@ -66,4 +83,3 @@ export function MobileAction({
     </Pressable>
   );
 }
-

@@ -12,6 +12,7 @@ import {
   RoleDrawerProvider,
   RoleMenuButton,
 } from "../RoleNavigationDrawer";
+import { mobileBrand } from "../../../theme/mobileBrand";
 
 const mockLogout = jest.fn().mockResolvedValue(undefined);
 
@@ -183,7 +184,16 @@ describe("RoleDrawerProvider", () => {
     const trigger = renderer!.root.findByProps({
       accessibilityLabel: "Open navigation menu",
     });
-    expect(trigger.props.style).toMatchObject({ width: 48, height: 48 });
+    const triggerControl = trigger.findByType("Pressable");
+    expect(triggerControl.props.style).toMatchObject({
+      minWidth: mobileBrand.minTarget,
+      minHeight: mobileBrand.minTarget,
+      backgroundColor: mobileBrand.inverseSurface,
+      borderColor: mobileBrand.inverseBorder,
+    });
+    expect(renderer!.root.findByProps({ name: "menu" }).props.color).toBe(
+      mobileBrand.inverseForeground,
+    );
 
     act(() => trigger.props.onPress());
 
@@ -225,6 +235,16 @@ describe("RoleDrawerProvider", () => {
     });
 
     const back = renderer!.root.findByProps({ accessibilityLabel: "Back" });
+    const backControl = back.findByType("Pressable");
+    expect(backControl.props.style).toMatchObject({
+      minWidth: mobileBrand.minTarget,
+      minHeight: mobileBrand.minTarget,
+      backgroundColor: mobileBrand.inverseSurface,
+      borderColor: mobileBrand.inverseBorder,
+    });
+    expect(renderer!.root.findByProps({ name: "arrow-left" }).props.color).toBe(
+      mobileBrand.inverseForeground,
+    );
     act(() => back.props.onPress());
     expect(onBackPress).toHaveBeenCalledTimes(1);
     expect(

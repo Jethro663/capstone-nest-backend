@@ -62,7 +62,7 @@ export function StudentScreen({
         navigationLabel={showBackButton && onBackPress ? "Back" : "Open navigation menu"}
         navigationIcon={showBackButton && onBackPress ? "arrow-left" : "menu"}
         onNavigationPress={showBackButton ? onBackPress : undefined}
-        navigationAction={showBackButton && onBackPress ? undefined : <RoleHeaderNavigationButton onBackPress={onBackPress} color={mobileBrand.white} />}
+        navigationAction={showBackButton && onBackPress ? undefined : <RoleHeaderNavigationButton onBackPress={onBackPress} />}
         rightAction={rightAction}
         onRefresh={showRefreshAction ? onRefresh : undefined}
         refreshing={Boolean(refreshing)}

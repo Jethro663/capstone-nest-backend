@@ -17,7 +17,8 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { teacherTheme as theme } from "../../theme/teacher";
+import { mobileBrand } from "../../theme/mobileBrand";
+import { MobileAction } from "../ui/MobileAction";
 import {
   ROLE_DRAWER_GROUPS,
   ROLE_DRAWER_PROFILE_DESTINATION,
@@ -41,63 +42,41 @@ export function useRoleDrawer() {
   return useContext(RoleDrawerContext);
 }
 
-export function RoleMenuButton({ color = theme.redText }: { color?: string }) {
+export function RoleMenuButton() {
   const drawer = useRoleDrawer();
   if (!drawer) return null;
 
   return (
-    <Pressable
-      accessibilityRole="button"
+    <MobileAction
+      label="Open navigation menu"
       accessibilityLabel="Open navigation menu"
+      icon="menu"
+      variant="inverse"
       onPress={drawer.openDrawer}
-      style={{
-        width: 48,
-        height: 48,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: theme.border,
-        backgroundColor: theme.surface,
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <MaterialCommunityIcons name="menu" size={23} color={color} />
-    </Pressable>
+    />
   );
 }
 
 export function RoleHeaderNavigationButton({
-  color = theme.redText,
   onBackPress,
   preferBack = false,
 }: {
-  color?: string;
   onBackPress?: () => void;
   preferBack?: boolean;
 }) {
   const drawer = useRoleDrawer();
 
-  if (drawer && !preferBack) return <RoleMenuButton color={color} />;
+  if (drawer && !preferBack) return <RoleMenuButton />;
   if (!onBackPress) return null;
 
   return (
-    <Pressable
-      accessibilityRole="button"
+    <MobileAction
+      label="Back"
       accessibilityLabel="Back"
+      icon="arrow-left"
+      variant="inverse"
       onPress={onBackPress}
-      style={{
-        width: 48,
-        height: 48,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: theme.border,
-        backgroundColor: theme.surface,
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <MaterialCommunityIcons name="arrow-left" size={23} color={color} />
-    </Pressable>
+    />
   );
 }
 
@@ -197,13 +176,13 @@ function RoleNavigationDrawer({
           flexDirection: "row",
           alignItems: "center",
           gap: 12,
-          backgroundColor: active ? theme.redSoft : "transparent",
+          backgroundColor: active ? mobileBrand.navySoft : mobileBrand.transparent,
         }}
       >
         <MaterialCommunityIcons
           name={destination.icon}
           size={20}
-          color={active ? theme.redText : theme.muted}
+          color={active ? mobileBrand.red : mobileBrand.muted}
         />
         <Text
           numberOfLines={1}
@@ -212,7 +191,7 @@ function RoleNavigationDrawer({
             flex: 1,
             fontSize: 14,
             fontWeight: active ? "800" : "600",
-            color: active ? theme.redText : theme.text,
+            color: active ? mobileBrand.navy : mobileBrand.text,
           }}
         >
           {destination.label}
@@ -223,7 +202,7 @@ function RoleNavigationDrawer({
               width: 4,
               height: 22,
               borderRadius: 999,
-              backgroundColor: theme.red,
+              backgroundColor: mobileBrand.red,
             }}
           />
         ) : null}
@@ -242,7 +221,7 @@ function RoleNavigationDrawer({
         style={{
           flex: 1,
           flexDirection: "row",
-          backgroundColor: "rgba(15,23,42,0.32)",
+          backgroundColor: mobileBrand.scrim,
         }}
       >
         <View
@@ -253,9 +232,9 @@ function RoleNavigationDrawer({
             height: "100%",
             paddingTop: insets.top,
             paddingBottom: insets.bottom,
-            backgroundColor: theme.surface,
+            backgroundColor: mobileBrand.surface,
             borderRightWidth: 1,
-            borderRightColor: theme.border,
+            borderRightColor: mobileBrand.border,
           }}
         >
           <View
@@ -266,7 +245,8 @@ function RoleNavigationDrawer({
               alignItems: "center",
               gap: 12,
               borderBottomWidth: 1,
-              borderBottomColor: theme.border,
+              borderBottomColor: mobileBrand.navyRaised,
+              backgroundColor: mobileBrand.navy,
             }}
           >
             <Image
@@ -276,7 +256,7 @@ function RoleNavigationDrawer({
             />
             <View style={{ flex: 1 }}>
               <Text
-                style={{ fontSize: 16, fontWeight: "900", color: theme.text }}
+                style={{ fontSize: 16, fontWeight: "900", color: mobileBrand.inverseForeground }}
               >
                 GABHS Nexora
               </Text>
@@ -285,29 +265,19 @@ function RoleNavigationDrawer({
                   marginTop: 2,
                   fontSize: 11,
                   fontWeight: "600",
-                  color: theme.muted,
+                  color: mobileBrand.inverseMuted,
                 }}
               >
                 {roleLabels[role]}
               </Text>
             </View>
-            <Pressable
-              accessibilityRole="button"
+            <MobileAction
+              label="Close navigation menu"
               accessibilityLabel="Close navigation menu"
+              icon="close"
+              variant="inverse"
               onPress={onClose}
-              style={{
-                width: 48,
-                height: 48,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <MaterialCommunityIcons
-                name="close"
-                size={22}
-                color={theme.muted}
-              />
-            </Pressable>
+            />
           </View>
 
           <ScrollView
@@ -328,7 +298,7 @@ function RoleNavigationDrawer({
                     fontWeight: "800",
                     letterSpacing: 0.8,
                     textTransform: "uppercase",
-                    color: theme.dim,
+                    color: mobileBrand.dim,
                   }}
                 >
                   {group.label}
@@ -346,7 +316,7 @@ function RoleNavigationDrawer({
               style={{
                 padding: 12,
                 borderTopWidth: 1,
-                borderTopColor: theme.border,
+                borderTopColor: mobileBrand.border,
                 flexDirection: "row",
                 alignItems: "stretch",
                 gap: 8,
@@ -364,8 +334,8 @@ function RoleNavigationDrawer({
                   minHeight: 48,
                   borderRadius: 12,
                   borderWidth: 1,
-                  borderColor: theme.redLine,
-                  backgroundColor: theme.redSoft,
+                  borderColor: mobileBrand.dangerBorder,
+                  backgroundColor: mobileBrand.dangerSoft,
                   paddingHorizontal: 10,
                   alignItems: "center",
                   justifyContent: "center",
@@ -376,12 +346,12 @@ function RoleNavigationDrawer({
                 <MaterialCommunityIcons
                   name="logout"
                   size={18}
-                  color={theme.redText}
+                  color={mobileBrand.danger}
                 />
                 <Text
                   numberOfLines={1}
                   style={{
-                    color: theme.redText,
+                    color: mobileBrand.danger,
                     fontSize: 11,
                     fontWeight: "900",
                   }}
@@ -395,7 +365,7 @@ function RoleNavigationDrawer({
               style={{
                 padding: 12,
                 borderTopWidth: 1,
-                borderTopColor: theme.border,
+                borderTopColor: mobileBrand.border,
               }}
             >
               {renderDestination(ROLE_DRAWER_PROFILE_DESTINATION)}

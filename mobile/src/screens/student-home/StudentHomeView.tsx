@@ -9,8 +9,7 @@ import {
   StudentInlineNotice,
   StudentScreen,
 } from "../../components/student/StudentWorkspacePrimitives";
-
-type IconName = React.ComponentProps<typeof MaterialCommunityIcons>["name"];
+import { StudentNextMoveRow } from "../../components/student/StudentNextMoveRow";
 
 type ScheduleItem = {
   id: string;
@@ -106,61 +105,6 @@ function SectionHeading({
         </Pressable>
       ) : null}
     </View>
-  );
-}
-
-function MoveTile({
-  icon,
-  label,
-  title,
-  subtitle,
-  onPress,
-  tone = "blue",
-}: {
-  icon: IconName;
-  label: string;
-  title: string;
-  subtitle: string;
-  onPress?: () => void;
-  tone?: "blue" | "amber" | "green";
-}) {
-  const palette =
-    tone === "amber"
-      ? { surface: theme.amberSoft, icon: theme.amber }
-      : tone === "green"
-        ? { surface: theme.greenSoft, icon: theme.green }
-        : { surface: theme.blueSoft, icon: theme.blue };
-
-  return (
-    <Pressable
-      accessibilityRole={onPress ? "button" : undefined}
-      onPress={onPress}
-      disabled={!onPress}
-      style={({ pressed }) => [
-        styles.moveTile,
-        pressed && onPress ? styles.pressed : null,
-      ]}
-    >
-      <View style={[styles.moveIcon, { backgroundColor: palette.surface }]}>
-        <MaterialCommunityIcons name={icon} size={20} color={palette.icon} />
-      </View>
-      <View style={styles.moveCopy}>
-        <Text style={styles.moveLabel}>{label}</Text>
-        <Text numberOfLines={2} style={styles.moveTitle}>
-          {title}
-        </Text>
-        <Text numberOfLines={2} style={styles.moveSubtitle}>
-          {subtitle}
-        </Text>
-      </View>
-      {onPress ? (
-        <MaterialCommunityIcons
-          name="arrow-top-right"
-          size={18}
-          color={theme.dim}
-        />
-      ) : null}
-    </Pressable>
   );
 }
 
@@ -507,7 +451,7 @@ export function StudentHomeView({
           </View>
           <View style={styles.moveStack}>
           {secondaryLesson ? (
-            <MoveTile
+            <StudentNextMoveRow
               icon="play-circle-outline"
               label="Learning"
               title={secondaryLesson.lesson.title}
@@ -521,21 +465,21 @@ export function StudentHomeView({
               }
             />
           ) : (
-            <MoveTile
+            <StudentNextMoveRow
               icon="book-check-outline"
               label="Learning"
               title="You are up to date"
               subtitle="New published lessons will appear here."
-              tone="green"
+              tone="success"
             />
           )}
           {secondaryAssessment ? (
-            <MoveTile
+            <StudentNextMoveRow
               icon="calendar-clock-outline"
               label="Another task"
               title={secondaryAssessment.assessment.title}
               subtitle={`${secondaryAssessment.subject.name} · Due ${formatDueDate(secondaryAssessment.assessment.dueDate)}`}
-              tone="amber"
+              tone="warning"
               onPress={() =>
                 navigation.navigate("AssessmentDetail", {
                   assessmentId: secondaryAssessment.assessment.id,
@@ -545,7 +489,7 @@ export function StudentHomeView({
               }
             />
           ) : (
-            <MoveTile
+            <StudentNextMoveRow
               icon={
                 hasPendingAssessmentSync ? "sync" : "check-decagram-outline"
               }
@@ -560,7 +504,7 @@ export function StudentHomeView({
                   ? "Your latest submissions are syncing."
                   : "Nice work keeping up."
               }
-              tone={hasPendingAssessmentSync ? "blue" : "green"}
+              tone={hasPendingAssessmentSync ? "info" : "success"}
               onPress={() => navigation.navigate("Assessments")}
             />
           )}
@@ -901,39 +845,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.surface,
   },
   moveStack: { backgroundColor: theme.surface },
-  moveTile: {
-    minHeight: 88,
-    borderTopWidth: 1,
-    borderTopColor: theme.border,
-    backgroundColor: theme.surface,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  moveIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   moveCopy: { flex: 1, minWidth: 0 },
-  moveLabel: {
-    color: theme.redText,
-    fontSize: 9,
-    fontWeight: "900",
-    letterSpacing: 0.7,
-    textTransform: "uppercase",
-  },
-  moveTitle: {
-    marginTop: 3,
-    color: theme.text,
-    fontSize: 14,
-    lineHeight: 18,
-    fontWeight: "900",
-  },
   moveSubtitle: {
     marginTop: 3,
     color: theme.muted,

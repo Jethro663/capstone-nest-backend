@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { mobileBrand, mobileRadii } from "../../theme/mobileBrand";
+import { mobileBrand } from "../../theme/mobileBrand";
+import { MobileAction } from "./MobileAction";
 
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>["name"];
 
@@ -44,22 +45,13 @@ export function MobileAppBar({
     >
       <View style={{ minHeight: 48, flexDirection: "row", alignItems: "center", gap: 10 }}>
         {navigationAction ?? (
-          <Pressable
-            accessibilityRole="button"
+          <MobileAction
+            label={navigationLabel}
             accessibilityLabel={navigationLabel}
+            icon={navigationIcon}
+            variant="inverse"
             onPress={onNavigationPress}
-            style={{
-              width: mobileBrand.minTarget,
-              height: mobileBrand.minTarget,
-              minHeight: mobileBrand.minTarget,
-              borderRadius: mobileRadii.control,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: "rgba(255,255,255,0.10)",
-            }}
-          >
-            <MaterialCommunityIcons name={navigationIcon} size={21} color={mobileBrand.white} />
-          </Pressable>
+          />
         )}
         <Text
           numberOfLines={1}
@@ -70,25 +62,15 @@ export function MobileAppBar({
         </Text>
         {rightAction}
         {onRefresh ? (
-          <Pressable
-            accessibilityRole="button"
+          <MobileAction
+            label={`Refresh ${title}`}
             accessibilityLabel={`Refresh ${title}`}
-            accessibilityState={{ disabled: refreshing }}
+            icon={refreshing ? "refresh-circle" : "refresh"}
+            variant="inverse"
             disabled={refreshing}
+            loading={refreshing}
             onPress={onRefresh}
-            style={{
-              width: mobileBrand.minTarget,
-              height: mobileBrand.minTarget,
-              minHeight: mobileBrand.minTarget,
-              opacity: refreshing ? 0.5 : 1,
-              borderRadius: mobileRadii.control,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: "rgba(255,255,255,0.10)",
-            }}
-          >
-            <MaterialCommunityIcons name={refreshing ? "refresh-circle" : "refresh"} size={21} color={mobileBrand.white} />
-          </Pressable>
+          />
         ) : null}
       </View>
     </View>

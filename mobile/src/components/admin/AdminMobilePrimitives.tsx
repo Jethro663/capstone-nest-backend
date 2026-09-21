@@ -36,7 +36,7 @@ export function AdminListHeader({
   rightAction?: ReactNode;
 }) {
   void subtitle;
-  return <MobileAppBar title={title} navigationAction={<RoleHeaderNavigationButton color={mobileBrand.white} />} rightAction={rightAction} />;
+  return <MobileAppBar title={title} navigationAction={<RoleHeaderNavigationButton />} rightAction={rightAction} />;
 }
 
 function toneColors(tone: Tone = "primary") {
@@ -104,7 +104,7 @@ export function AdminScreen({
           navigationLabel={canGoBack ? backLabel : "Open navigation menu"}
           navigationIcon={canGoBack ? "arrow-left" : "menu"}
           onNavigationPress={canGoBack ? onBackPress : undefined}
-          navigationAction={canGoBack ? undefined : <RoleHeaderNavigationButton color={mobileBrand.white} onBackPress={onBackPress} />}
+          navigationAction={canGoBack ? undefined : <RoleHeaderNavigationButton onBackPress={onBackPress} />}
           rightAction={rightAction}
           onRefresh={showRefreshAction ? onRefresh : undefined}
           refreshing={Boolean(refreshing)}

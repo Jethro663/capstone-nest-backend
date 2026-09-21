@@ -1,16 +1,16 @@
 ## 1. Regression Harness and Shared Foundation
 
-- [ ] 1.1 Add red rendered tests for inverse menu/Back action contrast, target size, and accessibility labels
-- [ ] 1.2 Add unit-tested deterministic mobile design-system audit and package script
-- [ ] 1.3 Expand the mobile brand authority with inverse, overlay, information, and semantic state-border roles
-- [ ] 1.4 Implement the shared inverse-header action variant
+- [x] 1.1 Add red rendered tests for inverse menu/Back action contrast, target size, and accessibility labels
+- [x] 1.2 Add unit-tested deterministic mobile design-system audit and package script
+- [x] 1.3 Expand the mobile brand authority with inverse, overlay, information, and semantic state-border roles
+- [x] 1.4 Implement the shared inverse-header action variant
 
 ## 2. Navigation and Student Rendering Hotfix
 
-- [ ] 2.1 Migrate shared app bar, role menu/Back, drawer close, and JA header actions to the inverse variant
-- [ ] 2.2 Restyle the shared role drawer while preserving destinations and navigation callbacks
-- [ ] 2.3 Add rendered tests for interactive and informational Student next-move rows
-- [ ] 2.4 Replace the Student Home local move tile with the stable shared row without changing agenda data or routes
+- [x] 2.1 Migrate shared app bar, role menu/Back, drawer close, and JA header actions to the inverse variant
+- [x] 2.2 Restyle the shared role drawer while preserving destinations and navigation callbacks
+- [x] 2.3 Add rendered tests for interactive and informational Student next-move rows
+- [x] 2.4 Replace the Student Home local move tile with the stable shared row without changing agenda data or routes
 
 ## 3. Active Presentation Convergence
 
