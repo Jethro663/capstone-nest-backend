@@ -552,4 +552,12 @@ The signer matches build 47, so build 47 → 48 is eligible for an ordinary in-p
 - Physical-device migration from legacy build 46 or earlier through backup/sync, external download, uninstall, reinstall, authentication, and version confirmation.
 - Physical-device in-place update from production-signed build 47 to build 48.
 - Authenticated teacher visual/accessibility acceptance on narrow phone, typical phone, tablet, and enlarged-font configurations.
-- Public deployed-byte equality, CI, and deployment status remain pending until the packaging commit is pushed.
+
+### Confirmed delivery evidence
+
+- Packaging commit `3832e7345f951860ca9c2a29bc30abc92ccb25e1` was pushed to `origin/developement` with no branch divergence.
+- GitHub CI run `35615167592` passed all seven jobs, including the complete mobile, frontend, backend, AI-service, browser-security, and PostgreSQL 16/18 gates.
+- Railway frontend deployment `82ccd929-da58-4c8a-879c-a0612e995980` and backend deployment `21479333-eb5e-4414-b416-08dd588c8304` reached `SUCCESS`; the backend live health endpoint returned `status: ok`.
+- The deployed manifest, immutable APK, and rolling APK were byte-identical to the reviewed repository files. Both live APK paths measured `37,637,094` bytes and hashed to `5d80a3142999c7ab8cc83b3e146a44eb8e1e6f48bfc3d2e7df0c24370b12b342`.
+- The protected backend registration accepted Android `0.1.47` / build `48` and reverified the live artifact. Policy read-back returns build 46 and build 47 as forced binary updates to the exact immutable APK, while build 48 returns `none`.
+- Railway deployment workflow run `35615629649` completed successfully after retrying a transient GitHub `504` encountered while downloading the Railway CLI for the AI-service job.
