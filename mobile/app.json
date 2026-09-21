@@ -2,15 +2,17 @@
   "expo": {
     "name": "Nexora Mobile",
     "slug": "nexora-lms-mobile",
-    "version": "0.1.46",
+    "version": "0.1.47",
     "orientation": "default",
     "scheme": "nexora-lms-mobile",
     "userInterfaceStyle": "light",
     "icon": "./assets/ja/apk_logo.png",
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "bundleIdentifier": "com.nexora.lms.mobile",
-      "buildNumber": "47"
+      "buildNumber": "48"
     },
     "android": {
       "package": "com.nexora.lms.mobile",
@@ -19,7 +21,7 @@
         "foregroundImage": "./assets/ja/apk_logo.png",
         "backgroundColor": "#000000"
       },
-      "versionCode": 47,
+      "versionCode": 48,
       "permissions": [
         "android.permission.REQUEST_INSTALL_PACKAGES",
         "POST_NOTIFICATIONS",
