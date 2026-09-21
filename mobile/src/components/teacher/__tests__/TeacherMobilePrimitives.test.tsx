@@ -4,6 +4,7 @@ import TestRenderer, { act } from "react-test-renderer";
 import {
   TeacherAccordionSection,
   TeacherScreen,
+  TeacherSelectMenu,
   teacherTheme,
 } from "../TeacherMobilePrimitives";
 
@@ -72,16 +73,35 @@ function flattenInstanceText(node: TestRenderer.ReactTestInstance | string): str
 }
 
 describe("teacher mobile primitives", () => {
-  it("uses the restrained P2 GABHS teacher palette", () => {
-    expect(teacherTheme.red).toBe("#C96B68");
-    expect(teacherTheme.redText).toBe("#98484A");
-    expect(teacherTheme.topbar).toBe("#FFFFFF");
+  it("uses the approved navy frame and red intent palette", () => {
+    expect(teacherTheme.red).toBe("#DC2626");
+    expect(teacherTheme.redText).toBe("#DC2626");
+    expect(teacherTheme.topbar).toBe("#0C1D3A");
     expect(teacherTheme.surface).toBe("#FFFFFF");
-    expect(teacherTheme.bg).toBe("#FBFAF8");
-    expect(teacherTheme.redSoft).toBe("#FFF5F2");
-    expect(teacherTheme.border).toBe("#E7E3DF");
+    expect(teacherTheme.bg).toBe("#F6F7F9");
+    expect(teacherTheme.redSoft).toBe("#FEE2E2");
+    expect(teacherTheme.border).toBe("#E4E7EC");
     expect(teacherTheme.blue).not.toBe(teacherTheme.red);
     expect(teacherTheme.purple).not.toBe(teacherTheme.red);
+  });
+
+  it("uses the shared compact filter sheet instead of a row of options", () => {
+    const onSelect = jest.fn();
+    let renderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        <TeacherSelectMenu
+          label="Filter status"
+          selectedValue="all"
+          options={[{ value: "all", label: "All" }, { value: "draft", label: "Draft" }]}
+          onSelect={onSelect}
+        />,
+      );
+    });
+    const trigger = renderer!.root.findByProps({ accessibilityLabel: "Filter status: All" });
+    act(() => trigger.props.onPress());
+    act(() => renderer!.root.findByProps({ accessibilityLabel: "Draft" }).props.onPress());
+    expect(onSelect).toHaveBeenCalledWith("draft");
   });
 
   it("renders a compact title row without workspace or subtitle copy", () => {

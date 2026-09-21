@@ -1,12 +1,15 @@
-import { useState, type PropsWithChildren, type ReactNode } from "react";
+import { type PropsWithChildren, type ReactNode } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { Refreshable, ScreenScroll } from "../ui/primitives";
+import { MobileAction, type MobileActionTone, type MobileActionVariant } from "../ui/MobileAction";
+import { MobileAppBar } from "../ui/MobileAppBar";
+import { MobileFilterSheet } from "../ui/MobileFilterSheet";
 import { stripRichText } from "../../theme/studentDark";
 import { teacherTheme as theme } from "../../theme/teacher";
 import { shadow } from "../../theme/tokens";
 import { RoleHeaderNavigationButton } from "../navigation/RoleNavigationDrawer";
+import { mobileBrand } from "../../theme/mobileBrand";
 
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>["name"];
 
@@ -35,7 +38,6 @@ export function TeacherScreen({
   onRefresh?: () => void;
   bottomAction?: ReactNode;
 }>) {
-  const insets = useSafeAreaInsets();
   const canGoBack = showBackButton && typeof onBackPress === "function";
 
   const scrollContent = (
@@ -45,72 +47,17 @@ export function TeacherScreen({
           onRefresh ? <Refreshable refreshing={Boolean(refreshing)} onRefresh={onRefresh} /> : undefined
         }
       >
-        <View
+        <MobileAppBar
           testID="teacher-compact-header"
-          style={{
-            backgroundColor: theme.topbar,
-            borderBottomWidth: 1,
-            borderBottomColor: theme.border,
-            paddingHorizontal: 16,
-            paddingTop: insets.top + 6,
-            paddingBottom: 8,
-          }}
-        >
-          <View style={{ minHeight: 48, flexDirection: "row", alignItems: "center", gap: 10 }}>
-            {canGoBack ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={backLabel}
-                onPress={onBackPress}
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 12,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: theme.redSoft,
-                }}
-              >
-                <MaterialCommunityIcons name="arrow-left" size={20} color={theme.red} />
-              </Pressable>
-            ) : (
-              <RoleHeaderNavigationButton onBackPress={onBackPress} />
-            )}
-            <Text
-              numberOfLines={1}
-              maxFontSizeMultiplier={1.35}
-              style={{ flex: 1, fontSize: 20, fontWeight: "900", color: theme.text }}
-            >
-              {title}
-            </Text>
-            {rightAction}
-            {onRefresh ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Refresh ${title}`}
-                onPress={onRefresh}
-                disabled={Boolean(refreshing)}
-                style={{
-                  opacity: refreshing ? 0.55 : 1,
-                  width: 44,
-                  minHeight: 44,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: theme.border,
-                  backgroundColor: theme.surface,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <MaterialCommunityIcons
-                  name={refreshing ? "refresh-circle" : "refresh"}
-                  size={20}
-                  color={theme.red}
-                />
-              </Pressable>
-            ) : null}
-          </View>
-        </View>
+          title={title}
+          navigationLabel={canGoBack ? backLabel : "Open navigation menu"}
+          navigationIcon={canGoBack ? "arrow-left" : "menu"}
+          onNavigationPress={canGoBack ? onBackPress : undefined}
+          navigationAction={canGoBack ? undefined : <RoleHeaderNavigationButton color={mobileBrand.white} onBackPress={onBackPress} />}
+          rightAction={rightAction}
+          onRefresh={onRefresh}
+          refreshing={Boolean(refreshing)}
+        />
         {children}
       </ScreenScroll>
   );
@@ -214,101 +161,26 @@ export function TeacherAccordionSection({
   );
 }
 
-export function TeacherSelectMenu({
+export function TeacherSelectMenu<Key extends string>({
   label,
   selectedValue,
   options,
   onSelect,
 }: {
   label: string;
-  selectedValue: string;
-  options: Array<{ label: string; value: string }>;
-  onSelect: (value: string) => void;
+  selectedValue: Key;
+  options: Array<{ label: string; value: Key }>;
+  onSelect: (value: Key) => void;
 }) {
-  const [visible, setVisible] = useState(false);
-  const selectedLabel = options.find((option) => option.value === selectedValue)?.label ?? label;
-
   return (
-    <>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`${label}: ${selectedLabel}`}
-        accessibilityState={{ expanded: visible }}
-        onPress={() => setVisible(true)}
-        style={{
-          marginHorizontal: 16,
-          marginTop: 12,
-          minHeight: 48,
-          borderRadius: 12,
-          borderWidth: 1,
-          borderColor: theme.border,
-          backgroundColor: theme.surface,
-          paddingHorizontal: 14,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 10,
-        }}
-      >
-        <MaterialCommunityIcons name="google-classroom" size={19} color={theme.red} />
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 10, fontWeight: "700", color: theme.muted, textTransform: "uppercase" }}>{label}</Text>
-          <Text style={{ marginTop: 2, fontSize: 13, fontWeight: "800", color: theme.text }}>{selectedLabel}</Text>
-        </View>
-        <MaterialCommunityIcons name="chevron-down" size={20} color={theme.dim} />
-      </Pressable>
-      <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Close ${label}`}
-          onPress={() => setVisible(false)}
-          style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(15,23,42,0.38)" }}
-        >
-          <View
-            style={{
-              maxHeight: "70%",
-              borderTopLeftRadius: 20,
-              borderTopRightRadius: 20,
-              backgroundColor: theme.surface,
-              paddingHorizontal: 16,
-              paddingTop: 16,
-              paddingBottom: 24,
-            }}
-          >
-            <Text style={{ fontSize: 17, fontWeight: "900", color: theme.text }}>{label}</Text>
-            <ScrollView style={{ marginTop: 10 }}>
-              {options.map((option) => {
-                const selected = option.value === selectedValue;
-                return (
-                  <Pressable
-                    key={option.value}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                    onPress={() => {
-                      onSelect(option.value);
-                      setVisible(false);
-                    }}
-                    style={{
-                      minHeight: 48,
-                      borderBottomWidth: 1,
-                      borderBottomColor: theme.border,
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      paddingHorizontal: 4,
-                    }}
-                  >
-                    <Text style={{ flex: 1, fontSize: 14, fontWeight: selected ? "800" : "600", color: selected ? theme.red : theme.text }}>
-                      {option.label}
-                    </Text>
-                    {selected ? <MaterialCommunityIcons name="check" size={20} color={theme.red} /> : null}
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </View>
-        </Pressable>
-      </Modal>
-    </>
+    <View style={{ marginHorizontal: 16, marginTop: 12 }}>
+      <MobileFilterSheet
+        label={label}
+        activeKey={selectedValue}
+        options={options.map((option) => ({ key: option.value, label: option.label }))}
+        onSelect={onSelect}
+      />
+    </View>
   );
 }
 
@@ -442,53 +314,9 @@ export function TeacherActionButton({
   onPress?: () => void;
   disabled?: boolean;
 }) {
-  const background =
-    tone === "neutral"
-      ? theme.active
-      : tone === "blue"
-        ? theme.blueSoft
-        : tone === "green"
-          ? theme.greenSoft
-          : tone === "amber"
-            ? theme.amberSoft
-            : tone === "purple"
-              ? theme.purpleSoft
-              : theme.redSoft;
-  const color =
-    tone === "neutral"
-      ? theme.text
-      : tone === "blue"
-        ? theme.blue
-        : tone === "green"
-          ? theme.green
-          : tone === "amber"
-            ? theme.amber
-            : tone === "purple"
-              ? theme.purple
-              : theme.red;
-
-  return (
-    <Pressable
-      disabled={disabled}
-      onPress={onPress}
-      style={{
-        opacity: disabled ? 0.45 : 1,
-        minHeight: 44,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: color,
-        backgroundColor: background,
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 8,
-      }}
-    >
-      {icon ? <MaterialCommunityIcons name={icon} size={15} color={color} /> : null}
-      <Text style={{ fontSize: 12, fontWeight: "700", color }}>{label}</Text>
-    </Pressable>
-  );
+  const variant: MobileActionVariant = tone === "red" ? "primary" : tone === "neutral" ? "tertiary" : "secondary";
+  const mobileTone: MobileActionTone = tone === "blue" || tone === "purple" ? "navy" : tone === "green" ? "success" : tone === "amber" ? "warning" : tone === "neutral" ? "neutral" : "red";
+  return <MobileAction label={label} icon={icon} variant={variant} tone={mobileTone} onPress={onPress} disabled={disabled} />;
 }
 
 export function TeacherEmpty({

@@ -4,7 +4,11 @@ import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { RoleHeaderNavigationButton } from "../navigation/RoleNavigationDrawer";
 import { Refreshable, ScreenScroll } from "../ui/primitives";
+import { MobileAppBar } from "../ui/MobileAppBar";
+import { MobileFilterSheet } from "../ui/MobileFilterSheet";
+import { MobileSegmentedTabs } from "../ui/MobileSegmentedTabs";
 import { studentDarkTheme as theme } from "../../theme/studentDark";
+import { mobileBrand } from "../../theme/mobileBrand";
 
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>["name"];
 type Tone = "red" | "blue" | "green" | "amber" | "purple" | "neutral";
@@ -46,54 +50,22 @@ export function StudentScreen({
   showRefreshAction?: boolean;
   bottomAction?: ReactNode;
 }>) {
-  const insets = useSafeAreaInsets();
   const scrollContent = (
     <ScreenScroll
       backgroundColor={theme.bg}
       refreshControl={onRefresh ? <Refreshable refreshing={Boolean(refreshing)} onRefresh={onRefresh} /> : undefined}
     >
-      <View
+      <MobileAppBar
         testID="student-compact-header"
-        style={{
-          backgroundColor: theme.topbar,
-          borderBottomWidth: 1,
-          borderBottomColor: theme.border,
-          paddingHorizontal: 16,
-          paddingTop: insets.top + 6,
-          paddingBottom: 8,
-        }}
-      >
-        <View style={{ minHeight: 48, flexDirection: "row", alignItems: "center", gap: 10 }}>
-          {showBackButton && onBackPress ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Back"
-              onPress={onBackPress}
-              style={{ width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: theme.redSoft }}
-            >
-              <MaterialCommunityIcons name="arrow-left" size={20} color={theme.redText} />
-            </Pressable>
-          ) : (
-            <RoleHeaderNavigationButton onBackPress={onBackPress} color={theme.redText} />
-          )}
-          <Text numberOfLines={1} maxFontSizeMultiplier={1.35} style={{ flex: 1, fontSize: 20, fontWeight: "900", color: theme.text }}>
-            {title}
-          </Text>
-          {rightAction}
-          {onRefresh && showRefreshAction ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Refresh ${title}`}
-              accessibilityState={{ disabled: Boolean(refreshing) }}
-              disabled={Boolean(refreshing)}
-              onPress={onRefresh}
-              style={{ width: 44, height: 44, opacity: refreshing ? 0.5 : 1, borderRadius: 12, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.surface, alignItems: "center", justifyContent: "center" }}
-            >
-              <MaterialCommunityIcons name="refresh" size={20} color={theme.redText} />
-            </Pressable>
-          ) : null}
-        </View>
-      </View>
+        title={title}
+        navigationLabel={showBackButton && onBackPress ? "Back" : "Open navigation menu"}
+        navigationIcon={showBackButton && onBackPress ? "arrow-left" : "menu"}
+        onNavigationPress={showBackButton ? onBackPress : undefined}
+        navigationAction={showBackButton && onBackPress ? undefined : <RoleHeaderNavigationButton onBackPress={onBackPress} color={mobileBrand.white} />}
+        rightAction={rightAction}
+        onRefresh={showRefreshAction ? onRefresh : undefined}
+        refreshing={Boolean(refreshing)}
+      />
       {children}
     </ScreenScroll>
   );
@@ -224,18 +196,7 @@ export function StudentSegmentedControl<Key extends string>({
   items: Array<{ key: Key; label: string }>;
   onSelect: (key: Key) => void;
 }) {
-  return (
-    <ScrollView accessibilityRole="tablist" accessibilityLabel={accessibilityLabel} horizontal showsHorizontalScrollIndicator={false} style={{ borderBottomWidth: 1, borderBottomColor: theme.border, backgroundColor: theme.surface }} contentContainerStyle={{ paddingHorizontal: 16 }}>
-      {items.map((item) => {
-        const selected = item.key === activeKey;
-        return (
-          <Pressable key={item.key} accessibilityRole="tab" accessibilityLabel={item.label} accessibilityState={{ selected }} onPress={() => onSelect(item.key)} style={{ minHeight: 44, justifyContent: "center", borderBottomWidth: 2, borderBottomColor: selected ? theme.red : "transparent", paddingHorizontal: 13 }}>
-            <Text style={{ fontSize: 12, fontWeight: selected ? "800" : "600", color: selected ? theme.redText : theme.muted }}>{item.label}</Text>
-          </Pressable>
-        );
-      })}
-    </ScrollView>
-  );
+  return <View style={{ marginHorizontal: 16, marginTop: 12 }}><MobileSegmentedTabs accessibilityLabel={accessibilityLabel} activeKey={activeKey} items={items} onSelect={onSelect} /></View>;
 }
 
 export function StudentSelectMenu({
@@ -251,31 +212,7 @@ export function StudentSelectMenu({
   onSelect: (value: string) => void;
   icon?: IconName;
 }) {
-  const [visible, setVisible] = useState(false);
-  const selectedLabel = options.find((option) => option.value === selectedValue)?.label ?? label;
-  return (
-    <>
-      <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${selectedLabel}`} accessibilityState={{ expanded: visible }} onPress={() => setVisible(true)} style={{ marginHorizontal: 16, marginTop: 12, minHeight: 48, borderRadius: 12, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.surface, paddingHorizontal: 13, flexDirection: "row", alignItems: "center", gap: 10 }}>
-        <MaterialCommunityIcons name={icon} size={19} color={theme.redText} />
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 10, fontWeight: "700", color: theme.muted, textTransform: "uppercase" }}>{label}</Text>
-          <Text style={{ marginTop: 2, fontSize: 13, fontWeight: "800", color: theme.text }}>{selectedLabel}</Text>
-        </View>
-        <MaterialCommunityIcons name="chevron-down" size={20} color={theme.dim} />
-      </Pressable>
-      <StudentActionSheet visible={visible} title={label} onClose={() => setVisible(false)}>
-        {options.map((option) => {
-          const selected = option.value === selectedValue;
-          return (
-            <Pressable key={option.value} accessibilityRole="button" accessibilityLabel={option.label} accessibilityState={{ selected }} onPress={() => { onSelect(option.value); setVisible(false); }} style={{ minHeight: 52, borderBottomWidth: 1, borderBottomColor: theme.border, flexDirection: "row", alignItems: "center", paddingHorizontal: 2 }}>
-              <Text style={{ flex: 1, fontSize: 14, fontWeight: selected ? "800" : "600", color: selected ? theme.redText : theme.text }}>{option.label}</Text>
-              {selected ? <MaterialCommunityIcons name="check" size={20} color={theme.redText} /> : null}
-            </Pressable>
-          );
-        })}
-      </StudentActionSheet>
-    </>
-  );
+  return <View style={{ marginHorizontal: 16, marginTop: 12 }}><MobileFilterSheet label={label} activeKey={selectedValue} options={options.map((option) => ({ key: option.value, label: option.label }))} onSelect={onSelect} icon={icon} /></View>;
 }
 
 export function StudentFlatSection({ title, subtitle, action, children }: PropsWithChildren<{ title: string; subtitle?: string; action?: ReactNode }>) {

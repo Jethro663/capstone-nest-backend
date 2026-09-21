@@ -1,4 +1,5 @@
 import type { ViewStyle } from "react-native";
+import { mobileBrand } from "./mobileBrand";
 
 export const modernAcademic = {
   surface: "#F7F9FB",
@@ -15,10 +16,10 @@ export const modernAcademic = {
   inverseOnSurface: "#EFF1F3",
   outline: "#757684",
   outlineVariant: "#C4C5D5",
-  surfaceTint: "#3755C3",
-  primary: "#00288E",
+  surfaceTint: mobileBrand.red,
+  primary: mobileBrand.navy,
   onPrimary: "#FFFFFF",
-  primaryContainer: "#1E40AF",
+  primaryContainer: mobileBrand.navyRaised,
   onPrimaryContainer: "#A8B8FF",
   inversePrimary: "#B8C4FF",
   secondary: "#505F76",

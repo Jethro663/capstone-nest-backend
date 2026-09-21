@@ -3,6 +3,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { teacherTheme as theme } from "../../theme/teacher";
+import { MobileSegmentedTabs } from "../ui/MobileSegmentedTabs";
 
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>["name"];
 type Tone = "red" | "blue" | "green" | "amber" | "purple" | "neutral";
@@ -271,63 +272,8 @@ export function TeacherSegmentedTabs<Key extends string>({
   accessibilityLabel: string;
 }) {
   return (
-    <View
-      accessibilityRole="tablist"
-      accessibilityLabel={accessibilityLabel}
-      style={{
-        marginHorizontal: 16,
-        marginTop: 12,
-        flexDirection: "row",
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: theme.border,
-        backgroundColor: theme.surface,
-        padding: 3,
-      }}
-    >
-      {items.map((item) => {
-        const selected = item.key === activeKey;
-        const itemLabel = item.count === undefined ? item.label : `${item.label}, ${item.count}`;
-        return (
-          <Pressable
-            key={item.key}
-            accessibilityRole="tab"
-            accessibilityLabel={itemLabel}
-            accessibilityState={{ selected }}
-            onPress={() => onSelect(item.key)}
-            style={{
-              flex: 1,
-              minWidth: 0,
-              minHeight: 44,
-              borderRadius: 9,
-              backgroundColor: selected ? theme.redSoft : "transparent",
-              alignItems: "center",
-              justifyContent: "center",
-              flexDirection: "row",
-              gap: 5,
-              paddingHorizontal: 6,
-            }}
-          >
-            <Text
-              numberOfLines={1}
-              maxFontSizeMultiplier={1.25}
-              style={{
-                flexShrink: 1,
-                fontSize: 11,
-                fontWeight: selected ? "900" : "700",
-                color: selected ? theme.redText : theme.muted,
-              }}
-            >
-              {item.label}
-            </Text>
-            {item.count !== undefined ? (
-              <Text style={{ fontSize: 10, fontWeight: "900", color: selected ? theme.redText : theme.dim }}>
-                {item.count}
-              </Text>
-            ) : null}
-          </Pressable>
-        );
-      })}
+    <View style={{ marginHorizontal: 16, marginTop: 12 }}>
+      <MobileSegmentedTabs items={items} activeKey={activeKey} onSelect={onSelect} accessibilityLabel={accessibilityLabel} />
     </View>
   );
 }

@@ -12,10 +12,12 @@ import {
   type TextInputProps,
   type ViewStyle,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Refreshable, ScreenScroll } from "../ui/primitives";
+import { MobileFilterSheet } from "../ui/MobileFilterSheet";
+import { MobileAppBar } from "../ui/MobileAppBar";
 import { RoleHeaderNavigationButton } from "../navigation/RoleNavigationDrawer";
 import { adminTheme as theme } from "../../theme/admin";
+import { mobileBrand } from "../../theme/mobileBrand";
 import { AdminMaintenanceNotice } from "./AdminMaintenanceNotice";
 
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>["name"];
@@ -32,56 +34,8 @@ export function AdminListHeader({
   subtitle?: string;
   rightAction?: ReactNode;
 }) {
-  const insets = useSafeAreaInsets();
-  return (
-    <View
-      style={{
-        paddingTop: insets.top + 6,
-        paddingBottom: subtitle ? 12 : 8,
-        paddingHorizontal: 16,
-        backgroundColor: theme.surface,
-        borderBottomWidth: 1,
-        borderBottomColor: theme.border,
-      }}
-    >
-      <View
-        style={{
-          minHeight: 48,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 10,
-        }}
-      >
-        <RoleHeaderNavigationButton color={theme.primary} />
-        <Text
-          numberOfLines={1}
-          maxFontSizeMultiplier={1.35}
-          style={{
-            flex: 1,
-            fontSize: 20,
-            fontWeight: "900",
-            color: theme.text,
-          }}
-        >
-          {title}
-        </Text>
-        {rightAction}
-      </View>
-      {subtitle ? (
-        <Text
-          style={{
-            marginLeft: 54,
-            marginTop: 2,
-            fontSize: 12,
-            lineHeight: 17,
-            color: theme.subtext,
-          }}
-        >
-          {subtitle}
-        </Text>
-      ) : null}
-    </View>
-  );
+  void subtitle;
+  return <MobileAppBar title={title} navigationAction={<RoleHeaderNavigationButton color={mobileBrand.white} />} rightAction={rightAction} />;
 }
 
 function toneColors(tone: Tone = "primary") {
@@ -125,7 +79,6 @@ export function AdminScreen({
   showRefreshAction?: boolean;
   bottomAction?: ReactNode;
 }>) {
-  const insets = useSafeAreaInsets();
   const canGoBack = showBackButton && typeof onBackPress === "function";
   const content = (
     <KeyboardAvoidingView
@@ -144,98 +97,17 @@ export function AdminScreen({
           ) : undefined
         }
       >
-        <View
+        <MobileAppBar
           testID="admin-compact-header"
-          style={{
-            paddingTop: insets.top + 6,
-            paddingBottom: subtitle ? 12 : 8,
-            paddingHorizontal: 16,
-            backgroundColor: theme.surface,
-            borderBottomWidth: 1,
-            borderBottomColor: theme.border,
-          }}
-        >
-          <View
-            style={{
-              minHeight: 48,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 10,
-            }}
-          >
-            {canGoBack ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={backLabel}
-                onPress={onBackPress}
-                style={{
-                  width: 48,
-                  height: 48,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <MaterialCommunityIcons
-                  name="arrow-left"
-                  size={22}
-                  color={theme.primary}
-                />
-              </Pressable>
-            ) : (
-              <RoleHeaderNavigationButton
-                color={theme.primary}
-                onBackPress={onBackPress}
-              />
-            )}
-            <Text
-              numberOfLines={1}
-              maxFontSizeMultiplier={1.35}
-              style={{
-                flex: 1,
-                fontSize: 20,
-                fontWeight: "900",
-                color: theme.text,
-              }}
-            >
-              {title}
-            </Text>
-            {rightAction}
-            {showRefreshAction && onRefresh ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Refresh ${title}`}
-                onPress={onRefresh}
-                disabled={Boolean(refreshing)}
-                style={{
-                  width: 48,
-                  height: 48,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  opacity: refreshing ? 0.5 : 1,
-                }}
-              >
-                <MaterialCommunityIcons
-                  name="refresh"
-                  size={21}
-                  color={theme.primary}
-                />
-              </Pressable>
-            ) : null}
-          </View>
-          {subtitle ? (
-            <Text
-              style={{
-                marginLeft: canGoBack ? 54 : 54,
-                marginTop: 2,
-                fontSize: 12,
-                lineHeight: 17,
-                color: theme.subtext,
-              }}
-            >
-              {subtitle}
-            </Text>
-          ) : null}
-        </View>
+          title={title}
+          navigationLabel={canGoBack ? backLabel : "Open navigation menu"}
+          navigationIcon={canGoBack ? "arrow-left" : "menu"}
+          onNavigationPress={canGoBack ? onBackPress : undefined}
+          navigationAction={canGoBack ? undefined : <RoleHeaderNavigationButton color={mobileBrand.white} onBackPress={onBackPress} />}
+          rightAction={rightAction}
+          onRefresh={showRefreshAction ? onRefresh : undefined}
+          refreshing={Boolean(refreshing)}
+        />
         <AdminMaintenanceNotice />
         {children}
       </ScreenScroll>
@@ -691,60 +563,19 @@ export function AdminFilterBar<Key extends string>({
           </Pressable>
         ) : null}
       </View>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{
-          paddingHorizontal: 16,
-          paddingVertical: 10,
-          gap: 6,
-        }}
-      >
-        {segments.map((segment) => {
-          const selected = segment.key === activeSegment;
-          return (
-            <Pressable
-              key={segment.key}
-              accessibilityRole="button"
-              accessibilityLabel={`Show ${segment.label}`}
-              accessibilityState={{ selected }}
-              onPress={() => onSegmentChange(segment.key)}
-              style={{
-                minHeight: 48,
-                minWidth: 62,
-                paddingHorizontal: 12,
-                borderRadius: 8,
-                borderWidth: 1,
-                borderColor: selected ? theme.primary : theme.border,
-                backgroundColor: selected ? theme.primarySoft : theme.surface,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 11,
-                  fontWeight: "800",
-                  color: selected ? theme.primary : theme.subtext,
-                }}
-              >
-                {segment.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-        <View
-          style={{
-            minHeight: 48,
-            paddingHorizontal: 8,
-            justifyContent: "center",
-          }}
-        >
-          <Text style={{ fontSize: 11, fontWeight: "700", color: theme.muted }}>
-            {resultCount} {resultCount === 1 ? "result" : "results"}
-          </Text>
-        </View>
-      </ScrollView>
+      <View style={{ marginHorizontal: 16, marginVertical: 10 }}>
+        <MobileFilterSheet
+          label="Filter records"
+          activeKey={activeSegment}
+          options={segments.map((segment) => ({ key: segment.key, label: segment.label }))}
+          onSelect={onSegmentChange}
+          resultCount={resultCount}
+          compact
+        />
+        <Text style={{ marginTop: 6, fontSize: 11, fontWeight: "700", color: theme.muted }}>
+          {resultCount} {resultCount === 1 ? "result" : "results"}
+        </Text>
+      </View>
     </View>
   );
 }

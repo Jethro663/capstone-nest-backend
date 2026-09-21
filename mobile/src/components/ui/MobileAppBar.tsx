@@ -15,6 +15,7 @@ export function MobileAppBar({
   rightAction,
   onRefresh,
   refreshing = false,
+  testID = "mobile-app-bar",
 }: {
   title: string;
   navigationLabel?: string;
@@ -24,11 +25,12 @@ export function MobileAppBar({
   rightAction?: ReactNode;
   onRefresh?: () => void;
   refreshing?: boolean;
+  testID?: string;
 }) {
   const insets = useSafeAreaInsets();
   return (
     <View
-      testID="mobile-app-bar"
+      testID={testID}
       style={[
         {
           backgroundColor: mobileBrand.navy,
@@ -49,6 +51,7 @@ export function MobileAppBar({
             style={{
               width: mobileBrand.minTarget,
               height: mobileBrand.minTarget,
+              minHeight: mobileBrand.minTarget,
               borderRadius: mobileRadii.control,
               alignItems: "center",
               justifyContent: "center",
@@ -76,6 +79,7 @@ export function MobileAppBar({
             style={{
               width: mobileBrand.minTarget,
               height: mobileBrand.minTarget,
+              minHeight: mobileBrand.minTarget,
               opacity: refreshing ? 0.5 : 1,
               borderRadius: mobileRadii.control,
               alignItems: "center",
@@ -90,4 +94,3 @@ export function MobileAppBar({
     </View>
   );
 }
-

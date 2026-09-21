@@ -21,6 +21,8 @@ jest.mock("react-native", () => {
     };
 
   return {
+    Modal: ({ visible, children, ...props }: Record<string, unknown>) =>
+      visible ? ReactRuntime.createElement("Modal", props, children) : null,
     Pressable: component("Pressable"),
     ScrollView: component("ScrollView"),
     Text: component("Text"),
@@ -122,7 +124,7 @@ describe("admin mobile primitives", () => {
     ).toHaveLength(2);
   });
 
-  it("standardizes search, clear, segments, and visible result count", () => {
+  it("standardizes search, clear, one filter sheet, and visible result count", () => {
     const onSearchChange = jest.fn();
     const onSegmentChange = jest.fn();
     let renderer: TestRenderer.ReactTestRenderer;
@@ -155,16 +157,10 @@ describe("admin mobile primitives", () => {
     );
     expect(onSearchChange).toHaveBeenCalledWith("");
 
-    const active = renderer!.root.findByProps({
-      accessibilityLabel: "Show Active",
-    });
-    expect(active.props.accessibilityState).toEqual({ selected: true });
-    expect(active.props.style).toMatchObject({ minHeight: 48 });
-    act(() =>
-      renderer!.root
-        .findByProps({ accessibilityLabel: "Show All" })
-        .props.onPress(),
-    );
+    const active = renderer!.root.findByProps({ accessibilityLabel: "Filter records: Active" });
+    expect(active.props.style).toMatchObject({ minHeight: 44 });
+    act(() => active.props.onPress());
+    act(() => renderer!.root.findByProps({ accessibilityLabel: "All" }).props.onPress());
     expect(onSegmentChange).toHaveBeenCalledWith("all");
   });
 
