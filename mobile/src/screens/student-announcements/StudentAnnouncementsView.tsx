@@ -6,7 +6,6 @@ import {
   StudentFlatSection,
   StudentListRow,
   StudentScreen,
-  StudentSegmentedControl,
   StudentSelectMenu,
 } from "../../components/student/StudentWorkspacePrimitives";
 import { announcementPreview, normalizeAnnouncementContent } from "../../utils/announcementContent";
@@ -42,7 +41,16 @@ export function StudentAnnouncementsView({
   return (
     <StudentScreen title="Announcements" refreshing={refreshing} onRefresh={onRefresh}>
       <StudentSelectMenu label="Class" selectedValue={selectedClassId} options={classOptions} onSelect={onSelectClass} icon="google-classroom" />
-      <StudentSegmentedControl accessibilityLabel="Announcement status" activeKey={filterMode} items={[{ key: "all", label: "All posts" }, { key: "pinned", label: "Pinned only" }]} onSelect={onFilterModeChange} />
+      <StudentSelectMenu
+        label="Announcement status"
+        selectedValue={filterMode}
+        options={[
+          { value: "all", label: "All posts" },
+          { value: "pinned", label: "Pinned only" },
+        ]}
+        onSelect={onFilterModeChange}
+        icon="filter-variant"
+      />
       <StudentFlatSection title="Latest posts" subtitle={`${announcements.length} shown across ${allAnnouncementCount} available`}>
         {announcements.length === 0 ? (
           <StudentListRow title={allAnnouncementCount === 0 ? "No announcements yet" : "No pinned announcements"} subtitle={allAnnouncementCount === 0 ? "Your class updates will appear here." : "Switch back to All posts to see every class update."} icon="inbox-outline" />

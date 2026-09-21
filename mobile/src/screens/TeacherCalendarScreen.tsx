@@ -5,10 +5,10 @@ import { queryKeys } from "../api/hooks";
 import { mobileWorkspaceApi } from "../api/services/mobile-workspace";
 import type { TeacherDrawerScreenProps } from "../navigation/types";
 import {
-  TeacherChip,
   TeacherEmpty,
   TeacherRow,
   TeacherScreen,
+  TeacherSelectMenu,
   teacherTheme as theme,
 } from "../components/teacher/TeacherMobilePrimitives";
 import { useAuth } from "../providers/AuthProvider";
@@ -287,29 +287,18 @@ export function TeacherCalendarScreen({ navigation, route }: Props) {
           <OfflineWorkspaceNotice lastSyncedAt={offlineState.lastSyncedAt} />
         </View>
       ) : null}
-      <View
-        style={{
-          marginHorizontal: 16,
-          marginTop: 10,
-          flexDirection: "row",
-          gap: 6,
-          flexWrap: "wrap",
-        }}
-      >
-        <TeacherChip
-          label="All classes"
-          active={selectedClassId === "all"}
-          onPress={() => setSelectedClassId("all")}
-        />
-        {(classesQuery.data ?? []).slice(0, 5).map((entry) => (
-          <TeacherChip
-            key={entry.id}
-            label={entry.subjectCode}
-            active={selectedClassId === entry.id}
-            onPress={() => setSelectedClassId(entry.id)}
-          />
-        ))}
-      </View>
+      <TeacherSelectMenu
+        label="Class filter"
+        selectedValue={selectedClassId}
+        options={[
+          { value: "all", label: "All classes" },
+          ...(classesQuery.data ?? []).map((entry) => ({
+            value: entry.id,
+            label: entry.subjectCode,
+          })),
+        ]}
+        onSelect={setSelectedClassId}
+      />
 
       <TeacherFlatSection
         title={formatDateLabel(month)}

@@ -12,10 +12,10 @@ import {
 import { API_BASE_URL } from "../api/config";
 import type { MainTabParamList, RootStackParamList } from "../navigation/types";
 import {
-  TeacherChip,
   TeacherEmpty,
   TeacherScreen,
   TeacherSearch,
+  TeacherSelectMenu,
   teacherTheme as theme,
 } from "../components/teacher/TeacherMobilePrimitives";
 import { TeacherSectionPresentationCard } from "../components/teacher/TeacherPresentationCards";
@@ -148,24 +148,17 @@ export function TeacherSectionsScreen({ navigation }: Props) {
         placeholder="Search by section, grade level, or school year"
       />
 
-      <View
-        style={{
-          marginHorizontal: 16,
-          marginTop: 10,
-          flexDirection: "row",
-          flexWrap: "wrap",
-          gap: 8,
-        }}
-      >
-        {(["all", "active", "archived", "hidden"] as const).map((entry) => (
-          <TeacherChip
-            key={entry}
-            label={entry[0].toUpperCase() + entry.slice(1)}
-            active={filter === entry}
-            onPress={() => setFilter(entry)}
-          />
-        ))}
-      </View>
+      <TeacherSelectMenu
+        label="Section status"
+        selectedValue={filter}
+        options={[
+          { value: "all", label: "All sections" },
+          { value: "active", label: "Active" },
+          { value: "archived", label: "Archived" },
+          { value: "hidden", label: "Hidden" },
+        ]}
+        onSelect={setFilter}
+      />
 
       <View style={{ marginHorizontal: 16, marginTop: 18, gap: 14 }}>
         {filtered.length ? (

@@ -22,7 +22,7 @@ describe("teacher guided workbench layout contracts", () => {
     ["TeacherLibraryScreen.tsx", ["TeacherSelectMenu", "TeacherSegmentedTabs", "TeacherFlatSection"]],
     ["TeacherAnnouncementsScreen.tsx", ["TeacherSelectMenu", "TeacherSegmentedTabs", "TeacherFlatSection"]],
     ["TeacherReportsScreen.tsx", ["TeacherSelectMenu", "TeacherSegmentedTabs", "TeacherFlatSection"]],
-    ["TeacherInterventionsScreen.tsx", ["TeacherSegmentedTabs", "TeacherActionSheet", "TeacherFlatSection"]],
+    ["TeacherInterventionsScreen.tsx", ["TeacherSelectMenu", "TeacherSegmentedTabs", "TeacherFlatSection"]],
     ["TeacherPerformanceScreen.tsx", ["TeacherSelectMenu", "TeacherSegmentedTabs", "TeacherSummaryStrip"]],
     ["TeacherEvaluationsScreen.tsx", ["TeacherSegmentedTabs", "TeacherSummaryStrip", "TeacherFlatSection"]],
   ])("migrates %s to the shared workbench primitives", (file, primitives) => {

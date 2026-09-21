@@ -12,6 +12,7 @@ import {
   TeacherEmpty,
   TeacherRow,
   TeacherScreen,
+  TeacherSelectMenu,
   teacherTheme as theme,
 } from "../components/teacher/TeacherMobilePrimitives";
 import {
@@ -147,22 +148,33 @@ export function TeacherEvaluationsScreen({ navigation }: Props) {
             ]}
           />
 
-          <View style={{ marginHorizontal: 16, marginTop: 10, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {evaluationTypes.map((entry) => (
-              <TeacherChip key={entry.value} label={entry.label} active={evaluationType === entry.value} onPress={() => setEvaluationType(entry.value)} />
-            ))}
-          </View>
-          <View style={{ marginHorizontal: 16, marginTop: 8, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            <TeacherChip label="All classes" active={selectedClassId === "all"} onPress={() => setSelectedClassId("all")} />
-            {(summaryQuery.data?.classes ?? []).slice(0, 6).map((entry) => (
-              <TeacherChip key={entry.id} label={entry.subjectCode} active={selectedClassId === entry.id} onPress={() => setSelectedClassId(entry.id)} />
-            ))}
-          </View>
-          <View style={{ marginHorizontal: 16, marginTop: 8, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {periodOptions.map((entry) => (
-              <TeacherChip key={entry} label={entry === "all" ? "All periods" : entry} active={gradingPeriod === entry} onPress={() => setGradingPeriod(entry)} />
-            ))}
-          </View>
+          <TeacherSelectMenu
+            label="Evaluation type"
+            selectedValue={evaluationType}
+            options={evaluationTypes}
+            onSelect={setEvaluationType}
+          />
+          <TeacherSelectMenu
+            label="Class filter"
+            selectedValue={selectedClassId}
+            options={[
+              { value: "all", label: "All classes" },
+              ...(summaryQuery.data?.classes ?? []).map((entry) => ({
+                value: entry.id,
+                label: entry.subjectCode,
+              })),
+            ]}
+            onSelect={setSelectedClassId}
+          />
+          <TeacherSelectMenu
+            label="Grading period"
+            selectedValue={gradingPeriod}
+            options={periodOptions.map((value) => ({
+              value,
+              label: value === "all" ? "All periods" : value,
+            }))}
+            onSelect={setGradingPeriod}
+          />
 
           <TeacherFlatSection title={summaryQuery.data?.tabTitle ?? "Evaluation summary"} subtitle={summaryQuery.data?.tabDescription ?? "Evaluation results for the selected filters."}>
             {summaryQuery.isError ? (

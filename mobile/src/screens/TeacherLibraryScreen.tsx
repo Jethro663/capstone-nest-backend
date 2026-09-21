@@ -11,7 +11,6 @@ import { useAuth } from "../providers/AuthProvider";
 import { TeacherConfirmModal } from "../components/teacher/TeacherConfirmModal";
 import {
   TeacherActionButton,
-  TeacherChip,
   TeacherEmpty,
   TeacherRow,
   TeacherScreen,
@@ -218,29 +217,18 @@ export function TeacherLibraryScreen({ navigation }: Props) {
           title="Folders"
           subtitle="Filter the source library or create a private folder."
         >
-          <View
-            style={{
-              paddingHorizontal: 14,
-              paddingBottom: 12,
-              flexDirection: "row",
-              flexWrap: "wrap",
-              gap: 7,
-            }}
-          >
-            <TeacherChip
-              label="All folders"
-              active={selectedFolderId === "all"}
-              onPress={() => setSelectedFolderId("all")}
-            />
-            {(foldersQuery.data ?? []).map((folder) => (
-              <TeacherChip
-                key={folder.id}
-                label={folder.name}
-                active={selectedFolderId === folder.id}
-                onPress={() => setSelectedFolderId(folder.id)}
-              />
-            ))}
-          </View>
+          <TeacherSelectMenu
+            label="Folder"
+            selectedValue={selectedFolderId}
+            options={[
+              { value: "all", label: "All folders" },
+              ...(foldersQuery.data ?? []).map((folder) => ({
+                value: folder.id,
+                label: folder.name,
+              })),
+            ]}
+            onSelect={setSelectedFolderId}
+          />
           <View
             style={{
               paddingHorizontal: 14,

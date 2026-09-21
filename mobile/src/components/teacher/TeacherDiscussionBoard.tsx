@@ -24,6 +24,7 @@ import {
   TeacherInlineField,
   TeacherPanel,
   TeacherSearch,
+  TeacherSelectMenu,
   stripRichText,
   teacherTheme as theme,
 } from "./TeacherMobilePrimitives";
@@ -314,16 +315,15 @@ export function TeacherDiscussionBoard({ classId, registerRefetch }: Props) {
     <View>
       <TeacherSearch value={search} onChangeText={setSearch} placeholder="Search threads, author, or content" />
 
-      <View style={{ marginHorizontal: 16, marginTop: 10, flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-        {THREAD_STATUS_FILTERS.map((filterKey) => (
-          <TeacherChip
-            key={filterKey}
-            label={filterKey === "all" ? "All" : filterKey[0].toUpperCase() + filterKey.slice(1)}
-            active={statusFilter === filterKey}
-            onPress={() => setStatusFilter(filterKey)}
-          />
-        ))}
-      </View>
+      <TeacherSelectMenu
+        label="Thread status"
+        selectedValue={statusFilter}
+        options={THREAD_STATUS_FILTERS.map((value) => ({
+          value,
+          label: value === "all" ? "All threads" : value[0].toUpperCase() + value.slice(1),
+        }))}
+        onSelect={setStatusFilter}
+      />
 
       <TeacherPanel
         title="Thread Composer"

@@ -199,7 +199,7 @@ export function StudentSegmentedControl<Key extends string>({
   return <View style={{ marginHorizontal: 16, marginTop: 12 }}><MobileSegmentedTabs accessibilityLabel={accessibilityLabel} activeKey={activeKey} items={items} onSelect={onSelect} /></View>;
 }
 
-export function StudentSelectMenu({
+export function StudentSelectMenu<Key extends string>({
   label,
   selectedValue,
   options,
@@ -207,9 +207,9 @@ export function StudentSelectMenu({
   icon = "google-classroom",
 }: {
   label: string;
-  selectedValue: string;
-  options: Array<{ label: string; value: string }>;
-  onSelect: (value: string) => void;
+  selectedValue: Key;
+  options: Array<{ label: string; value: Key }>;
+  onSelect: (value: Key) => void;
   icon?: IconName;
 }) {
   return <View style={{ marginHorizontal: 16, marginTop: 12 }}><MobileFilterSheet label={label} activeKey={selectedValue} options={options.map((option) => ({ key: option.value, label: option.label }))} onSelect={onSelect} icon={icon} /></View>;

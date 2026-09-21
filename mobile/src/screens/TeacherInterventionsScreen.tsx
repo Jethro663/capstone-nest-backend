@@ -20,7 +20,6 @@ import type {
 import { TeacherInterventionWorkspaceContent } from "./TeacherDeepParityScreens";
 import {
   TeacherActionButton,
-  TeacherChip,
   TeacherEmpty,
   TeacherRow,
   TeacherScreen,
@@ -29,7 +28,6 @@ import {
   teacherTheme,
 } from "../components/teacher/TeacherMobilePrimitives";
 import {
-  TeacherActionSheet,
   TeacherFlatSection,
   TeacherSegmentedTabs,
   TeacherSummaryStrip,
@@ -217,7 +215,6 @@ export function TeacherInterventionsScreen({ navigation, route }: Props) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [sortMode, setSortMode] = useState<SortMode>("newest");
-  const [filtersVisible, setFiltersVisible] = useState(false);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [selectedHistoryRow, setSelectedHistoryRow] =
     useState<TeacherInterventionHistoryRow | null>(null);
@@ -440,59 +437,27 @@ export function TeacherInterventionsScreen({ navigation, route }: Props) {
         onChangeText={setSearch}
         placeholder="Search student, email, status, or source"
       />
-      <View style={{ marginHorizontal: 16, marginTop: 8, alignItems: "flex-start" }}>
-        <TeacherActionButton
-          label={`Filter · ${statusFilter === "all" ? "All status" : statusFilter} · ${sortMode}`}
-          icon="tune-variant"
-          tone="neutral"
-          onPress={() => setFiltersVisible(true)}
-        />
-      </View>
-      <TeacherActionSheet
-        visible={filtersVisible}
-        title="Filter interventions"
-        subtitle="Choose a status and sort order."
-        onClose={() => setFiltersVisible(false)}
-      >
-        <View style={{ paddingBottom: 14, gap: 12 }}>
-          <Text style={{ color: teacherTheme.text, fontSize: 12, fontWeight: "900" }}>Status</Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {(
-              [
-                "all",
-                "pending",
-                "active",
-                "completed",
-                "dismissed",
-              ] as StatusFilter[]
-            ).map((status) => (
-              <TeacherChip
-                key={status}
-                label={status === "all" ? "All status" : status}
-                active={statusFilter === status}
-                onPress={() => setStatusFilter(status)}
-              />
-            ))}
-          </View>
-          <Text style={{ color: teacherTheme.text, fontSize: 12, fontWeight: "900" }}>Sort</Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {(["newest", "risk", "progress"] as SortMode[]).map((sort) => (
-              <TeacherChip
-                key={sort}
-                label={
-                  sort === "newest"
-                    ? "Newest"
-                    : sort === "risk"
-                      ? "Highest risk"
-                      : "Least progress"
-                }
-                active={sortMode === sort}
-                onPress={() => setSortMode(sort)}
-              />
-            ))}
-          </View>
-        </View>
-      </TeacherActionSheet>
+      <TeacherSelectMenu
+        label="Case status"
+        selectedValue={statusFilter}
+        options={(
+          ["all", "pending", "active", "completed", "dismissed"] as StatusFilter[]
+        ).map((value) => ({
+          value,
+          label: value === "all" ? "All status" : value[0].toUpperCase() + value.slice(1),
+        }))}
+        onSelect={setStatusFilter}
+      />
+      <TeacherSelectMenu
+        label="Sort cases"
+        selectedValue={sortMode}
+        options={[
+          { value: "newest", label: "Newest" },
+          { value: "risk", label: "Highest risk" },
+          { value: "progress", label: "Least progress" },
+        ]}
+        onSelect={setSortMode}
+      />
 
       {selectedCaseId ? (
         <TeacherFlatSection
@@ -652,24 +617,15 @@ export function TeacherInterventionsScreen({ navigation, route }: Props) {
             title="Leaderboard"
             subtitle={`Sorted by ${leaderboardScope}.`}
           >
-            <View
-              style={{
-                paddingHorizontal: 14,
-                paddingBottom: 14,
-                flexDirection: "row",
-                flexWrap: "wrap",
-                gap: 8,
-              }}
-            >
-              {leaderboardOptions.map((option) => (
-                <TeacherChip
-                  key={option.key}
-                  label={option.label}
-                  active={leaderboardScope === option.key}
-                  onPress={() => setLeaderboardScope(option.key)}
-                />
-              ))}
-            </View>
+            <TeacherSelectMenu
+              label="Leaderboard measure"
+              selectedValue={leaderboardScope}
+              options={leaderboardOptions.map((option) => ({
+                value: option.key,
+                label: option.label,
+              }))}
+              onSelect={setLeaderboardScope}
+            />
             {shownLeaderboardRows.length ? (
               shownLeaderboardRows.map((row, index) => {
                 const caseId = queueCaseByStudent.get(row.studentId);

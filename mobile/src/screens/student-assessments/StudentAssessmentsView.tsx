@@ -5,7 +5,7 @@ import {
   StudentInlineNotice,
   StudentListRow,
   StudentScreen,
-  StudentSegmentedControl,
+  StudentSelectMenu,
 } from "../../components/student/StudentWorkspacePrimitives";
 import { studentDarkTheme as theme } from "../../theme/studentDark";
 
@@ -59,16 +59,17 @@ export function StudentAssessmentsView({
         </Pressable>
       }
     >
-      <StudentSegmentedControl
-        accessibilityLabel="Assessment status"
-        activeKey={activeFilter}
-        items={[
-          { key: "pending", label: "Pending" },
-          { key: "past_due", label: "Past Due" },
-          { key: "completed", label: "Completed" },
-          { key: "allAssessments", label: "All Assessments" },
+      <StudentSelectMenu
+        label="Assessment status"
+        selectedValue={activeFilter}
+        options={[
+          { value: "pending", label: "Pending" },
+          { value: "past_due", label: "Past due" },
+          { value: "completed", label: "Completed" },
+          { value: "allAssessments", label: "All assessments" },
         ]}
         onSelect={onFilterChange}
+        icon="filter-variant"
       />
       <View style={{ paddingHorizontal: 16, paddingVertical: 12, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border }}>
         <View style={{ minHeight: 48, flexDirection: "row", alignItems: "center", gap: 10, borderRadius: 12, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.bg, paddingHorizontal: 12 }}>

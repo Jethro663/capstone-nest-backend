@@ -10,7 +10,6 @@ import { TeacherAnnouncementEditorModal } from "../components/teacher/TeacherAnn
 import { TeacherAnnouncementRow } from "../components/teacher/TeacherAnnouncementRow";
 import {
   TeacherActionButton,
-  TeacherChip,
   TeacherEmpty,
   TeacherScreen,
   TeacherSearch,
@@ -139,18 +138,17 @@ export function TeacherAnnouncementsScreen({ navigation }: Props) {
       {viewMode === "feed" ? (
         <>
       <TeacherSearch value={search} onChangeText={setSearch} placeholder="Search announcement feed" />
+      <TeacherSelectMenu
+        label="Filter announcements"
+        selectedValue={feedFilter}
+        options={[
+          { value: "all", label: "All posts" },
+          { value: "pinned", label: "Pinned" },
+          { value: "scheduled", label: "Scheduled" },
+        ]}
+        onSelect={setFeedFilter}
+      />
       <TeacherFlatSection title="Announcement feed" subtitle="Pinned, scheduled, and posted communication for this class.">
-        <View style={{ paddingHorizontal: 14, paddingBottom: 10, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          {(["all", "pinned", "scheduled"] as FeedFilter[]).map((entry) => (
-            <TeacherChip
-              key={entry}
-              label={entry === "all" ? "All posts" : entry}
-              active={feedFilter === entry}
-              onPress={() => setFeedFilter(entry)}
-            />
-          ))}
-        </View>
-
         {filteredAnnouncements.length ? (
           filteredAnnouncements.map((announcement) => (
             <TeacherAnnouncementRow

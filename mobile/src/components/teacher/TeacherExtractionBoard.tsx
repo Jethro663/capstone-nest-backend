@@ -24,6 +24,7 @@ import {
   TeacherEmpty,
   TeacherPanel,
   TeacherSearch,
+  TeacherSelectMenu,
   teacherTheme,
   stripRichText,
 } from "./TeacherMobilePrimitives";
@@ -269,16 +270,15 @@ export function TeacherExtractionBoard({ classId, classItem, registerRefetch, on
     <View>
       <TeacherSearch value={search} onChangeText={setSearch} placeholder="Search extraction history" />
 
-      <View style={{ marginHorizontal: 16, marginTop: 10, flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-        {EXTRACTION_FILTERS.map((entry) => (
-          <TeacherChip
-            key={entry}
-            label={entry === "all" ? "All" : entry === "review" ? "Needs Review" : entry[0].toUpperCase() + entry.slice(1)}
-            active={filter === entry}
-            onPress={() => setFilter(entry)}
-          />
-        ))}
-      </View>
+      <TeacherSelectMenu
+        label="Extraction status"
+        selectedValue={filter}
+        options={EXTRACTION_FILTERS.map((value) => ({
+          value,
+          label: value === "all" ? "All extractions" : value === "review" ? "Needs review" : value[0].toUpperCase() + value.slice(1),
+        }))}
+        onSelect={setFilter}
+      />
 
       <TeacherPanel title="Start AI Extraction" subtitle="Upload a PDF and convert it into structured lesson and assessment drafts.">
         <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>

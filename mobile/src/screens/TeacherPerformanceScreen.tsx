@@ -10,7 +10,7 @@ import type { TeacherDrawerScreenProps } from "../navigation/types";
 import { useAuth } from "../providers/AuthProvider";
 import { boundAcademicPercentage } from "../lib/academicScore";
 import {
-  TeacherChip,
+  TeacherActionButton,
   TeacherEmpty,
   TeacherRow,
   TeacherScreen,
@@ -329,24 +329,15 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
       >
         {comparisonRows.length ? (
           <>
-            <View
-              style={{
-                paddingHorizontal: 14,
-                paddingBottom: 10,
-                flexDirection: "row",
-                flexWrap: "wrap",
-                gap: 8,
-              }}
-            >
-              {comparisonFilters.map((filter) => (
-                <TeacherChip
-                  key={filter.id}
-                  label={formatFilterLabel(filter)}
-                  active={selectedComparisonFilterId === filter.id}
-                  onPress={() => setSelectedComparisonFilterId(filter.id)}
-                />
-              ))}
-            </View>
+            <TeacherSelectMenu
+              label="Comparison group"
+              selectedValue={selectedComparisonFilterId}
+              options={comparisonFilters.map((filter) => ({
+                value: filter.id,
+                label: formatFilterLabel(filter),
+              }))}
+              onSelect={setSelectedComparisonFilterId}
+            />
             <TeacherSummaryStrip
               items={[
                 {
@@ -439,12 +430,16 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
             gap: 8,
           }}
         >
-          <TeacherChip
+          <TeacherActionButton
             label="Open Interventions"
+            icon="account-heart-outline"
+            tone="blue"
             onPress={() => navigation.navigate("TeacherInterventions")}
           />
-          <TeacherChip
+          <TeacherActionButton
             label="Open Reports"
+            icon="file-chart-outline"
+            tone="neutral"
             onPress={() => navigation.navigate("TeacherReports")}
           />
         </View>
