@@ -16,7 +16,7 @@ describe("teacher guided workbench layout contracts", () => {
   });
 
   it.each([
-    ["TeacherAssessmentDetailScreen.tsx", ["TeacherContextStrip", "TeacherSegmentedTabs", "TeacherActionSheet"]],
+    ["TeacherAssessmentDetailScreen.tsx", ["MobileFilterSheet", "TeacherSegmentedTabs", "TeacherActionSheet"]],
     ["TeacherSectionDetailScreen.tsx", ["TeacherContextStrip", "TeacherSegmentedTabs", "TeacherSearch"]],
     ["TeacherLessonsScreen.tsx", ["TeacherSelectMenu", "TeacherSegmentedTabs", "TeacherActionSheet"]],
     ["TeacherLibraryScreen.tsx", ["TeacherSelectMenu", "TeacherSegmentedTabs", "TeacherFlatSection"]],

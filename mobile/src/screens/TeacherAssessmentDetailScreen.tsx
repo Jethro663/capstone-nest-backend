@@ -12,9 +12,9 @@ import {
 import { assessmentsApi } from "../api/services/assessments";
 import { toAppError } from "../api/http";
 import type { RootStackParamList } from "../navigation/types";
+import type { AssessmentQuestionAnalytics } from "../types/assessment";
 import {
   TeacherActionButton,
-  TeacherChip,
   TeacherEmpty,
   TeacherRow,
   TeacherScreen,
@@ -25,11 +25,13 @@ import {
 } from "../components/teacher/TeacherMobilePrimitives";
 import {
   TeacherActionSheet,
-  TeacherContextStrip,
   TeacherFlatSection,
   TeacherSegmentedTabs,
   TeacherSummaryStrip,
 } from "../components/teacher/TeacherWorkspacePrimitives";
+import { MobileFilterSheet } from "../components/ui/MobileFilterSheet";
+import { MobileScoreState } from "../components/ui/MobileScoreState";
+import { mobileBrand } from "../theme/mobileBrand";
 
 type Props = NativeStackScreenProps<
   RootStackParamList,
@@ -177,6 +179,7 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
   const [manageVisible, setManageVisible] = useState(false);
   const [releasingGrades, setReleasingGrades] = useState(false);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
+  const [selectedQuestion, setSelectedQuestion] = useState<AssessmentQuestionAnalytics | null>(null);
 
   const assessment = assessmentQuery.data;
   const submissions = submissionsQuery.data;
@@ -371,7 +374,7 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
 
   return (
     <TeacherScreen
-      title="Assessment"
+      title={assessment?.title || "Assessment"}
       subtitle="Review learner work, evidence, and lifecycle controls."
       icon="clipboard-check-outline"
       showBackButton
@@ -393,16 +396,6 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
     >
       {assessment ? (
         <>
-          <TeacherContextStrip
-            title={assessment.title}
-            subtitle={
-              assessment.type.replace(/_/g, " ") +
-              " · Due " +
-              formatDate(assessment.dueDate)
-            }
-            status={assessment.isPublished ? "Published" : "Draft"}
-            icon="clipboard-check-outline"
-          />
           <View style={{ paddingHorizontal: 16, paddingTop: 12, flexDirection: "row", gap: 8 }}>
             <TeacherActionButton label="Preview" icon="eye-outline" tone="neutral" onPress={openEditor} />
             <TeacherActionButton label="Manage assessment" icon="tune-variant" tone="red" onPress={() => setManageVisible(true)} />
@@ -427,7 +420,18 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
                   : "Core assessment details visible to this class."
               }
             >
-              <TeacherRow title="Status" subtitle={assessment.isPublished ? "Published and visible to students." : "Draft only; students cannot open it yet."} />
+              <View testID="assessment-overview-callout" style={{ margin: 14, borderRadius: 16, backgroundColor: mobileBrand.navy, padding: 16 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 11, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.7, color: "rgba(255,255,255,0.68)" }}>{assessment.type.replace(/_/g, " ")}</Text>
+                    <Text style={{ marginTop: 5, fontSize: 18, fontWeight: "900", color: mobileBrand.white }}>{assessment.isPublished ? "Ready for learners" : "Draft in preparation"}</Text>
+                  </View>
+                  <View style={{ borderRadius: 999, backgroundColor: assessment.isPublished ? mobileBrand.success : mobileBrand.warning, paddingHorizontal: 10, paddingVertical: 6 }}>
+                    <Text style={{ fontSize: 10, fontWeight: "900", color: mobileBrand.white }}>{assessment.isPublished ? "PUBLISHED" : "DRAFT"}</Text>
+                  </View>
+                </View>
+                <Text style={{ marginTop: 10, fontSize: 12, lineHeight: 18, color: "rgba(255,255,255,0.78)" }}>Due {formatDate(assessment.dueDate)} · {assessment.totalPoints ?? 0} points · {assessment.questions?.length ?? 0} questions</Text>
+              </View>
               <TeacherRow title="Assessment type" subtitle={assessment.type.replace(/_/g, " ")} />
               <TeacherRow title="Due date" subtitle={formatDate(assessment.dueDate)} />
               <TeacherRow title="Passing score" subtitle={assessment.passingScore != null ? assessment.passingScore + "%" : "Not set"} />
@@ -438,10 +442,15 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
           {activeTab === "submissions" ? (
             <>
               <TeacherSearch value={submissionSearch} onChangeText={setSubmissionSearch} placeholder="Search learner name or email" />
-              <View style={{ marginHorizontal: 16, marginTop: 10, flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                {filterItems.map(([key, label]) => (
-                  <TeacherChip key={key} label={label + " " + submissionCounts[key]} active={submissionFilter === key} onPress={() => setSubmissionFilter(key)} />
-                ))}
+              <View style={{ marginHorizontal: 16, marginTop: 10 }}>
+                <MobileFilterSheet
+                  label="Filter submissions"
+                  activeKey={submissionFilter}
+                  options={filterItems.map(([key, label]) => ({ key, label, count: submissionCounts[key] }))}
+                  onSelect={setSubmissionFilter}
+                  resultCount={visibleSubmissions.length}
+                  compact
+                />
               </View>
               <TeacherSelectMenu
                 label="Sort submissions"
@@ -485,14 +494,12 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
                             : undefined
                         }
                         right={
-                          <View style={{ alignItems: "flex-end" }}>
-                            <Text style={{ fontSize: 11, fontWeight: "800", color: displayStatus === "returned" ? theme.green : displayStatus === "turned_in" ? theme.amber : theme.muted }}>
-                              {displayStatus.replace(/_/g, " ")}
-                            </Text>
-                            <Text style={{ marginTop: 3, fontSize: 10, color: theme.muted }}>
-                              {submission.directScore ?? submission.latestAttemptScore ?? "--"}
-                            </Text>
-                          </View>
+                          <MobileScoreState
+                            score={submission.directScore ?? submission.latestAttemptScore}
+                            maximum={assessment.totalPoints}
+                            state={displayStatus}
+                            label={displayStatus.replace(/_/g, " ")}
+                          />
                         }
                       />
                     );
@@ -525,6 +532,7 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
                       key={question.questionId}
                       title={"Q" + (index + 1) + ": " + stripRichText(question.content)}
                       subtitle={question.correctPercent + "% correct · " + question.correctCount + "/" + question.totalResponses + " responses · " + question.averagePoints + "/" + question.points + " average points"}
+                      onPress={() => setSelectedQuestion(question)}
                     />
                   ))
                 ) : (
@@ -533,6 +541,43 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
               </TeacherFlatSection>
             </>
           ) : null}
+
+          <TeacherActionSheet
+            visible={Boolean(selectedQuestion)}
+            title="Question analysis"
+            subtitle="Server-confirmed response evidence for this question."
+            onClose={() => setSelectedQuestion(null)}
+          >
+            {selectedQuestion ? (
+              <View testID="question-analytics-detail" style={{ paddingBottom: 20, gap: 14 }}>
+                <View style={{ borderRadius: 16, backgroundColor: mobileBrand.navy, padding: 16 }}>
+                  <Text style={{ fontSize: 14, lineHeight: 20, fontWeight: "900", color: mobileBrand.white }}>{stripRichText(selectedQuestion.content)}</Text>
+                  <View style={{ marginTop: 12, flexDirection: "row", gap: 12 }}>
+                    <View style={{ flex: 1 }}><Text style={{ fontSize: 22, fontWeight: "900", color: mobileBrand.white }}>{selectedQuestion.correctPercent}%</Text><Text style={{ fontSize: 10, color: "rgba(255,255,255,0.72)" }}>Correct</Text></View>
+                    <View style={{ flex: 1 }}><Text style={{ fontSize: 22, fontWeight: "900", color: mobileBrand.white }}>{selectedQuestion.correctCount}</Text><Text style={{ fontSize: 10, color: "rgba(255,255,255,0.72)" }}>Right answers</Text></View>
+                    <View style={{ flex: 1 }}><Text style={{ fontSize: 22, fontWeight: "900", color: mobileBrand.white }}>{selectedQuestion.totalResponses - selectedQuestion.correctCount}</Text><Text style={{ fontSize: 10, color: "rgba(255,255,255,0.72)" }}>Wrong answers</Text></View>
+                  </View>
+                </View>
+                <View>
+                  <Text style={{ fontSize: 13, fontWeight: "900", color: mobileBrand.text }}>Answer distribution</Text>
+                  {selectedQuestion.options.length ? selectedQuestion.options.map((option) => (
+                    <View key={option.optionId} style={{ minHeight: 52, borderBottomWidth: 1, borderBottomColor: mobileBrand.border, flexDirection: "row", alignItems: "center", gap: 10 }}>
+                      <MaterialCommunityIcons name={option.isCorrect ? "check-circle" : "circle-outline"} size={19} color={option.isCorrect ? mobileBrand.success : mobileBrand.muted} />
+                      <Text style={{ flex: 1, fontSize: 12, fontWeight: option.isCorrect ? "800" : "600", color: mobileBrand.text }}>{option.text}</Text>
+                      <Text style={{ fontSize: 12, fontWeight: "900", color: mobileBrand.navy }}>{option.selectionCount} · {option.selectionPercent}%</Text>
+                    </View>
+                  )) : <Text style={{ marginTop: 8, fontSize: 12, color: mobileBrand.muted }}>No option distribution is available for this question type.</Text>}
+                </View>
+                {selectedQuestion.textAnswers.length ? (
+                  <View>
+                    <Text style={{ fontSize: 13, fontWeight: "900", color: mobileBrand.text }}>Submitted text answers</Text>
+                    {selectedQuestion.textAnswers.map((answer, index) => <View key={`${index}-${answer}`} style={{ marginTop: 8, borderRadius: 12, backgroundColor: mobileBrand.surfaceMuted, padding: 12 }}><Text style={{ fontSize: 12, lineHeight: 18, color: mobileBrand.text }}>{answer}</Text></View>)}
+                  </View>
+                ) : null}
+                <Text style={{ fontSize: 11, color: mobileBrand.muted }}>Average points: {selectedQuestion.averagePoints}/{selectedQuestion.points} from {selectedQuestion.totalResponses} responses.</Text>
+              </View>
+            ) : null}
+          </TeacherActionSheet>
 
           <TeacherActionSheet
             visible={manageVisible}

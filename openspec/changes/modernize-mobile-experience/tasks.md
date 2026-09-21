@@ -27,8 +27,8 @@
 
 - [x] 5.1 Add failing tests for assessment search, shared filters, visible display pagination, and removal of the redundant context strip.
 - [x] 5.2 Implement complete-result search/filtering and bounded visible pagination without changing the backend paging contract.
-- [ ] 5.3 Add failing tests for the scannable assessment overview, submission selector, semantic scores, and interactive analytics question details.
-- [ ] 5.4 Implement the assessment detail hierarchy and analytics drill-down using only existing server evidence.
+- [x] 5.3 Add failing tests for the scannable assessment overview, submission selector, semantic scores, and interactive analytics question details.
+- [x] 5.4 Implement the assessment detail hierarchy and analytics drill-down using only existing server evidence.
 
 ## 6. Submission review workspace
 
