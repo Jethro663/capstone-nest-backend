@@ -7,6 +7,7 @@ import { Refreshable, ScreenScroll } from "../ui/primitives";
 import { MobileAppBar } from "../ui/MobileAppBar";
 import { MobileFilterSheet } from "../ui/MobileFilterSheet";
 import { MobileSegmentedTabs } from "../ui/MobileSegmentedTabs";
+import { MobileAction } from "../ui/MobileAction";
 import { studentDarkTheme as theme } from "../../theme/studentDark";
 import { mobileBrand } from "../../theme/mobileBrand";
 
@@ -283,10 +284,9 @@ export function StudentBottomActionBar({ primaryLabel, onPrimary, primaryIcon = 
   return (
     <View testID="student-bottom-action-bar" style={{ borderTopWidth: 1, borderTopColor: theme.border, backgroundColor: theme.surface, paddingHorizontal: 16, paddingTop: 10, paddingBottom: Math.max(insets.bottom, 10), flexDirection: "row", alignItems: "center", gap: 8 }}>
       {secondary}
-      <Pressable accessibilityRole="button" accessibilityLabel={primaryLabel} accessibilityState={{ disabled }} disabled={disabled} onPress={onPrimary} style={{ flex: 1, minHeight: 48, opacity: disabled ? 0.5 : 1, borderRadius: 12, backgroundColor: theme.redText, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }}>
-        <Text style={{ fontSize: 13, fontWeight: "900", color: "#FFFFFF" }}>{primaryLabel}</Text>
-        <MaterialCommunityIcons name={primaryIcon} size={18} color="#FFFFFF" />
-      </Pressable>
+      <View style={{ flex: 1 }}>
+        <MobileAction label={primaryLabel} icon={primaryIcon} variant="primary" tone="red" onPress={onPrimary} disabled={disabled} />
+      </View>
     </View>
   );
 }

@@ -1,12 +1,13 @@
+import { mobileBrand } from "../mobileBrand";
 import { studentDarkTheme } from "../studentDark";
 
 describe("student mobile theme", () => {
-  it("uses the approved warm P2 GABHS palette", () => {
-    expect(studentDarkTheme.bg).toBe("#FBFAF8");
-    expect(studentDarkTheme.header).toBe("#FFFFFF");
+  it("uses the shared GABHS navy/red palette", () => {
+    expect(studentDarkTheme.bg).toBe(mobileBrand.canvas);
+    expect(studentDarkTheme.header).toBe(mobileBrand.navy);
     expect(studentDarkTheme.surface).toBe("#FFFFFF");
-    expect(studentDarkTheme.border).toBe("#E7E3DF");
-    expect(studentDarkTheme.red).toBe("#C96B68");
-    expect(studentDarkTheme.redText).toBe("#98484A");
+    expect(studentDarkTheme.border).toBe(mobileBrand.border);
+    expect(studentDarkTheme.red).toBe(mobileBrand.red);
+    expect(studentDarkTheme.redText).toBe(mobileBrand.red);
   });
 });

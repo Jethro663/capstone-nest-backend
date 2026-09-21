@@ -5907,7 +5907,7 @@ describe("mobile rendered screen flows", () => {
         }),
       );
     });
-    const labels = ["Pending", "Past Due", "Completed", "All Assessments"];
+    const labels = ["Pending", "Past due", "Completed", "All assessments"];
     const filters = renderer!.root
       .findAllByType("Pressable")
       .filter((node) => labels.includes(flattenText(node)));
@@ -5918,9 +5918,9 @@ describe("mobile rendered screen flows", () => {
     expect(rendered()).not.toContain("Overdue task");
     expect(rendered()).not.toContain("Finished task");
     for (const [label, title] of [
-      ["Past Due", "Overdue task"],
+      ["Past due", "Overdue task"],
       ["Completed", "Finished task"],
-      ["All Assessments", "Upcoming task"],
+      ["All assessments", "Upcoming task"],
     ]) {
       act(() => findPressableByText(renderer!.root, label).props.onPress());
       expect(rendered()).toContain(title);

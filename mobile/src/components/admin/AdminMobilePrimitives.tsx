@@ -15,6 +15,7 @@ import {
 import { Refreshable, ScreenScroll } from "../ui/primitives";
 import { MobileFilterSheet } from "../ui/MobileFilterSheet";
 import { MobileAppBar } from "../ui/MobileAppBar";
+import { MobileAction, type MobileActionTone, type MobileActionVariant } from "../ui/MobileAction";
 import { RoleHeaderNavigationButton } from "../navigation/RoleNavigationDrawer";
 import { adminTheme as theme } from "../../theme/admin";
 import { mobileBrand } from "../../theme/mobileBrand";
@@ -397,52 +398,21 @@ export function AdminButton({
   onPress?: () => void;
   disabled?: boolean;
 }) {
-  const colors = toneColors(tone);
-  const solid = variant === "solid";
-  const textOnly = variant === "text";
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      disabled={disabled}
-      onPress={onPress}
-      style={{
-        minHeight: 48,
-        opacity: disabled ? 0.45 : 1,
-        borderRadius: 8,
-        borderWidth: textOnly ? 0 : 1,
-        borderColor: solid ? colors.color : theme.borderStrong,
-        backgroundColor: textOnly
-          ? "transparent"
-          : solid
-            ? colors.color
-            : colors.surface,
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 7,
-      }}
-    >
-      {icon ? (
-        <MaterialCommunityIcons
-          name={icon}
-          size={16}
-          color={solid ? "#FFFFFF" : colors.color}
-        />
-      ) : null}
-      <Text
-        style={{
-          fontSize: 12,
-          fontWeight: "800",
-          color: solid ? "#FFFFFF" : colors.color,
-        }}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
+  const actionVariant: MobileActionVariant =
+    variant === "solid" ? "primary" : variant === "text" ? "tertiary" : "secondary";
+  const actionTone: MobileActionTone =
+    tone === "primary"
+      ? "red"
+      : tone === "green"
+        ? "success"
+        : tone === "amber"
+          ? "warning"
+          : tone === "red"
+            ? "danger"
+            : tone === "neutral"
+              ? "neutral"
+              : "navy";
+  return <MobileAction label={label} icon={icon} variant={actionVariant} tone={actionTone} onPress={onPress} disabled={disabled} />;
 }
 
 export function AdminChip({

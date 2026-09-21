@@ -63,12 +63,11 @@ describe("Direction A administrator shell", () => {
     ]);
   });
 
-  it("uses the GABHS red/white administrator palette", () => {
+  it("uses the shared GABHS navy/red administrator palette", () => {
     const source = read("../../theme/admin.ts");
-    expect(source).toContain('primary: "#98484A"');
-    expect(source).toContain('primarySoft: "#FFF5F2"');
-    expect(source).not.toContain("#24466F");
-    expect(source).not.toContain("#E8EEF8");
+    expect(source).toContain('topbar: mobileBrand.navy');
+    expect(source).toContain('primary: mobileBrand.red');
+    expect(source).toContain('primarySoft: mobileBrand.redSoft');
   });
 
   it("exposes notifications from Home and profile plus logout in the admin drawer footer", () => {

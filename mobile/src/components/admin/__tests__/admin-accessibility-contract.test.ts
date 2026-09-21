@@ -5,11 +5,15 @@ const read = (file: string) =>
   fs.readFileSync(path.resolve(__dirname, "..", file), "utf8");
 
 describe("administrator adaptive and accessibility contract", () => {
-  it("uses 48dp as the shared interactive target floor", () => {
+  it("delegates actions to the shared 44dp-or-larger action primitive", () => {
     const source = read("AdminMobilePrimitives.tsx");
-    const targetFloors = source.match(/minHeight: 48/g) ?? [];
-    expect(targetFloors.length).toBeGreaterThanOrEqual(5);
-    expect(source).not.toContain("minHeight: 44");
+    expect(source).toContain('from "../ui/MobileAction"');
+    expect(source).toContain("<MobileAction");
+    const shared = fs.readFileSync(
+      path.resolve(__dirname, "../../ui/MobileAction.tsx"),
+      "utf8",
+    );
+    expect(shared).toContain("minHeight: mobileBrand.minTarget");
   });
 
   it("keeps forms reachable above the keyboard and dismisses list keyboards naturally", () => {

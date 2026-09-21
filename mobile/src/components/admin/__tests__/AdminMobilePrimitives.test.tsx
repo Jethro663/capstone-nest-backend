@@ -187,7 +187,7 @@ describe("admin mobile primitives", () => {
     expect(
       renderer!.root.findByProps({ accessibilityLabel: "Add user" }).props
         .style,
-    ).toMatchObject({ minHeight: 48 });
+    ).toMatchObject({ minHeight: 44 });
   });
 
   it("keeps row actions outside the row navigation press target", () => {

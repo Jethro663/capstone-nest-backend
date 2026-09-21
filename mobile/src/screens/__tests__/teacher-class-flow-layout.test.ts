@@ -58,16 +58,15 @@ describe("teacher class flow compact layouts", () => {
 
   it("makes lesson content reading-first and moves controls and versions to a sheet", () => {
     const contents = source("TeacherLessonDetailScreen.tsx");
-    expect(contents).toContain("TeacherContextStrip");
+    expect(contents).not.toContain("TeacherContextStrip");
     expect(contents).toContain("TeacherFlatSection");
     expect(contents).toContain("TeacherActionSheet");
     expect(contents).toContain("TeacherBottomActionBar");
     expect(contents).toContain('primaryLabel="Edit lesson"');
     expect(contents).not.toContain("TeacherStats");
     expect(contents).not.toContain("<TeacherPanel");
-    expect(contents.indexOf('title="Lesson content"')).toBeLessThan(
-      contents.indexOf('title="Version history"'),
-    );
+    expect(contents).toContain('accessibilityLabel="Lesson preview modes"');
+    expect(contents).toContain("nestedScrollEnabled scrollEnabled");
   });
 
   it("organizes AI drafting into focused sources, setup, and review stages", () => {

@@ -142,7 +142,8 @@ describe("role drawer integration", () => {
     expect(source).toContain(
       'NativeStackScreenProps<RootStackParamList, "Notifications">',
     );
-    expect(source).toContain('accessibilityLabel="Back"');
+    expect(source).toContain('navigationLabel="Back"');
+    expect(source).toContain('navigationIcon="arrow-left"');
     expect(source).toContain(
       'navigation.navigate("TeacherDrawer", { screen: "Home" })',
     );
