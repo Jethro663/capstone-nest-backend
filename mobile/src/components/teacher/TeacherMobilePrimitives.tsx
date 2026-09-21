@@ -421,6 +421,7 @@ export function TeacherSearch({
     >
       <MaterialCommunityIcons name="magnify" size={16} color={theme.muted} />
       <TextInput
+        accessibilityLabel={placeholder}
         placeholder={placeholder}
         placeholderTextColor={theme.dim}
         value={value}

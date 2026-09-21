@@ -15,21 +15,23 @@ import { useAuth } from "../providers/AuthProvider";
 import { TeacherConfirmModal } from "../components/teacher/TeacherConfirmModal";
 import { TeacherAiJobsPanel } from "./teacher-assessments/TeacherAiJobsPanel";
 import type { TeacherAiJobSummary } from "../types/ai";
-import { filterTeacherAssessments } from "./teacher-assessments/model";
+import {
+  filterTeacherAssessments,
+  paginateTeacherAssessments,
+  type TeacherAssessmentStatusFilter,
+} from "./teacher-assessments/model";
 import {
   TeacherAccordionSection,
   TeacherActionButton,
   TeacherEmpty,
   TeacherPanel,
   TeacherRow,
+  TeacherSearch,
   TeacherScreen,
   TeacherSelectMenu,
   teacherTheme as theme,
 } from "../components/teacher/TeacherMobilePrimitives";
-import {
-  TeacherContextStrip,
-  TeacherFlatSection,
-} from "../components/teacher/TeacherWorkspacePrimitives";
+import { TeacherFlatSection } from "../components/teacher/TeacherWorkspacePrimitives";
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, "Assessments">,
@@ -49,6 +51,9 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
   const classesQuery = useTeacherClasses(teacherId);
   const aiJobsQuery = useTeacherAiJobs();
   const [classFilter, setClassFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<TeacherAssessmentStatusFilter>("all");
+  const [assessmentSearch, setAssessmentSearch] = useState("");
+  const [displayPage, setDisplayPage] = useState(1);
   const [expandedClassId, setExpandedClassId] = useState<string | null>(null);
   const [aiJobsExpanded, setAiJobsExpanded] = useState(false);
   const [creatingAssessment, setCreatingAssessment] = useState(false);
@@ -97,11 +102,16 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
   const filteredRecords = useMemo(() => {
     return filterTeacherAssessments(records, {
       period: "all",
-      status: "all",
+      status: statusFilter,
       classId: classFilter,
-      search: "",
+      search: assessmentSearch,
     });
-  }, [classFilter, records]);
+  }, [assessmentSearch, classFilter, records, statusFilter]);
+
+  const paginatedRecords = useMemo(
+    () => paginateTeacherAssessments(filteredRecords, displayPage, 10),
+    [displayPage, filteredRecords],
+  );
 
   const classGroups = useMemo(
     () =>
@@ -111,11 +121,16 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
         )
         .map((classItem) => ({
           classItem,
-          assessments: filteredRecords.filter(
+          assessments: paginatedRecords.items.filter(
             (assessment) => assessment.classId === classItem.id,
           ),
-        })),
-    [classFilter, classesQuery.data, filteredRecords],
+        }))
+        .filter(({ classItem, assessments }) =>
+          assessments.length > 0 ||
+          (paginatedRecords.page === 1 &&
+            !filteredRecords.some((assessment) => assessment.classId === classItem.id)),
+        ),
+    [classFilter, classesQuery.data, filteredRecords, paginatedRecords.items, paginatedRecords.page],
   );
 
   const classNames = useMemo(
@@ -134,6 +149,10 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
     initializedExpansion.current = true;
     setExpandedClassId(classesQuery.data[0].id);
   }, [classesQuery.data]);
+
+  useEffect(() => {
+    setDisplayPage(1);
+  }, [assessmentSearch, classFilter, statusFilter]);
 
   const toggleSelectAssessment = (id: string) => {
     setSelectedAssessmentIds((prev) =>
@@ -261,12 +280,6 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
         ]);
       }}
     >
-      <TeacherContextStrip
-        title="Assessment workspace"
-        subtitle="Create, review, grade, and manage work by class."
-        status={`${filteredRecords.length} shown`}
-        icon="clipboard-text-outline"
-      />
       {assessmentLoadFailed ? (
         <TeacherFlatSection
           title="Assessments could not fully load"
@@ -282,8 +295,10 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
         </TeacherFlatSection>
       ) : null}
 
+      <TeacherSearch value={assessmentSearch} onChangeText={setAssessmentSearch} placeholder="Search assessments" />
+
       <TeacherSelectMenu
-        label="Class"
+        label="Filter class"
         selectedValue={classFilter}
         options={[
           { label: "All classes", value: "all" },
@@ -295,6 +310,22 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
         onSelect={(value) => {
           setClassFilter(value);
           setExpandedClassId(value === "all" ? null : value);
+          setSelectedAssessmentIds([]);
+        }}
+      />
+
+      <TeacherSelectMenu
+        label="Filter status"
+        selectedValue={statusFilter}
+        options={[
+          { value: "all", label: "All statuses" },
+          { value: "published", label: "Published" },
+          { value: "draft", label: "Drafts" },
+          { value: "attention", label: "Needs attention" },
+          { value: "history", label: "Historical" },
+        ]}
+        onSelect={(value) => {
+          setStatusFilter(value);
           setSelectedAssessmentIds([]);
         }}
       />
@@ -592,6 +623,19 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
           icon="book-alert-outline"
         />
       )}
+
+      <View testID="assessment-display-pagination" style={{ marginHorizontal: 16, marginTop: 12, marginBottom: 8, minHeight: 52, borderTopWidth: 1, borderBottomWidth: 1, borderColor: theme.border, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Previous assessment page" accessibilityState={{ disabled: paginatedRecords.page <= 1 }} disabled={paginatedRecords.page <= 1} onPress={() => setDisplayPage((page) => Math.max(1, page - 1))} style={{ minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center", opacity: paginatedRecords.page <= 1 ? 0.35 : 1 }}>
+          <MaterialCommunityIcons name="chevron-left" size={22} color={theme.text} />
+        </Pressable>
+        <View style={{ alignItems: "center" }}>
+          <Text style={{ fontSize: 12, fontWeight: "900", color: theme.text }}>Page {paginatedRecords.page} of {paginatedRecords.pageCount}</Text>
+          <Text style={{ marginTop: 2, fontSize: 10, color: theme.muted }}>{paginatedRecords.total} matching assessments</Text>
+        </View>
+        <Pressable accessibilityRole="button" accessibilityLabel="Next assessment page" accessibilityState={{ disabled: paginatedRecords.page >= paginatedRecords.pageCount }} disabled={paginatedRecords.page >= paginatedRecords.pageCount} onPress={() => setDisplayPage((page) => Math.min(paginatedRecords.pageCount, page + 1))} style={{ minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center", opacity: paginatedRecords.page >= paginatedRecords.pageCount ? 0.35 : 1 }}>
+          <MaterialCommunityIcons name="chevron-right" size={22} color={theme.text} />
+        </Pressable>
+      </View>
 
       <TeacherAccordionSection
         title="AI Draft Jobs"

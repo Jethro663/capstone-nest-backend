@@ -15,6 +15,7 @@ jest.mock("react-native", () => {
     Alert: { alert: jest.fn() },
     Pressable: component("Pressable"),
     Text: component("Text"),
+    TextInput: component("TextInput"),
     View: component("View"),
   };
 });
@@ -108,6 +109,8 @@ jest.mock("../../components/teacher/TeacherMobilePrimitives", () => {
       ),
     TeacherSelectMenu: ({ label, selectedValue }: any) =>
       ReactRuntime.createElement(Text, null, `${label}:${selectedValue}`),
+    TeacherSearch: ({ placeholder }: any) =>
+      ReactRuntime.createElement("TextInput", { accessibilityLabel: placeholder }),
     TeacherActionButton: ({ label }: any) =>
       ReactRuntime.createElement(Text, null, label),
     TeacherEmpty: ({ title, subtitle }: any) =>
@@ -243,12 +246,16 @@ describe("teacher assessment workspace layout", () => {
     });
 
     const text = flattenText(renderer!.toJSON());
-    expect(text).toContain("Class:all");
+    expect(renderer!.root.findByProps({ accessibilityLabel: "Search assessments" })).toBeTruthy();
+    expect(text).toContain("Filter class:all");
+    expect(text).toContain("Filter status:all");
     expect(text).toContain("Assessments by class");
     expect(text).toContain("ENG · English:0");
     expect(text).toContain("Create first assessment");
     expect(text).not.toContain("All Quarters");
     expect(text).not.toContain("Create and edit");
+    expect(text).not.toContain("Assessment workspace");
+    expect(renderer!.root.findByProps({ testID: "assessment-display-pagination" })).toBeTruthy();
     expect(text.indexOf("Assessments by class")).toBeLessThan(
       text.indexOf("AI Draft Jobs:0"),
     );

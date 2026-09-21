@@ -1,4 +1,4 @@
-import { filterTeacherAssessments } from '../teacher-assessments/model';
+import { filterTeacherAssessments, paginateTeacherAssessments } from '../teacher-assessments/model';
 
 const records = [
   {
@@ -68,5 +68,17 @@ describe('mobile teacher assessment filters', () => {
         search: 'science',
       }).map((record) => record.id),
     ).toEqual(['q4-published']);
+  });
+
+  it('slices the complete filtered result into bounded visible pages', () => {
+    const values = Array.from({ length: 23 }, (_, index) => ({ id: index + 1 }));
+    expect(paginateTeacherAssessments(values, 2, 10)).toEqual({
+      items: values.slice(10, 20),
+      page: 2,
+      pageCount: 3,
+      pageSize: 10,
+      total: 23,
+    });
+    expect(paginateTeacherAssessments(values, 99, 10).page).toBe(3);
   });
 });

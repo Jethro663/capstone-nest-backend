@@ -60,3 +60,20 @@ export function filterTeacherAssessments<T extends FilterableAssessment>(
     return true;
   });
 }
+
+export function paginateTeacherAssessments<T>(
+  records: T[],
+  requestedPage: number,
+  pageSize = 10,
+) {
+  const safePageSize = Math.max(1, Math.floor(pageSize));
+  const pageCount = Math.max(1, Math.ceil(records.length / safePageSize));
+  const page = Math.min(Math.max(1, Math.floor(requestedPage)), pageCount);
+  return {
+    items: records.slice((page - 1) * safePageSize, page * safePageSize),
+    page,
+    pageCount,
+    pageSize: safePageSize,
+    total: records.length,
+  };
+}
