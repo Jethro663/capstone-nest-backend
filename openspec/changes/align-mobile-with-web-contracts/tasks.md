@@ -91,6 +91,6 @@
 - [x] 12.3 Add the Next.js preview route using the existing student lesson renderer with loading, expiry, protected-asset, and failure coverage.
 - [x] 12.4 Add typed mobile block models, shared rich-text editing, and one native renderer used by both student and teacher surfaces.
 - [x] 12.5 Replace the legacy mobile editor with Details/Content workspaces, all eleven palette choices, typed focused editing, and boundary insertion.
-- [x] 12.6 Add Mobile/Web/Compare teacher preview and inspected confirmation-first version restoration.
-- [x] 12.7 Redesign module detail around the outline with visible Settings, Manage, per-section Add content, Arrange, and centered dialogs.
+- [x] 12.6 Add truthful Mobile/Web teacher preview and inspected confirmation-first version restoration; the later modernization change removes the constrained phone Compare surface.
+- [x] 12.7 Redesign module detail around the outline with visible Settings, accessible labeled overflow management, per-section Add content, Arrange, and centered dialogs.
 - [ ] 12.8 Run affected backend/web/mobile verification, package Android `0.1.45` / `46`, and record exact-SHA CI, deployment, live artifact, and device evidence boundaries.
