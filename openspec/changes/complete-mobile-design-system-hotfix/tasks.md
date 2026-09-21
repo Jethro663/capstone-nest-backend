@@ -29,10 +29,10 @@
 
 ## 5. Verification and Release
 
-- [ ] 5.1 Pass focused render/navigation tests, design audit, typecheck, release tests, iOS delivery tests, and full mobile Jest
-- [ ] 5.2 Produce and inspect a production Android Expo export containing the final hotfix source
-- [ ] 5.3 Bump once to version 0.1.48/build 49 and rerun version-sensitive verification
-- [ ] 5.4 Build and validate the production-signed ARM64 APK for package, signer, version, ABI, API, archive, 16-KB alignment, size, and hash
+- [x] 5.1 Pass focused render/navigation tests, design audit, typecheck, release tests, iOS delivery tests, and full mobile Jest
+- [x] 5.2 Produce and inspect a production Android Expo export containing the final hotfix source
+- [x] 5.3 Bump once to version 0.1.48/build 49 and rerun version-sensitive verification
+- [x] 5.4 Build and validate the production-signed ARM64 APK for package, signer, version, ABI, API, archive, 16-KB alignment, size, and hash
 - [ ] 5.5 Package the immutable public build-49 artifact and matching manifest
 - [ ] 5.6 Push the verified exact SHA and pass its GitHub CI and Railway deployment
 - [ ] 5.7 Prove live manifest/APK byte identity and backend update-policy registration
