@@ -3,7 +3,6 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import {
   Alert,
   Image,
-  ScrollView,
   Text,
   TextInput,
   View,
@@ -19,14 +18,16 @@ import type { RootStackParamList } from "../navigation/types";
 import type { AttemptResult } from "../types/assessment";
 import {
   TeacherActionButton,
-  TeacherChip,
   TeacherPanel,
   TeacherScreen,
-  TeacherStats,
   stripRichText,
   teacherTheme as theme,
 } from "../components/teacher/TeacherMobilePrimitives";
+import { MobileFilterSheet } from "../components/ui/MobileFilterSheet";
+import { MobileScoreState } from "../components/ui/MobileScoreState";
+import { MobileSegmentedTabs } from "../components/ui/MobileSegmentedTabs";
 import { presentAcademicScore } from "../lib/academicScore";
+import { mobileBrand } from "../theme/mobileBrand";
 
 type Props = NativeStackScreenProps<
   RootStackParamList,
@@ -63,6 +64,15 @@ function resolveStudentAnswer(response: AttemptResult["responses"][number]) {
   return "No captured answer";
 }
 
+function resolveExpectedAnswer(response: AttemptResult["responses"][number]) {
+  const correctOptions = (response.question?.options ?? [])
+    .filter((option) => option.isCorrect)
+    .map((option) => stripRichText(option.text));
+  return correctOptions.length
+    ? correctOptions.join(", ")
+    : "Manual review required for this response type";
+}
+
 export function TeacherAssessmentReviewScreen({ navigation, route }: Props) {
   const { attemptId, assessmentId } = route.params;
   const resultQuery = useAssessmentResult(attemptId);
@@ -83,6 +93,7 @@ export function TeacherAssessmentReviewScreen({ navigation, route }: Props) {
   >({});
   const [bonusPoints, setBonusPoints] = useState("0");
   const [bonusReason, setBonusReason] = useState("");
+  const [activeResponseIndex, setActiveResponseIndex] = useState(0);
 
   useEffect(() => {
     setFeedback(result?.teacherFeedback || "");
@@ -226,6 +237,15 @@ export function TeacherAssessmentReviewScreen({ navigation, route }: Props) {
     }
   };
 
+  const activeResponse =
+    result?.responses[activeResponseIndex] ?? result?.responses[0];
+  const scorePresentation = result ? presentAcademicScore(result) : null;
+  const scoreValue =
+    result?.scoreBreakdown?.effectivePoints ?? scorePresentation?.scorePercent;
+  const scoreMaximum =
+    result?.scoreBreakdown?.possiblePoints ??
+    (scorePresentation?.scorePercent == null ? undefined : 100);
+
   return (
     <TeacherScreen
       title={result?.assessment?.title || "Attempt review"}
@@ -237,61 +257,62 @@ export function TeacherAssessmentReviewScreen({ navigation, route }: Props) {
       onRefresh={() => {
         void resultQuery.refetch();
       }}
+      stickyHeader={
+        result ? (
+          <View
+            testID="review-control-panel"
+            style={{
+              borderBottomWidth: 1,
+              borderBottomColor: mobileBrand.border,
+              backgroundColor: mobileBrand.surface,
+              paddingHorizontal: 16,
+              paddingVertical: 10,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 10,
+            }}
+          >
+            <MobileScoreState
+              score={scoreValue}
+              maximum={scoreMaximum}
+              state={result.isReturned ? "returned" : "submitted"}
+              label={result.isReturned ? "Returned" : "In review"}
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 12, fontWeight: "900", color: mobileBrand.navy }}>
+                Attempt #{result.attemptNumber ?? "?"}
+              </Text>
+              <Text numberOfLines={1} style={{ marginTop: 2, fontSize: 10, color: mobileBrand.muted }}>
+                {scorePresentation?.compactLabel} · {result.passed == null ? "Awaiting final grade" : result.passed ? "Passing result" : "Needs support"}
+              </Text>
+            </View>
+            <TeacherActionButton
+              label={result.isReturned ? "Update grade" : "Return grade"}
+              icon="send-outline"
+              tone="green"
+              onPress={() => void handleReturn()}
+              disabled={returnMutation.isPending}
+            />
+          </View>
+        ) : undefined
+      }
     >
       {result ? (
         <>
-          <TeacherStats
-            items={[
-              {
-                label: "Score",
-                value: presentAcademicScore(result).compactLabel,
-                tone:
-                  result.score == null
-                    ? "amber"
-                    : result.passed
-                      ? "green"
-                      : "red",
-              },
-              {
-                label: "Result",
-                value:
-                  result.passed == null
-                    ? "Ungraded"
-                    : result.passed
-                      ? "Passed"
-                      : "Failed",
-                tone:
-                  result.passed == null
-                    ? "amber"
-                    : result.passed
-                      ? "green"
-                      : "red",
-              },
-              {
-                label: "Returned",
-                value: result.isReturned ? "Yes" : "No",
-                tone: result.isReturned ? "blue" : "purple",
-              },
-            ]}
-          />
-
           <TeacherPanel
             title="Return controls"
             subtitle="Grade from response or rubric evidence, or choose an explicit direct-score override."
           >
             <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                <TeacherChip
-                  label="Response / rubric scoring"
-                  active={gradingMode === "evidence"}
-                  onPress={() => setGradingMode("evidence")}
-                />
-                <TeacherChip
-                  label="Direct score override"
-                  active={gradingMode === "direct"}
-                  onPress={() => setGradingMode("direct")}
-                />
-              </View>
+              <MobileSegmentedTabs
+                accessibilityLabel="Grading method"
+                activeKey={gradingMode}
+                onSelect={setGradingMode}
+                items={[
+                  { key: "evidence", label: "Response / rubric" },
+                  { key: "direct", label: "Direct score" },
+                ]}
+              />
 
               {gradingMode === "direct" ? (
                 <>
@@ -507,34 +528,18 @@ export function TeacherAssessmentReviewScreen({ navigation, route }: Props) {
                   textAlignVertical: "top",
                 }}
               />
-
-              <View
-                style={{
-                  marginTop: 12,
-                  flexDirection: "row",
-                  flexWrap: "wrap",
-                  gap: 8,
-                }}
-              >
-                <TeacherActionButton
-                  label={
-                    result.isReturned ? "Update returned grade" : "Return grade"
-                  }
-                  icon="send-outline"
-                  tone="green"
-                  onPress={() => void handleReturn()}
-                  disabled={returnMutation.isPending}
-                />
-                {result.isReturned ? (
+              {result.isReturned ? (
+                <View style={{ marginTop: 10, alignItems: "flex-start" }}>
                   <TeacherActionButton
-                    label="Unreturn"
+                    label="Unreturn grade"
                     icon="undo-variant"
                     tone="amber"
                     onPress={() => void handleUnreturn()}
                     disabled={unreturnMutation.isPending}
                   />
-                ) : null}
-              </View>
+                </View>
+              ) : null}
+
             </View>
           </TeacherPanel>
 
@@ -608,21 +613,25 @@ export function TeacherAssessmentReviewScreen({ navigation, route }: Props) {
 
           <TeacherPanel
             title="Question review"
-            subtitle="Keep the review flow visually aligned with the updated student results screen, but with teacher grading controls."
+            subtitle="Move through one answer at a time, compare the expected evidence, and grade without losing your place."
           >
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{
-                paddingHorizontal: 14,
-                paddingBottom: 14,
-              }}
-            >
-              <View style={{ width: 1 }} />
-            </ScrollView>
-            {result.responses.map((response, index) => (
+            <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
+              <MobileFilterSheet
+                label="Review question"
+                activeKey={String(activeResponseIndex)}
+                options={result.responses.map((response, index) => ({
+                  key: String(index),
+                  label: `Question ${index + 1}`,
+                  count: response.pointsEarned ?? undefined,
+                }))}
+                onSelect={(key) => setActiveResponseIndex(Number(key))}
+                resultCount={result.responses.length}
+                icon="format-list-numbered"
+              />
+            </View>
+            {activeResponse ? (
               <View
-                key={response.questionId}
+                key={activeResponse.questionId}
                 style={{
                   paddingHorizontal: 14,
                   paddingVertical: 14,
@@ -645,12 +654,12 @@ export function TeacherAssessmentReviewScreen({ navigation, route }: Props) {
                       color: theme.red,
                     }}
                   >
-                    Question {index + 1}
+                    Question {activeResponseIndex + 1}
                   </Text>
                   <Text style={{ fontSize: 11, color: theme.muted }}>
-                    {response.pointsEarned == null
+                    {activeResponse.pointsEarned == null
                       ? "Ungraded"
-                      : `${response.pointsEarned}/${response.question?.points ?? 0} pts`}
+                      : `${activeResponse.pointsEarned}/${activeResponse.question?.points ?? 0} pts`}
                   </Text>
                 </View>
                 <Text
@@ -662,12 +671,12 @@ export function TeacherAssessmentReviewScreen({ navigation, route }: Props) {
                   }}
                 >
                   {stripRichText(
-                    response.question?.content || "No question content.",
+                    activeResponse.question?.content || "No question content.",
                   )}
                 </Text>
-                {response.question?.imageUrl ? (
+                {activeResponse.question?.imageUrl ? (
                   <Image
-                    source={{ uri: response.question.imageUrl }}
+                    source={{ uri: activeResponse.question.imageUrl }}
                     resizeMode="contain"
                     style={{
                       marginTop: 10,
@@ -678,53 +687,74 @@ export function TeacherAssessmentReviewScreen({ navigation, route }: Props) {
                     }}
                   />
                 ) : null}
-                <Text
+                <View
+                  testID="learner-answer"
                   style={{
-                    marginTop: 8,
-                    fontSize: 11,
-                    lineHeight: 17,
-                    color: "#9D9D9D",
+                    marginTop: 12,
+                    borderLeftWidth: 4,
+                    borderLeftColor:
+                      activeResponse.isCorrect == null
+                        ? mobileBrand.warning
+                        : activeResponse.isCorrect
+                          ? mobileBrand.success
+                          : mobileBrand.danger,
+                    borderRadius: 12,
+                    backgroundColor: mobileBrand.surfaceMuted,
+                    padding: 14,
                   }}
                 >
-                  Student answer: {resolveStudentAnswer(response)}
-                </Text>
+                  <Text style={{ fontSize: 10, fontWeight: "900", color: mobileBrand.muted, textTransform: "uppercase", letterSpacing: 0.6 }}>Learner answer</Text>
+                  <Text style={{ marginTop: 5, fontSize: 17, lineHeight: 24, fontWeight: "900", color: mobileBrand.text }}>{resolveStudentAnswer(activeResponse)}</Text>
+                </View>
+                <View
+                  testID="expected-answer"
+                  style={{
+                    marginTop: 10,
+                    borderRadius: 12,
+                    backgroundColor: mobileBrand.successSoft,
+                    padding: 14,
+                  }}
+                >
+                  <Text style={{ fontSize: 10, fontWeight: "900", color: mobileBrand.success, textTransform: "uppercase", letterSpacing: 0.6 }}>Expected answer</Text>
+                  <Text style={{ marginTop: 5, fontSize: 15, lineHeight: 22, fontWeight: "800", color: mobileBrand.text }}>{resolveExpectedAnswer(activeResponse)}</Text>
+                </View>
                 <Text
                   style={{
                     marginTop: 5,
                     fontSize: 11,
                     fontWeight: "700",
                     color:
-                      response.isCorrect == null
+                      activeResponse.isCorrect == null
                         ? theme.amber
-                        : response.isCorrect
+                        : activeResponse.isCorrect
                           ? theme.green
                           : theme.red,
                   }}
                 >
-                  {response.isCorrect == null
+                  {activeResponse.isCorrect == null
                     ? "Awaiting manual grading"
-                    : response.isCorrect
+                    : activeResponse.isCorrect
                       ? "Correct"
                       : "Incorrect"}
                 </Text>
-                {response.hint ? (
+                {activeResponse.hint ? (
                   <Text
                     style={{ marginTop: 5, fontSize: 11, color: theme.muted }}
                   >
-                    Hint: {response.hint}
+                    Hint: {activeResponse.hint}
                   </Text>
                 ) : null}
-                {gradingMode === "evidence" && response.isCorrect == null ? (
+                {gradingMode === "evidence" && activeResponse.isCorrect == null ? (
                   <TextInput
-                    value={manualScores[response.questionId] ?? ""}
+                    value={manualScores[activeResponse.questionId] ?? ""}
                     onChangeText={(value) =>
                       setManualScores((current) => ({
                         ...current,
-                        [response.questionId]: value,
+                        [activeResponse.questionId]: value,
                       }))
                     }
                     keyboardType="numeric"
-                    placeholder={`Manual points (0-${response.question?.points ?? 0})`}
+                    placeholder={`Manual points (0-${activeResponse.question?.points ?? 0})`}
                     placeholderTextColor={theme.dim}
                     style={{
                       marginTop: 8,
@@ -739,7 +769,11 @@ export function TeacherAssessmentReviewScreen({ navigation, route }: Props) {
                   />
                 ) : null}
               </View>
-            ))}
+            ) : (
+              <View style={{ paddingHorizontal: 14, paddingBottom: 16 }}>
+                <Text style={{ fontSize: 12, color: mobileBrand.muted }}>No question responses were captured for this attempt.</Text>
+              </View>
+            )}
           </TeacherPanel>
         </>
       ) : (

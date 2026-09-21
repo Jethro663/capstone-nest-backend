@@ -32,8 +32,8 @@
 
 ## 6. Submission review workspace
 
-- [ ] 6.1 Add failing tests for the compact sticky score/control region, question navigator, and prominent learner/correct-answer hierarchy.
-- [ ] 6.2 Redesign submission review without summary-stat cards while preserving grading, rubric, attachment, and return behavior.
+- [x] 6.1 Add failing tests for the compact sticky score/control region, question navigator, and prominent learner/correct-answer hierarchy.
+- [x] 6.2 Redesign submission review without summary-stat cards while preserving grading, rubric, attachment, and return behavior.
 
 ## 7. Android signer migration
 

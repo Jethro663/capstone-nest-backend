@@ -24,6 +24,7 @@ export function TeacherScreen({
   refreshing,
   onRefresh,
   bottomAction,
+  stickyHeader,
   children,
 }: PropsWithChildren<{
   workspaceLabel?: string;
@@ -37,27 +38,32 @@ export function TeacherScreen({
   refreshing?: boolean;
   onRefresh?: () => void;
   bottomAction?: ReactNode;
+  stickyHeader?: ReactNode;
 }>) {
   const canGoBack = showBackButton && typeof onBackPress === "function";
+  const appBar = (
+    <MobileAppBar
+      testID="teacher-compact-header"
+      title={title}
+      navigationLabel={canGoBack ? backLabel : "Open navigation menu"}
+      navigationIcon={canGoBack ? "arrow-left" : "menu"}
+      onNavigationPress={canGoBack ? onBackPress : undefined}
+      navigationAction={canGoBack ? undefined : <RoleHeaderNavigationButton color={mobileBrand.white} onBackPress={onBackPress} />}
+      rightAction={rightAction}
+      onRefresh={onRefresh}
+      refreshing={Boolean(refreshing)}
+    />
+  );
 
   const scrollContent = (
     <ScreenScroll
         backgroundColor={theme.bg}
+        stickyHeaderIndices={stickyHeader ? [0] : undefined}
         refreshControl={
           onRefresh ? <Refreshable refreshing={Boolean(refreshing)} onRefresh={onRefresh} /> : undefined
         }
       >
-        <MobileAppBar
-          testID="teacher-compact-header"
-          title={title}
-          navigationLabel={canGoBack ? backLabel : "Open navigation menu"}
-          navigationIcon={canGoBack ? "arrow-left" : "menu"}
-          onNavigationPress={canGoBack ? onBackPress : undefined}
-          navigationAction={canGoBack ? undefined : <RoleHeaderNavigationButton color={mobileBrand.white} onBackPress={onBackPress} />}
-          rightAction={rightAction}
-          onRefresh={onRefresh}
-          refreshing={Boolean(refreshing)}
-        />
+        {stickyHeader ? <View>{appBar}{stickyHeader}</View> : appBar}
         {children}
       </ScreenScroll>
   );

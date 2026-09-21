@@ -14,6 +14,7 @@ jest.mock("react-native", () => {
   return {
     Alert: { alert: jest.fn() },
     Image: component("Image"),
+    Modal: component("Modal"),
     Pressable: component("Pressable"),
     ScrollView: component("ScrollView"),
     Text: component("Text"),
@@ -66,7 +67,7 @@ jest.mock("../../components/teacher/TeacherMobilePrimitives", () => ({
     <Pressable accessibilityLabel={label} onPress={onPress} />
   ),
   TeacherPanel: ({ children }: any) => <View>{children}</View>,
-  TeacherScreen: ({ children }: any) => <View>{children}</View>,
+  TeacherScreen: ({ children, stickyHeader }: any) => <View>{stickyHeader}{children}</View>,
   TeacherStats: ({ items }: any) => (
     <View>
       {items.map((item: any) => (

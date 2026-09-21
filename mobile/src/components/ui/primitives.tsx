@@ -160,9 +160,11 @@ export function ScreenScroll({
   children,
   refreshControl,
   backgroundColor,
+  stickyHeaderIndices,
 }: PropsWithChildren<{
   refreshControl?: React.ComponentProps<typeof ScrollView>["refreshControl"];
   backgroundColor?: string;
+  stickyHeaderIndices?: number[];
 }>) {
   const refreshState = resolveRefreshControlState(refreshControl);
   const isAndroidCustomRefresh = Platform.OS === "android" && !!refreshState?.onRefresh;
@@ -217,6 +219,7 @@ export function ScreenScroll({
         <ScrollView
           bounces
           showsVerticalScrollIndicator={false}
+          stickyHeaderIndices={stickyHeaderIndices}
           contentContainerStyle={{ paddingBottom: 112 }}
           refreshControl={nativeRefreshControl}
           style={{ flex: 1, backgroundColor: resolvedBackground }}
