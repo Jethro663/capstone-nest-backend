@@ -43,6 +43,6 @@
 ## 8. Verification and release
 
 - [x] 8.1 Run focused suites after each slice, then mobile typecheck and the complete mobile Jest suite.
-- [ ] 8.2 Run Expo production export and the repository release test/prepare/verify workflow with the next version metadata.
-- [ ] 8.3 Verify package name, artifact SHA-256, and production signing certificate continuity; keep physical-device evidence separate.
+- [x] 8.2 Run Expo production export and the repository release test/prepare/verify workflow with the next version metadata.
+- [x] 8.3 Verify package name, artifact SHA-256, and production signing certificate continuity; keep physical-device evidence separate.
 - [ ] 8.4 Commit and push the verified exact SHA, observe CI/deployment and public artifact evidence, and record any remaining physical-device acceptance gate.

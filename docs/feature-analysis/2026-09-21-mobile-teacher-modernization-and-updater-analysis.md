@@ -519,3 +519,37 @@ The redesign is complete only when:
 - attempt review keeps context and grading actions visible without stat-card clutter;
 - build 47 → next build updates in place with the same production certificate;
 - the legacy build path is accurately presented as a one-time reinstall, with physical-device evidence captured.
+
+## 19. Implemented and packaged evidence — 2026-09-21
+
+### Confirmed in source and automated verification
+
+- The approved navy-frame/red-intent system is implemented through shared role-neutral primitives for app bars, actions, record filters, segmented modes, overflow actions, and score states.
+- Teacher Home, Notification Center, module detail, lesson preview, assessment list/detail, analytics question drill-down, and submission review now use the approved hierarchy while preserving existing API, RBAC, route, grading, and invalidation contracts.
+- Every identified record-filter pill row across teacher, student, and admin surfaces now delegates to the shared selector; chips remain only for genuine selections or toggles.
+- The complete mobile verification passed: 19 admin contracts / 57 layer checks, TypeScript with zero errors, and 146 Jest suites / 826 tests.
+- Production Expo export completed with the production backend URL, and the Android release build completed with version `0.1.47` / build `48`.
+
+### Confirmed release artifact
+
+| Field | Verified value |
+|---|---|
+| Source revision | `e651e5f7fe6437f0a4fdbbf18c2ea8896585af2d` |
+| Package | `com.nexora.lms.mobile` |
+| Native version / build | `0.1.47` / `48` |
+| Minimum / target SDK | `24` / `36` |
+| ABI | `arm64-v8a` |
+| Size | `37,637,094` bytes |
+| SHA-256 | `5d80a3142999c7ab8cc83b3e146a44eb8e1e6f48bfc3d2e7df0c24370b12b342` |
+| Signer SHA-256 | `46cbcee985a7e0ecfda5a8fddfbdd679d9f0312ee07d96a593817302eb7c0a39` |
+| Signature / alignment | APK Signature Scheme v2 / 16 KB ZIP alignment verified |
+| Immutable path | `next-frontend/public/downloads/android/48-e651e5f7/nexora-mobile-0.1.47-build48.apk` |
+
+The signer matches build 47, so build 47 → 48 is eligible for an ordinary in-place Android update. Builds 46 and earlier use the explicit external browser/download-manager migration flow and never pass the new APK through app-private cache or the normal installer path.
+
+### Still unverified
+
+- Physical-device migration from legacy build 46 or earlier through backup/sync, external download, uninstall, reinstall, authentication, and version confirmation.
+- Physical-device in-place update from production-signed build 47 to build 48.
+- Authenticated teacher visual/accessibility acceptance on narrow phone, typical phone, tablet, and enlarged-font configurations.
+- Public deployed-byte equality, CI, and deployment status remain pending until the packaging commit is pushed.
