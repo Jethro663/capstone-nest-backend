@@ -54,7 +54,7 @@ export function MobileFilterSheet<Key extends string>({
       </Pressable>
 
       <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
-        <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(12,29,58,0.46)" }}>
+        <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: mobileBrand.scrim }}>
           <Pressable accessibilityRole="button" accessibilityLabel={`Dismiss ${label}`} onPress={() => setVisible(false)} style={{ flex: 1 }} />
           <View style={{ maxHeight: "78%", borderTopLeftRadius: mobileRadii.sheet, borderTopRightRadius: mobileRadii.sheet, backgroundColor: mobileBrand.surface, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 24 }}>
             <View style={{ width: 40, height: 4, borderRadius: mobileRadii.pill, backgroundColor: mobileBrand.borderStrong, alignSelf: "center", marginBottom: 10 }} />

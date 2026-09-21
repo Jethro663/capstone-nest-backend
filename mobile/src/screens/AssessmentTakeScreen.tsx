@@ -1,3 +1,4 @@
+import { mobileBrand } from "../theme/mobileBrand";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -203,7 +204,7 @@ function HeaderActionButton({
     >
       <Text
         style={{
-          color: isSecondary ? theme.text : "#FFFFFF",
+          color: isSecondary ? theme.text : mobileBrand.white,
           fontSize: 11,
           fontWeight: "800",
         }}
@@ -248,7 +249,7 @@ function InlineActionButton({
     >
       <Text
         style={{
-          color: isPrimary ? "#FFFFFF" : theme.text,
+          color: isPrimary ? mobileBrand.white : theme.text,
           fontSize: 12,
           fontWeight: "800",
         }}
@@ -1046,7 +1047,7 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
             style={{
               marginTop: 12,
               borderRadius: 18,
-              backgroundColor: "rgba(255,255,255,0.04)",
+              backgroundColor: mobileBrand.inverseSurface,
               paddingHorizontal: 12,
               paddingVertical: 12,
             }}
@@ -1377,18 +1378,18 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
             <MaterialCommunityIcons
               name="shield-lock-outline"
               size={22}
-              color="#FFFFFF"
+              color={mobileBrand.white}
             />
             <View style={{ flex: 1 }}>
               <Text
-                style={{ color: "#FFFFFF", fontSize: 12, fontWeight: "900" }}
+                style={{ color: mobileBrand.white, fontSize: 12, fontWeight: "900" }}
               >
                 Attempt in progress
               </Text>
               <Text
                 style={{
                   marginTop: 2,
-                  color: "#D7E0EB",
+                  color: mobileBrand.inverseMuted,
                   fontSize: 10,
                   lineHeight: 14,
                 }}
@@ -1396,7 +1397,7 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
                 Stay in Nexora until you submit. Leaving the app is recorded.
               </Text>
             </View>
-            <Text style={{ color: "#F7B3AE", fontSize: 10, fontWeight: "900" }}>
+            <Text style={{ color: mobileBrand.dangerBorder, fontSize: 10, fontWeight: "900" }}>
               Violation {attempt?.violationCount ?? 0} of 3
             </Text>
           </View>
@@ -1867,7 +1868,7 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
                 }}
               >
                 <Text
-                  style={{ color: "#FFFFFF", fontSize: 14, fontWeight: "900" }}
+                  style={{ color: mobileBrand.white, fontSize: 14, fontWeight: "900" }}
                 >
                   {canGoNext
                     ? "Save & Next"
@@ -1908,7 +1909,7 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
                   color:
                     headerUploadActionVariant === "secondary"
                       ? theme.text
-                      : "#FFFFFF",
+                      : mobileBrand.white,
                   fontSize: 14,
                   fontWeight: "900",
                 }}

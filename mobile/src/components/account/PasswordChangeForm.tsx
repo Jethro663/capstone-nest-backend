@@ -1,10 +1,11 @@
+import { mobileBrand } from "../../theme/mobileBrand";
 import { useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { authApi } from "../../api/services/auth";
 import { toAppError } from "../../api/http";
 import { validatePasswordChange, type PasswordChangeErrors } from "../../utils/accountSecurity";
 
-const palette = { text: "#E5E7EB", muted: "#94A3B8", border: "#334155", field: "#111C30", action: "#1D4ED8", error: "#EF4444", success: "#22C55E" };
+const palette = { text: mobileBrand.border, muted: mobileBrand.info, border: mobileBrand.navy, field: mobileBrand.navy, action: mobileBrand.info, error: mobileBrand.danger, success: mobileBrand.success };
 
 export function PasswordChangeForm() {
   const [oldPassword, setOldPassword] = useState("");
@@ -55,7 +56,7 @@ export function PasswordChangeForm() {
       <Text style={{ color: palette.muted, fontSize: 10 }}>8+ characters with uppercase, lowercase, number, and special character.</Text>
       {status ? <Text accessibilityLiveRegion="polite" style={{ color: Object.keys(errors).length ? palette.error : palette.success, fontSize: 12 }}>{status}</Text> : null}
       <Pressable accessibilityRole="button" disabled={saving} onPress={() => void submit()} style={{ borderRadius: 10, backgroundColor: palette.action, alignItems: "center", paddingVertical: 12, opacity: saving ? 0.6 : 1 }}>
-        <Text style={{ color: "#FFFFFF", fontWeight: "800" }}>{saving ? "Updating..." : "Update Password"}</Text>
+        <Text style={{ color: mobileBrand.white, fontWeight: "800" }}>{saving ? "Updating..." : "Update Password"}</Text>
       </Pressable>
     </View>
   );

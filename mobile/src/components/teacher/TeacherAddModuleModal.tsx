@@ -1,3 +1,4 @@
+import { mobileBrand } from "../../theme/mobileBrand";
 import { useEffect, useRef, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
@@ -78,7 +79,7 @@ export function TeacherAddModuleModal({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
-        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.65)", justifyContent: "center", paddingHorizontal: 16 }}>
+        <View style={{ flex: 1, backgroundColor: mobileBrand.scrimStrong, justifyContent: "center", paddingHorizontal: 16 }}>
           <View
             style={{
               maxHeight: "85%",
@@ -282,8 +283,8 @@ export function TeacherAddModuleModal({
                   gap: 6,
                 }}
               >
-                <MaterialCommunityIcons name="view-module-outline" size={16} color="#ffffff" />
-                <Text style={{ fontSize: 13, fontWeight: "800", color: "#ffffff" }}>
+                <MaterialCommunityIcons name="view-module-outline" size={16} color={mobileBrand.white} />
+                <Text style={{ fontSize: 13, fontWeight: "800", color: mobileBrand.white }}>
                   {saving ? "Creating..." : "Create Module"}
                 </Text>
               </Pressable>

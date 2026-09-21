@@ -14,18 +14,18 @@
 
 ## 3. Active Presentation Convergence
 
-- [ ] 3.1 Migrate shared, auth, provider, notification, modal, and utility presentation to semantic roles
-- [ ] 3.2 Migrate active student presentation and main actions while preserving filters, segmented modes, data, and routes
-- [ ] 3.3 Migrate active teacher presentation, option controls, status tones, and main actions
-- [ ] 3.4 Migrate active admin presentation and status tones
-- [ ] 3.5 Replace decorative rainbow class presets with restrained navy/red/neutral variants without changing the data shape
-- [ ] 3.6 Make the design audit pass with no undocumented active-source exception
+- [x] 3.1 Migrate shared, auth, provider, notification, modal, and utility presentation to semantic roles
+- [x] 3.2 Migrate active student presentation and main actions while preserving filters, segmented modes, data, and routes
+- [x] 3.3 Migrate active teacher presentation, option controls, status tones, and main actions
+- [x] 3.4 Migrate active admin presentation and status tones
+- [x] 3.5 Replace decorative rainbow class presets with restrained navy/red/neutral variants without changing the data shape
+- [x] 3.6 Make the design audit pass with no undocumented active-source exception
 
 ## 4. Native and Generated Alignment
 
-- [ ] 4.1 Align adaptive icon, splash, status bar, navigation bar, and root StatusBar presentation
-- [ ] 4.2 Align assessment rich-text generator styles and rebuild generated output
-- [ ] 4.3 Extend audit coverage for native and generated presentation authorities
+- [x] 4.1 Align adaptive icon, splash, status bar, navigation bar, and root StatusBar presentation
+- [x] 4.2 Align assessment rich-text generator styles and rebuild generated output
+- [x] 4.3 Extend audit coverage for native and generated presentation authorities
 
 ## 5. Verification and Release
 

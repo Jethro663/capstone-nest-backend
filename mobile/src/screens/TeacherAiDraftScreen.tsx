@@ -6,7 +6,7 @@ import { DEFAULT_SETTINGS, QUESTION_TYPES as SUPPORTED_QUESTION_TYPES } from "..
 import type { AiAssessmentSettings } from "../types/assessment";
 import { assessmentSettingsSummary } from "../features/assessment-editor/settings-summary";
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Pressable, Text, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { aiApi } from "../api/services/ai";
 import { toAppError } from "../api/http";
@@ -449,9 +449,9 @@ export function TeacherAiDraftScreen({ navigation, route }: AiDraftProps) {
                 {QUESTION_TYPES.map((type) => {
                   const selected = questionType === type.value;
                   return (
-                    <TouchableOpacity key={type.value} accessibilityRole="button" accessibilityState={{ selected }} onPress={() => setQuestionType(type.value)} style={{ minHeight: 44, minWidth: 44, justifyContent: "center", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: selected ? theme.redSoft : theme.active, borderWidth: 1, borderColor: selected ? theme.redLine : theme.border }}>
+                    <Pressable key={type.value} accessibilityRole="radio" accessibilityState={{ checked: selected }} onPress={() => setQuestionType(type.value)} style={{ minHeight: 44, minWidth: 44, justifyContent: "center", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: selected ? theme.redSoft : theme.active, borderWidth: 1, borderColor: selected ? theme.redLine : theme.border }}>
                       <Text style={{ fontSize: 12, fontWeight: "700", color: selected ? theme.redText : theme.subtext }}>{type.label}</Text>
-                    </TouchableOpacity>
+                    </Pressable>
                   );
                 })}
               </View>

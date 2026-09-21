@@ -1,3 +1,4 @@
+import { mobileBrand } from "../../theme/mobileBrand";
 import { type ReactNode, useEffect, useRef } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { FlatList, Image, Pressable, Text, View } from "react-native";
@@ -152,7 +153,7 @@ export function JaChatWorkspace({
           {avatarSource ? (
             <Image source={avatarSource} style={{ width: 34, height: 34 }} resizeMode="contain" />
           ) : (
-            <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "900" }}>JA</Text>
+            <Text style={{ color: mobileBrand.white, fontSize: 13, fontWeight: "900" }}>JA</Text>
           )}
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
@@ -186,7 +187,7 @@ export function JaChatWorkspace({
           flexDirection: "row",
           alignItems: "center",
           gap: 9,
-          backgroundColor: lessonSelection.kind === "stale" ? "#FFF1F2" : theme.surface,
+          backgroundColor: lessonSelection.kind === "stale" ? mobileBrand.redSoft : theme.surface,
           borderBottomWidth: 1,
           borderBottomColor: lessonSelection.kind === "stale" ? colors.red : theme.border,
         }}
@@ -203,7 +204,7 @@ export function JaChatWorkspace({
       </Pressable>
 
       {dataError ? (
-        <View style={{ paddingHorizontal: 16, paddingVertical: 9, backgroundColor: "#FFF1F2", borderBottomWidth: 1, borderBottomColor: colors.red }}>
+        <View style={{ paddingHorizontal: 16, paddingVertical: 9, backgroundColor: mobileBrand.redSoft, borderBottomWidth: 1, borderBottomColor: colors.red }}>
           <Text style={{ color: colors.red, fontSize: 11, fontWeight: "800" }}>{dataError}</Text>
         </View>
       ) : null}
@@ -262,7 +263,7 @@ export function JaChatWorkspace({
         }}
       >
         {error ? (
-          <View style={{ borderRadius: 12, borderWidth: 1, borderColor: colors.red, backgroundColor: "#FFF1F2", padding: 10, flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <View style={{ borderRadius: 12, borderWidth: 1, borderColor: colors.red, backgroundColor: mobileBrand.redSoft, padding: 10, flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Text style={{ flex: 1, color: colors.red, fontSize: 11, lineHeight: 16, fontWeight: "700" }}>{error}</Text>
             <Pressable accessibilityRole="button" accessibilityLabel="Dismiss JA error" onPress={onDismissError} style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 6 }}>
               <Text style={{ color: colors.red, fontSize: 11, fontWeight: "900" }}>Dismiss</Text>
@@ -286,8 +287,8 @@ export function JaChatWorkspace({
             opacity: promptEnabled ? 1 : 0.7,
           }}
         >
-          <MaterialCommunityIcons name="message-question-outline" size={18} color={promptEnabled ? "#FFFFFF" : theme.muted} />
-          <Text numberOfLines={1} maxFontSizeMultiplier={1.2} style={{ color: promptEnabled ? "#FFFFFF" : theme.muted, fontSize: 13, fontWeight: "900" }}>
+          <MaterialCommunityIcons name="message-question-outline" size={18} color={promptEnabled ? mobileBrand.white : theme.muted} />
+          <Text numberOfLines={1} maxFontSizeMultiplier={1.2} style={{ color: promptEnabled ? mobileBrand.white : theme.muted, fontSize: 13, fontWeight: "900" }}>
             Ask JA about this lesson
           </Text>
         </Pressable>

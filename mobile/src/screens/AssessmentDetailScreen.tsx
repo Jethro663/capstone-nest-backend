@@ -1,3 +1,4 @@
+import { mobileBrand } from "../theme/mobileBrand";
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -350,7 +351,7 @@ function ActionButton({
         style={{
           fontSize: compact ? 11 : 12,
           fontWeight: "800",
-          color: disabled ? theme.muted : primary ? "#FFFFFF" : theme.text,
+          color: disabled ? theme.muted : primary ? mobileBrand.white : theme.text,
         }}
       >
         {label}

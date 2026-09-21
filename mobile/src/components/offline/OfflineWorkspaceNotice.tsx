@@ -1,3 +1,4 @@
+import { mobileBrand } from "../../theme/mobileBrand";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Text, View } from "react-native";
 
@@ -23,8 +24,8 @@ export function OfflineWorkspaceNotice({
         minHeight: 62,
         borderRadius: 14,
         borderWidth: 1,
-        borderColor: "#F3C4C7",
-        backgroundColor: "#FFF5F5",
+        borderColor: mobileBrand.dangerBorder,
+        backgroundColor: mobileBrand.redSoft,
         paddingHorizontal: 13,
         paddingVertical: 11,
         flexDirection: "row",
@@ -35,16 +36,16 @@ export function OfflineWorkspaceNotice({
       <MaterialCommunityIcons
         name="cloud-off-outline"
         size={20}
-        color="#A51D2D"
+        color={mobileBrand.danger}
       />
       <View style={{ flex: 1 }}>
-        <Text style={{ color: "#741623", fontSize: 12, fontWeight: "900" }}>
+        <Text style={{ color: mobileBrand.redPressed, fontSize: 12, fontWeight: "900" }}>
           Offline snapshot
         </Text>
         <Text
           style={{
             marginTop: 3,
-            color: "#6B5560",
+            color: mobileBrand.muted,
             fontSize: 11,
             lineHeight: 16,
           }}

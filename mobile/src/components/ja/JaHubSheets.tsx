@@ -1,3 +1,4 @@
+import { mobileBrand } from "../../theme/mobileBrand";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -111,7 +112,7 @@ export function JaHubSheets({
       statusBarTranslucent
       onRequestClose={onClose}
     >
-      <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0, 20, 60, 0.42)" }}>
+      <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: mobileBrand.scrim }}>
         <Pressable accessibilityRole="button" accessibilityLabel="Close sheet" onPress={onClose} style={{ flex: 1 }} />
         <View style={{ maxHeight: "82%", borderTopLeftRadius: 24, borderTopRightRadius: 24, backgroundColor: theme.bg, borderWidth: 1, borderColor: theme.border, paddingBottom: Math.max(insets.bottom, 14) }}>
           <View style={{ paddingHorizontal: 16, paddingVertical: 14, flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: theme.border }}>
@@ -234,7 +235,7 @@ export function JaHubSheets({
                 </View>
                 {activityLoading ? <Text style={{ color: theme.muted, fontSize: 12 }}>Loading complete activity history...</Text> : null}
                 {activityError ? (
-                  <View style={{ borderRadius: 14, borderWidth: 1, borderColor: colors.red, backgroundColor: "#FFF1F2", padding: 12 }}>
+                  <View style={{ borderRadius: 14, borderWidth: 1, borderColor: colors.red, backgroundColor: mobileBrand.redSoft, padding: 12 }}>
                     <Text style={{ color: colors.red, fontSize: 12, fontWeight: "800" }}>Activity history is unavailable.</Text>
                     <Pressable accessibilityRole="button" accessibilityLabel="Refresh activity history" onPress={onRefreshActivity} style={{ minHeight: 44, justifyContent: "center" }}>
                       <Text style={{ color: colors.red, fontSize: 11, fontWeight: "900" }}>Refresh</Text>

@@ -1,3 +1,4 @@
+import { mobileBrand } from "../theme/mobileBrand";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -211,7 +212,7 @@ export function TeacherEvaluationsScreen({ navigation }: Props) {
       )}
 
       <Modal visible={Boolean(selectedEvaluation)} transparent animationType="slide" onRequestClose={() => setSelectedEvaluation(null)}>
-        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.65)", justifyContent: "flex-end" }}>
+        <View style={{ flex: 1, backgroundColor: mobileBrand.scrimStrong, justifyContent: "flex-end" }}>
           <View style={{ backgroundColor: theme.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: "90%" }}>
             <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 14 }}>
               <View style={{ flex: 1, paddingRight: 12 }}>
@@ -267,7 +268,7 @@ export function TeacherEvaluationsScreen({ navigation }: Props) {
               disabled={submitMutation.isPending}
               style={{ borderRadius: 10, backgroundColor: theme.blue, paddingVertical: 12, alignItems: "center", opacity: submitMutation.isPending ? 0.6 : 1 }}
             >
-              <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "800" }}>
+              <Text style={{ color: mobileBrand.white, fontSize: 13, fontWeight: "800" }}>
                 {submitMutation.isPending ? "Submitting..." : "Submit Evaluation"}
               </Text>
             </Pressable>

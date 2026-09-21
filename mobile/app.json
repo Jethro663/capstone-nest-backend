@@ -19,7 +19,7 @@
       "usesCleartextTraffic": false,
       "adaptiveIcon": {
         "foregroundImage": "./assets/ja/apk_logo.png",
-        "backgroundColor": "#000000"
+        "backgroundColor": "#0C1D3A"
       },
       "versionCode": 48,
       "permissions": [

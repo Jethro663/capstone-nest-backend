@@ -1,3 +1,4 @@
+import { mobileBrand } from "../theme/mobileBrand";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RichTextContent } from "../components/ui/RichTextContent";
 import { normalizeAnnouncementContent } from "../utils/announcementContent";
@@ -1013,7 +1014,7 @@ export function StudentClassDetailContent({
                 }}
               >
                 <Text
-                  style={{ color: "#FFFFFF", fontSize: 12, fontWeight: "700" }}
+                  style={{ color: mobileBrand.white, fontSize: 12, fontWeight: "700" }}
                 >
                   {classBadge}
                 </Text>
@@ -1733,7 +1734,7 @@ export function StudentClassDetailContent({
                         style={{
                           fontSize: 11,
                           fontWeight: "700",
-                          color: "#FFFFFF",
+                          color: mobileBrand.white,
                         }}
                       >
                         {buildInitials(
@@ -1830,7 +1831,7 @@ export function StudentClassDetailContent({
                     style={{
                       fontSize: 12,
                       fontWeight: "700",
-                      color: "#FFFFFF",
+                      color: mobileBrand.white,
                     }}
                   >
                     {buildInitials(
@@ -1909,7 +1910,7 @@ export function StudentClassDetailContent({
                         style={{
                           fontSize: 12,
                           fontWeight: "700",
-                          color: "#FFFFFF",
+                          color: mobileBrand.white,
                         }}
                       >
                         {buildInitials(
@@ -2260,7 +2261,7 @@ export function StudentClassDetailContent({
                         color: !cell.inMonth
                           ? "transparent"
                           : cell.isToday
-                            ? "#FFFFFF"
+                            ? mobileBrand.white
                             : cell.isClassDay
                               ? theme.blue
                               : theme.muted,
@@ -2339,7 +2340,7 @@ export function StudentClassDetailContent({
               right: 0,
               bottom: 0,
               left: 0,
-              backgroundColor: "rgba(0,0,0,0.65)",
+              backgroundColor: mobileBrand.scrimStrong,
             }}
           />
 

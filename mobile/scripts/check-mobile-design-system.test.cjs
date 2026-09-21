@@ -1,6 +1,8 @@
 const assert = require("node:assert/strict");
+const path = require("node:path");
 const test = require("node:test");
 const {
+  checkNativeDesignContracts,
   isIgnoredSource,
   scanSource,
 } = require("./check-mobile-design-system.cjs");
@@ -9,6 +11,13 @@ test("allows the token authority and explicit generated/test boundaries", () => 
   assert.equal(isIgnoredSource("src/theme/mobileBrand.ts"), true);
   assert.equal(isIgnoredSource("src/generated/assessment-rich-text.ts"), true);
   assert.equal(isIgnoredSource("src/components/__tests__/Card.test.tsx"), true);
+});
+
+test("keeps app startup, system bars, and rich text on the approved palette", () => {
+  assert.deepEqual(
+    checkNativeDesignContracts(path.resolve(__dirname, "..")),
+    [],
+  );
 });
 
 test("reports direct colors with deterministic file and line evidence", () => {
@@ -45,5 +54,15 @@ test("reports generic Button and TouchableOpacity controls from React Native", (
       { kind: "legacy-control", value: "Button" },
       { kind: "legacy-control", value: "TouchableOpacity" },
     ],
+  );
+});
+
+test("reports named style colors without confusing semantic tone strings", () => {
+  assert.deepEqual(
+    scanSource(
+      "src/screens/Named.tsx",
+      'const style = { color: "white" };\nconst tone = "red";\n',
+    ).map(({ kind, value }) => ({ kind, value })),
+    [{ kind: "named-color", value: 'color: "white"' }],
   );
 });

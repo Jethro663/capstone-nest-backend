@@ -1,3 +1,4 @@
+import { mobileBrand } from "../theme/mobileBrand";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -797,7 +798,7 @@ function PracticePanel({
         </Text>
       </View>
       <Pressable onPress={onStart} disabled={busy} style={{ borderRadius: 12, paddingVertical: 14, alignItems: "center", backgroundColor: dark.blue }}>
-        <Text style={{ color: "#fff", fontSize: 14, fontWeight: "900" }}>{busy ? "Generating..." : "Generate Practice Run"}</Text>
+        <Text style={{ color: mobileBrand.white, fontSize: 14, fontWeight: "900" }}>{busy ? "Generating..." : "Generate Practice Run"}</Text>
       </Pressable>
       <DarkPanel>
         <SectionLabel title="How it works" meta={counts} />
@@ -863,8 +864,8 @@ function ReplayPanel({
               style={({ pressed }) => [{
                 borderRadius: 20,
                 borderWidth: 1.5,
-                borderColor: isReplayed ? "#86EFAC" : "#FDA4AF",
-                backgroundColor: isReplayed ? "#F0FDF4" : "#FFF1F2",
+                borderColor: isReplayed ? mobileBrand.successBorder : mobileBrand.dangerBorder,
+                backgroundColor: isReplayed ? mobileBrand.successSoft : mobileBrand.redSoft,
                 padding: 15,
                 marginBottom: 10,
                 opacity: pressed ? 0.85 : 1,
@@ -878,7 +879,7 @@ function ReplayPanel({
                   <MaterialCommunityIcons
                     name={isReplayed ? "check-circle" : "alert-circle-outline"}
                     size={18}
-                    color={isReplayed ? "#16A34A" : "#E11D48"}
+                    color={isReplayed ? mobileBrand.success : mobileBrand.danger}
                   />
                   <Text style={{ color: dark.text, fontSize: 14, fontWeight: "900", flex: 1 }}>
                     {stripRichText(attempt.assessmentTitle)}
@@ -894,11 +895,11 @@ function ReplayPanel({
                 </Text>
 
                 {isReplayed ? (
-                  <Text style={{ marginTop: 4, color: "#15803D", fontSize: 11, fontWeight: "900" }}>
+                  <Text style={{ marginTop: 4, color: mobileBrand.success, fontSize: 11, fontWeight: "900" }}>
                     Replay Completed • Tap to view result
                   </Text>
                 ) : isSubmitted ? (
-                  <Text style={{ marginTop: 4, color: "#991B1B", fontSize: 11, fontWeight: "900" }}>
+                  <Text style={{ marginTop: 4, color: mobileBrand.danger, fontSize: 11, fontWeight: "900" }}>
                     Tap to start JA Replay
                   </Text>
                 ) : null}
@@ -908,15 +909,15 @@ function ReplayPanel({
                 paddingHorizontal: 12,
                 paddingVertical: 6,
                 borderRadius: 999,
-                backgroundColor: isReplayed ? "#DCFCE7" : "#FFE4E6",
+                backgroundColor: isReplayed ? mobileBrand.successSoft : mobileBrand.redSoft,
                 borderWidth: 1,
-                borderColor: isReplayed ? "#86EFAC" : "#FDA4AF",
+                borderColor: isReplayed ? mobileBrand.successBorder : mobileBrand.dangerBorder,
                 flexDirection: "row",
                 alignItems: "center",
                 gap: 5,
               }}>
-                <View style={{ width: 6, height: 6, borderRadius: 999, backgroundColor: isReplayed ? "#16A34A" : "#E11D48" }} />
-                <Text style={{ color: isReplayed ? "#15803D" : "#991B1B", fontSize: 11, fontWeight: "900" }}>
+                <View style={{ width: 6, height: 6, borderRadius: 999, backgroundColor: isReplayed ? mobileBrand.success : mobileBrand.danger }} />
+                <Text style={{ color: isReplayed ? mobileBrand.success : mobileBrand.danger, fontSize: 11, fontWeight: "900" }}>
                   {isReplayed ? `Score: ${attempt.replayScore ?? 100}%` : "Not Retaken Yet"}
                 </Text>
               </View>
@@ -978,10 +979,10 @@ function SessionPanel({
       </View>
       <View style={{ marginTop: 14, flexDirection: "row", justifyContent: "flex-end", gap: 8 }}>
         <Pressable onPress={onSubmit} style={{ minHeight: 44, borderRadius: 10, backgroundColor: canComplete ? dark.blue : dark.surface2, paddingHorizontal: 14, paddingVertical: 10, justifyContent: "center" }}>
-          <Text style={{ color: canComplete ? "#fff" : dark.muted, fontSize: 12, fontWeight: "800" }}>{submitLabel}</Text>
+          <Text style={{ color: canComplete ? mobileBrand.white : dark.muted, fontSize: 12, fontWeight: "800" }}>{submitLabel}</Text>
         </Pressable>
         <Pressable onPress={onComplete} disabled={!canComplete} style={{ minHeight: 44, borderRadius: 10, backgroundColor: canComplete ? dark.green : dark.surface2, paddingHorizontal: 14, paddingVertical: 10, justifyContent: "center" }}>
-          <Text style={{ color: canComplete ? "#fff" : dark.muted, fontSize: 12, fontWeight: "800" }}>Complete</Text>
+          <Text style={{ color: canComplete ? mobileBrand.white : dark.muted, fontSize: 12, fontWeight: "800" }}>Complete</Text>
         </Pressable>
       </View>
     </DarkPanel>

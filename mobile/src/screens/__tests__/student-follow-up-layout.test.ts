@@ -38,7 +38,9 @@ describe("student mobile follow-up layout contracts", () => {
     expect(source).toContain(
       'import { LinearGradient } from "expo-linear-gradient"',
     );
-    expect(source).toContain('colors={["#0C1D3A", "#172944"]}');
+    expect(source).toContain(
+      "colors={[mobileBrand.navy, mobileBrand.navyRaised]}",
+    );
     expect(source).toContain("styles.heroStatusRow");
     expect(source).toContain("styles.heroIdentity");
     expect(source).toContain(

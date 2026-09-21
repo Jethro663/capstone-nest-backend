@@ -114,7 +114,7 @@ export function StudentActionSheet({
 }: PropsWithChildren<{ visible: boolean; title: string; subtitle?: string; onClose: () => void }>) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(15,23,42,0.34)" }}>
+      <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: mobileBrand.scrim }}>
         <Pressable accessibilityRole="button" accessibilityLabel={`Dismiss ${title}`} onPress={onClose} style={{ flex: 1 }} />
         <View style={{ maxHeight: "82%", borderTopLeftRadius: 22, borderTopRightRadius: 22, backgroundColor: theme.surface, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 24 }}>
           <View style={{ width: 38, height: 4, borderRadius: 999, backgroundColor: theme.border2, alignSelf: "center", marginBottom: 8 }} />

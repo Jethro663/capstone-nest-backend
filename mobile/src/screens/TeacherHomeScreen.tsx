@@ -232,8 +232,8 @@ export function TeacherHomeScreen({ navigation }: Props) {
             height: 44,
             borderRadius: 12,
             borderWidth: 1,
-              borderColor: "rgba(255,255,255,0.22)",
-              backgroundColor: "rgba(255,255,255,0.10)",
+              borderColor: mobileBrand.inverseBorder,
+              backgroundColor: mobileBrand.inverseSurface,
             alignItems: "center",
             justifyContent: "center",
           }}
@@ -261,7 +261,7 @@ export function TeacherHomeScreen({ navigation }: Props) {
               }}
             >
               <Text
-                style={{ color: "#FFFFFF", fontSize: 9, fontWeight: "900" }}
+                style={{ color: mobileBrand.white, fontSize: 9, fontWeight: "900" }}
               >
                 {unreadCount > 9 ? "9+" : unreadCount}
               </Text>
@@ -330,7 +330,7 @@ export function TeacherHomeScreen({ navigation }: Props) {
                 padding: 18,
               }}
             >
-              <Text style={{ marginBottom: 10, fontSize: 10, fontWeight: "900", letterSpacing: 0.9, textTransform: "uppercase", color: "rgba(255,255,255,0.72)" }}>Next up</Text>
+              <Text style={{ marginBottom: 10, fontSize: 10, fontWeight: "900", letterSpacing: 0.9, textTransform: "uppercase", color: mobileBrand.inverseMuted }}>Next up</Text>
               <View
                 style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
               >
@@ -341,7 +341,7 @@ export function TeacherHomeScreen({ navigation }: Props) {
                     borderRadius: 12,
                     alignItems: "center",
                     justifyContent: "center",
-                    backgroundColor: "rgba(220,38,38,0.92)",
+                    backgroundColor: mobileBrand.danger,
                   }}
                 >
                   <MaterialCommunityIcons
@@ -355,7 +355,7 @@ export function TeacherHomeScreen({ navigation }: Props) {
                     style={{
                       fontSize: 12,
                       fontWeight: "800",
-                      color: "rgba(255,255,255,0.78)",
+                      color: mobileBrand.inverseMuted,
                     }}
                   >
                     {nextClass.timeLabel}
@@ -374,10 +374,10 @@ export function TeacherHomeScreen({ navigation }: Props) {
                 <MaterialCommunityIcons
                   name="chevron-right"
                   size={22}
-                  color="rgba(255,255,255,0.68)"
+                  color={mobileBrand.inverseMuted}
                 />
               </View>
-              <Text style={{ marginTop: 10, fontSize: 12, color: "rgba(255,255,255,0.72)" }}>
+              <Text style={{ marginTop: 10, fontSize: 12, color: mobileBrand.inverseMuted }}>
                 {nextClass.classItem.section?.name || "Section pending"}
                 {nextClass.classItem.room
                   ? ` · ${nextClass.classItem.room}`
@@ -386,7 +386,7 @@ export function TeacherHomeScreen({ navigation }: Props) {
             </Pressable>
           ) : (
             <View testID="teacher-next-up" style={{ minHeight: 96, borderRadius: 20, backgroundColor: mobileBrand.navy, padding: 18, justifyContent: "center" }}>
-              <Text style={{ fontSize: 10, fontWeight: "900", letterSpacing: 0.9, textTransform: "uppercase", color: "rgba(255,255,255,0.72)" }}>Next up</Text>
+              <Text style={{ fontSize: 10, fontWeight: "900", letterSpacing: 0.9, textTransform: "uppercase", color: mobileBrand.inverseMuted }}>Next up</Text>
               <Text style={{ marginTop: 8, fontSize: 15, fontWeight: "800", color: mobileBrand.white }}>{schedule.length ? "No more classes are scheduled today." : "No classes are scheduled today."}</Text>
             </View>
           )}

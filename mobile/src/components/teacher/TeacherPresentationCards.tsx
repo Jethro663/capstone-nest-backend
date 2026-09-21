@@ -1,3 +1,4 @@
+import { mobileBrand } from "../../theme/mobileBrand";
 import type { ComponentProps, ReactNode } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -7,7 +8,7 @@ import type { TeacherSection } from "../../types/teacher";
 import { getPresetColors } from "../../utils/class-card-presets";
 import { teacherTheme as theme } from "../../theme/teacher";
 
-const GABHS_FALLBACK = ["#C96B68", "#A85A5B", "#98484A"] as const;
+const GABHS_FALLBACK = [mobileBrand.navy, mobileBrand.navyRaised, mobileBrand.red] as const;
 
 function heroColors(preset?: string | null): [string, string, ...string[]] {
   return (preset ? getPresetColors(preset) : GABHS_FALLBACK) as [
@@ -126,7 +127,7 @@ function PresentationCard({
         )}
         {bannerUri ? (
           <LinearGradient
-            colors={["rgba(15,23,42,0.12)", "rgba(15,23,42,0.78)"]}
+            colors={[mobileBrand.inverseSurface, mobileBrand.scrimStrong]}
             style={{ position: "absolute", inset: 0 }}
           />
         ) : null}
@@ -138,7 +139,7 @@ function PresentationCard({
             borderRadius: 999,
             right: -30,
             top: -50,
-            backgroundColor: "rgba(255,255,255,0.10)",
+            backgroundColor: mobileBrand.inverseSurface,
           }}
         />
         <View
@@ -154,13 +155,13 @@ function PresentationCard({
               style={{
                 borderRadius: 999,
                 borderWidth: 1,
-                borderColor: "rgba(255,255,255,0.42)",
-                backgroundColor: "rgba(0,0,0,0.16)",
+                borderColor: mobileBrand.inverseBorder,
+                backgroundColor: mobileBrand.inverseSurface,
                 paddingHorizontal: 10,
                 paddingVertical: 5,
               }}
             >
-              <Text style={{ fontSize: 10, fontWeight: "900", color: "#FFFFFF" }}>
+              <Text style={{ fontSize: 10, fontWeight: "900", color: mobileBrand.white }}>
                 {status}
               </Text>
             </View>
@@ -177,13 +178,13 @@ function PresentationCard({
                 height: 38,
                 borderRadius: 999,
                 borderWidth: 1,
-                borderColor: "rgba(255,255,255,0.42)",
-                backgroundColor: "rgba(0,0,0,0.18)",
+                borderColor: mobileBrand.inverseBorder,
+                backgroundColor: mobileBrand.inverseSurface,
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <MaterialCommunityIcons name="palette-outline" size={18} color="#FFFFFF" />
+              <MaterialCommunityIcons name="palette-outline" size={18} color={mobileBrand.white} />
             </Pressable>
           </View>
 
@@ -191,14 +192,14 @@ function PresentationCard({
             <View style={{ flex: 1 }}>
               <Text
                 numberOfLines={1}
-                style={{ fontSize: 10, fontWeight: "900", letterSpacing: 1, color: "rgba(255,255,255,0.82)" }}
+                style={{ fontSize: 10, fontWeight: "900", letterSpacing: 1, color: mobileBrand.inverseMuted }}
               >
                 {eyebrow.toUpperCase()}
               </Text>
-              <Text numberOfLines={2} style={{ marginTop: 3, fontSize: 23, lineHeight: 27, fontWeight: "900", color: "#FFFFFF" }}>
+              <Text numberOfLines={2} style={{ marginTop: 3, fontSize: 23, lineHeight: 27, fontWeight: "900", color: mobileBrand.white }}>
                 {title}
               </Text>
-              <Text numberOfLines={1} style={{ marginTop: 4, fontSize: 12, fontWeight: "700", color: "rgba(255,255,255,0.88)" }}>
+              <Text numberOfLines={1} style={{ marginTop: 4, fontSize: 12, fontWeight: "700", color: mobileBrand.inverseMuted }}>
                 {heroMeta}
               </Text>
             </View>
@@ -208,13 +209,13 @@ function PresentationCard({
                 height: 42,
                 borderRadius: 14,
                 borderWidth: 1,
-                borderColor: "rgba(255,255,255,0.35)",
-                backgroundColor: "rgba(255,255,255,0.16)",
+                borderColor: mobileBrand.inverseBorder,
+                backgroundColor: mobileBrand.inverseBorder,
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <MaterialCommunityIcons name={icon} size={21} color="#FFFFFF" />
+              <MaterialCommunityIcons name={icon} size={21} color={mobileBrand.white} />
             </View>
           </View>
         </View>
@@ -347,7 +348,7 @@ export function TeacherSectionPresentationCard({
         </View>
         <View style={{ marginTop: 8, height: 7, borderRadius: 999, backgroundColor: theme.border, overflow: "hidden" }}>
           <LinearGradient
-            colors={["#C96B68", "#E6A09B"]}
+            colors={[mobileBrand.red, mobileBrand.redPressed]}
             style={{ width: `${occupancy}%`, height: "100%", borderRadius: 999 }}
           />
         </View>

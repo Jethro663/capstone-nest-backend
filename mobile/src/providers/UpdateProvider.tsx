@@ -1,3 +1,4 @@
+import { mobileBrand } from "../theme/mobileBrand";
 import type { PropsWithChildren } from "react";
 import {
   createContext,
@@ -118,7 +119,7 @@ const iosUpdateStyles = {
     flex: 1,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    backgroundColor: "rgba(10, 25, 47, 0.72)",
+    backgroundColor: mobileBrand.scrimStrong,
     padding: 24,
   },
   dialog: {
@@ -810,7 +811,7 @@ function AndroidUpdateProvider({ children }: PropsWithChildren) {
               right: 0,
               bottom: 0,
               left: 0,
-              backgroundColor: "rgba(15,23,42,0.16)",
+              backgroundColor: mobileBrand.inverseSurface,
               alignItems: "center",
               paddingHorizontal: 16,
               paddingTop: 16,
@@ -823,7 +824,7 @@ function AndroidUpdateProvider({ children }: PropsWithChildren) {
                 minHeight: 48,
                 borderRadius: 14,
                 borderWidth: 1,
-                borderColor: "rgba(220,38,38,0.24)",
+                borderColor: mobileBrand.dangerSoft,
                 backgroundColor: colors.white,
                 paddingHorizontal: 14,
                 flexDirection: "row",
@@ -832,7 +833,7 @@ function AndroidUpdateProvider({ children }: PropsWithChildren) {
                 ...shadow.card,
               }}
             >
-              <ActivityIndicator size="small" color="#DC2626" />
+              <ActivityIndicator size="small" color={mobileBrand.red} />
               <Text
                 style={{
                   flex: 1,

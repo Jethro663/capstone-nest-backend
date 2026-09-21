@@ -1,3 +1,4 @@
+import { mobileBrand } from "../../theme/mobileBrand";
 import { useEffect, useMemo, useState } from "react";
 import * as DocumentPicker from "expo-document-picker";
 import { Linking, Pressable, Text, View } from "react-native";
@@ -472,7 +473,7 @@ export function TeacherDiscussionBoard({ classId, registerRefetch }: Props) {
                 </View>
               </View>
 
-              <Text style={{ marginTop: 7, fontSize: 12, lineHeight: 18, color: "#B8B8B8" }} numberOfLines={3}>
+              <Text style={{ marginTop: 7, fontSize: 12, lineHeight: 18, color: mobileBrand.borderStrong }} numberOfLines={3}>
                 {stripRichText(thread.bodyHtml)}
               </Text>
 
@@ -549,14 +550,14 @@ export function TeacherDiscussionBoard({ classId, registerRefetch }: Props) {
         >
           {threadQuery.error ? (
             <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
-              <Text style={{ fontSize: 12, color: "#FF9CAA" }}>{peekAppError(threadQuery.error).message}</Text>
+              <Text style={{ fontSize: 12, color: mobileBrand.dangerBorder }}>{peekAppError(threadQuery.error).message}</Text>
             </View>
           ) : null}
 
           {selectedThread ? (
             <>
               <View style={{ paddingHorizontal: 14, paddingBottom: 12, borderTopWidth: 1, borderTopColor: theme.border }}>
-                <Text style={{ marginTop: 10, fontSize: 12, lineHeight: 18, color: "#C9C9C9" }}>
+                <Text style={{ marginTop: 10, fontSize: 12, lineHeight: 18, color: mobileBrand.borderStrong }}>
                   {stripRichText(selectedThread.bodyHtml)}
                 </Text>
 
@@ -616,7 +617,7 @@ export function TeacherDiscussionBoard({ classId, registerRefetch }: Props) {
                       <Text style={{ fontSize: 12, fontWeight: "700", color: theme.text }}>
                         {getAuthorName(comment.author)} <Text style={{ fontWeight: "400", color: theme.muted }}>{formatDateTime(comment.createdAt)}</Text>
                       </Text>
-                      <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: "#C8C8C8" }}>
+                      <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: mobileBrand.borderStrong }}>
                         {stripRichText(comment.bodyHtml || "") || "No text body"}
                       </Text>
 

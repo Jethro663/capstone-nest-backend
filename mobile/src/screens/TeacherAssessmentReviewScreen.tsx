@@ -576,7 +576,7 @@ export function TeacherAssessmentReviewScreen({ navigation, route }: Props) {
                       {file.originalName || "Submitted file"}
                     </Text>
                     <Text
-                      style={{ marginTop: 3, fontSize: 11, color: "#9D9D9D" }}
+                      style={{ marginTop: 3, fontSize: 11, color: mobileBrand.dim }}
                     >
                       {file.mimeType || "File"}
                       {file.sizeBytes

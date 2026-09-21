@@ -1,3 +1,4 @@
+import { mobileBrand } from "../../theme/mobileBrand";
 import { useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Alert, Modal, Pressable, ScrollView, Text, View } from "react-native";
@@ -172,7 +173,7 @@ export function AdminAnnouncementRow({
           <View
             style={{
               flex: 1,
-              backgroundColor: "rgba(15,23,42,0.46)",
+              backgroundColor: mobileBrand.scrim,
               justifyContent: "flex-end",
             }}
           >

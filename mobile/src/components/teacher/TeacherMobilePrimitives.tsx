@@ -391,11 +391,11 @@ export function TeacherRow({
     >
       {left}
       <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 13, fontWeight: "700", color: containerStyle?.backgroundColor ? '#fff' : theme.text }}>{title}</Text>
-        {subtitle ? <Text style={{ marginTop: 3, fontSize: 11, lineHeight: 17, color: containerStyle?.backgroundColor ? 'rgba(255,255,255,0.8)' : theme.subtext }}>{subtitle}</Text> : null}
+        <Text style={{ fontSize: 13, fontWeight: "700", color: containerStyle?.backgroundColor ? mobileBrand.white : theme.text }}>{title}</Text>
+        {subtitle ? <Text style={{ marginTop: 3, fontSize: 11, lineHeight: 17, color: containerStyle?.backgroundColor ? mobileBrand.inverseMuted : theme.subtext }}>{subtitle}</Text> : null}
       </View>
       {right}
-      {onPress ? <MaterialCommunityIcons name="chevron-right" size={16} color={containerStyle?.backgroundColor ? '#fff' : theme.dim} /> : null}
+      {onPress ? <MaterialCommunityIcons name="chevron-right" size={16} color={containerStyle?.backgroundColor ? mobileBrand.white : theme.dim} /> : null}
     </Pressable>
   );
 }

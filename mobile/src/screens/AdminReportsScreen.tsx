@@ -1,3 +1,4 @@
+import { mobileBrand } from "../theme/mobileBrand";
 import { useMemo, useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, Text, View } from "react-native";
 import DateTimePicker, {
@@ -93,7 +94,7 @@ function escapeHtml(value: unknown) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+    .replace(/'/g, "&${mobileBrand.navyRaised};");
 }
 
 function rowPresentation(row: Record<string, unknown>) {
@@ -165,11 +166,11 @@ function reportHtml(input: {
   content: unknown;
 }) {
   return `<!doctype html><html><head><meta charset="utf-8"><style>
-    @page { margin: 32px; } body { color:#231f20; font-family:Arial,sans-serif; }
-    header { border-bottom:4px solid #b91c1c; padding-bottom:16px; margin-bottom:20px; }
-    h1 { margin:0 0 6px; font-size:24px; } header p,.empty { color:#655f61; }
-    article { border:1px solid #ded8da; border-radius:10px; margin:0 0 12px; padding:12px; break-inside:avoid; }
-    h2 { font-size:15px; margin:0 0 4px; } article p { color:#655f61; font-size:12px; margin:0 0 8px; }
+    @page { margin: 32px; } body { color:${mobileBrand.text}; font-family:Arial,sans-serif; }
+    header { border-bottom:4px solid ${mobileBrand.redPressed}; padding-bottom:16px; margin-bottom:20px; }
+    h1 { margin:0 0 6px; font-size:24px; } header p,.empty { color:${mobileBrand.muted}; }
+    article { border:1px solid ${mobileBrand.border}; border-radius:10px; margin:0 0 12px; padding:12px; break-inside:avoid; }
+    h2 { font-size:15px; margin:0 0 4px; } article p { color:${mobileBrand.muted}; font-size:12px; margin:0 0 8px; }
     article div { display:flex; flex-wrap:wrap; gap:8px 16px; font-size:11px; }
   </style></head><body><header><h1>${escapeHtml(input.title)}</h1><p>${escapeHtml(input.filterSummary)}</p></header>${printableRows(input.content)}</body></html>`;
 }

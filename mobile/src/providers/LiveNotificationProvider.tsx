@@ -1,3 +1,4 @@
+import { mobileBrand } from "../theme/mobileBrand";
 import type { PropsWithChildren } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Notifications from "expo-notifications";
@@ -614,7 +615,7 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
                 lockscreenVisibility:
                   Notifications.AndroidNotificationVisibility.PRIVATE,
             vibrationPattern: [0, 260, 120, 260],
-            lightColor: "#E3062C",
+            lightColor: mobileBrand.danger,
             enableVibrate: true,
             showBadge: true,
           },
@@ -690,7 +691,7 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
             data: notificationToNativeData(notification, role),
             sound: true,
             priority: Notifications.AndroidNotificationPriority.HIGH,
-            color: interventionAlert ? "#BE123C" : "#2563EB",
+            color: interventionAlert ? mobileBrand.danger : mobileBrand.info,
             vibrate: interventionAlert ? [0, 280, 120, 280] : [0, 180],
             autoDismiss: true,
           },

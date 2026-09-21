@@ -1,3 +1,4 @@
+import { mobileBrand } from "../../theme/mobileBrand";
 import { useEffect, useMemo, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Alert, Modal, Pressable, Text, TextInput, View } from "react-native";
@@ -103,7 +104,7 @@ export function DatePickerModal({
       <View
         style={{
           flex: 1,
-          backgroundColor: "rgba(0,0,0,0.6)",
+          backgroundColor: mobileBrand.scrimStrong,
           justifyContent: "center",
           alignItems: "center",
           padding: 20,
@@ -280,7 +281,7 @@ export function DatePickerModal({
                       style={{
                         fontSize: 12,
                         fontWeight: isSelected ? "800" : "600",
-                        color: isSelected ? "#ffffff" : theme.text,
+                        color: isSelected ? mobileBrand.white : theme.text,
                       }}
                     >
                       {dayNum}

@@ -7,6 +7,7 @@ import type { SaveAssessmentEditorInput } from "../../types/assessment";
 import type { AcademicPeriod } from "../../types/academic-grading";
 import { AssessmentRichTextEditor } from "../../components/ui/AssessmentRichTextEditor";
 import { teacherTheme as theme } from "../../components/teacher/TeacherMobilePrimitives";
+import { mobileBrand } from "../../theme/mobileBrand";
 
 type Settings = SaveAssessmentEditorInput["settings"];
 export function Field({
@@ -38,7 +39,7 @@ export function Field({
           borderColor: theme.border,
           borderRadius: 8,
           color: theme.text,
-          backgroundColor: "white",
+          backgroundColor: mobileBrand.surface,
         }}
       />
     </View>
@@ -74,7 +75,7 @@ export function Choices({
               borderRadius: 8,
               borderWidth: 1,
               borderColor: value === option.value ? theme.red : theme.border,
-              backgroundColor: value === option.value ? theme.active : "white",
+              backgroundColor: value === option.value ? theme.active : mobileBrand.surface,
             }}
           >
             <Text style={{ color: theme.text }}>{option.label}</Text>

@@ -1,3 +1,4 @@
+import { mobileBrand } from "../theme/mobileBrand";
 import {
   useEffect,
   useMemo,
@@ -591,7 +592,7 @@ export function ProfileScreen(props: Props) {
                 ) : (
                   <Text
                     style={{
-                      color: "#FFFFFF",
+                      color: mobileBrand.white,
                       fontSize: 22,
                       fontWeight: "700",
                     }}
@@ -1042,13 +1043,13 @@ export function ProfileScreen(props: Props) {
           >
             <View style={{ alignItems: "center", flexDirection: "row" }}>
               <MaterialCommunityIcons
-                color={isContactSectionValid ? "#FFFFFF" : theme.dim}
+                color={isContactSectionValid ? mobileBrand.white : theme.dim}
                 name="content-save-outline"
                 size={14}
               />
               <Text
                 style={{
-                  color: isContactSectionValid ? "#FFFFFF" : theme.dim,
+                  color: isContactSectionValid ? mobileBrand.white : theme.dim,
                   fontSize: 13,
                   fontWeight: "600",
                   marginLeft: 7,

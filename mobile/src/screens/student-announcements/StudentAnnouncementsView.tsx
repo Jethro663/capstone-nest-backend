@@ -1,3 +1,4 @@
+import { mobileBrand } from "../../theme/mobileBrand";
 import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { AnnouncementPreview } from "../../data/types";
@@ -69,7 +70,7 @@ export function StudentAnnouncementsView({
       <View style={{ height: 24 }} />
 
       <Modal visible={Boolean(selectedAnnouncement)} transparent animationType="slide" onRequestClose={() => onSelectAnnouncement(null)}>
-        <View style={{ flex: 1, backgroundColor: "rgba(15,23,42,0.34)", justifyContent: "flex-end" }}>
+        <View style={{ flex: 1, backgroundColor: mobileBrand.scrim, justifyContent: "flex-end" }}>
           <View style={{ maxHeight: "85%", borderTopLeftRadius: 22, borderTopRightRadius: 22, backgroundColor: theme.surface, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 24 }}>
             <View style={{ width: 38, height: 4, borderRadius: 999, backgroundColor: theme.border2, alignSelf: "center", marginBottom: 8 }} />
             <View style={{ minHeight: 48, flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
@@ -86,7 +87,7 @@ export function StudentAnnouncementsView({
               <RichTextContent html={normalizeAnnouncementContent(selectedAnnouncement?.content)} color={theme.text} mutedColor={theme.muted} accentColor={theme.redText} />
             </ScrollView>
             <Pressable accessibilityRole="button" onPress={() => onSelectAnnouncement(null)} style={{ minHeight: 48, borderRadius: 12, backgroundColor: theme.redText, alignItems: "center", justifyContent: "center" }}>
-              <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "900" }}>Close Announcement</Text>
+              <Text style={{ color: mobileBrand.white, fontSize: 13, fontWeight: "900" }}>Close Announcement</Text>
             </Pressable>
           </View>
         </View>

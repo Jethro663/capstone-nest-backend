@@ -6,7 +6,7 @@ export type MobileScoreStatus = "draft" | "submitted" | "returned" | "missing" |
 function scoreColors(state: MobileScoreStatus) {
   if (state === "returned" || state === "graded") return { color: mobileBrand.success, background: mobileBrand.successSoft };
   if (state === "missing") return { color: mobileBrand.danger, background: mobileBrand.dangerSoft };
-  if (state === "submitted") return { color: mobileBrand.navy, background: "#E8EDF5" };
+  if (state === "submitted") return { color: mobileBrand.navy, background: mobileBrand.navySoft };
   return { color: mobileBrand.warning, background: mobileBrand.warningSoft };
 }
 

@@ -1,3 +1,4 @@
+import { mobileBrand } from "../theme/mobileBrand";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
@@ -339,7 +340,7 @@ export function AdminClassesScreen({ navigation, route }: Props) {
               padding: 16,
               gap: 10,
               borderTopWidth: 1,
-              borderTopColor: "#DDE3EA",
+              borderTopColor: mobileBrand.infoBorder,
             }}
           >
             <AdminField

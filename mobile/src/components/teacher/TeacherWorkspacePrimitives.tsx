@@ -1,3 +1,4 @@
+import { mobileBrand } from "../../theme/mobileBrand";
 import { type PropsWithChildren, type ReactNode, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, View } from "react-native";
@@ -176,7 +177,7 @@ export function TeacherActionSheet({
 }: PropsWithChildren<{ visible: boolean; title: string; subtitle?: string; onClose: () => void }>) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(15,23,42,0.34)" }}>
+      <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: mobileBrand.scrim }}>
         <Pressable accessibilityRole="button" accessibilityLabel={`Dismiss ${title}`} onPress={onClose} style={{ flex: 1 }} />
         <View style={{ maxHeight: "82%", borderTopLeftRadius: 22, borderTopRightRadius: 22, backgroundColor: theme.surface, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 24 }}>
           <View style={{ width: 38, height: 4, borderRadius: 999, backgroundColor: theme.border2, alignSelf: "center", marginBottom: 8 }} />
@@ -214,7 +215,7 @@ export function TeacherCenteredDialog({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={{ flex: 1, justifyContent: "center", paddingHorizontal: 16, paddingVertical: 28, backgroundColor: "rgba(15,23,42,0.42)" }}
+        style={{ flex: 1, justifyContent: "center", paddingHorizontal: 16, paddingVertical: 28, backgroundColor: mobileBrand.scrim }}
       >
         <View accessibilityViewIsModal style={{ width: "100%", maxWidth: 560, maxHeight: "88%", alignSelf: "center", overflow: "hidden", borderRadius: 18, backgroundColor: theme.surface }}>
           <View style={{ minHeight: 58, paddingLeft: 16, paddingRight: 8, borderBottomWidth: 1, borderBottomColor: theme.border, flexDirection: "row", alignItems: "center", gap: 10 }}>
@@ -366,8 +367,8 @@ export function TeacherBottomActionBar({
     <View testID="teacher-bottom-action-bar" style={{ borderTopWidth: 1, borderTopColor: theme.border, backgroundColor: theme.surface, paddingHorizontal: 16, paddingTop: 10, paddingBottom: Math.max(insets.bottom, 10), flexDirection: "row", alignItems: "center", gap: 8 }}>
       {secondary}
       <Pressable accessibilityRole="button" accessibilityLabel={primaryLabel} disabled={disabled} onPress={onPrimary} style={{ flex: 1, minHeight: 48, opacity: disabled ? 0.45 : 1, borderRadius: 12, backgroundColor: theme.redText, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }}>
-        <Text style={{ fontSize: 13, fontWeight: "900", color: "#FFFFFF" }}>{primaryLabel}</Text>
-        <MaterialCommunityIcons name={primaryIcon} size={18} color="#FFFFFF" />
+        <Text style={{ fontSize: 13, fontWeight: "900", color: mobileBrand.white }}>{primaryLabel}</Text>
+        <MaterialCommunityIcons name={primaryIcon} size={18} color={mobileBrand.white} />
       </Pressable>
     </View>
   );

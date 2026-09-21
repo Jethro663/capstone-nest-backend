@@ -65,8 +65,16 @@ describe("shared mobile design system", () => {
         expect.objectContaining({ backgroundColor: mobileBrand.navy }),
       ]),
     );
-    expect(renderer!.root.findByProps({ accessibilityLabel: "Back" }).props.style.width).toBe(44);
-    expect(renderer!.root.findByProps({ accessibilityLabel: "Refresh Assessments" }).props.style.width).toBe(44);
+    const back = renderer!.root
+      .findByProps({ accessibilityLabel: "Back" })
+      .findByType("Pressable");
+    const refresh = renderer!.root
+      .findByProps({ accessibilityLabel: "Refresh Assessments" })
+      .findByType("Pressable");
+    expect(back.props.style.minWidth).toBe(44);
+    expect(refresh.props.style.minWidth).toBe(44);
+    expect(back.props.style.backgroundColor).toBe(mobileBrand.inverseSurface);
+    expect(refresh.props.style.backgroundColor).toBe(mobileBrand.inverseSurface);
   });
 
   it("keeps four action variants visually distinct and accessible", () => {

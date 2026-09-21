@@ -1,3 +1,4 @@
+import { mobileBrand } from "../theme/mobileBrand";
 import * as Clipboard from "expo-clipboard";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -605,7 +606,7 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
           style={{
             padding: 16,
             gap: 6,
-            backgroundColor: "white",
+            backgroundColor: mobileBrand.surface,
             borderBottomWidth: 1,
             borderColor: theme.border,
           }}
@@ -749,7 +750,7 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
             </View>
           )}
           {error && (
-            <Text accessibilityRole="alert" style={{ color: "#b91c1c" }}>
+            <Text accessibilityRole="alert" style={{ color: mobileBrand.redPressed }}>
               {error}
             </Text>
           )}
@@ -775,7 +776,7 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
               {issues.map((issue, index) => (
                 <Text
                   key={`${issue.field}-${index}`}
-                  style={{ color: "#b91c1c" }}
+                  style={{ color: mobileBrand.redPressed }}
                 >
                   {issue.field}: {issue.message}
                 </Text>
@@ -912,7 +913,7 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
                     <View
                       key={question.clientId}
                       style={{
-                        backgroundColor: "white",
+                        backgroundColor: mobileBrand.surface,
                         borderWidth: 1,
                         borderColor:
                           expanded === question.clientId
@@ -1368,7 +1369,7 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
             padding: 12,
             borderTopWidth: 1,
             borderColor: theme.border,
-            backgroundColor: "white",
+            backgroundColor: mobileBrand.surface,
             gap: 8,
           }}
         >

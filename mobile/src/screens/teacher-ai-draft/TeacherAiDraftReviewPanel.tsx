@@ -1,3 +1,4 @@
+import { mobileBrand } from "../../theme/mobileBrand";
 import { Text, View } from "react-native";
 import { TeacherActionButton, TeacherRow, stripRichText } from "../../components/teacher/TeacherMobilePrimitives";
 import type { QuizDraftStructuredOutput } from "../../types/ai";
@@ -49,7 +50,7 @@ export function TeacherAiDraftReviewPanel({
       ))}
       {unresolvedIssues.map((issue) => (
         <View key={issue.id} style={{ paddingHorizontal: 14, paddingBottom: 10 }}>
-          <Text style={{ color: issue.severity === "blocking" ? "#b91c1c" : "#92400e", fontSize: 13 }}>
+          <Text style={{ color: issue.severity === "blocking" ? mobileBrand.redPressed : mobileBrand.warning, fontSize: 13 }}>
             {issue.severity === "blocking" ? "Blocking: " : "Warning: "}{issue.message}
           </Text>
           {issue.severity === "warning" ? (
@@ -67,7 +68,7 @@ export function TeacherAiDraftReviewPanel({
       ))}
       <View style={{ paddingHorizontal: 14, paddingVertical: 14, gap: 8 }}>
         {draft.reviewRequired || draft.qualityGate === "fail" ? (
-          <Text style={{ color: "#92400e", fontSize: 13 }}>Finish the review checklist before applying this draft.</Text>
+          <Text style={{ color: mobileBrand.warning, fontSize: 13 }}>Finish the review checklist before applying this draft.</Text>
         ) : null}
         <TeacherActionButton
           label={applying ? "Preparing apply preview..." : "Review and apply"}

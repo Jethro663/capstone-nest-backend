@@ -1,3 +1,4 @@
+import { mobileBrand } from "../../theme/mobileBrand";
 import { ActivityIndicator, Modal, Pressable, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { LoginServerStatus } from "../../services/system-status/login-server-status";
@@ -5,16 +6,16 @@ import { campusColors } from "./campus-login-theme";
 import type { LoginVersionStatus } from "./login-status-model";
 
 const stateColors = {
-  checking: "#64748B",
-  online: "#2F8A5B",
-  limited: "#C57A10",
-  unexpected: "#C83D4D",
-  offline: "#C83D4D",
-  current: "#2F8A5B",
-  supported: "#2F8A5B",
-  available: "#C57A10",
-  required: "#C83D4D",
-  unverified: "#C57A10",
+  checking: mobileBrand.navyRaised,
+  online: mobileBrand.success,
+  limited: mobileBrand.warning,
+  unexpected: mobileBrand.danger,
+  offline: mobileBrand.danger,
+  current: mobileBrand.success,
+  supported: mobileBrand.success,
+  available: mobileBrand.warning,
+  required: mobileBrand.danger,
+  unverified: mobileBrand.warning,
 } as const;
 
 type Props = {
@@ -45,8 +46,8 @@ function StatusRow({
   return (
     <View
       style={{
-        backgroundColor: "#FFF8F4",
-        borderColor: "#F1DDD6",
+        backgroundColor: mobileBrand.surface,
+        borderColor: mobileBrand.border,
         borderRadius: 18,
         borderWidth: 1,
         flexDirection: "row",
@@ -56,8 +57,8 @@ function StatusRow({
       <View
         style={{
           alignItems: "center",
-          backgroundColor: "#FFFFFF",
-          borderColor: "#F0DDD6",
+          backgroundColor: mobileBrand.surfaceMuted,
+          borderColor: mobileBrand.border,
           borderRadius: 13,
           borderWidth: 1,
           height: 40,
@@ -70,7 +71,7 @@ function StatusRow({
         <View
           style={{
             backgroundColor: color,
-            borderColor: "#FFFFFF",
+            borderColor: mobileBrand.white,
             borderRadius: 999,
             borderWidth: 1.5,
             bottom: 3,
@@ -152,7 +153,7 @@ export function MobileLoginStatusModal({
         accessibilityViewIsModal
         style={{
           alignItems: "center",
-          backgroundColor: "rgba(38,23,22,0.52)",
+          backgroundColor: mobileBrand.scrimStrong,
           flex: 1,
           justifyContent: "center",
           padding: 20,
@@ -165,7 +166,7 @@ export function MobileLoginStatusModal({
             elevation: 12,
             maxWidth: 360,
             padding: 20,
-            shadowColor: "#261716",
+            shadowColor: mobileBrand.redPressed,
             shadowOffset: { height: 10, width: 0 },
             shadowOpacity: 0.2,
             shadowRadius: 24,
@@ -201,7 +202,7 @@ export function MobileLoginStatusModal({
               onPress={onClose}
               style={{
                 alignItems: "center",
-                backgroundColor: "#F9ECE8",
+                backgroundColor: mobileBrand.redSoft,
                 borderRadius: 13,
                 height: 40,
                 justifyContent: "center",
@@ -272,7 +273,7 @@ export function MobileLoginStatusModal({
               onPress={onCheckAgain}
               style={{
                 alignItems: "center",
-                backgroundColor: updateActionable ? "#F9ECE8" : campusColors.red,
+                backgroundColor: updateActionable ? mobileBrand.redSoft : campusColors.red,
                 borderRadius: 14,
                 flex: 1,
                 justifyContent: "center",

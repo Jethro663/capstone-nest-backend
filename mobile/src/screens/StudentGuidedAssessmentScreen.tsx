@@ -1,3 +1,4 @@
+import { mobileBrand } from "../theme/mobileBrand";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -45,7 +46,7 @@ function isCorrectAnswer(question: GuidedAssessmentQuestion, answer: string | st
 }
 
 function scoreTone(passed?: boolean) {
-  return passed ? { bg: "#DCFCE7", line: "#86EFAC", text: "#166534" } : { bg: "#FFF7ED", line: "#FDBA74", text: "#9A3412" };
+  return passed ? { bg: mobileBrand.successSoft, line: mobileBrand.successBorder, text: mobileBrand.success } : { bg: mobileBrand.warningSoft, line: mobileBrand.warningBorder, text: mobileBrand.danger };
 }
 
 export function StudentGuidedAssessmentScreen({ navigation, route }: Props) {
@@ -175,16 +176,16 @@ export function StudentGuidedAssessmentScreen({ navigation, route }: Props) {
         eyebrow="Learners Path AI Quiz"
         title={session?.guidedAssessment.title ?? result?.guidedAssessment?.title ?? "Guided assessment"}
         rightContent={
-          <Pressable onPress={() => navigation.goBack()} style={{ borderRadius: 999, backgroundColor: "rgba(255,255,255,0.18)", paddingHorizontal: 12, paddingVertical: 8 }}>
+          <Pressable onPress={() => navigation.goBack()} style={{ borderRadius: 999, backgroundColor: mobileBrand.inverseBorder, paddingHorizontal: 12, paddingVertical: 8 }}>
             <Text style={{ color: colors.white, fontSize: 12, fontWeight: "900" }}>Back</Text>
           </Pressable>
         }
       >
         <View style={{ marginTop: 12 }}>
-          <Text style={{ color: "rgba(255,255,255,0.88)", fontSize: 12, fontWeight: "800" }}>
+          <Text style={{ color: mobileBrand.inverseMuted, fontSize: 12, fontWeight: "800" }}>
             Passing score: {summary?.passingScore ?? result?.passingScore ?? 60}% | Best: {bestScoreLabel}
           </Text>
-          <ProgressBar value={progress} color="#FACC15" trackColor="rgba(255,255,255,0.24)" height={10} />
+          <ProgressBar value={progress} color={mobileBrand.warning} trackColor={mobileBrand.inverseBorder} height={10} />
         </View>
       </GradientHeader>
 
@@ -198,7 +199,7 @@ export function StudentGuidedAssessmentScreen({ navigation, route }: Props) {
               {Array.from({ length: summary.maxAttempts }).map((_, index) => {
                 const attempt = summary.attempts.find((item) => item.attemptNumber === index + 1);
                 return (
-                  <View key={index} style={{ borderRadius: 14, borderWidth: 1, borderColor: "#CBD5E1", backgroundColor: colors.white, paddingHorizontal: 12, paddingVertical: 8 }}>
+                  <View key={index} style={{ borderRadius: 14, borderWidth: 1, borderColor: mobileBrand.infoBorder, backgroundColor: colors.white, paddingHorizontal: 12, paddingVertical: 8 }}>
                     <Text style={{ color: theme.text, fontSize: 11, fontWeight: "900" }}>Try {index + 1}</Text>
                     <Text style={{ color: theme.muted, fontSize: 11, fontWeight: "700" }}>{attempt?.scorePercent ?? "--"}%</Text>
                   </View>
@@ -232,8 +233,8 @@ export function StudentGuidedAssessmentScreen({ navigation, route }: Props) {
                     {question.options.map((option) => {
                       const selected = isSelected(response?.answer, option.id);
                       const correct = Boolean(option.isCorrect);
-                      const bg = correct ? "#DCFCE7" : selected ? "#FEE2E2" : "#F8FAFC";
-                      const line = correct ? "#22C55E" : selected ? "#EF4444" : "#CBD5E1";
+                      const bg = correct ? mobileBrand.successSoft : selected ? mobileBrand.redSoft : mobileBrand.infoSoft;
+                      const line = correct ? mobileBrand.success : selected ? mobileBrand.danger : mobileBrand.infoBorder;
                       return (
                         <View key={option.id} style={{ borderRadius: 16, borderWidth: 1, borderColor: line, backgroundColor: bg, padding: 11 }}>
                           <Text style={{ color: theme.text, fontSize: 12, fontWeight: "800" }}>{stripRichText(option.text)}</Text>
@@ -248,9 +249,9 @@ export function StudentGuidedAssessmentScreen({ navigation, route }: Props) {
                     Correct answer: {formatCorrectAnswer(question)}
                   </Text>
                   {reviewHint ? (
-                    <View style={{ marginTop: 8, borderRadius: 16, borderWidth: 1, borderColor: "#7DD3FC", backgroundColor: "#F0F9FF", padding: 10 }}>
-                      <Text style={{ color: "#075985", fontSize: 11, fontWeight: "900", textTransform: "uppercase" }}>JA clue</Text>
-                      <Text style={{ marginTop: 4, color: "#155E75", fontSize: 12, lineHeight: 18, fontWeight: "700" }}>{cleanJaClueText(reviewHint)}</Text>
+                    <View style={{ marginTop: 8, borderRadius: 16, borderWidth: 1, borderColor: mobileBrand.infoBorder, backgroundColor: mobileBrand.infoSoft, padding: 10 }}>
+                      <Text style={{ color: mobileBrand.navy, fontSize: 11, fontWeight: "900", textTransform: "uppercase" }}>JA clue</Text>
+                      <Text style={{ marginTop: 4, color: mobileBrand.navy, fontSize: 12, lineHeight: 18, fontWeight: "700" }}>{cleanJaClueText(reviewHint)}</Text>
                     </View>
                   ) : null}
                   <Text style={{ marginTop: 8, color: theme.muted, fontSize: 12, lineHeight: 18 }}>{stripRichText(question.explanation)}</Text>
@@ -270,7 +271,7 @@ export function StudentGuidedAssessmentScreen({ navigation, route }: Props) {
               {activeQuestion.options.map((option) => {
                 const selected = isSelected(activeAnswer, option.id);
                 return (
-                  <Pressable key={option.id} onPress={() => chooseOption(activeQuestion, option.id)} style={{ borderRadius: 18, borderWidth: 1, borderColor: selected ? colors.primary : "#CBD5E1", backgroundColor: selected ? "#EEF2FF" : "#F8FAFC", padding: 13 }}>
+                  <Pressable key={option.id} onPress={() => chooseOption(activeQuestion, option.id)} style={{ borderRadius: 18, borderWidth: 1, borderColor: selected ? colors.primary : mobileBrand.infoBorder, backgroundColor: selected ? mobileBrand.infoSoft : mobileBrand.infoSoft, padding: 13 }}>
                     <Text style={{ color: theme.text, fontSize: 13, fontWeight: "800" }}>{stripRichText(option.text)}</Text>
                   </Pressable>
                 );
@@ -278,24 +279,24 @@ export function StudentGuidedAssessmentScreen({ navigation, route }: Props) {
             </View>
 
             {normalizeAnswer(activeAnswer).length ? (
-              <View style={{ marginTop: 14, borderRadius: 20, borderWidth: 1, borderColor: answerCorrect ? "#86EFAC" : "#FDBA74", backgroundColor: answerCorrect ? "#F0FDF4" : "#FFF7ED", padding: 12 }}>
-                <Text style={{ color: answerCorrect ? "#166534" : "#9A3412", fontSize: 12, fontWeight: "900" }}>
+              <View style={{ marginTop: 14, borderRadius: 20, borderWidth: 1, borderColor: answerCorrect ? mobileBrand.successBorder : mobileBrand.warningBorder, backgroundColor: answerCorrect ? mobileBrand.successSoft : mobileBrand.warningSoft, padding: 12 }}>
+                <Text style={{ color: answerCorrect ? mobileBrand.success : mobileBrand.danger, fontSize: 12, fontWeight: "900" }}>
                   {answerCorrect ? "Correct" : "Review the explanation"}
                 </Text>
                 <Text style={{ marginTop: 5, color: theme.muted, fontSize: 12, lineHeight: 18 }}>
                   Correct answer: {formatCorrectAnswer(activeQuestion)}. {stripRichText(activeQuestion.explanation)}
                 </Text>
                 {activeReviewHint ? (
-                  <View style={{ marginTop: 8, borderRadius: 16, borderWidth: 1, borderColor: "#7DD3FC", backgroundColor: "#F0F9FF", padding: 10 }}>
-                    <Text style={{ color: "#075985", fontSize: 11, fontWeight: "900", textTransform: "uppercase" }}>JA clue</Text>
-                    <Text style={{ marginTop: 4, color: "#155E75", fontSize: 12, lineHeight: 18, fontWeight: "700" }}>{cleanJaClueText(activeReviewHint)}</Text>
+                  <View style={{ marginTop: 8, borderRadius: 16, borderWidth: 1, borderColor: mobileBrand.infoBorder, backgroundColor: mobileBrand.infoSoft, padding: 10 }}>
+                    <Text style={{ color: mobileBrand.navy, fontSize: 11, fontWeight: "900", textTransform: "uppercase" }}>JA clue</Text>
+                    <Text style={{ marginTop: 4, color: mobileBrand.navy, fontSize: 12, lineHeight: 18, fontWeight: "700" }}>{cleanJaClueText(activeReviewHint)}</Text>
                   </View>
                 ) : null}
               </View>
             ) : null}
 
             <View style={{ marginTop: 16, flexDirection: "row", justifyContent: "space-between", gap: 10 }}>
-              <Pressable disabled={currentIndex === 0} onPress={() => setCurrentIndex((value) => Math.max(0, value - 1))} style={{ flex: 1, borderRadius: 16, backgroundColor: currentIndex === 0 ? "#E2E8F0" : "#DBEAFE", paddingVertical: 12, alignItems: "center" }}>
+              <Pressable disabled={currentIndex === 0} onPress={() => setCurrentIndex((value) => Math.max(0, value - 1))} style={{ flex: 1, borderRadius: 16, backgroundColor: currentIndex === 0 ? mobileBrand.infoSoft : mobileBrand.infoSoft, paddingVertical: 12, alignItems: "center" }}>
                 <Text style={{ color: currentIndex === 0 ? theme.muted : colors.blue, fontWeight: "900" }}>Previous</Text>
               </Pressable>
               {currentIndex < questions.length - 1 ? (

@@ -5,6 +5,7 @@ import {
   TeacherClassPresentationCard,
   TeacherSectionPresentationCard,
 } from "../TeacherPresentationCards";
+import { mobileBrand } from "../../../theme/mobileBrand";
 
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -45,7 +46,7 @@ function flattenText(node: TestRenderer.ReactTestRendererJSON | TestRenderer.Rea
 }
 
 describe("teacher presentation cards", () => {
-  it("uses the soft P2 GABHS fallback hero and keeps class actions intact", () => {
+  it("uses the GABHS navy and red fallback hero and keeps class actions intact", () => {
     const onOpen = jest.fn();
     const onCustomize = jest.fn();
     let renderer: TestRenderer.ReactTestRenderer;
@@ -76,9 +77,9 @@ describe("teacher presentation cards", () => {
     expect(text).toContain("35");
     expect(text).toContain("Open class");
     expect(renderer!.root.findByType("LinearGradient").props.colors).toEqual([
-      "#C96B68",
-      "#A85A5B",
-      "#98484A",
+      mobileBrand.navy,
+      mobileBrand.navyRaised,
+      mobileBrand.red,
     ]);
 
     act(() => renderer!.root.findByProps({ accessibilityLabel: "Customize Mathematics" }).props.onPress({ stopPropagation: jest.fn() }));
@@ -118,6 +119,9 @@ describe("teacher presentation cards", () => {
     expect(text).toContain("75%");
     expect(text).toContain("Open section");
     const gradients = renderer!.root.findAllByType("LinearGradient");
-    expect(gradients[1].props.colors).toEqual(["#C96B68", "#E6A09B"]);
+    expect(gradients[1].props.colors).toEqual([
+      mobileBrand.red,
+      mobileBrand.redPressed,
+    ]);
   });
 });

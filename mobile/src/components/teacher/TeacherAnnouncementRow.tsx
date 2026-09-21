@@ -1,3 +1,4 @@
+import { mobileBrand } from "../../theme/mobileBrand";
 import { useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Alert, Modal, Pressable, ScrollView, Text, View } from "react-native";
@@ -132,7 +133,7 @@ export function TeacherAnnouncementRow({ announcement, contextLabel, onEdit, onD
           <View
             style={{
               flex: 1,
-              backgroundColor: "rgba(0,0,0,0.65)",
+              backgroundColor: mobileBrand.scrimStrong,
               justifyContent: "flex-end",
             }}
           >

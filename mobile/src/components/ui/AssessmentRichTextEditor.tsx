@@ -13,6 +13,7 @@ import { WebView } from "react-native-webview";
 import { ASSESSMENT_RICH_TEXT_HTML } from "../../generated/assessment-rich-text";
 import { RichTextContent } from "./RichTextContent";
 import { teacherTheme as theme } from "../teacher/TeacherMobilePrimitives";
+import { mobileBrand } from "../../theme/mobileBrand";
 
 export function AssessmentRichTextEditor({
   label,
@@ -50,7 +51,7 @@ export function AssessmentRichTextEditor({
           borderWidth: 1,
           borderColor: theme.border,
           borderRadius: 10,
-          backgroundColor: "white",
+          backgroundColor: mobileBrand.surface,
         }}
       >
         {value ? (
@@ -69,7 +70,7 @@ export function AssessmentRichTextEditor({
         animationType="slide"
         onRequestClose={() => setOpen(false)}
       >
-        <SafeAreaView style={{ flex: 1, backgroundColor: "white" }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: mobileBrand.surface }}>
           <KeyboardAvoidingView
             style={{ flex: 1 }}
             behavior={Platform.OS === "ios" ? "padding" : undefined}

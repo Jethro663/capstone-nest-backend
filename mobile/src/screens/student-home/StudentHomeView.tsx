@@ -1,3 +1,4 @@
+import { mobileBrand } from "../../theme/mobileBrand";
 import { useMemo, type ReactNode } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
@@ -322,7 +323,7 @@ export function StudentHomeView({
                           : "check-circle-outline"
                   }
                   size={23}
-                  color="#FFFFFF"
+                  color={mobileBrand.white}
                 />
               </View>
               <Text style={styles.priorityKicker}>
@@ -366,7 +367,7 @@ export function StudentHomeView({
         <View style={styles.dayCard}>
           <View style={styles.followUpRail}>
             <View style={styles.followUpRailIcon}>
-              <MaterialCommunityIcons name="clock-outline" size={18} color="#FFFFFF" />
+              <MaterialCommunityIcons name="clock-outline" size={18} color={mobileBrand.white} />
             </View>
             <Text style={styles.followUpRailTitle}>Today&apos;s schedule</Text>
             <Text style={styles.followUpRailMeta}>{agenda.today.length || "Clear"}</Text>
@@ -444,10 +445,10 @@ export function StudentHomeView({
         <View style={styles.momentumCard}>
           <View style={styles.followUpRail}>
             <View style={styles.followUpRailIcon}>
-              <MaterialCommunityIcons name="arrow-right-circle-outline" size={18} color="#FFFFFF" />
+              <MaterialCommunityIcons name="arrow-right-circle-outline" size={18} color={mobileBrand.white} />
             </View>
             <Text style={styles.followUpRailTitle}>Two small next moves</Text>
-            <MaterialCommunityIcons name="chevron-down" size={18} color="#D7E0EB" />
+            <MaterialCommunityIcons name="chevron-down" size={18} color={mobileBrand.inverseMuted} />
           </View>
           <View style={styles.moveStack}>
           {secondaryLesson ? (
@@ -533,7 +534,7 @@ export function StudentHomeView({
         >
           <View style={styles.followUpRail}>
             <View style={styles.followUpRailIcon}>
-              <MaterialCommunityIcons name="bullhorn-outline" size={18} color="#FFFFFF" />
+              <MaterialCommunityIcons name="bullhorn-outline" size={18} color={mobileBrand.white} />
             </View>
             <Text style={styles.followUpRailTitle}>Latest from GABHS</Text>
             <Text style={styles.followUpRailMeta}>Open</Text>
@@ -606,7 +607,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  notificationBadgeText: { color: "#FFFFFF", fontSize: 8, fontWeight: "900" },
+  notificationBadgeText: { color: mobileBrand.white, fontSize: 8, fontWeight: "900" },
   welcomeHero: {
     minHeight: 158,
     marginHorizontal: 16,
@@ -623,7 +624,7 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
   },
   heroEyebrow: {
-    color: "#F7B3AE",
+    color: mobileBrand.dangerBorder,
     fontSize: 10,
     fontWeight: "900",
     letterSpacing: 1,
@@ -645,14 +646,14 @@ const styles = StyleSheet.create({
   },
   welcomeTitle: {
     marginTop: 7,
-    color: "#FFFFFF",
+    color: mobileBrand.white,
     fontSize: 25,
     lineHeight: 31,
     fontWeight: "900",
   },
   welcomeSubtitle: {
     marginTop: 6,
-    color: "#D7E0EB",
+    color: mobileBrand.inverseMuted,
     fontSize: 12,
     lineHeight: 18,
   },
@@ -714,7 +715,7 @@ const styles = StyleSheet.create({
   },
   priorityKicker: {
     flex: 1,
-    color: "#FFFFFF",
+    color: mobileBrand.white,
     fontSize: 11,
     fontWeight: "900",
     letterSpacing: 0.8,
@@ -772,14 +773,14 @@ const styles = StyleSheet.create({
   },
   followUpRailTitle: {
     flex: 1,
-    color: "#FFFFFF",
+    color: mobileBrand.white,
     fontSize: 11,
     fontWeight: "900",
     letterSpacing: 0.6,
     textTransform: "uppercase",
   },
   followUpRailMeta: {
-    color: "#D7E0EB",
+    color: mobileBrand.inverseMuted,
     fontSize: 10,
     fontWeight: "800",
   },

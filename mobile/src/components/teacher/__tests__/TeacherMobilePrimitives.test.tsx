@@ -131,7 +131,7 @@ describe("teacher mobile primitives", () => {
 
     const refresh = renderer!.root.findByProps({ accessibilityLabel: "Refresh Assessments" });
     expect(renderer!.root.findByProps({ accessibilityLabel: "Open navigation menu" })).toBeTruthy();
-    expect(refresh.props.style.minHeight).toBeGreaterThanOrEqual(44);
+    expect(refresh.findByType("Pressable").props.style.minHeight).toBeGreaterThanOrEqual(44);
     act(() => refresh.props.onPress());
     expect(onRefresh).toHaveBeenCalledTimes(1);
   });

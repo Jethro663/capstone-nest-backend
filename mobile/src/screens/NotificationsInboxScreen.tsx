@@ -47,39 +47,39 @@ function toneForNotification(notification: MobileNotification) {
   if (joined.includes("intervention") || joined.includes("at risk") || joined.includes("learner path")) {
     return {
       icon: "alert-decagram-outline" as const,
-      bg: "#FFF1F2",
-      line: "#FDA4AF",
-      text: "#BE123C",
-      soft: "#FFE4E6",
+      bg: mobileBrand.redSoft,
+      line: mobileBrand.dangerBorder,
+      text: mobileBrand.danger,
+      soft: mobileBrand.redSoft,
       label: "Intervention",
     };
   }
   if (joined.includes("assessment") || joined.includes("quiz") || joined.includes("task")) {
     return {
       icon: "clipboard-text-clock-outline" as const,
-      bg: "#EFF6FF",
-      line: "#93C5FD",
-      text: "#1D4ED8",
-      soft: "#DBEAFE",
+      bg: mobileBrand.infoSoft,
+      line: mobileBrand.infoBorder,
+      text: mobileBrand.info,
+      soft: mobileBrand.infoSoft,
       label: "Assessment",
     };
   }
   if (joined.includes("announcement")) {
     return {
       icon: "bullhorn-outline" as const,
-      bg: "#FFFBEB",
-      line: "#FCD34D",
-      text: "#B45309",
-      soft: "#FEF3C7",
+      bg: mobileBrand.warningSoft,
+      line: mobileBrand.warningBorder,
+      text: mobileBrand.warning,
+      soft: mobileBrand.warningSoft,
       label: "Announcement",
     };
   }
   return {
     icon: "bell-ring-outline" as const,
-    bg: "#F8FAFC",
-    line: "#CBD5E1",
+    bg: mobileBrand.infoSoft,
+    line: mobileBrand.infoBorder,
     text: colors.primary,
-    soft: "#EEF2FF",
+    soft: mobileBrand.infoSoft,
     label: "Nexora",
   };
 }
@@ -243,7 +243,7 @@ export function NotificationsInboxScreen({ navigation }: Props) {
               accessibilityLabel="Mark all notifications as read"
               disabled={markingAll || unreadCount === 0}
               onPress={() => void markAllRead()}
-              style={{ width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.10)", opacity: markingAll || unreadCount === 0 ? 0.5 : 1 }}
+              style={{ width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: mobileBrand.inverseSurface, opacity: markingAll || unreadCount === 0 ? 0.5 : 1 }}
             >
               <MaterialCommunityIcons name={markingAll ? "progress-clock" : "email-check-outline"} size={20} color={mobileBrand.white} />
             </Pressable>
@@ -252,7 +252,7 @@ export function NotificationsInboxScreen({ navigation }: Props) {
               accessibilityLabel="Clear all notifications"
               disabled={clearingAll || notifications.length === 0}
               onPress={confirmDismissAll}
-              style={{ width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.10)", opacity: clearingAll || notifications.length === 0 ? 0.5 : 1 }}
+              style={{ width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: mobileBrand.inverseSurface, opacity: clearingAll || notifications.length === 0 ? 0.5 : 1 }}
             >
               <MaterialCommunityIcons name={clearingAll ? "progress-clock" : "delete-sweep-outline"} size={20} color={mobileBrand.white} />
             </Pressable>
@@ -261,8 +261,8 @@ export function NotificationsInboxScreen({ navigation }: Props) {
       />
 
       {actionError ? (
-        <View style={{ marginHorizontal: 16, marginTop: 12, borderRadius: 12, backgroundColor: "#FFF1F2", padding: 12 }}>
-          <Text accessibilityLiveRegion="polite" style={{ color: "#BE123C", fontSize: 12 }}>{actionError}</Text>
+        <View style={{ marginHorizontal: 16, marginTop: 12, borderRadius: 12, backgroundColor: mobileBrand.redSoft, padding: 12 }}>
+          <Text accessibilityLiveRegion="polite" style={{ color: mobileBrand.danger, fontSize: 12 }}>{actionError}</Text>
         </View>
       ) : null}
 
@@ -329,7 +329,7 @@ export function NotificationsInboxScreen({ navigation }: Props) {
                           {stripRichText(notification.title)}
                         </Text>
                         {!notification.isRead ? (
-                          <View style={{ width: 9, height: 9, borderRadius: 999, backgroundColor: "#2563EB" }} />
+                          <View style={{ width: 9, height: 9, borderRadius: 999, backgroundColor: mobileBrand.info }} />
                         ) : null}
                         <Pressable
                           accessibilityRole="button"
@@ -340,9 +340,9 @@ export function NotificationsInboxScreen({ navigation }: Props) {
                             void dismissOne(notification);
                           }}
                           hitSlop={8}
-                          style={{ width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.72)", opacity: deletingId === notification.id ? 0.5 : 1 }}
+                          style={{ width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: mobileBrand.inverseMuted, opacity: deletingId === notification.id ? 0.5 : 1 }}
                         >
-                          <MaterialCommunityIcons name="trash-can-outline" size={17} color="#BE123C" />
+                          <MaterialCommunityIcons name="trash-can-outline" size={17} color={mobileBrand.danger} />
                         </Pressable>
                       </View>
                       <Text style={{ marginTop: 3, fontSize: 11, color: theme.muted }}>

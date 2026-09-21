@@ -1,3 +1,4 @@
+import { mobileBrand } from "../../theme/mobileBrand";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { ActivityIndicator, Modal, Pressable, Text, View } from "react-native";
 import { teacherTheme as theme } from "./TeacherMobilePrimitives";
@@ -28,7 +29,7 @@ export function TeacherConfirmModal({
       <Pressable
         style={{
           flex: 1,
-          backgroundColor: "rgba(0, 0, 0, 0.65)",
+          backgroundColor: mobileBrand.scrimStrong,
           justifyContent: "center",
           alignItems: "center",
           padding: 20,
@@ -44,7 +45,7 @@ export function TeacherConfirmModal({
             borderWidth: 1,
             borderColor: theme.border,
             padding: 24,
-            shadowColor: "#000",
+            shadowColor: mobileBrand.text,
             shadowOffset: { width: 0, height: 8 },
             shadowOpacity: 0.25,
             shadowRadius: 16,
@@ -126,11 +127,11 @@ export function TeacherConfirmModal({
               }}
             >
               {loading ? (
-                <ActivityIndicator size="small" color="#ffffff" />
+                <ActivityIndicator size="small" color={mobileBrand.white} />
               ) : (
                 <>
-                  <MaterialCommunityIcons name="trash-can-outline" size={16} color="#ffffff" />
-                  <Text style={{ fontSize: 13, fontWeight: "700", color: "#ffffff" }}>{confirmLabel}</Text>
+                  <MaterialCommunityIcons name="trash-can-outline" size={16} color={mobileBrand.white} />
+                  <Text style={{ fontSize: 13, fontWeight: "700", color: mobileBrand.white }}>{confirmLabel}</Text>
                 </>
               )}
             </Pressable>

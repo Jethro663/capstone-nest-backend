@@ -1,3 +1,4 @@
+import { mobileBrand } from "../../theme/mobileBrand";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Modal, Pressable, ScrollView, Text, View } from "react-native";
@@ -44,9 +45,9 @@ function formatTime(value?: string | null) {
 
 function notificationColor(notification: MobileNotification) {
   const joined = `${notification.type} ${notification.title} ${getMobileNotificationMessage(notification)}`.toLowerCase();
-  if (joined.includes("intervention") || joined.includes("at risk")) return "#BE123C";
-  if (joined.includes("assessment") || joined.includes("task")) return "#1D4ED8";
-  if (joined.includes("announcement")) return "#B45309";
+  if (joined.includes("intervention") || joined.includes("at risk")) return mobileBrand.danger;
+  if (joined.includes("assessment") || joined.includes("task")) return mobileBrand.info;
+  if (joined.includes("announcement")) return mobileBrand.warning;
   return colors.primary;
 }
 
@@ -101,7 +102,7 @@ export function MobileNotificationQuickPanel({ visible, role, onClose, navigate 
 
   return (
     <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
-      <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(15,23,42,0.42)" }}>
+      <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: mobileBrand.scrim }}>
         <Pressable style={{ flex: 1 }} onPress={onClose} />
         <View
           style={[
@@ -109,7 +110,7 @@ export function MobileNotificationQuickPanel({ visible, role, onClose, navigate 
               maxHeight: "78%",
               borderTopLeftRadius: 26,
               borderTopRightRadius: 26,
-              backgroundColor: "#F8FAFC",
+              backgroundColor: mobileBrand.surface,
               paddingBottom: 16,
               overflow: "hidden",
             },
@@ -122,7 +123,7 @@ export function MobileNotificationQuickPanel({ visible, role, onClose, navigate 
               paddingTop: 12,
               paddingBottom: 14,
               borderBottomWidth: 1,
-              borderBottomColor: "#E2E8F0",
+              borderBottomColor: mobileBrand.border,
             }}
           >
             <View
@@ -131,7 +132,7 @@ export function MobileNotificationQuickPanel({ visible, role, onClose, navigate 
                 width: 42,
                 height: 4,
                 borderRadius: 999,
-                backgroundColor: "#CBD5E1",
+                backgroundColor: mobileBrand.infoBorder,
                 marginBottom: 14,
               }}
             />
@@ -149,7 +150,7 @@ export function MobileNotificationQuickPanel({ visible, role, onClose, navigate 
                   borderRadius: 999,
                   alignItems: "center",
                   justifyContent: "center",
-                  backgroundColor: "#E2E8F0",
+                  backgroundColor: mobileBrand.infoSoft,
                 }}
               >
                 <MaterialCommunityIcons name="close" size={18} color={theme.text} />
@@ -172,7 +173,7 @@ export function MobileNotificationQuickPanel({ visible, role, onClose, navigate 
                   alignItems: "center",
                   borderRadius: 20,
                   borderWidth: 1,
-                  borderColor: "#E2E8F0",
+                  borderColor: mobileBrand.infoSoft,
                   backgroundColor: colors.white,
                   paddingHorizontal: 18,
                   paddingVertical: 28,
@@ -198,7 +199,7 @@ export function MobileNotificationQuickPanel({ visible, role, onClose, navigate 
                           marginTop: index === 0 ? 0 : 9,
                           borderRadius: 18,
                           borderWidth: 1,
-                          borderColor: notification.isRead ? "#E2E8F0" : hexToRgba(color, 0.28),
+                          borderColor: notification.isRead ? mobileBrand.infoSoft : hexToRgba(color, 0.28),
                           backgroundColor: notification.isRead ? colors.white : hexToRgba(color, 0.08),
                           paddingHorizontal: 13,
                           paddingVertical: 12,
@@ -213,7 +214,7 @@ export function MobileNotificationQuickPanel({ visible, role, onClose, navigate 
                             width: 10,
                             height: 10,
                             borderRadius: 999,
-                            backgroundColor: notification.isRead ? "#CBD5E1" : color,
+                            backgroundColor: notification.isRead ? mobileBrand.infoBorder : color,
                           }}
                         />
                         <View style={{ flex: 1, minWidth: 0 }}>
@@ -240,7 +241,7 @@ export function MobileNotificationQuickPanel({ visible, role, onClose, navigate 
             )}
           </ScrollView>
 
-          <View style={{ borderTopWidth: 1, borderTopColor: "#E2E8F0", paddingHorizontal: 14, paddingTop: 10 }}>
+          <View style={{ borderTopWidth: 1, borderTopColor: mobileBrand.infoSoft, paddingHorizontal: 14, paddingTop: 10 }}>
             <Pressable
               accessibilityLabel="See all notifications"
               onPress={seeAll}

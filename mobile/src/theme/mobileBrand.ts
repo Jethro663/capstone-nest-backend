@@ -33,6 +33,7 @@ export const mobileBrand = {
   inverseForeground: "#FFFFFF",
   inverseMuted: "#D7E0EB",
   scrim: "rgba(12,29,58,0.48)",
+  scrimStrong: "rgba(12,29,58,0.72)",
   transparent: "transparent",
   white: "#FFFFFF",
   minTarget: 44,

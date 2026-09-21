@@ -74,7 +74,7 @@ function DeleteConfirmModal({
       <View
         style={{
           flex: 1,
-          backgroundColor: "rgba(0,0,0,0.65)",
+          backgroundColor: mobileBrand.scrimStrong,
           justifyContent: "center",
           alignItems: "center",
           padding: 20,
@@ -423,14 +423,14 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
               <View testID="assessment-overview-callout" style={{ margin: 14, borderRadius: 16, backgroundColor: mobileBrand.navy, padding: 16 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 11, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.7, color: "rgba(255,255,255,0.68)" }}>{assessment.type.replace(/_/g, " ")}</Text>
+                    <Text style={{ fontSize: 11, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.7, color: mobileBrand.inverseMuted }}>{assessment.type.replace(/_/g, " ")}</Text>
                     <Text style={{ marginTop: 5, fontSize: 18, fontWeight: "900", color: mobileBrand.white }}>{assessment.isPublished ? "Ready for learners" : "Draft in preparation"}</Text>
                   </View>
                   <View style={{ borderRadius: 999, backgroundColor: assessment.isPublished ? mobileBrand.success : mobileBrand.warning, paddingHorizontal: 10, paddingVertical: 6 }}>
                     <Text style={{ fontSize: 10, fontWeight: "900", color: mobileBrand.white }}>{assessment.isPublished ? "PUBLISHED" : "DRAFT"}</Text>
                   </View>
                 </View>
-                <Text style={{ marginTop: 10, fontSize: 12, lineHeight: 18, color: "rgba(255,255,255,0.78)" }}>Due {formatDate(assessment.dueDate)} · {assessment.totalPoints ?? 0} points · {assessment.questions?.length ?? 0} questions</Text>
+                <Text style={{ marginTop: 10, fontSize: 12, lineHeight: 18, color: mobileBrand.inverseMuted }}>Due {formatDate(assessment.dueDate)} · {assessment.totalPoints ?? 0} points · {assessment.questions?.length ?? 0} questions</Text>
               </View>
               <TeacherRow title="Assessment type" subtitle={assessment.type.replace(/_/g, " ")} />
               <TeacherRow title="Due date" subtitle={formatDate(assessment.dueDate)} />
@@ -553,9 +553,9 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
                 <View style={{ borderRadius: 16, backgroundColor: mobileBrand.navy, padding: 16 }}>
                   <Text style={{ fontSize: 14, lineHeight: 20, fontWeight: "900", color: mobileBrand.white }}>{stripRichText(selectedQuestion.content)}</Text>
                   <View style={{ marginTop: 12, flexDirection: "row", gap: 12 }}>
-                    <View style={{ flex: 1 }}><Text style={{ fontSize: 22, fontWeight: "900", color: mobileBrand.white }}>{selectedQuestion.correctPercent}%</Text><Text style={{ fontSize: 10, color: "rgba(255,255,255,0.72)" }}>Correct</Text></View>
-                    <View style={{ flex: 1 }}><Text style={{ fontSize: 22, fontWeight: "900", color: mobileBrand.white }}>{selectedQuestion.correctCount}</Text><Text style={{ fontSize: 10, color: "rgba(255,255,255,0.72)" }}>Right answers</Text></View>
-                    <View style={{ flex: 1 }}><Text style={{ fontSize: 22, fontWeight: "900", color: mobileBrand.white }}>{selectedQuestion.totalResponses - selectedQuestion.correctCount}</Text><Text style={{ fontSize: 10, color: "rgba(255,255,255,0.72)" }}>Wrong answers</Text></View>
+                    <View style={{ flex: 1 }}><Text style={{ fontSize: 22, fontWeight: "900", color: mobileBrand.white }}>{selectedQuestion.correctPercent}%</Text><Text style={{ fontSize: 10, color: mobileBrand.inverseMuted }}>Correct</Text></View>
+                    <View style={{ flex: 1 }}><Text style={{ fontSize: 22, fontWeight: "900", color: mobileBrand.white }}>{selectedQuestion.correctCount}</Text><Text style={{ fontSize: 10, color: mobileBrand.inverseMuted }}>Right answers</Text></View>
+                    <View style={{ flex: 1 }}><Text style={{ fontSize: 22, fontWeight: "900", color: mobileBrand.white }}>{selectedQuestion.totalResponses - selectedQuestion.correctCount}</Text><Text style={{ fontSize: 10, color: mobileBrand.inverseMuted }}>Wrong answers</Text></View>
                   </View>
                 </View>
                 <View>

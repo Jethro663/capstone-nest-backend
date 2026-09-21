@@ -1,3 +1,4 @@
+import { mobileBrand } from "../theme/mobileBrand";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -49,7 +50,7 @@ export function StudentGeneratedLessonScreen({ navigation, route }: Props) {
       <View style={{ flex: 1, justifyContent: "center", backgroundColor: theme.bg, padding: 24 }}>
         <Text style={{ color: theme.text, fontSize: 20, fontWeight: "900" }}>Lesson unavailable</Text>
         <Text style={{ color: theme.muted, marginTop: 8 }}>{lessonQuery.error ? toAppError(lessonQuery.error).message : "The generated lesson was not returned."}</Text>
-        <Pressable onPress={() => void lessonQuery.refetch()} style={{ marginTop: 18, borderRadius: 12, backgroundColor: theme.blue, paddingVertical: 13, alignItems: "center" }}><Text style={{ color: "#FFFFFF", fontWeight: "900" }}>Retry</Text></Pressable>
+        <Pressable onPress={() => void lessonQuery.refetch()} style={{ marginTop: 18, borderRadius: 12, backgroundColor: theme.blue, paddingVertical: 13, alignItems: "center" }}><Text style={{ color: mobileBrand.white, fontWeight: "900" }}>Retry</Text></Pressable>
         <Pressable onPress={() => navigation.goBack()} style={{ marginTop: 10, paddingVertical: 12, alignItems: "center" }}><Text style={{ color: theme.muted, fontWeight: "800" }}>Back to Learners Path</Text></Pressable>
       </View>
     );
@@ -69,7 +70,7 @@ export function StudentGeneratedLessonScreen({ navigation, route }: Props) {
         </View>
         {actionError ? <Text accessibilityLiveRegion="polite" style={{ color: theme.red, marginTop: 12 }}>{actionError}</Text> : null}
         <Pressable disabled={completeMutation.isPending} onPress={() => void complete()} style={{ marginTop: 18, borderRadius: 12, backgroundColor: theme.blue, paddingVertical: 14, alignItems: "center", opacity: completeMutation.isPending ? 0.6 : 1 }}>
-          <Text style={{ color: "#FFFFFF", fontWeight: "900" }}>{completeMutation.isPending ? "Saving..." : "Mark lesson complete"}</Text>
+          <Text style={{ color: mobileBrand.white, fontWeight: "900" }}>{completeMutation.isPending ? "Saving..." : "Mark lesson complete"}</Text>
         </Pressable>
       </View>
     </ScreenScroll>

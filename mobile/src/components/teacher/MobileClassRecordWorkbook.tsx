@@ -1,3 +1,4 @@
+import { mobileBrand } from "../../theme/mobileBrand";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { useEffect, useState } from "react";
 import type {
@@ -246,7 +247,7 @@ export function MobileClassRecordWorkbook({
             borderRadius: 18,
             borderWidth: 1,
             borderColor: theme.border,
-            backgroundColor: "#07182C",
+            backgroundColor: mobileBrand.navy,
             padding: 12,
           }}
         >
@@ -256,7 +257,7 @@ export function MobileClassRecordWorkbook({
               fontWeight: "900",
               letterSpacing: 1,
               textTransform: "uppercase",
-              color: "#67E8F9",
+              color: mobileBrand.info,
             }}
           >
             {workbook.header.workbookSheetName || workbook.header.quarter}
@@ -313,7 +314,7 @@ export function MobileClassRecordWorkbook({
               borderRadius: 999,
               borderWidth: 1,
               borderColor: learnerFilter === value ? theme.red : theme.border,
-              backgroundColor: learnerFilter === value ? "#FDE8E8" : "#FFFFFF",
+              backgroundColor: learnerFilter === value ? mobileBrand.redSoft : mobileBrand.white,
               paddingHorizontal: 12,
               paddingVertical: 7,
             }}
@@ -346,7 +347,7 @@ export function MobileClassRecordWorkbook({
               overflow: "hidden",
             }}
           >
-            <View style={{ flexDirection: "row", backgroundColor: "#0B2440" }}>
+            <View style={{ flexDirection: "row", backgroundColor: mobileBrand.navy }}>
               {columns.map((column) => (
                 <View
                   key={column.key}
@@ -355,7 +356,7 @@ export function MobileClassRecordWorkbook({
                     minHeight: 56,
                     justifyContent: "center",
                     borderRightWidth: 1,
-                    borderRightColor: "rgba(255,255,255,0.10)",
+                    borderRightColor: mobileBrand.inverseSurface,
                     paddingHorizontal: 8,
                     paddingVertical: 8,
                   }}
@@ -365,7 +366,7 @@ export function MobileClassRecordWorkbook({
                       fontSize: 10,
                       lineHeight: 14,
                       fontWeight: "900",
-                      color: "#CDEBFF",
+                      color: mobileBrand.infoSoft,
                     }}
                   >
                     {column.label}
@@ -379,9 +380,9 @@ export function MobileClassRecordWorkbook({
                 key={student.studentId}
                 style={{
                   flexDirection: "row",
-                  backgroundColor: rowIndex % 2 === 0 ? "#FFFFFF" : "#F7FBFF",
+                  backgroundColor: rowIndex % 2 === 0 ? mobileBrand.white : mobileBrand.infoSoft,
                   borderTopWidth: 1,
-                  borderTopColor: "#D8E6F5",
+                  borderTopColor: mobileBrand.infoSoft,
                 }}
               >
                 {columns.map((column) => {
@@ -397,7 +398,7 @@ export function MobileClassRecordWorkbook({
                         minHeight: 46,
                         justifyContent: "center",
                         borderRightWidth: 1,
-                        borderRightColor: "#D8E6F5",
+                        borderRightColor: mobileBrand.infoSoft,
                         paddingHorizontal: 8,
                         paddingVertical: 6,
                       }}

@@ -1,4 +1,5 @@
 import { getAiJobPresentation } from "../teacher-assessments/ai-job-presentation";
+import { mobileBrand } from "../../theme/mobileBrand";
 
 it("gives every AI job state a distinct accessible label and color", () => {
   const statuses = [
@@ -21,7 +22,14 @@ it("gives every AI job state a distinct accessible label and color", () => {
     "Rejected",
     "Cancelled",
   ]);
-  expect(new Set(presentations.map((entry) => entry.color)).size).toBe(
-    statuses.length,
-  );
+  expect(presentations.map((entry) => entry.color)).toEqual([
+    mobileBrand.warning,
+    mobileBrand.info,
+    mobileBrand.navy,
+    mobileBrand.success,
+    mobileBrand.danger,
+    mobileBrand.danger,
+    mobileBrand.muted,
+  ]);
+  expect(presentations.every((entry) => entry.color !== entry.backgroundColor)).toBe(true);
 });

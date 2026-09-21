@@ -17,7 +17,14 @@ const result = esbuild.buildSync({
   target: "es2020",
 });
 const script = result.outputFiles[0].text.replace(/<\/script/gi, "<\\/script");
-const html = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'"><style>body{margin:0;padding:16px;color:#142743;background:#fff;font:17px/1.6 system-ui}.tiptap{outline:none;min-height:70vh}p{margin:0 0 12px}a{color:#154b86}blockquote{border-left:3px solid #bbb;padding-left:12px}</style></head><body><div id="editor"></div><script>${script}</script></body></html>`;
+const richTextPalette = {
+  text: "#101828",
+  background: "#FFFFFF",
+  link: "#175CD3",
+  quote: "#DC2626",
+  border: "#D0D5DD",
+};
+const html = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'"><style>body{margin:0;padding:16px;color:${richTextPalette.text};background:${richTextPalette.background};font:17px/1.6 system-ui}.tiptap{outline:none;min-height:70vh}p{margin:0 0 12px}a{color:${richTextPalette.link}}blockquote{border-left:3px solid ${richTextPalette.quote};padding-left:12px}hr{border:0;border-top:1px solid ${richTextPalette.border}}</style></head><body><div id="editor"></div><script>${script}</script></body></html>`;
 const out = path.join(root, "src/generated/assessment-rich-text.ts");
 fs.mkdirSync(path.dirname(out), { recursive: true });
 fs.writeFileSync(

@@ -1,3 +1,4 @@
+import { mobileBrand } from "../../theme/mobileBrand";
 import type { PropsWithChildren, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -24,10 +25,10 @@ const seal = require("../../../assets/auth/gabhs-seal.png");
 const students = require("../../../assets/auth/nexora-students.png");
 
 const toneColors: Record<LoginStatusTone, string> = {
-  neutral: "#64748B",
-  green: "#2F8A5B",
-  amber: "#C57A10",
-  red: "#C83D4D",
+  neutral: mobileBrand.navyRaised,
+  green: mobileBrand.success,
+  amber: mobileBrand.warning,
+  red: mobileBrand.danger,
 };
 
 type Props = PropsWithChildren<{
@@ -93,7 +94,7 @@ export function MobileCampusLogin({
       }}
     >
       <LinearGradient
-        colors={[campusColors.deepRed, campusColors.red, campusColors.rose]}
+        colors={[campusColors.deepRed, campusColors.rose, campusColors.red]}
         end={{ x: 1, y: 1 }}
         start={{ x: 0, y: 0 }}
         style={{
@@ -122,8 +123,8 @@ export function MobileCampusLogin({
           pointerEvents="none"
           style={{
             backgroundColor: split
-              ? "rgba(59,7,18,0.22)"
-              : "rgba(76,8,22,0.18)",
+              ? mobileBrand.dangerSoft
+              : mobileBrand.dangerSoft,
             bottom: 0,
             left: 0,
             position: "absolute",
@@ -134,7 +135,7 @@ export function MobileCampusLogin({
         <View
           pointerEvents="none"
           style={{
-            backgroundColor: "rgba(255,255,255,0.07)",
+            backgroundColor: mobileBrand.inverseSurface,
             borderRadius: 999,
             height: split ? 410 : 260,
             position: "absolute",
@@ -146,7 +147,7 @@ export function MobileCampusLogin({
         <View
           pointerEvents="none"
           style={{
-            backgroundColor: "rgba(230,169,54,0.20)",
+            backgroundColor: mobileBrand.warningSoft,
             borderRadius: 999,
             bottom: split ? -120 : -150,
             height: split ? 360 : 280,
@@ -193,7 +194,7 @@ export function MobileCampusLogin({
               {!layout.compact ? (
                 <Text
                   style={{
-                    color: "rgba(255,255,255,0.78)",
+                    color: mobileBrand.inverseMuted,
                     fontSize: split ? 11 : 9,
                     letterSpacing: 1.1,
                     marginTop: 3,
@@ -220,7 +221,7 @@ export function MobileCampusLogin({
               </Text>
               <Text
                 style={{
-                  color: "rgba(255,255,255,0.82)",
+                  color: mobileBrand.inverseMuted,
                   fontSize: split ? 13 : 9,
                   fontWeight: "700",
                   letterSpacing: split ? 2.4 : 1.8,
@@ -232,7 +233,7 @@ export function MobileCampusLogin({
               {split ? (
                 <Text
                   style={{
-                    color: "rgba(255,255,255,0.78)",
+                    color: mobileBrand.inverseMuted,
                     fontSize: 15,
                     lineHeight: 23,
                     marginTop: 18,
@@ -258,7 +259,7 @@ export function MobileCampusLogin({
               </Text>
               <Text
                 style={{
-                  color: "rgba(255,255,255,0.78)",
+                  color: mobileBrand.inverseMuted,
                   fontSize: 7,
                   fontWeight: "700",
                   letterSpacing: 1.4,
@@ -279,8 +280,8 @@ export function MobileCampusLogin({
         onPress={onOpenStatus}
         style={{
           alignItems: "center",
-          backgroundColor: "rgba(255,255,255,0.94)",
-          borderColor: "rgba(116,20,39,0.12)",
+          backgroundColor: mobileBrand.inverseForeground,
+          borderColor: mobileBrand.dangerSoft,
           borderRadius: 15,
           borderWidth: 1,
           elevation: 4,
@@ -288,7 +289,7 @@ export function MobileCampusLogin({
           justifyContent: "center",
           left: insets.left + 12,
           position: "absolute",
-          shadowColor: "#4A0F1B",
+          shadowColor: mobileBrand.redPressed,
           shadowOffset: { height: 3, width: 0 },
           shadowOpacity: 0.18,
           shadowRadius: 8,

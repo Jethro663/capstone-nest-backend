@@ -1,3 +1,4 @@
+import { mobileBrand } from "../../theme/mobileBrand";
 import { useEffect, useMemo, useState } from "react";
 import * as DocumentPicker from "expo-document-picker";
 import { Alert, AppState, Text, View } from "react-native";
@@ -282,7 +283,7 @@ export function TeacherExtractionBoard({ classId, classItem, registerRefetch, on
 
       <TeacherPanel title="Start AI Extraction" subtitle="Upload a PDF and convert it into structured lesson and assessment drafts.">
         <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
-          <Text style={{ fontSize: 10, fontWeight: "700", color: "#8C8C8C", textTransform: "uppercase", letterSpacing: 0.7 }}>
+          <Text style={{ fontSize: 10, fontWeight: "700", color: mobileBrand.dim, textTransform: "uppercase", letterSpacing: 0.7 }}>
             Subject
           </Text>
           <View style={{ marginTop: 8, flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
@@ -301,7 +302,7 @@ export function TeacherExtractionBoard({ classId, classItem, registerRefetch, on
               marginTop: 10,
               fontSize: 10,
               fontWeight: "700",
-              color: "#8C8C8C",
+              color: mobileBrand.dim,
               textTransform: "uppercase",
               letterSpacing: 0.7,
             }}
@@ -319,7 +320,7 @@ export function TeacherExtractionBoard({ classId, classItem, registerRefetch, on
             ))}
           </View>
 
-          <Text style={{ marginTop: 10, fontSize: 10, fontWeight: "700", color: "#8C8C8C", textTransform: "uppercase", letterSpacing: 0.7 }}>
+          <Text style={{ marginTop: 10, fontSize: 10, fontWeight: "700", color: mobileBrand.dim, textTransform: "uppercase", letterSpacing: 0.7 }}>
             Extraction style
           </Text>
           <View style={{ marginTop: 8, flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
@@ -338,7 +339,7 @@ export function TeacherExtractionBoard({ classId, classItem, registerRefetch, on
               marginTop: 10,
               fontSize: 10,
               fontWeight: "700",
-              color: "#8C8C8C",
+              color: mobileBrand.dim,
               textTransform: "uppercase",
               letterSpacing: 0.7,
             }}
@@ -397,16 +398,16 @@ export function TeacherExtractionBoard({ classId, classItem, registerRefetch, on
         {filteredExtractions.length ? (
           filteredExtractions.map((extraction) => (
             <View key={extraction.id} style={{ borderTopWidth: 1, borderTopColor: teacherTheme.border, paddingHorizontal: 14, paddingVertical: 11 }}>
-              <Text style={{ fontSize: 13, fontWeight: "700", color: "#ECECEC" }}>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: mobileBrand.border }}>
                 {extraction.structuredContent?.title || extraction.originalName || "PDF Extraction"}
               </Text>
-              <Text style={{ marginTop: 4, fontSize: 11, color: "#9D9D9D" }}>
+              <Text style={{ marginTop: 4, fontSize: 11, color: mobileBrand.dim }}>
                 {formatDate(extraction.createdAt)} - {getExtractionStatusLabel(extraction)}
               </Text>
-              <Text style={{ marginTop: 3, fontSize: 11, color: "#9D9D9D" }}>
+              <Text style={{ marginTop: 3, fontSize: 11, color: mobileBrand.dim }}>
                 {extraction.structuredContent?.sections?.length ?? 0} sections - {extraction.structuredContent?.mediaAssets?.length ?? 0} media assets
               </Text>
-              <Text style={{ marginTop: 3, fontSize: 11, color: "#9D9D9D" }}>
+              <Text style={{ marginTop: 3, fontSize: 11, color: mobileBrand.dim }}>
                 {extraction.progressPercent}% - {extraction.processedChunks}/{extraction.totalChunks ?? "?"} chunks
                 {extraction.structuredContent?.audit?.extractionStyle ? ` - ${extraction.structuredContent.audit.extractionStyle.replace("_", " ")}` : ""}
               </Text>
@@ -474,7 +475,7 @@ export function TeacherExtractionBoard({ classId, classItem, registerRefetch, on
         >
           <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
             {selectedExtraction.structuredContent?.description ? (
-              <Text style={{ marginTop: 8, fontSize: 12, lineHeight: 18, color: "#BFBFBF" }}>
+              <Text style={{ marginTop: 8, fontSize: 12, lineHeight: 18, color: mobileBrand.borderStrong }}>
                 {stripRichText(selectedExtraction.structuredContent.description)}
               </Text>
             ) : null}
@@ -492,10 +493,10 @@ export function TeacherExtractionBoard({ classId, classItem, registerRefetch, on
                   paddingVertical: 9,
                 }}
               >
-                <Text style={{ fontSize: 12, fontWeight: "700", color: "#ECECEC" }}>
+                <Text style={{ fontSize: 12, fontWeight: "700", color: mobileBrand.border }}>
                   {section.order}. {section.title}
                 </Text>
-                <Text style={{ marginTop: 4, fontSize: 11, color: "#8D8D8D" }}>
+                <Text style={{ marginTop: 4, fontSize: 11, color: mobileBrand.dim }}>
                   {section.lessonBlocks.length} blocks
                   {section.assessmentDraft?.questions?.length
                     ? ` - ${section.assessmentDraft.questions.length} draft questions`

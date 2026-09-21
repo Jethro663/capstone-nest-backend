@@ -1,3 +1,4 @@
+import { mobileBrand } from "../theme/mobileBrand";
 import { useMemo, useState } from "react";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import type { CompositeScreenProps } from "@react-navigation/native";
@@ -222,7 +223,7 @@ export function TeacherClassesScreen({ navigation }: Props) {
         <View
           style={{
             flex: 1,
-            backgroundColor: "rgba(0,0,0,0.5)",
+            backgroundColor: mobileBrand.scrim,
             justifyContent: "flex-end",
           }}
         >
@@ -345,7 +346,7 @@ export function TeacherClassesScreen({ navigation }: Props) {
                         alignItems: "center",
                       }}
                     >
-                      <Text style={{ color: "#fff", fontWeight: "bold" }}>
+                      <Text style={{ color: mobileBrand.white, fontWeight: "bold" }}>
                         {opt.label}
                       </Text>
                     </LinearGradient>

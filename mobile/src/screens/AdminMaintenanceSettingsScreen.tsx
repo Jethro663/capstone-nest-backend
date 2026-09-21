@@ -1,3 +1,4 @@
+import { mobileBrand } from "../theme/mobileBrand";
 import { useEffect, useMemo, useState } from "react";
 import { Alert, AppState, Text, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -222,7 +223,7 @@ export function AdminMaintenanceSettingsScreen({ navigation }: Props) {
                 multiline
                 maxLength={240}
               />
-              <Text style={{ fontSize: 11, color: "#64748B" }}>
+              <Text style={{ fontSize: 11, color: mobileBrand.navyRaised }}>
                 {reason.trim().length}/240 · minimum 10 characters
               </Text>
               <AdminField

@@ -33,6 +33,8 @@ import {
   getPendingAssignmentCreation,
 } from "../features/assignment-creation/recovery";
 import { teacherTheme as theme } from "../components/teacher/TeacherMobilePrimitives";
+import { MobileAction } from "../components/ui/MobileAction";
+import { mobileBrand } from "../theme/mobileBrand";
 
 type Props = NativeStackScreenProps<
   RootStackParamList,
@@ -40,7 +42,7 @@ type Props = NativeStackScreenProps<
 >;
 const STEP_NAMES = ["Format", "Class record", "Details"] as const;
 
-function Button({
+function AssessmentAction({
   label,
   onPress,
   disabled = false,
@@ -52,26 +54,13 @@ function Button({
   quiet?: boolean;
 }) {
   return (
-    <Pressable
-      accessibilityRole="button"
+    <MobileAction
+      label={label}
       disabled={disabled}
       onPress={onPress}
-      style={{
-        minHeight: 48,
-        alignItems: "center",
-        justifyContent: "center",
-        borderRadius: 10,
-        borderWidth: 1,
-        borderColor: quiet ? theme.border : theme.red,
-        backgroundColor: quiet ? "white" : theme.red,
-        paddingHorizontal: 16,
-        opacity: disabled ? 0.45 : 1,
-      }}
-    >
-      <Text style={{ color: quiet ? theme.text : "white", fontWeight: "800" }}>
-        {label}
-      </Text>
-    </Pressable>
+      variant={quiet ? "secondary" : "primary"}
+      tone={quiet ? "navy" : "red"}
+    />
   );
 }
 
@@ -99,7 +88,7 @@ function Choice({
         borderRadius: 12,
         borderWidth: 1,
         borderColor: selected ? theme.red : theme.border,
-        backgroundColor: selected ? theme.redSoft : "white",
+        backgroundColor: selected ? theme.redSoft : mobileBrand.surface,
         padding: 13,
         opacity: disabled ? 0.5 : 1,
       }}
@@ -319,7 +308,7 @@ export function TeacherCreateAssessmentScreen({ navigation, route }: Props) {
             paddingVertical: 14,
             borderBottomWidth: 1,
             borderColor: theme.border,
-            backgroundColor: "white",
+            backgroundColor: mobileBrand.surface,
             gap: 12,
           }}
         >
@@ -412,7 +401,7 @@ export function TeacherCreateAssessmentScreen({ navigation, route }: Props) {
                   ? "File upload"
                   : "Questions"}
               </Text>
-              <Button
+              <AssessmentAction
                 label={busy ? "Recovering…" : "Retry creation"}
                 disabled={busy}
                 onPress={() => void submit(false)}
@@ -430,7 +419,7 @@ export function TeacherCreateAssessmentScreen({ navigation, route }: Props) {
               <Text style={{ color: theme.subtext }}>
                 Assignment setup could not be loaded.
               </Text>
-              <Button
+              <AssessmentAction
                 quiet
                 label="Retry"
                 onPress={() => void context.refetch()}
@@ -643,7 +632,7 @@ export function TeacherCreateAssessmentScreen({ navigation, route }: Props) {
                         borderWidth: 1,
                         borderColor: theme.border,
                         borderRadius: 10,
-                        backgroundColor: "white",
+                        backgroundColor: mobileBrand.surface,
                         padding: 13,
                         color: theme.text,
                       }}
@@ -678,14 +667,14 @@ export function TeacherCreateAssessmentScreen({ navigation, route }: Props) {
                       </Text>
                       <View style={{ flexDirection: "row", gap: 8 }}>
                         <View style={{ flex: 1 }}>
-                          <Button
+                          <AssessmentAction
                             quiet
                             label="Choose date"
                             onPress={() => setPickerMode("date")}
                           />
                         </View>
                         <View style={{ flex: 1 }}>
-                          <Button
+                          <AssessmentAction
                             quiet
                             label="Choose time"
                             onPress={() => setPickerMode("time")}
@@ -735,7 +724,7 @@ export function TeacherCreateAssessmentScreen({ navigation, route }: Props) {
                           borderWidth: 1,
                           borderColor: theme.border,
                           borderRadius: 10,
-                          backgroundColor: "white",
+                          backgroundColor: mobileBrand.surface,
                           padding: 13,
                           color: theme.text,
                         }}
@@ -779,7 +768,7 @@ export function TeacherCreateAssessmentScreen({ navigation, route }: Props) {
             style={{
               borderTopWidth: 1,
               borderColor: theme.border,
-              backgroundColor: "white",
+              backgroundColor: mobileBrand.surface,
               padding: 14,
               gap: 10,
             }}
@@ -787,7 +776,7 @@ export function TeacherCreateAssessmentScreen({ navigation, route }: Props) {
             <View style={{ flexDirection: "row", gap: 10 }}>
               {step > 0 ? (
                 <View style={{ flex: 1 }}>
-                  <Button
+                  <AssessmentAction
                     quiet
                     label="Back"
                     disabled={busy}
@@ -803,7 +792,7 @@ export function TeacherCreateAssessmentScreen({ navigation, route }: Props) {
               )}
               {step === 1 ? (
                 <View style={{ flex: 1 }}>
-                  <Button
+                  <AssessmentAction
                     label="Continue"
                     disabled={busy || !placementValid}
                     onPress={() => go(2)}
@@ -812,7 +801,7 @@ export function TeacherCreateAssessmentScreen({ navigation, route }: Props) {
               ) : null}
               {step === 2 ? (
                 <View style={{ flex: 1 }}>
-                  <Button
+                  <AssessmentAction
                     label={busy ? "Creating…" : "Create draft"}
                     disabled={busy}
                     onPress={() => void submit(false)}

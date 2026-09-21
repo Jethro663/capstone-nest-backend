@@ -1,3 +1,4 @@
+import { mobileBrand } from "../../theme/mobileBrand";
 import { useEffect, useMemo, useState } from "react";
 import * as ImagePicker from "expo-image-picker";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -224,7 +225,7 @@ function CommentCard({
             backgroundColor: theme.red,
           }}
         >
-          <Text style={{ fontSize: 11, fontWeight: "700", color: "#FFFFFF" }}>
+          <Text style={{ fontSize: 11, fontWeight: "700", color: mobileBrand.white }}>
             {buildInitials(comment.author?.firstName, comment.author?.lastName)}
           </Text>
         </View>
@@ -242,7 +243,7 @@ function CommentCard({
       </View>
 
       {comment.bodyHtml ? (
-        <Text style={{ marginTop: 10, fontSize: 12, lineHeight: 18, color: "#C9C9C9" }}>
+        <Text style={{ marginTop: 10, fontSize: 12, lineHeight: 18, color: mobileBrand.borderStrong }}>
           {stripRichText(comment.bodyHtml)}
         </Text>
       ) : null}
@@ -618,7 +619,7 @@ export function StudentDiscussionBoard({ classId, registerRefetch }: Props) {
                     {selectedThread.allowComments ? <ToneTag label="Comments open" tone="green" /> : <ToneTag label="Comments off" tone="red" />}
                     {selectedThread.status !== "published" ? <ToneTag label={selectedThread.status} tone="purple" /> : null}
                   </View>
-                  <Text style={{ marginTop: 10, fontSize: 12, lineHeight: 19, color: "#C9C9C9" }}>
+                  <Text style={{ marginTop: 10, fontSize: 12, lineHeight: 19, color: mobileBrand.borderStrong }}>
                     {stripRichText(selectedThread.bodyHtml)}
                   </Text>
                   {selectedThreadAttachments.map((attachment) => (
@@ -752,7 +753,7 @@ export function StudentDiscussionBoard({ classId, registerRefetch }: Props) {
                           paddingVertical: 10,
                         }}
                       >
-                        <Text style={{ fontSize: 11, fontWeight: "800", color: "#FFFFFF" }}>
+                        <Text style={{ fontSize: 11, fontWeight: "800", color: mobileBrand.white }}>
                           {commentMutation.isPending ? "Posting..." : "Post Reply"}
                         </Text>
                       </Pressable>

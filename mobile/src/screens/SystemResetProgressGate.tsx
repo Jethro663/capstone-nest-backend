@@ -8,6 +8,7 @@ import { RESET_PHASE_LABELS } from "../features/system-reset/model";
 import { adminTheme as theme } from "../theme/admin";
 import { rootNavigationRef } from "../navigation/navigation-ref";
 import { resolveMobileRole } from "../navigation/role-resolver";
+import { mobileBrand } from "../theme/mobileBrand";
 
 /** Root modal survives replacement of any authenticated navigator. */
 export function SystemResetProgressGate({ children }: PropsWithChildren) {
@@ -51,7 +52,7 @@ export function SystemResetProgressGate({ children }: PropsWithChildren) {
             backgroundColor: theme.primary,
           }}
         >
-          <Text style={{ color: "white", fontWeight: "700" }}>
+          <Text style={{ color: mobileBrand.inverseForeground, fontWeight: "700" }}>
             View reset progress · leaving does not cancel
           </Text>
         </Pressable>
@@ -174,7 +175,7 @@ export function SystemResetProgressGate({ children }: PropsWithChildren) {
               opacity: reset.clearing ? 0.5 : 1,
             }}
           >
-            <Text style={{ color: "white", fontWeight: "700" }}>
+            <Text style={{ color: mobileBrand.inverseForeground, fontWeight: "700" }}>
               {completed
                 ? "Sign in again"
                 : aborted

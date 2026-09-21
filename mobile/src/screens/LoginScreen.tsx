@@ -1,3 +1,4 @@
+import { mobileBrand } from "../theme/mobileBrand";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -215,8 +216,8 @@ export function LoginScreen({ navigation }: Props) {
           autoCapitalize="none"
           autoCorrect={false}
           containerStyle={{
-            backgroundColor: "#FFF8F4",
-            borderColor: "#E9D5CE",
+            backgroundColor: mobileBrand.warningSoft,
+            borderColor: mobileBrand.dangerBorder,
           }}
           icon="email-outline"
           iconColor={campusColors.red}
@@ -234,8 +235,8 @@ export function LoginScreen({ navigation }: Props) {
           autoCapitalize="none"
           autoCorrect={false}
           containerStyle={{
-            backgroundColor: "#FFF8F4",
-            borderColor: "#E9D5CE",
+            backgroundColor: mobileBrand.warningSoft,
+            borderColor: mobileBrand.dangerBorder,
           }}
           icon="lock-outline"
           iconColor={campusColors.red}

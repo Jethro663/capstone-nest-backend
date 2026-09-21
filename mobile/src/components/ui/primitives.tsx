@@ -1,3 +1,4 @@
+import { mobileBrand } from "../../theme/mobileBrand";
 import type { PropsWithChildren, ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -276,7 +277,7 @@ export function GradientHeader({
       <View className="flex-row items-start justify-between">
         <View className="flex-1 pr-3">
           {eyebrow ? (
-            <Text style={{ color: "rgba(255,255,255,0.9)", fontSize: 12, fontWeight: "900", letterSpacing: 1.4, textTransform: "uppercase" }}>{eyebrow}</Text>
+            <Text style={{ color: mobileBrand.inverseMuted, fontSize: 12, fontWeight: "900", letterSpacing: 1.4, textTransform: "uppercase" }}>{eyebrow}</Text>
           ) : null}
           {title ? (
             <Text style={{ color: colors.white, fontSize: 24, fontWeight: "900", marginTop: eyebrow ? 2 : 0 }}>
@@ -311,9 +312,9 @@ export function FloatingIconButton({
         borderRadius: 999,
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: "rgba(255,255,255,0.2)",
+        backgroundColor: mobileBrand.inverseBorder,
         borderWidth: 1,
-        borderColor: "rgba(255,255,255,0.28)",
+        borderColor: mobileBrand.inverseBorder,
       }}
     >
       <MaterialCommunityIcons name={icon} size={18} color={colors.white} />
@@ -376,7 +377,7 @@ export function Pill({
 export function ProgressBar({
   value,
   color,
-  trackColor = "#E5E7EB",
+  trackColor = mobileBrand.border,
   height = 8,
 }: {
   value: number;
@@ -385,7 +386,7 @@ export function ProgressBar({
   height?: number;
 }) {
   return (
-    <View style={{ height, borderRadius: 999, backgroundColor: trackColor === "#E5E7EB" ? modernAcademic.surfaceContainerHigh : trackColor, overflow: "hidden" }}>
+    <View style={{ height, borderRadius: 999, backgroundColor: trackColor === mobileBrand.border ? modernAcademic.surfaceContainerHigh : trackColor, overflow: "hidden" }}>
       <View
         style={{
           width: `${Math.max(0, Math.min(100, value))}%`,
@@ -532,7 +533,7 @@ export function StatCard({
         paddingVertical: 12,
         paddingHorizontal: 10,
         alignItems: "center",
-        backgroundColor: translucent ? "rgba(255,255,255,0.2)" : colors.card,
+        backgroundColor: translucent ? mobileBrand.inverseBorder : colors.card,
         ...(!translucent ? shadow.card : {}),
       }}
     >
@@ -545,7 +546,7 @@ export function StatCard({
           marginTop: 2,
           fontSize: 11,
           fontWeight: "700",
-          color: translucent ? "rgba(255,255,255,0.82)" : colors.muted,
+          color: translucent ? mobileBrand.inverseMuted : colors.muted,
         }}
       >
         {label}
@@ -597,7 +598,7 @@ export function SimpleBarChart({
       <Svg width={chartWidth} height={chartHeight}>
         {[0, 1, 2].map((lineIndex) => {
           const y = topPadding + ((baselineY - topPadding) / 3) * lineIndex;
-          return <Line key={lineIndex} x1="8" y1={y} x2={chartWidth - 8} y2={y} stroke="#F3F4F6" strokeDasharray="4 4" />;
+          return <Line key={lineIndex} x1="8" y1={y} x2={chartWidth - 8} y2={y} stroke={mobileBrand.infoSoft} strokeDasharray="4 4" />;
         })}
         {bars.map((bar) => (
           <Rect

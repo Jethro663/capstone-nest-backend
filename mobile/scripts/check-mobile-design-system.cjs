@@ -8,6 +8,7 @@ const ALLOWED_SOURCE_FILES = new Set([
 
 const COLOR_PATTERN = /#[0-9a-fA-F]{3,8}\b|rgba?\(\s*\d+(?:\.\d+)?\s*,\s*\d+(?:\.\d+)?\s*,\s*\d+(?:\.\d+)?(?:\s*,\s*(?:\d+(?:\.\d+)?|\.\d+))?\s*\)/g;
 const LEGACY_CONTROL_PATTERN = /\b(?:Button|TouchableOpacity)\b/g;
+const NAMED_STYLE_COLOR_PATTERN = /(?:color|backgroundColor|borderColor|borderTopColor|borderBottomColor|borderLeftColor|borderRightColor|shadowColor|tintColor)\s*:\s*(["'])(?:white|black|gray|grey|red|blue|green|yellow|purple|orange)\1/g;
 
 function isIgnoredSource(relativePath) {
   const normalized = path.normalize(relativePath);
@@ -32,6 +33,14 @@ function scanSource(relativePath, source) {
       file: path.normalize(relativePath),
       line: lineForOffset(source, match.index),
       kind: "raw-color",
+      value: match[0],
+    });
+  }
+  for (const match of source.matchAll(NAMED_STYLE_COLOR_PATTERN)) {
+    violations.push({
+      file: path.normalize(relativePath),
+      line: lineForOffset(source, match.index),
+      kind: "named-color",
       value: match[0],
     });
   }
@@ -60,12 +69,88 @@ function walkSource(rootDir, currentDir = path.join(rootDir, "src")) {
 }
 
 function findDesignViolations(rootDir) {
-  return walkSource(rootDir).sort((left, right) =>
+  return [...walkSource(rootDir), ...checkNativeDesignContracts(rootDir)].sort((left, right) =>
     left.file.localeCompare(right.file) ||
     left.line - right.line ||
     left.kind.localeCompare(right.kind) ||
     left.value.localeCompare(right.value),
   );
+}
+
+function checkNativeDesignContracts(rootDir) {
+  const violations = [];
+  const appJson = JSON.parse(fs.readFileSync(path.join(rootDir, "app.json"), "utf8"));
+  const colorsXml = fs.readFileSync(
+    path.join(rootDir, "android/app/src/main/res/values/colors.xml"),
+    "utf8",
+  );
+  const stylesXml = fs.readFileSync(
+    path.join(rootDir, "android/app/src/main/res/values/styles.xml"),
+    "utf8",
+  );
+  const appRoot = fs.readFileSync(path.join(rootDir, "src/bootstrap/AppRoot.tsx"), "utf8");
+  const richTextBuilder = fs.readFileSync(
+    path.join(rootDir, "scripts/build-assessment-rich-text.cjs"),
+    "utf8",
+  );
+  const expectations = [
+    [
+      appJson.expo?.android?.adaptiveIcon?.backgroundColor === "#0C1D3A",
+      "app.json",
+      "adaptive-icon",
+      "backgroundColor=#0C1D3A",
+    ],
+    [
+      /<color name="splashscreen_background">#F6F7F9<\/color>/.test(colorsXml),
+      "android/app/src/main/res/values/colors.xml",
+      "native-color",
+      "splashscreen_background=#F6F7F9",
+    ],
+    [
+      /<color name="iconBackground">#0C1D3A<\/color>/.test(colorsXml),
+      "android/app/src/main/res/values/colors.xml",
+      "native-color",
+      "iconBackground=#0C1D3A",
+    ],
+    [
+      /<color name="colorPrimary">#0C1D3A<\/color>/.test(colorsXml),
+      "android/app/src/main/res/values/colors.xml",
+      "native-color",
+      "colorPrimary=#0C1D3A",
+    ],
+    [
+      /<color name="navigationBar">#F6F7F9<\/color>/.test(colorsXml),
+      "android/app/src/main/res/values/colors.xml",
+      "native-color",
+      "navigationBar=#F6F7F9",
+    ],
+    [
+      stylesXml.includes('<item name="android:statusBarColor">@color/colorPrimary</item>') &&
+        stylesXml.includes('<item name="android:navigationBarColor">@color/navigationBar</item>'),
+      "android/app/src/main/res/values/styles.xml",
+      "system-bars",
+      "semantic status and navigation resources",
+    ],
+    [
+      appRoot.includes('<StatusBar barStyle="light-content" backgroundColor={mobileBrand.navy} />'),
+      "src/bootstrap/AppRoot.tsx",
+      "status-bar",
+      "light-content on mobileBrand.navy",
+    ],
+    [
+      richTextBuilder.includes('text: "#101828"') &&
+        richTextBuilder.includes('background: "#FFFFFF"') &&
+        richTextBuilder.includes('link: "#175CD3"') &&
+        richTextBuilder.includes('quote: "#DC2626"'),
+      "scripts/build-assessment-rich-text.cjs",
+      "rich-text-palette",
+      "approved semantic palette",
+    ],
+  ];
+  for (const [ok, file, kind, value] of expectations) {
+    if (!ok) violations.push({ file, line: 1, kind, value });
+  }
+  return violations;
 }
 
 function main() {
@@ -86,6 +171,7 @@ function main() {
 
 module.exports = {
   findDesignViolations,
+  checkNativeDesignContracts,
   isIgnoredSource,
   scanSource,
 };

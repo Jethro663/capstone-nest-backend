@@ -1,11 +1,12 @@
+import { mobileBrand } from "../../theme/mobileBrand";
 export const campusColors = {
-  ink: "#261716",
-  muted: "#765E5A",
-  red: "#A51C30",
-  deepRed: "#741427",
-  rose: "#D94A59",
-  amber: "#E6A936",
-  cream: "#FFF8F2",
-  paper: "#FFFCF9",
-  white: "#FFFFFF",
+  ink: mobileBrand.text,
+  muted: mobileBrand.muted,
+  red: mobileBrand.red,
+  deepRed: mobileBrand.navy,
+  rose: mobileBrand.navyRaised,
+  amber: mobileBrand.warning,
+  cream: mobileBrand.canvas,
+  paper: mobileBrand.surface,
+  white: mobileBrand.inverseForeground,
 } as const;

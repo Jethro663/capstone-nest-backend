@@ -1,3 +1,4 @@
+import { mobileBrand } from "../../theme/mobileBrand";
 import type { PropsWithChildren, ReactNode } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -16,12 +17,12 @@ export const authTheme = {
   border: colors.border,
   badgeBorder: colors.border,
   badgeFill: skillStream.elevated,
-  badgeIconFill: "#DDE1FF",
+  badgeIconFill: mobileBrand.infoSoft,
   badgeIconBorder: modernAcademic.outlineVariant,
   errorFill: modernAcademic.errorContainer,
-  errorBorder: "rgba(255,180,171,0.28)",
-  successFill: "rgba(159,214,184,0.12)",
-  successBorder: "rgba(159,214,184,0.28)",
+  errorBorder: mobileBrand.dangerSoft,
+  successFill: mobileBrand.successSoft,
+  successBorder: mobileBrand.successSoft,
   white: modernAcademic.onPrimary,
   red: modernAcademic.error,
   orange: colors.amber,
@@ -70,7 +71,7 @@ export function AuthScreenFrame({ children }: PropsWithChildren) {
         ))}
         <View
           style={{
-            backgroundColor: "rgba(30,64,175,0.03)",
+            backgroundColor: mobileBrand.infoSoft,
             bottom: 0,
             left: 0,
             position: "absolute",
@@ -425,8 +426,8 @@ export function AuthRulePills({ rules }: { rules: Array<{ label: string; passed:
           key={rule.label}
           style={{
             alignItems: "center",
-            backgroundColor: rule.passed ? "rgba(34,197,94,0.09)" : authTheme.cardInner,
-            borderColor: rule.passed ? "rgba(34,197,94,0.28)" : authTheme.border,
+            backgroundColor: rule.passed ? mobileBrand.successSoft : authTheme.cardInner,
+            borderColor: rule.passed ? mobileBrand.successSoft : authTheme.border,
             borderRadius: 4,
             borderWidth: 1,
             flexDirection: "row",

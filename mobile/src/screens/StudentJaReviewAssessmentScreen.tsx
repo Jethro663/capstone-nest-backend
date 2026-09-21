@@ -1,3 +1,4 @@
+import { mobileBrand } from "../theme/mobileBrand";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -205,17 +206,17 @@ export function StudentJaReviewAssessmentScreen({ navigation, route }: Props) {
         rightContent={
           <Pressable
             onPress={() => navigation.goBack()}
-            style={{ borderRadius: 999, backgroundColor: "rgba(255,255,255,0.18)", paddingHorizontal: 12, paddingVertical: 8 }}
+            style={{ borderRadius: 999, backgroundColor: mobileBrand.inverseBorder, paddingHorizontal: 12, paddingVertical: 8 }}
           >
             <Text style={{ color: colors.white, fontSize: 12, fontWeight: "900" }}>Back</Text>
           </Pressable>
         }
       >
         <View style={{ marginTop: 12 }}>
-          <Text style={{ color: "rgba(255,255,255,0.9)", fontSize: 12, fontWeight: "800" }}>
+          <Text style={{ color: mobileBrand.inverseMuted, fontSize: 12, fontWeight: "800" }}>
             3 tries maximum | correct answers appear after submitting
           </Text>
-          <ProgressBar value={progress} color="#FACC15" trackColor="rgba(255,255,255,0.24)" height={10} />
+          <ProgressBar value={progress} color={mobileBrand.warning} trackColor={mobileBrand.inverseBorder} height={10} />
         </View>
       </GradientHeader>
 
@@ -240,7 +241,7 @@ export function StudentJaReviewAssessmentScreen({ navigation, route }: Props) {
                   <Pressable key={attempt.attemptId} disabled={busy || locked} onPress={() => startAttempt(attempt)}>
                     <View style={[{ borderRadius: 24, backgroundColor: colors.white, padding: 15, opacity: locked ? 0.65 : 1 }, shadow.card]}>
                       <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}>
-                        <View style={{ width: 46, height: 46, borderRadius: 18, backgroundColor: locked ? "#F1F5F9" : "#EEF2FF", alignItems: "center", justifyContent: "center" }}>
+                        <View style={{ width: 46, height: 46, borderRadius: 18, backgroundColor: locked ? mobileBrand.infoSoft : mobileBrand.infoSoft, alignItems: "center", justifyContent: "center" }}>
                           <MaterialCommunityIcons name={locked ? "lock" : "robot-happy-outline"} size={23} color={locked ? theme.muted : colors.primary} />
                         </View>
                         <View style={{ flex: 1 }}>
@@ -257,8 +258,8 @@ export function StudentJaReviewAssessmentScreen({ navigation, route }: Props) {
                                   style={{
                                     borderRadius: 999,
                                     borderWidth: 1,
-                                    borderColor: filled ? colors.primary : "#CBD5E1",
-                                    backgroundColor: filled ? "#EEF2FF" : "#F8FAFC",
+                                    borderColor: filled ? colors.primary : mobileBrand.infoBorder,
+                                    backgroundColor: filled ? mobileBrand.infoSoft : mobileBrand.infoSoft,
                                     paddingHorizontal: 10,
                                     paddingVertical: 6,
                                   }}
@@ -288,13 +289,13 @@ export function StudentJaReviewAssessmentScreen({ navigation, route }: Props) {
           </View>
         ) : activeItem ? (
           <View style={{ gap: 14 }}>
-            <View style={[{ borderRadius: 26, backgroundColor: submitted ? "#F0FDF4" : colors.white, borderWidth: 1, borderColor: submitted ? "#86EFAC" : "#E2E8F0", padding: 14 }, shadow.card]}>
-              <Text style={{ color: submitted ? "#166534" : colors.primary, fontSize: 12, fontWeight: "900", textTransform: "uppercase" }}>
+            <View style={[{ borderRadius: 26, backgroundColor: submitted ? mobileBrand.successSoft : colors.white, borderWidth: 1, borderColor: submitted ? mobileBrand.successBorder : mobileBrand.infoSoft, padding: 14 }, shadow.card]}>
+              <Text style={{ color: submitted ? mobileBrand.success : colors.primary, fontSize: 12, fontWeight: "900", textTransform: "uppercase" }}>
                 {submitted ? "Done - replay submitted" : `Question ${currentIndex + 1} of ${session.items.length}`}
               </Text>
               <Text style={{ marginTop: 7, color: theme.text, fontSize: 18, lineHeight: 25, fontWeight: "900" }}>{stripRichText(activeItem.prompt)}</Text>
               {submitted ? (
-                <Text style={{ marginTop: 7, color: "#166534", fontSize: 12, fontWeight: "900" }}>
+                <Text style={{ marginTop: 7, color: mobileBrand.success, fontSize: 12, fontWeight: "900" }}>
                   Score: {score.percent}% ({score.correct}/{score.total})
                 </Text>
               ) : null}
@@ -307,8 +308,8 @@ export function StudentJaReviewAssessmentScreen({ navigation, route }: Props) {
                   const selected = selectedIds.includes(option.id);
                   const correct = activeItem.response ? getCorrectOptionIds(activeItem).includes(option.id) : false;
                   const wrongSelected = Boolean(activeItem.response && selected && !correct);
-                  const bg = correct ? "#DCFCE7" : wrongSelected ? "#FEE2E2" : selected ? "#EEF2FF" : "#F8FAFC";
-                  const line = correct ? "#22C55E" : wrongSelected ? "#EF4444" : selected ? colors.primary : "#CBD5E1";
+                  const bg = correct ? mobileBrand.successSoft : wrongSelected ? mobileBrand.redSoft : selected ? mobileBrand.infoSoft : mobileBrand.infoSoft;
+                  const line = correct ? mobileBrand.success : wrongSelected ? mobileBrand.danger : selected ? colors.primary : mobileBrand.infoBorder;
 
                   return (
                     <Pressable
@@ -321,7 +322,7 @@ export function StudentJaReviewAssessmentScreen({ navigation, route }: Props) {
                         <MaterialCommunityIcons
                           name={correct ? "check-circle" : wrongSelected ? "close-circle" : selected ? "radiobox-marked" : "radiobox-blank"}
                           size={19}
-                          color={correct ? "#16A34A" : wrongSelected ? "#DC2626" : selected ? colors.primary : theme.muted}
+                          color={correct ? mobileBrand.success : wrongSelected ? mobileBrand.red : selected ? colors.primary : theme.muted}
                         />
                         <Text style={{ flex: 1, color: theme.text, fontSize: 13, fontWeight: "800" }}>{stripRichText(option.text)}</Text>
                       </View>
@@ -331,19 +332,19 @@ export function StudentJaReviewAssessmentScreen({ navigation, route }: Props) {
               </View>
 
               {activeItem.response ? (
-                <View style={{ marginTop: 14, borderRadius: 20, borderWidth: 1, borderColor: activeItem.response.isCorrect ? "#86EFAC" : "#FCA5A5", backgroundColor: activeItem.response.isCorrect ? "#F0FDF4" : "#FFF1F2", padding: 13 }}>
-                  <Text style={{ color: activeItem.response.isCorrect ? "#166534" : "#BE123C", fontSize: 12, fontWeight: "900" }}>
+                <View style={{ marginTop: 14, borderRadius: 20, borderWidth: 1, borderColor: activeItem.response.isCorrect ? mobileBrand.successBorder : mobileBrand.dangerBorder, backgroundColor: activeItem.response.isCorrect ? mobileBrand.successSoft : mobileBrand.redSoft, padding: 13 }}>
+                  <Text style={{ color: activeItem.response.isCorrect ? mobileBrand.success : mobileBrand.danger, fontSize: 12, fontWeight: "900" }}>
                     {activeItem.response.isCorrect ? "Your answer is correct" : "Your answer needs review"}
                   </Text>
                   <Text style={{ marginTop: 7, color: theme.text, fontSize: 12, lineHeight: 18, fontWeight: "800" }}>
                     Your answer: {formatOptionNames(activeItem, getResponseAnswerIds(activeItem))}
                   </Text>
-                  <Text style={{ marginTop: 5, color: "#166534", fontSize: 12, lineHeight: 18, fontWeight: "900" }}>
+                  <Text style={{ marginTop: 5, color: mobileBrand.success, fontSize: 12, lineHeight: 18, fontWeight: "900" }}>
                     Correct answer: {formatOptionNames(activeItem, getCorrectOptionIds(activeItem))}
                   </Text>
                   {activeItem.response.feedback || activeItem.explanation || activeItem.hint ? (
-                    <View style={{ marginTop: 10, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.7)", padding: 10 }}>
-                      <Text style={{ color: "#0F3F56", fontSize: 11, fontWeight: "900", textTransform: "uppercase" }}>JA clue</Text>
+                    <View style={{ marginTop: 10, borderRadius: 14, backgroundColor: mobileBrand.inverseMuted, padding: 10 }}>
+                      <Text style={{ color: mobileBrand.navy, fontSize: 11, fontWeight: "900", textTransform: "uppercase" }}>JA clue</Text>
                       <Text style={{ marginTop: 3, color: theme.muted, fontSize: 12, lineHeight: 18 }}>
                         {cleanJaClueText(activeItem.hint || activeItem.explanation || activeItem.response.feedback)}
                       </Text>
@@ -356,7 +357,7 @@ export function StudentJaReviewAssessmentScreen({ navigation, route }: Props) {
                 <Pressable
                   disabled={currentIndex === 0}
                   onPress={() => setCurrentIndex((value) => Math.max(0, value - 1))}
-                  style={{ flex: 1, borderRadius: 16, backgroundColor: currentIndex === 0 ? "#E2E8F0" : "#DBEAFE", paddingVertical: 12, alignItems: "center" }}
+                  style={{ flex: 1, borderRadius: 16, backgroundColor: currentIndex === 0 ? mobileBrand.infoSoft : mobileBrand.infoSoft, paddingVertical: 12, alignItems: "center" }}
                 >
                   <Text style={{ color: currentIndex === 0 ? theme.muted : colors.blue, fontWeight: "900" }}>Previous</Text>
                 </Pressable>

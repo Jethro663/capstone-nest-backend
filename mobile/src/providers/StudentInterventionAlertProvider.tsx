@@ -1,3 +1,4 @@
+import { mobileBrand } from "../theme/mobileBrand";
 import type { PropsWithChildren } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -78,7 +79,7 @@ export function StudentInterventionAlertProvider({
             flex: 1,
             justifyContent: "center",
             paddingHorizontal: 22,
-            backgroundColor: "rgba(15,23,42,0.42)",
+            backgroundColor: mobileBrand.scrim,
           }}
         >
           <View
@@ -86,7 +87,7 @@ export function StudentInterventionAlertProvider({
               borderRadius: 18,
               backgroundColor: colors.white,
               padding: 20,
-              shadowColor: "#000",
+              shadowColor: mobileBrand.text,
               shadowOffset: { width: 0, height: 18 },
               shadowOpacity: 0.22,
               shadowRadius: 30,
@@ -103,13 +104,13 @@ export function StudentInterventionAlertProvider({
                   borderRadius: 14,
                   alignItems: "center",
                   justifyContent: "center",
-                  backgroundColor: "#FFE4E6",
+                  backgroundColor: mobileBrand.redSoft,
                 }}
               >
                 <MaterialCommunityIcons
                   name="account-alert-outline"
                   size={24}
-                  color="#BE123C"
+                  color={mobileBrand.danger}
                 />
               </View>
               <View style={{ flex: 1 }}>
@@ -134,8 +135,8 @@ export function StudentInterventionAlertProvider({
                     style={{
                       borderRadius: 12,
                       borderWidth: 1,
-                      borderColor: "#FECACA",
-                      backgroundColor: "#FFF7F7",
+                      borderColor: mobileBrand.dangerBorder,
+                      backgroundColor: mobileBrand.redSoft,
                       paddingHorizontal: 12,
                       paddingVertical: 10,
                     }}
@@ -193,7 +194,7 @@ export function StudentInterventionAlertProvider({
                   borderRadius: 12,
                   paddingHorizontal: 14,
                   paddingVertical: 10,
-                  backgroundColor: "#F1F5F9",
+                  backgroundColor: mobileBrand.infoSoft,
                 }}
               >
                 <Text
@@ -213,7 +214,7 @@ export function StudentInterventionAlertProvider({
                     borderRadius: 12,
                     paddingHorizontal: 14,
                     paddingVertical: 10,
-                    backgroundColor: "#BE123C",
+                    backgroundColor: mobileBrand.danger,
                   }}
                 >
                   <Text

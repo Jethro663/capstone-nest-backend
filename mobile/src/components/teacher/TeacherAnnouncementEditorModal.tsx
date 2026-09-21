@@ -1,3 +1,4 @@
+import { mobileBrand } from "../../theme/mobileBrand";
 import { useEffect, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
@@ -70,7 +71,7 @@ export function TeacherAnnouncementEditorModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.65)", justifyContent: "flex-end" }}>
+      <View style={{ flex: 1, backgroundColor: mobileBrand.scrimStrong, justifyContent: "flex-end" }}>
         <View
           style={{
             maxHeight: "90%",
@@ -316,8 +317,8 @@ export function TeacherAnnouncementEditorModal({
                 gap: 6,
               }}
             >
-              <MaterialCommunityIcons name="bullhorn-outline" size={16} color="#ffffff" />
-              <Text style={{ fontSize: 13, fontWeight: "800", color: "#ffffff" }}>
+              <MaterialCommunityIcons name="bullhorn-outline" size={16} color={mobileBrand.white} />
+              <Text style={{ fontSize: 13, fontWeight: "800", color: mobileBrand.white }}>
                 {saving ? "Posting..." : editingId ? "Save Changes" : "Publish Announcement"}
               </Text>
             </Pressable>

@@ -1,3 +1,4 @@
+import { mobileBrand } from "../../theme/mobileBrand";
 import type { AiGenerationStatus } from "../../types/ai";
 
 export interface AiJobPresentation {
@@ -10,45 +11,45 @@ export interface AiJobPresentation {
 const PRESENTATIONS: Record<string, AiJobPresentation> = {
   pending: {
     label: "Queued",
-    color: "#d97706",
-    backgroundColor: "#2f220f",
-    borderColor: "#7c4a12",
+    color: mobileBrand.warning,
+    backgroundColor: mobileBrand.warningSoft,
+    borderColor: mobileBrand.warningBorder,
   },
   processing: {
     label: "Processing",
-    color: "#60a5fa",
-    backgroundColor: "#10243f",
-    borderColor: "#28558a",
+    color: mobileBrand.info,
+    backgroundColor: mobileBrand.infoSoft,
+    borderColor: mobileBrand.infoBorder,
   },
   completed: {
     label: "Ready for review",
-    color: "#a78bfa",
-    backgroundColor: "#251c42",
-    borderColor: "#5b4690",
+    color: mobileBrand.navy,
+    backgroundColor: mobileBrand.navySoft,
+    borderColor: mobileBrand.infoBorder,
   },
   approved: {
     label: "Approved",
-    color: "#34d399",
-    backgroundColor: "#102e25",
-    borderColor: "#24664e",
+    color: mobileBrand.success,
+    backgroundColor: mobileBrand.successSoft,
+    borderColor: mobileBrand.successBorder,
   },
   failed: {
     label: "Failed",
-    color: "#f87171",
-    backgroundColor: "#371719",
-    borderColor: "#7f3034",
+    color: mobileBrand.danger,
+    backgroundColor: mobileBrand.dangerSoft,
+    borderColor: mobileBrand.dangerBorder,
   },
   rejected: {
     label: "Rejected",
-    color: "#fb7185",
-    backgroundColor: "#3a1721",
-    borderColor: "#873548",
+    color: mobileBrand.danger,
+    backgroundColor: mobileBrand.dangerSoft,
+    borderColor: mobileBrand.dangerBorder,
   },
   cancelled: {
     label: "Cancelled",
-    color: "#94a3b8",
-    backgroundColor: "#202733",
-    borderColor: "#465267",
+    color: mobileBrand.muted,
+    backgroundColor: mobileBrand.surfaceMuted,
+    borderColor: mobileBrand.borderStrong,
   },
 };
 

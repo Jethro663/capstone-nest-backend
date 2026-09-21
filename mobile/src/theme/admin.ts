@@ -4,8 +4,8 @@ import { mobileBrand } from "./mobileBrand";
 export const adminTheme = {
   bg: mobileBrand.canvas,
   topbar: mobileBrand.navy,
-  surface: "#FFFFFF",
-  surfaceMuted: "#F8FAFC",
+  surface: mobileBrand.surface,
+  surfaceMuted: mobileBrand.surfaceMuted,
   selection: mobileBrand.redSoft,
   border: mobileBrand.border,
   borderStrong: mobileBrand.borderStrong,

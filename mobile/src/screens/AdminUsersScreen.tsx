@@ -1,3 +1,4 @@
+import { mobileBrand } from "../theme/mobileBrand";
 import { useEffect, useMemo, useState } from "react";
 import { Alert, View } from "react-native";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
@@ -278,7 +279,7 @@ export function AdminUsersScreen({ navigation }: Props) {
           .join(", ");
         const selected = selectedIds.includes(user.id);
         return (
-          <View style={{ borderBottomWidth: 1, borderBottomColor: "#E8DCDD" }}>
+          <View style={{ borderBottomWidth: 1, borderBottomColor: mobileBrand.dangerBorder }}>
             <AdminDataRow
               title={
                 `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() ||

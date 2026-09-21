@@ -119,6 +119,13 @@ jest.mock("../../components/teacher/TeacherMobilePrimitives", () => ({
     border: "#ddd",
   },
 }));
+jest.mock("../../components/ui/MobileAction", () => {
+  const React = require("react");
+  return {
+    MobileAction: ({ label, ...props }: { label: string }) =>
+      React.createElement("Pressable", props, label),
+  };
+});
 
 const flatten = (node: { children: Array<string | object> }): string =>
   node.children

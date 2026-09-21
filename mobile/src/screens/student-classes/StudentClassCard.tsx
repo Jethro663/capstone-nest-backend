@@ -1,3 +1,4 @@
+import { mobileBrand } from "../../theme/mobileBrand";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { Pressable, StyleSheet, Text, View } from "react-native";
@@ -64,7 +65,7 @@ export function StudentClassCard({
     <View style={styles.card}>
       <LinearGradient
         testID="student-class-hero-surface"
-        colors={["#0C1D3A", "#172944"]}
+        colors={[mobileBrand.navy, mobileBrand.navyRaised]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.hero}
@@ -207,7 +208,7 @@ export function StudentClassCard({
             <MaterialCommunityIcons
               name="arrow-right"
               size={17}
-              color="#FFFFFF"
+              color={mobileBrand.white}
             />
           </View>
         </Pressable>
@@ -284,14 +285,14 @@ const styles = StyleSheet.create({
     minHeight: 27,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "#FECACA",
-    backgroundColor: "#FEE2E2",
+    borderColor: mobileBrand.dangerBorder,
+    backgroundColor: mobileBrand.redSoft,
     paddingHorizontal: 11,
     alignItems: "center",
     justifyContent: "center",
   },
-  statusPillComplete: { borderColor: "#BBF7D0", backgroundColor: "#DCFCE7" },
-  statusPillReady: { borderColor: "#E2E8F0", backgroundColor: "#F8FAFC" },
+  statusPillComplete: { borderColor: mobileBrand.successBorder, backgroundColor: mobileBrand.successSoft },
+  statusPillReady: { borderColor: mobileBrand.infoSoft, backgroundColor: mobileBrand.infoSoft },
   statusText: {
     color: theme.redText,
     fontSize: 9,
@@ -299,11 +300,11 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     textTransform: "uppercase",
   },
-  statusTextComplete: { color: "#166534" },
+  statusTextComplete: { color: mobileBrand.success },
   statusTextReady: { color: theme.subtext },
   heroIdentity: { marginTop: 18 },
   subjectName: {
-    color: "#FFFFFF",
+    color: mobileBrand.white,
     fontSize: 29,
     lineHeight: 32,
     fontWeight: "800",
@@ -311,14 +312,14 @@ const styles = StyleSheet.create({
   },
   gradeLine: {
     marginTop: 8,
-    color: "rgba(255,255,255,0.92)",
+    color: mobileBrand.inverseForeground,
     fontSize: 13,
     lineHeight: 18,
     fontWeight: "700",
   },
   teacherLine: {
     marginTop: 2,
-    color: "rgba(255,255,255,0.80)",
+    color: mobileBrand.inverseMuted,
     fontSize: 12,
     lineHeight: 17,
     fontWeight: "600",
@@ -404,7 +405,7 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     flexShrink: 1,
     textAlign: "center",
-    color: "#FFFFFF",
+    color: mobileBrand.white,
     fontSize: 12,
     lineHeight: 16,
     fontWeight: "900",

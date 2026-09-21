@@ -1,3 +1,4 @@
+import { mobileBrand } from "../theme/mobileBrand";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -317,7 +318,7 @@ export function StudentEvaluationsScreen({ navigation }: Props) {
             onPress={() => void Promise.all([inboxQuery.refetch(), systemInboxQuery.refetch()])}
             style={{ marginTop: 12, borderRadius: 999, backgroundColor: theme.blue, paddingHorizontal: 14, paddingVertical: 8 }}
           >
-            <Text style={{ color: "#FFFFFF", fontSize: 11, fontWeight: "800" }}>Retry</Text>
+            <Text style={{ color: mobileBrand.white, fontSize: 11, fontWeight: "800" }}>Retry</Text>
           </Pressable>
         </View>
       ) : visibleItems.length === 0 ? (
@@ -355,7 +356,7 @@ export function StudentEvaluationsScreen({ navigation }: Props) {
                 <View
                   style={{
                     borderRadius: 999,
-                    backgroundColor: item.status === "submitted" ? "#DCFCE7" : "#FEF3C7",
+                    backgroundColor: item.status === "submitted" ? mobileBrand.successSoft : mobileBrand.warningSoft,
                     paddingHorizontal: 8,
                     paddingVertical: 3,
                   }}
@@ -371,7 +372,7 @@ export function StudentEvaluationsScreen({ navigation }: Props) {
               </Text>
               {item.status === "pending" ? (
                 <View style={{ marginTop: 10, alignSelf: "flex-start", borderRadius: 999, backgroundColor: theme.blue, paddingHorizontal: 12, paddingVertical: 6 }}>
-                  <Text style={{ color: "#FFFFFF", fontSize: 11, fontWeight: "800" }}>Start Evaluation</Text>
+                  <Text style={{ color: mobileBrand.white, fontSize: 11, fontWeight: "800" }}>Start Evaluation</Text>
                 </View>
               ) : null}
             </Pressable>
@@ -381,7 +382,7 @@ export function StudentEvaluationsScreen({ navigation }: Props) {
 
       {/* Evaluation Form Modal */}
       <Modal visible={Boolean(selectedEvaluation)} transparent animationType="slide" onRequestClose={() => setSelectedEvaluation(null)}>
-        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.65)", justifyContent: "flex-end" }}>
+        <View style={{ flex: 1, backgroundColor: mobileBrand.scrimStrong, justifyContent: "flex-end" }}>
           <View style={{ backgroundColor: theme.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: "90%" }}>
             <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 14 }}>
               <View style={{ flex: 1, paddingRight: 12 }}>
@@ -446,7 +447,7 @@ export function StudentEvaluationsScreen({ navigation }: Props) {
                 opacity: submitMutation.isPending ? 0.7 : 1,
               }}
             >
-              <Text style={{ color: "#FFFFFF", fontSize: 14, fontWeight: "800" }}>
+              <Text style={{ color: mobileBrand.white, fontSize: 14, fontWeight: "800" }}>
                 {submitMutation.isPending ? "Submitting..." : "Submit Evaluation"}
               </Text>
             </Pressable>

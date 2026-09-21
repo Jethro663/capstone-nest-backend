@@ -1,10 +1,11 @@
+import { mobileBrand } from "../theme/mobileBrand";
 export const CLASS_CARD_PRESETS = [
-  { id: 'oceanic-blue', label: 'Oceanic Blue', colors: ['#2c4fdd', '#3d63f1'] },
-  { id: 'emerald-wave', label: 'Emerald Wave', colors: ['#069f77', '#11b68d'] },
-  { id: 'violet-burst', label: 'Violet Burst', colors: ['#7f22f0', '#9944f5'] },
-  { id: 'sunset-orange', label: 'Sunset Orange', colors: ['#d66a1e', '#f08d2d'] },
-  { id: 'rose-dusk', label: 'Rose Dusk', colors: ['#d42756', '#ef5f87'] },
-  { id: 'slate-night', label: 'Slate Night', colors: ['#1d304f', '#2e4a73'] },
+  { id: 'oceanic-blue', label: 'GABHS Navy', colors: [mobileBrand.navy, mobileBrand.navyRaised] },
+  { id: 'emerald-wave', label: 'Navy and Red', colors: [mobileBrand.navy, mobileBrand.red] },
+  { id: 'violet-burst', label: 'Academic Blue', colors: [mobileBrand.navyRaised, mobileBrand.info] },
+  { id: 'sunset-orange', label: 'Signal Red', colors: [mobileBrand.red, mobileBrand.redPressed] },
+  { id: 'rose-dusk', label: 'Clean Slate', colors: [mobileBrand.muted, mobileBrand.navy] },
+  { id: 'slate-night', label: 'Night Navy', colors: [mobileBrand.navyRaised, mobileBrand.navy] },
 ] as const;
 
 export function getPresetColors(presetId?: string | null): string[] {

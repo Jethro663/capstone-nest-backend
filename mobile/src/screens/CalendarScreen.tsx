@@ -1,3 +1,4 @@
+import { mobileBrand } from "../theme/mobileBrand";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -554,7 +555,7 @@ export function CalendarScreen({ navigation, route }: Props) {
                       <Text
                         style={{
                           color: isToday
-                            ? "#FFFFFF"
+                            ? mobileBrand.white
                             : cell.inMonth
                               ? theme.text
                               : theme.dim,
