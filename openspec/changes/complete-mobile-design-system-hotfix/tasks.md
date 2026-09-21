@@ -34,6 +34,6 @@
 - [x] 5.3 Bump once to version 0.1.48/build 49 and rerun version-sensitive verification
 - [x] 5.4 Build and validate the production-signed ARM64 APK for package, signer, version, ABI, API, archive, 16-KB alignment, size, and hash
 - [x] 5.5 Package the immutable public build-49 artifact and matching manifest
-- [ ] 5.6 Push the verified exact SHA and pass its GitHub CI and Railway deployment
-- [ ] 5.7 Prove live manifest/APK byte identity and backend update-policy registration
-- [ ] 5.8 Record physical-device acceptance as verified evidence or explicitly unverified
+- [x] 5.6 Push the verified exact SHA and pass its GitHub CI and Railway deployment
+- [x] 5.7 Prove live manifest/APK byte identity and backend update-policy registration
+- [x] 5.8 Record physical-device acceptance as explicitly unverified because no ADB device was attached on 2026-09-22
