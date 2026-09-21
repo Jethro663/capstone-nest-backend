@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Alert, Text, useWindowDimensions, View } from "react-native";
+import { Alert, Text, View } from "react-native";
 import { WebView } from "react-native-webview";
 import { useLessonDetail, useTeacherLessonDraftStateMutation } from "../api/hooks";
 import { toAppError } from "../api/http";
@@ -13,10 +13,10 @@ import type { ContentBlock, LessonVersionDetail } from "../types/lesson";
 import { LessonBlockRenderer } from "../components/lesson/LessonBlockRenderer";
 import { RichTextContent } from "../components/ui/RichTextContent";
 import { TeacherActionButton, TeacherScreen, stripRichText, teacherTheme as theme } from "../components/teacher/TeacherMobilePrimitives";
-import { TeacherActionSheet, TeacherBottomActionBar, TeacherCenteredDialog, TeacherContextStrip, TeacherFlatSection, TeacherInlineNotice, TeacherSegmentedTabs } from "../components/teacher/TeacherWorkspacePrimitives";
+import { TeacherActionSheet, TeacherBottomActionBar, TeacherCenteredDialog, TeacherFlatSection, TeacherInlineNotice, TeacherSegmentedTabs } from "../components/teacher/TeacherWorkspacePrimitives";
 
 type Props = NativeStackScreenProps<RootStackParamList, "TeacherLessonDetail">;
-type PreviewMode = "mobile" | "web" | "compare";
+type PreviewMode = "mobile" | "web";
 
 function buildLessonSubtitle(description?: string | null) {
   const stripped = stripRichText(description || "").replace(/\s+/g, " ").trim();
@@ -25,7 +25,6 @@ function buildLessonSubtitle(description?: string | null) {
 }
 
 export function TeacherLessonDetailScreen({ navigation, route }: Props) {
-  const { width } = useWindowDimensions();
   const { classId, lessonId } = route.params;
   const handleBack = () => navigateTeacherDetailBack(navigation, "TeacherLessonDetail", route.params);
   const lessonQuery = useLessonDetail(lessonId);
@@ -41,7 +40,6 @@ export function TeacherLessonDetailScreen({ navigation, route }: Props) {
   const draftMutation = useTeacherLessonDraftStateMutation(classId || lesson?.classId, lessonId);
   const versionsQuery = useQuery({ queryKey: ["lesson-versions", lessonId], queryFn: () => lessonsApi.getVersions(lessonId) });
   const blocks = useMemo(() => [...(lesson?.contentBlocks ?? [])].sort((left, right) => left.order - right.order), [lesson?.contentBlocks]);
-  const compareInColumns = width >= 720;
 
   const loadWebPreview = async () => {
     try {
@@ -59,7 +57,7 @@ export function TeacherLessonDetailScreen({ navigation, route }: Props) {
 
   const selectPreviewMode = (mode: PreviewMode) => {
     setPreviewMode(mode);
-    if (mode !== "mobile" && !webPreviewUrl && !webPreviewLoading) void loadWebPreview();
+    if (mode === "web" && !webPreviewUrl && !webPreviewLoading) void loadWebPreview();
   };
 
   const togglePublish = async () => {
@@ -121,7 +119,7 @@ export function TeacherLessonDetailScreen({ navigation, route }: Props) {
   const webPreview = <View style={{ minHeight: 440, borderWidth: 1, borderColor: theme.border, borderRadius: 14, overflow: "hidden", backgroundColor: theme.surface }}>
     {webPreviewLoading ? <View style={{ flex: 1, minHeight: 440, alignItems: "center", justifyContent: "center" }}><Text style={{ color: theme.muted }}>Creating secure web preview…</Text></View>
       : webPreviewError ? <View style={{ minHeight: 440, alignItems: "center", justifyContent: "center", padding: 20 }}><Text style={{ color: theme.text, fontWeight: "900", textAlign: "center" }}>Web preview unavailable</Text><Text style={{ color: theme.muted, textAlign: "center", marginTop: 6, lineHeight: 18 }}>{webPreviewError}</Text><View style={{ marginTop: 12 }}><TeacherActionButton label="Try web preview again" icon="refresh" tone="blue" onPress={() => void loadWebPreview()} /></View></View>
-        : webPreviewUrl ? <View style={{ minHeight: 440 }}><View style={{ padding: 8, borderBottomWidth: 1, borderBottomColor: theme.border, alignItems: "flex-end" }}><TeacherActionButton label="Refresh web preview" icon="refresh" tone="neutral" onPress={() => void loadWebPreview()} /></View><WebView source={{ uri: webPreviewUrl }} javaScriptEnabled sharedCookiesEnabled={false} thirdPartyCookiesEnabled={false} cacheEnabled={false} onError={() => setWebPreviewError("The secure web preview could not be loaded.")} style={{ minHeight: 388 }} /></View>
+        : webPreviewUrl ? <View style={{ minHeight: 560 }}><View style={{ padding: 8, borderBottomWidth: 1, borderBottomColor: theme.border, alignItems: "flex-end" }}><TeacherActionButton label="Refresh web preview" icon="refresh" tone="neutral" onPress={() => void loadWebPreview()} /></View><WebView source={{ uri: webPreviewUrl }} javaScriptEnabled sharedCookiesEnabled={false} thirdPartyCookiesEnabled={false} cacheEnabled={false} nestedScrollEnabled scrollEnabled onError={() => setWebPreviewError("The secure web preview could not be loaded.")} style={{ minHeight: 508, flex: 1 }} /></View>
           : <View style={{ minHeight: 440, alignItems: "center", justifyContent: "center" }}><TeacherActionButton label="Open web preview" icon="web" tone="blue" onPress={() => void loadWebPreview()} /></View>}
   </View>;
 
@@ -138,11 +136,10 @@ export function TeacherLessonDetailScreen({ navigation, route }: Props) {
     bottomAction={lesson ? <TeacherBottomActionBar primaryLabel="Edit lesson" primaryIcon="notebook-edit-outline" onPrimary={() => navigation.navigate("TeacherLessonEditor", { lessonId: lesson.id, classId: classId || lesson.classId })} secondary={<TeacherActionButton label="Options" icon="tune-variant" tone="neutral" onPress={() => setControlsVisible(true)} />} /> : undefined}
   >
     {lesson ? <>
-      <TeacherContextStrip title={lesson.title} subtitle={`${blocks.length} blocks · preview as a learner before publishing`} status={lesson.isDraft ? "Draft" : "Published"} icon="text-box-outline" />
-      <TeacherSegmentedTabs accessibilityLabel="Lesson preview modes" activeKey={previewMode} onSelect={selectPreviewMode} items={[{ key: "mobile", label: "Mobile" }, { key: "web", label: "Web" }, { key: "compare", label: "Compare" }]} />
-      <TeacherFlatSection title={previewMode === "mobile" ? "Student mobile preview" : previewMode === "web" ? "Student web preview" : "Mobile and web comparison"} subtitle={previewMode === "compare" ? (compareInColumns ? "Side by side at this width" : "Stacked for a readable phone view") : "Read-only; editing stays in the lesson editor."}>
+      <TeacherSegmentedTabs accessibilityLabel="Lesson preview modes" activeKey={previewMode} onSelect={selectPreviewMode} items={[{ key: "mobile", label: "Mobile" }, { key: "web", label: "Web" }]} />
+      <TeacherFlatSection title={previewMode === "mobile" ? "Student mobile preview" : "Student web preview"} subtitle="Read-only; editing stays in the lesson editor.">
         <View style={{ padding: 14, borderTopWidth: 1, borderTopColor: theme.border }}>
-          {previewMode === "mobile" ? mobilePreview : previewMode === "web" ? webPreview : <View style={{ flexDirection: compareInColumns ? "row" : "column", gap: 12 }}><View style={{ flex: 1, gap: 7 }}><Text style={{ color: theme.redText, fontSize: 10, fontWeight: "900" }}>MOBILE</Text>{mobilePreview}</View><View style={{ flex: 1, gap: 7 }}><Text style={{ color: theme.blue, fontSize: 10, fontWeight: "900" }}>WEB</Text>{webPreview}</View></View>}
+          {previewMode === "mobile" ? mobilePreview : webPreview}
         </View>
       </TeacherFlatSection>
 

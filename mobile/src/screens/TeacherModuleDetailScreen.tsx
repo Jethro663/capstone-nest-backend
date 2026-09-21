@@ -25,6 +25,7 @@ import { assessmentsApi } from "../api/services/assessments";
 import { lessonsApi } from "../api/services/lessons";
 import { modulesApi } from "../api/services/modules";
 import { TeacherConfirmModal } from "../components/teacher/TeacherConfirmModal";
+import { MobileOverflowAction } from "../components/ui/MobileOverflowAction";
 import {
   TeacherActionButton,
   TeacherAccordionSection,
@@ -322,7 +323,7 @@ export function TeacherModuleDetailScreen({ navigation, route }: Props) {
                   onToggle={() => setExpandedSectionIds((current) => current.includes(section.id) ? current.filter((id) => id !== section.id) : [...current, section.id])}
                   action={
                     arrangeMode ? <View style={{ flexDirection: "row", gap: 4 }}><Pressable accessibilityRole="button" accessibilityLabel={`Move ${section.title} up`} disabled={sIndex === 0} onPress={() => void moveSection(sIndex, "up")} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center", opacity: sIndex === 0 ? 0.35 : 1 }}><MaterialCommunityIcons name="arrow-up" size={19} color={theme.muted} /></Pressable><Pressable accessibilityRole="button" accessibilityLabel={`Move ${section.title} down`} disabled={sIndex === module.sections.length - 1} onPress={() => void moveSection(sIndex, "down")} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center", opacity: sIndex === module.sections.length - 1 ? 0.35 : 1 }}><MaterialCommunityIcons name="arrow-down" size={19} color={theme.muted} /></Pressable></View>
-                      : <TeacherActionButton label="Manage section" icon="pencil-outline" tone="neutral" onPress={() => setManagingSection({ id: section.id, title: section.title, index: sIndex })} />
+                      : <MobileOverflowAction accessibilityLabel={`More actions for section ${section.title}`} onPress={() => setManagingSection({ id: section.id, title: section.title, index: sIndex })} />
                   }
                 >
                   {section.items.length ? (
@@ -346,7 +347,7 @@ export function TeacherModuleDetailScreen({ navigation, route }: Props) {
                           onPress={() => void openItem(item)}
                           right={
                             arrangeMode ? <View style={{ flexDirection: "row" }}><Pressable accessibilityRole="button" accessibilityLabel={`Move ${itemTitle} up`} disabled={iIndex === 0} onPress={() => void moveItem(section.id, section.items, iIndex, "up")} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center", opacity: iIndex === 0 ? 0.35 : 1 }}><MaterialCommunityIcons name="arrow-up" size={18} color={theme.muted} /></Pressable><Pressable accessibilityRole="button" accessibilityLabel={`Move ${itemTitle} down`} disabled={iIndex === section.items.length - 1} onPress={() => void moveItem(section.id, section.items, iIndex, "down")} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center", opacity: iIndex === section.items.length - 1 ? 0.35 : 1 }}><MaterialCommunityIcons name="arrow-down" size={18} color={theme.muted} /></Pressable></View>
-                              : <TeacherActionButton label="Manage item" icon="pencil-outline" tone="neutral" onPress={() => setManagingItem({ id: item.id, sectionId: section.id, title: itemTitle, index: iIndex })} />
+                              : <MobileOverflowAction accessibilityLabel={`More actions for ${itemTitle}`} onPress={() => setManagingItem({ id: item.id, sectionId: section.id, title: itemTitle, index: iIndex })} />
                           }
                         />
                       );

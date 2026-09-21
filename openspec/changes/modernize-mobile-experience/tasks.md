@@ -19,9 +19,9 @@
 
 ## 4. Module and lesson workspaces
 
-- [ ] 4.1 Add failing contract tests for labeled 44 px module overflow actions and a two-mode scrollable lesson preview.
-- [ ] 4.2 Replace visible Manage text with accessible overflow action sheets while preserving Settings, Add content, Arrange, and existing mutations.
-- [ ] 4.3 Remove Compare mode and make the secure Web preview a dedicated scroll owner while preserving the native Mobile renderer.
+- [x] 4.1 Add failing contract tests for labeled 44 px module overflow actions and a two-mode scrollable lesson preview.
+- [x] 4.2 Replace visible Manage text with accessible overflow action sheets while preserving Settings, Add content, Arrange, and existing mutations.
+- [x] 4.3 Remove Compare mode and make the secure Web preview a dedicated scroll owner while preserving the native Mobile renderer.
 
 ## 5. Assessment list and detail workspaces
 

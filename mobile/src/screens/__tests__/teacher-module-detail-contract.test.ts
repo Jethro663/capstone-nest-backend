@@ -4,11 +4,14 @@ import path from "node:path";
 describe("teacher module outline contract", () => {
   const source = fs.readFileSync(path.join(__dirname, "..", "TeacherModuleDetailScreen.tsx"), "utf8");
 
-  it("keeps settings in context, exposes manage and per-section insertion, and supports arrange mode", () => {
+  it("keeps settings in context, exposes quiet labeled overflow actions and per-section insertion, and supports arrange mode", () => {
     expect(source).toContain('statusPlacement="leading"');
     expect(source).toContain('label="Module settings"');
-    expect(source).toContain('label="Manage section"');
-    expect(source).toContain('label="Manage item"');
+    expect(source).toContain("MobileOverflowAction");
+    expect(source).toContain("More actions for section");
+    expect(source).toContain("More actions for ${itemTitle}");
+    expect(source).not.toContain('label="Manage section"');
+    expect(source).not.toContain('label="Manage item"');
     expect(source).toContain('label="Add content"');
     expect(source).toContain('"Arrange"');
     expect(source).toContain("TeacherCenteredDialog");
