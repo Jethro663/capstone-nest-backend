@@ -33,7 +33,7 @@
 - [x] 5.2 Produce and inspect a production Android Expo export containing the final hotfix source
 - [x] 5.3 Bump once to version 0.1.48/build 49 and rerun version-sensitive verification
 - [x] 5.4 Build and validate the production-signed ARM64 APK for package, signer, version, ABI, API, archive, 16-KB alignment, size, and hash
-- [ ] 5.5 Package the immutable public build-49 artifact and matching manifest
+- [x] 5.5 Package the immutable public build-49 artifact and matching manifest
 - [ ] 5.6 Push the verified exact SHA and pass its GitHub CI and Railway deployment
 - [ ] 5.7 Prove live manifest/APK byte identity and backend update-policy registration
 - [ ] 5.8 Record physical-device acceptance as verified evidence or explicitly unverified
