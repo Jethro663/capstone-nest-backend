@@ -1,6 +1,7 @@
 import { Choices } from "../features/assessment-editor/SettingsFields";
 import { useCallback, useRef, useState } from "react";
-import { Alert, Text, TextInput, View } from "react-native";
+import { Text, TextInput, View } from "react-native";
+import { AppAlert as Alert } from "../components/ui/AppAlert";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Crypto from "expo-crypto";
 import { academicStateService as states } from "../api/services/academic-state";

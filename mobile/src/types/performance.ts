@@ -40,11 +40,41 @@ export interface StudentOwnPerformanceSummary {
 
 export interface TeacherClassPerformanceSummary {
   classId: string;
+  threshold?: number;
   totalStudents?: number;
+  studentsWithData?: number;
   atRiskCount?: number;
+  atRiskRate?: number;
+  averages?: {
+    blended: number | null;
+    assessment: number | null;
+    classRecord: number | null;
+  };
+  // Older summary fields remain optional for cached mobile responses.
   averageBlendedScore?: number | null;
   thresholdApplied?: number;
   [key: string]: unknown;
+}
+
+export interface TeacherClassDiagnosticsResponse {
+  classId: string;
+  threshold: number;
+  lowestAssessments: Array<{
+    assessmentId: string;
+    title: string;
+    category: string;
+    averageScore: number | null;
+    attemptCount: number;
+  }>;
+  conceptHotspots: Array<{
+    concept: string;
+    wrongCount: number;
+    masteryScore: number;
+    evidenceCount: number;
+  }>;
+  studentCount: number;
+  atRiskCount: number;
+  insufficientEvidence: boolean;
 }
 
 export interface TeacherClassAtRiskStudentRow {

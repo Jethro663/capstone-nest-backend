@@ -73,4 +73,25 @@ describe("performanceApi", () => {
     expect(result.overall.totalClasses).toBe(0);
     expect(result.overall.averageBlendedScore).toBeNull();
   });
+
+  it("loads teacher concept evidence from the shared diagnostics endpoint", async () => {
+    mockedApiClient.get.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          classId: "class-1",
+          threshold: 74,
+          lowestAssessments: [],
+          conceptHotspots: [{ concept: "fractions", wrongCount: 6, masteryScore: 41, evidenceCount: 8 }],
+          studentCount: 24,
+          atRiskCount: 5,
+          insufficientEvidence: false,
+        },
+      },
+    });
+
+    const result = await performanceApi.getClassDiagnostics("class-1");
+    expect(mockedApiClient.get).toHaveBeenCalledWith("/performance/classes/class-1/diagnostics");
+    expect(result.conceptHotspots[0]).toEqual({ concept: "fractions", wrongCount: 6, masteryScore: 41, evidenceCount: 8 });
+  });
 });

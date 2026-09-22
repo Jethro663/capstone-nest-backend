@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Alert, Modal, Text, View } from "react-native";
+import { Modal, Text, View } from "react-native";
+import { AppAlert as Alert } from "../components/ui/AppAlert";
 import {
   useAssessmentDetail,
   useTeacherAssessmentSubmissions,

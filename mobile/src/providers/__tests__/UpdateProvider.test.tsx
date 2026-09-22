@@ -404,7 +404,7 @@ describe("UpdateProvider", () => {
     expect(
       renderer.root.findByProps({ testID: "update-gated-content" }).props
         .pointerEvents,
-    ).toBe("none");
+    ).toBe("auto");
 
     await act(async () => {
       recheck.resolve(noUpdatePolicy);
@@ -416,6 +416,20 @@ describe("UpdateProvider", () => {
       renderer.root.findByProps({ testID: "update-gated-content" }).props
         .pointerEvents,
     ).toBe("auto");
+  });
+
+  it("keeps optional updates nonblocking and does not schedule a minute poll", async () => {
+    const intervalSpy = jest.spyOn(global, "setInterval");
+    try {
+      mockCheckUpdatePolicy.mockResolvedValue(policy12);
+      const renderer = await renderProvider();
+      expect(renderer.root.findAllByType("Modal")).toHaveLength(0);
+      expect(renderer.root.findByProps({ testID: "optional-update-banner" })).toBeDefined();
+      expect(renderer.root.findByProps({ testID: "update-gated-content" }).props.pointerEvents).toBe("auto");
+      expect(intervalSpy).not.toHaveBeenCalledWith(expect.any(Function), 60_000);
+    } finally {
+      intervalSpy.mockRestore();
+    }
   });
 
   it("locks admitted content after an API policy rejection and failed refresh", async () => {

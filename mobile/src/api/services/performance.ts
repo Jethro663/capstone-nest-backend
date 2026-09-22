@@ -5,6 +5,7 @@ import type {
   StudentOwnClassPerformance,
   StudentOwnPerformanceSummary,
   TeacherClassAtRiskResponse,
+  TeacherClassDiagnosticsResponse,
   TeacherClassPerformanceSummary,
   TeacherInterventionQuizComparisonResponse,
 } from "../../types/performance";
@@ -60,6 +61,26 @@ export const performanceApi = {
       ...payload,
       students: normalizeArray(payload.students),
     } as TeacherClassAtRiskResponse;
+  },
+
+  async getClassDiagnostics(classId: string) {
+    const response = await apiClient.get<ApiEnvelope<TeacherClassDiagnosticsResponse>>(
+      `/performance/classes/${classId}/diagnostics`,
+    );
+    const payload = normalizeObject(unwrapEnvelope(response.data), {
+      classId,
+      threshold: 0,
+      lowestAssessments: [],
+      conceptHotspots: [],
+      studentCount: 0,
+      atRiskCount: 0,
+      insufficientEvidence: true,
+    } as TeacherClassDiagnosticsResponse);
+    return {
+      ...payload,
+      lowestAssessments: normalizeArray(payload.lowestAssessments),
+      conceptHotspots: normalizeArray(payload.conceptHotspots),
+    } as TeacherClassDiagnosticsResponse;
   },
 
   async getInterventionQuizComparison(classId: string) {

@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Alert, Text, View } from "react-native";
+import { Text, View } from "react-native";
+import { AppAlert as Alert } from "../ui/AppAlert";
 import { academicGradingService } from "../../api/services/academic-grading";
 import { toAppError } from "../../api/http";
 import type {

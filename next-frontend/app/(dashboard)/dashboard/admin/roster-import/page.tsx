@@ -74,6 +74,8 @@ export default function RosterImportPage() {
   const [filePreviewError, setFilePreviewError] = useState<string | null>(null);
   const [activePreviewSheetIndex, setActivePreviewSheetIndex] = useState(0);
   const [preview, setPreview] = useState<RosterImportPreview | null>(null);
+  const [activateNewAccounts, setActivateNewAccounts] = useState(false);
+  const [activationAcknowledged, setActivationAcknowledged] = useState(false);
   const [pending, setPending] = useState<PendingImportRow[]>([]);
   const [loadingPending, setLoadingPending] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -116,6 +118,8 @@ export default function RosterImportPage() {
     setFilePreview(null);
     setFilePreviewDirty(false);
     setPreview(null);
+    setActivateNewAccounts(false);
+    setActivationAcknowledged(false);
     setFilePreviewError(null);
     setFilePreviewLoading(false);
     setActivePreviewSheetIndex(0);
@@ -136,6 +140,8 @@ export default function RosterImportPage() {
     const requestId = previewRequestRef.current;
     setSelectedFile(file);
     setPreview(null);
+    setActivateNewAccounts(false);
+    setActivationAcknowledged(false);
     setFilePreview(null);
     setFilePreviewDirty(false);
     setFilePreviewError(null);
@@ -225,11 +231,16 @@ export default function RosterImportPage() {
 
   const handleCommit = async () => {
     if (!sectionId || !preview) return;
+    if (activateNewAccounts && !activationAcknowledged) {
+      toast.error('Confirm the new account activation choice before committing.');
+      return;
+    }
 
     try {
       setCommitting(true);
       await rosterImportService.commit(sectionId, {
         sectionId,
+        skipVerification: activateNewAccounts,
         enrolledRows: preview.registered.map((row) => ({
           userId: row.userId,
           name: row.name,
@@ -242,7 +253,9 @@ export default function RosterImportPage() {
           email: row.email,
         })),
       });
-      toast.success('Roster uploaded successfully. Import committed.');
+      toast.success(activateNewAccounts
+        ? 'Roster committed. New accounts are active; temporary password delivery has been requested.'
+        : 'Roster uploaded successfully. Import committed.');
       setPreview(null);
       clearSelectedFile();
       fetchPending();
@@ -292,6 +305,8 @@ export default function RosterImportPage() {
                 validationRequestRef.current += 1;
                 setSectionId(event.target.value);
                 setPreview(null);
+                setActivateNewAccounts(false);
+                setActivationAcknowledged(false);
               }}
               className="admin-select w-full"
             >
@@ -477,13 +492,50 @@ export default function RosterImportPage() {
                 size="sm"
                 className="admin-button-solid rounded-xl font-black"
                 onClick={handleCommit}
-                disabled={uploading || committing || preview.summary.registeredCount + preview.summary.pendingCount === 0}
+                disabled={uploading || committing || (activateNewAccounts && !activationAcknowledged) || preview.summary.registeredCount + preview.summary.pendingCount === 0}
               >
                 {committing ? 'Committing...' : 'Commit Import'}
               </Button>
             </div>
           )}
         >
+          {preview.summary.pendingCount > 0 ? (
+            <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-slate-900">New account activation</p>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Standard: {preview.summary.pendingCount} new account{preview.summary.pendingCount === 1 ? '' : 's'} {preview.summary.pendingCount === 1 ? 'receives' : 'receive'} an OTP and {preview.summary.pendingCount === 1 ? 'stays' : 'stay'} pending until verification.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  aria-pressed={activateNewAccounts}
+                  onClick={() => {
+                    setActivateNewAccounts((current) => !current);
+                    setActivationAcknowledged(false);
+                  }}
+                  disabled={committing}
+                >
+                  {activateNewAccounts ? 'Skip verification: On' : 'Enable skip verification'}
+                </Button>
+              </div>
+              {activateNewAccounts ? (
+                <label className="mt-3 flex cursor-pointer items-start gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={activationAcknowledged}
+                    onChange={(event) => setActivationAcknowledged(event.target.checked)}
+                    className="mt-0.5 h-4 w-4 accent-red-600"
+                  />
+                  <span>
+                    I confirm {preview.summary.pendingCount === 1 ? 'this new account' : `these ${preview.summary.pendingCount} new accounts`} should be active immediately. Nexora will not verify mailbox ownership by OTP; it will attempt to email temporary passwords to the listed addresses. Existing accounts will not be reactivated.
+                  </span>
+                </label>
+              ) : null}
+            </div>
+          ) : null}
           <div className="admin-table-shell max-h-[32rem] overflow-auto">
             <Table>
               <TableHeader className="admin-table-head">
@@ -515,8 +567,8 @@ export default function RosterImportPage() {
                     <TableCell>{formatRosterName(row.name)}</TableCell>
                     <TableCell>{row.email}</TableCell>
                     <TableCell>{row.lrn || '-'}</TableCell>
-                    <TableCell><Badge variant="secondary">To Create</Badge></TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{row.reason || 'Will auto-create active student account'}</TableCell>
+                    <TableCell><Badge variant="secondary">{activateNewAccounts ? 'Active after import' : 'Pending verification'}</Badge></TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{row.reason || 'New student account'}</TableCell>
                   </TableRow>
                 ))}
                 {preview.errors.map((row) => (

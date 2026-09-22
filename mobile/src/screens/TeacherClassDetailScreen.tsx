@@ -2,7 +2,8 @@ import { TeacherAnnouncementRow } from "../components/teacher/TeacherAnnouncemen
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Alert, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import { AppAlert as Alert } from "../components/ui/AppAlert";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   queryKeys,

@@ -1,6 +1,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { AppAlert as Alert } from "../components/ui/AppAlert";
 import { useEffect, useState } from "react";
 import * as ImagePicker from "expo-image-picker";
 import {

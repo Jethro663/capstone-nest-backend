@@ -5,19 +5,8 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import * as ScreenCapture from "expo-screen-capture";
-import {
-  Alert,
-  AppState,
-  BackHandler,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  Text,
-  TextInput,
-  View,
-  useWindowDimensions,
-} from "react-native";
+import { AppState, BackHandler, Image, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { AppAlert as Alert } from "../components/ui/AppAlert";
 import { API_BASE_URL } from "../api/config";
 import { useAssessmentDetail, useAssessmentSubmitMutation } from "../api/hooks";
 import { peekAppError, toAppError } from "../api/http";

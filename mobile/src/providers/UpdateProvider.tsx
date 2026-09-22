@@ -370,6 +370,7 @@ function AndroidUpdateProvider({ children }: PropsWithChildren) {
   const [hasAdmitted, setHasAdmitted] = useState(false);
   const checkPromise = useRef<Promise<void> | null>(null);
   const operationBusy = useRef(false);
+  const policyFailureRef = useRef(false);
   const checkedDecision = useRef<UpdateState["decision"]>(null);
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -378,13 +379,14 @@ function AndroidUpdateProvider({ children }: PropsWithChildren) {
     if (checkPromise.current) return checkPromise.current;
     if (operationBusy.current) return Promise.resolve();
     const previousState = stateRef.current;
+    const keepAppOpen = previousState.access === "allowed" && !policyFailureRef.current;
     const run = async () => {
       try {
         checkedDecision.current = null;
-        setAndroidAdmission("checking");
+        if (!keepAppOpen) setAndroidAdmission("checking");
         setState((prev) => ({
           ...prev,
-          access: "checking",
+          access: keepAppOpen ? "allowed" : "checking",
           status: "checking",
           errorMessage: null,
           failureStage: null,
@@ -395,6 +397,7 @@ function AndroidUpdateProvider({ children }: PropsWithChildren) {
 
         const decision = await checkUpdatePolicy();
         checkedDecision.current = decision;
+        policyFailureRef.current = false;
 
         if (decision.updateType === "none") {
           // The policy service validates installed identity before approving access.
@@ -438,10 +441,10 @@ function AndroidUpdateProvider({ children }: PropsWithChildren) {
           }));
         }
       } catch (err: unknown) {
-        setAndroidAdmission("blocked");
+        if (!keepAppOpen) setAndroidAdmission("blocked");
         setState((prev) => ({
           ...prev,
-          access: "blocked",
+          access: keepAppOpen ? "allowed" : "blocked",
           status: "error",
           errorMessage: errorMessage(err, "Failed to check for updates."),
           failureStage: "check",
@@ -711,6 +714,7 @@ function AndroidUpdateProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     const unsubscribe = subscribeUpdatePolicyFailure(() => {
+      policyFailureRef.current = true;
       setState((prev) => ({ ...prev, access: "blocked" }));
       void checkForUpdates();
     });
@@ -720,12 +724,8 @@ function AndroidUpdateProvider({ children }: PropsWithChildren) {
       if (next === "active" && previous !== "active") void checkForUpdates();
       previous = next;
     });
-    const timer = setInterval(() => {
-      if (AppState.currentState === "active") void checkForUpdates();
-    }, 60_000);
     return () => {
       subscription.remove();
-      clearInterval(timer);
       unsubscribe();
       setAndroidAdmission("checking");
     };
@@ -750,17 +750,11 @@ function AndroidUpdateProvider({ children }: PropsWithChildren) {
     ],
   );
 
-  const shouldShowModal =
-    state.access !== "allowed" ||
-    state.status === "apk_required" ||
-    state.status === "downloading_apk" ||
-    state.status === "verifying_apk" ||
-    state.status === "ready_to_install" ||
-    state.status === "installing" ||
-    state.status === "permission_denied" ||
-    (state.status === "error" &&
-      (state.decision?.updateType === "apk_optional" ||
-        state.decision?.updateType === "apk_forced"));
+  const shouldShowModal = state.access !== "allowed";
+  const showOptionalBanner = state.access === "allowed" &&
+    ((state.decision?.updateType === "apk_optional" &&
+      !["idle", "checking"].includes(state.status)) ||
+      (state.status === "error" && state.failureStage === "check"));
 
   const isForce =
     state.access !== "allowed" ||
@@ -803,15 +797,13 @@ function AndroidUpdateProvider({ children }: PropsWithChildren) {
         {isAdmittedRecheck ? (
           <View
             testID="admitted-update-recheck"
-            accessibilityViewIsModal
             accessibilityLiveRegion="polite"
+            pointerEvents="none"
             style={{
               position: "absolute",
               top: 0,
               right: 0,
-              bottom: 0,
               left: 0,
-              backgroundColor: mobileBrand.inverseSurface,
               alignItems: "center",
               paddingHorizontal: 16,
               paddingTop: 16,
@@ -844,6 +836,55 @@ function AndroidUpdateProvider({ children }: PropsWithChildren) {
               >
                 Verifying app version…
               </Text>
+            </View>
+          </View>
+        ) : null}
+        {showOptionalBanner ? (
+          <View
+            testID="optional-update-banner"
+            accessibilityLiveRegion="polite"
+            style={{
+              position: "absolute",
+              bottom: 16,
+              left: 16,
+              right: 16,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: mobileBrand.border,
+              backgroundColor: mobileBrand.surface,
+              padding: 14,
+              ...shadow.card,
+            }}
+          >
+            <Text style={{ color: mobileBrand.navy, fontWeight: "800", fontSize: 15 }}>
+              {state.status === "ready_to_install" ? "Ready to Install" :
+                state.status === "downloading_apk" ? `Downloading update ${state.downloadProgress}%` :
+                state.status === "verifying_apk" ? "Verifying update" :
+                state.status === "permission_denied" ? "Installation needs permission" :
+                state.status === "error" ? "Update needs attention" : "Nexora update available"}
+            </Text>
+            {requiresLegacySignerMigration ? (
+              <Text style={{ color: mobileBrand.muted, marginTop: 4, lineHeight: 18 }}>
+                This is a one-time production-signing migration. Download first, then uninstall the old Nexora app. Finish and sync your work before uninstalling; your local offline data will be removed.
+              </Text>
+            ) : null}
+            {state.errorMessage ? (
+              <Text style={{ color: mobileBrand.muted, marginTop: 4 }}>{state.errorMessage}</Text>
+            ) : null}
+            <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
+              {(state.status === "apk_required" || state.status === "error") ? (
+                <Pressable accessibilityRole="button" onPress={() => void (state.failureStage === "check" ? checkForUpdates() : state.status === "error" ? retryApkDownload() : startApkDownload())} style={{ minHeight: 44, justifyContent: "center", backgroundColor: mobileBrand.red, borderRadius: 10, paddingHorizontal: 14 }}>
+                  <Text style={{ color: mobileBrand.white, fontWeight: "800" }}>{state.failureStage === "check" ? "Retry check" : state.status === "error" ? "Retry Download" : requiresLegacySignerMigration ? "Open school APK download" : "Download & Install Update"}</Text>
+                </Pressable>
+              ) : null}
+              {(state.status === "ready_to_install" || state.status === "permission_denied") ? (
+                <Pressable accessibilityRole="button" onPress={() => void installDownloadedApk()} style={{ minHeight: 44, justifyContent: "center", backgroundColor: mobileBrand.red, borderRadius: 10, paddingHorizontal: 14 }}>
+                  <Text style={{ color: mobileBrand.white, fontWeight: "800" }}>Install update</Text>
+                </Pressable>
+              ) : null}
+              <Pressable accessibilityRole="button" onPress={dismissOptionalUpdate} style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 12 }}>
+                <Text style={{ color: mobileBrand.navy, fontWeight: "700" }}>Later</Text>
+              </Pressable>
             </View>
           </View>
         ) : null}

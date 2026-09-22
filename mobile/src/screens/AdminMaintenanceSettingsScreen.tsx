@@ -1,6 +1,7 @@
 import { mobileBrand } from "../theme/mobileBrand";
 import { useEffect, useMemo, useState } from "react";
-import { Alert, AppState, Text, View } from "react-native";
+import { AppState, Text, View } from "react-native";
+import { AppAlert as Alert } from "../components/ui/AppAlert";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import {
   AdminButton,

@@ -41,14 +41,8 @@ import {
   useMemo,
   useState,
 } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  Linking,
-  Pressable,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, Linking, Pressable, Text, View } from "react-native";
+import { AppAlert as Alert } from "../components/ui/AppAlert";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import {
   createBottomTabNavigator,

@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
-import { Alert, Image, Pressable, Text, View } from "react-native";
+import { Image, Pressable, Text, View } from "react-native";
+import { AppAlert as Alert } from "../components/ui/AppAlert";
 import { API_BASE_URL } from "../api/config";
 import {
   useTeacherProfile,

@@ -3,7 +3,8 @@ import { useMemo, useState } from "react";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import type { CompositeScreenProps } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Pressable, Text, View, Modal, ScrollView, Alert } from "react-native";
+import { Pressable, Text, View, Modal, ScrollView } from "react-native";
+import { AppAlert as Alert } from "../components/ui/AppAlert";
 import * as ImagePicker from "expo-image-picker";
 import {
   useTeacherClasses,

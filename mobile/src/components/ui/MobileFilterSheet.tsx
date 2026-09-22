@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { mobileBrand, mobileRadii } from "../../theme/mobileBrand";
 
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>["name"];
@@ -23,8 +23,16 @@ export function MobileFilterSheet<Key extends string>({
   compact?: boolean;
 }) {
   const [visible, setVisible] = useState(false);
+  const [search, setSearch] = useState("");
+  const close = () => {
+    setSearch("");
+    setVisible(false);
+  };
   const active = options.find((option) => option.key === activeKey) ?? options[0];
   const activeLabel = active?.label ?? "Choose";
+  const shownOptions = options.length > 8 && search.trim()
+    ? options.filter((option) => option.label.toLowerCase().includes(search.trim().toLowerCase()))
+    : options;
   return (
     <>
       <Pressable
@@ -53,19 +61,30 @@ export function MobileFilterSheet<Key extends string>({
         <MaterialCommunityIcons name="chevron-down" size={20} color={mobileBrand.muted} />
       </Pressable>
 
-      <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
+      <Modal visible={visible} transparent animationType="fade" onRequestClose={close}>
         <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: mobileBrand.scrim }}>
-          <Pressable accessibilityRole="button" accessibilityLabel={`Dismiss ${label}`} onPress={() => setVisible(false)} style={{ flex: 1 }} />
+          <Pressable accessibilityRole="button" accessibilityLabel={`Dismiss ${label}`} onPress={close} style={{ flex: 1 }} />
           <View style={{ maxHeight: "78%", borderTopLeftRadius: mobileRadii.sheet, borderTopRightRadius: mobileRadii.sheet, backgroundColor: mobileBrand.surface, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 24 }}>
             <View style={{ width: 40, height: 4, borderRadius: mobileRadii.pill, backgroundColor: mobileBrand.borderStrong, alignSelf: "center", marginBottom: 10 }} />
             <View style={{ minHeight: 48, flexDirection: "row", alignItems: "center", gap: 10 }}>
               <Text style={{ flex: 1, fontSize: 18, fontWeight: "900", color: mobileBrand.text }}>{label}</Text>
-              <Pressable accessibilityRole="button" accessibilityLabel={`Close ${label}`} onPress={() => setVisible(false)} style={{ width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: mobileBrand.surfaceMuted }}>
+              <Pressable accessibilityRole="button" accessibilityLabel={`Close ${label}`} onPress={close} style={{ width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: mobileBrand.surfaceMuted }}>
                 <MaterialCommunityIcons name="close" size={20} color={mobileBrand.text} />
               </Pressable>
             </View>
+            {options.length > 8 ? (
+              <TextInput
+                accessibilityLabel={`Search ${label}`}
+                placeholder={`Search ${label.toLowerCase()}`}
+                placeholderTextColor={mobileBrand.muted}
+                value={search}
+                onChangeText={setSearch}
+                style={{ minHeight: 44, borderRadius: mobileRadii.control, borderWidth: 1, borderColor: mobileBrand.borderStrong, color: mobileBrand.text, paddingHorizontal: 12, marginBottom: 8 }}
+              />
+            ) : null}
             <ScrollView showsVerticalScrollIndicator={false}>
-              {options.map((option) => {
+              {shownOptions.length === 0 ? <Text style={{ color: mobileBrand.muted, paddingVertical: 16 }}>No matching choices</Text> : null}
+              {shownOptions.map((option) => {
                 const selected = option.key === activeKey;
                 const countLabel = option.count === undefined ? option.label : `${option.label}, ${option.count} ${option.count === 1 ? "result" : "results"}`;
                 return (
@@ -76,7 +95,7 @@ export function MobileFilterSheet<Key extends string>({
                     accessibilityState={{ selected }}
                     onPress={() => {
                       onSelect(option.key);
-                      setVisible(false);
+                      close();
                     }}
                     style={{ minHeight: 52, borderBottomWidth: 1, borderBottomColor: mobileBrand.border, flexDirection: "row", alignItems: "center", gap: 12 }}
                   >
@@ -95,4 +114,3 @@ export function MobileFilterSheet<Key extends string>({
     </>
   );
 }
-

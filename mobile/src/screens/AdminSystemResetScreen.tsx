@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, BackHandler, Pressable, Text, View } from "react-native";
+import { BackHandler, Pressable, Text, View } from "react-native";
+import { AppAlert as Alert } from "../components/ui/AppAlert";
 import { useFocusEffect } from "@react-navigation/native";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";

@@ -34,6 +34,7 @@ export class UserEventsListener {
       await this.mailService.sendPasswordEmail(
         event.email,
         event.generatedPassword,
+        event.requiresOTP,
       );
     }
 

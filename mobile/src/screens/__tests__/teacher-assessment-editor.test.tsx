@@ -301,6 +301,12 @@ it("keeps assessment type out of post-creation settings and confirms the draft",
   mockAssessment = {
     ...saved().assessment,
     classRecordCategory: "written_work",
+    academicCapabilities: {
+      canPrepare: true,
+      canRelease: true,
+      period: "Q1",
+      schoolYear: "2026-2027",
+    } as Assessment["academicCapabilities"],
   };
   await mount(true);
   await press("Settings");
@@ -309,6 +315,24 @@ it("keeps assessment type out of post-creation settings and confirms the draft",
   ).toBe(false);
   expect(flatten(renderer.root)).toContain("Draft created");
   expect(flatten(renderer.root)).toContain("hidden from students");
+});
+it("shows assessment questions without edit controls when preparation is restricted", async () => {
+  mockAssessment = {
+    ...saved().assessment,
+    academicCapabilities: {
+      canPrepare: false,
+      canRelease: false,
+      period: "Q1",
+      schoolYear: "2026-2027",
+    } as Assessment["academicCapabilities"],
+  };
+  await mount();
+  const text = flatten(renderer.root);
+  expect(text).toContain("Read-only question review");
+  expect(text).toContain("Review restrictions");
+  expect(text).not.toContain("Add question");
+  expect(text).not.toContain("Save draft");
+  expect(assessmentsApi.saveEditor).not.toHaveBeenCalled();
 });
 it("edits fill-in-the-blank answer keys as plain text for automatic grading", async () => {
   await mount();

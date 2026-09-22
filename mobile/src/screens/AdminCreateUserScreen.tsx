@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Alert, View } from "react-native";
+import { View } from "react-native";
+import { AppAlert as Alert } from "../components/ui/AppAlert";
 import { useQueryClient } from "@tanstack/react-query";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { adminApi } from "../api/services/admin";

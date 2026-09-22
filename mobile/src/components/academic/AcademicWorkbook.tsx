@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Text, View } from "react-native";
+import { Text, View } from "react-native";
+import { AppAlert as Alert } from "../ui/AppAlert";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { classRecordApi } from "../../api/services/class-record";
 import { classesApi } from "../../api/services/classes";
@@ -22,6 +23,7 @@ import {
 import { MobileClassRecordWorkbook } from "../teacher/MobileClassRecordWorkbook";
 import { exportAcademicCsv } from "../../lib/academic-workbook-export";
 import { AcademicAnnualPanel } from "./AcademicAnnualPanel";
+import { MobileFilterSheet } from "../ui/MobileFilterSheet";
 import type { PeriodEligibility } from "../../types/academic-grading";
 export function AcademicWorkbook({
   classId,
@@ -57,7 +59,7 @@ export function AcademicWorkbook({
     queryKey: ["class-records", classId],
     queryFn: () => classRecordApi.getByClass(classId),
   });
-  const [recordId, setRecordId] = useState("");
+  const [periodKey, setPeriodKey] = useState("");
   const [tab, setTab] = useState("scores");
   const [studentId, setStudentId] = useState("");
   const [itemId, setItemId] = useState("");
@@ -71,12 +73,19 @@ export function AcademicWorkbook({
   const [decisions, setDecisions] = useState<
     Record<string, { eligibility: PeriodEligibility | ""; reason: string }>
   >({});
-  const selected =
-    records.data?.find((record) => record.id === recordId) ??
+  const defaultRecord =
     records.data?.find(
       (record) => record.gradingPeriod === context.data?.current.quarter,
     ) ??
     records.data?.[0];
+  const activePeriodKey = periodKey || defaultRecord?.gradingPeriod ||
+    context.data?.current.quarter || context.data?.policy.periods[0]?.key || "";
+  const selected = records.data?.find(
+    (record) => record.gradingPeriod === activePeriodKey,
+  );
+  const plannedPeriod = context.data?.policy.periods.find(
+    (period) => period.key === activePeriodKey,
+  );
   const evidence = useQuery({
     queryKey: ["academic", "record", selected?.id],
     enabled: Boolean(selected?.id),
@@ -197,50 +206,30 @@ export function AcademicWorkbook({
               writes are disabled until refreshed.
             </Text>
           )}
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-            {policy?.periods.map((period) => {
-              const record = records.data?.find(
-                (r) => r.gradingPeriod === period.key,
-              );
-              return (
-                <Action
-                  key={period.key}
-                  label={record ? period.label : `Create ${period.label}`}
-                  tone={selected?.id === record?.id ? "red" : "neutral"}
-                  disabled={
-                    busy ||
-                    (!record &&
-                      (!context.data?.cls.isActive ||
-                        context.data.cls.schoolYear <
-                          context.data.current.schoolYear))
-                  }
-                  onPress={() =>
-                    record
-                      ? setRecordId(record.id)
-                      : void write(async () => {
-                          const created = await classRecordApi.generate({
-                            classId,
-                            gradingPeriod: period.key,
-                          });
-                          setRecordId(created.id);
-                        }, "Workbook created. Confirm its period eligibility.")
-                  }
-                />
-              );
-            })}
-            {records.data
-              ?.filter(
-                (r) => !policy?.periods.some((p) => p.key === r.gradingPeriod),
-              )
-              .map((r) => (
-                <Chip
-                  key={r.id}
-                  label={`Historical ${r.gradingPeriod}`}
-                  active={selected?.id === r.id}
-                  onPress={() => setRecordId(r.id)}
-                />
-              ))}
-          </View>
+          <MobileFilterSheet
+            label="Grading period"
+            activeKey={activePeriodKey}
+            options={[
+              ...(policy?.periods.map((period) => ({
+                key: period.key,
+                label: `${period.label}${records.data?.some((record) => record.gradingPeriod === period.key) ? "" : " · Not created"}`,
+              })) ?? []),
+              ...(records.data?.filter((record) => !policy?.periods.some((period) => period.key === record.gradingPeriod))
+                .map((record) => ({ key: record.gradingPeriod, label: `Historical ${record.gradingPeriod}` })) ?? []),
+            ]}
+            onSelect={setPeriodKey}
+            icon="calendar-range"
+          />
+          {plannedPeriod && !selected ? (
+            <Action
+              label={`Create ${plannedPeriod.label}`}
+              tone="red"
+              disabled={busy || !context.data?.cls.isActive || context.data.cls.schoolYear < context.data.current.schoolYear}
+              onPress={() => void write(async () => {
+                await classRecordApi.generate({ classId, gradingPeriod: plannedPeriod.key });
+              }, "Workbook created. Confirm its period eligibility.")}
+            />
+          ) : null}
           {selected && (
             <Text style={textStyle}>
               {sheet?.header.periodLabel ?? selected.gradingPeriod} ·{" "}
@@ -253,20 +242,19 @@ export function AcademicWorkbook({
                 ? "Future draft: prepare now, grade after activation."
                 : "Blank is missing. Zero is explicit. Exemptions require evidence.")}
           </Text>
-          {selected && (
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-              {["scores", "eligibility", "readiness", "annual", "history"].map(
-                (value) => (
-                  <Chip
-                    key={value}
-                    label={value}
-                    active={tab === value}
-                    onPress={() => setTab(value)}
-                  />
-                ),
-              )}
-            </View>
-          )}
+          {selected ? <MobileFilterSheet
+            label="Record view"
+            activeKey={tab}
+            options={[
+              { key: "scores", label: "Scores" },
+              { key: "eligibility", label: "Eligibility" },
+              { key: "readiness", label: "Readiness" },
+              { key: "annual", label: "Annual result" },
+              { key: "history", label: "History" },
+            ]}
+            onSelect={setTab}
+            icon="view-list-outline"
+          /> : null}
         </View>
       </Panel>
       {sheet && tab === "scores" && (
@@ -277,41 +265,40 @@ export function AcademicWorkbook({
                 Select one learner and item. Linked scores come from assessment
                 grading.
               </Text>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                {sheet.students.map((p) => (
-                  <Chip
-                    key={p.studentId}
-                    label={`${p.lastName}, ${p.firstName}${p.accountState === "archived" ? " · Archived account" : ""}`}
-                    active={studentId === p.studentId}
-                    onPress={() => {
-                      setStudentId(p.studentId);
-                      setScore("");
-                      setBonusPoints("0");
-                      setBonusReason("");
-                      setReason("");
-                    }}
-                  />
-                ))}
-              </View>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                {sheet.categories.flatMap((c) =>
-                  c.items.map((i) => (
-                    <Chip
-                      key={i.id}
-                      label={`${c.name}: ${i.title} (${i.hps ?? 0})`}
-                      active={itemId === i.id}
-                      onPress={() => {
-                        setItemId(i.id);
-                        setScore("");
-                        setBonusPoints("0");
-                        setBonusReason("");
-                        setHps(String(i.hps ?? ""));
-                        setReason("");
-                      }}
-                    />
-                  )),
-                )}
-              </View>
+              <MobileFilterSheet
+                label="Learner"
+                activeKey={studentId}
+                options={[
+                  { key: "", label: "Choose learner" },
+                  ...sheet.students.map((p) => ({ key: p.studentId, label: `${p.lastName}, ${p.firstName}${p.accountState === "archived" ? " · Archived account" : ""}` })),
+                ]}
+                onSelect={(value) => {
+                  setStudentId(value);
+                  setScore("");
+                  setBonusPoints("0");
+                  setBonusReason("");
+                  setReason("");
+                }}
+                icon="account-search-outline"
+              />
+              <MobileFilterSheet
+                label="Assessment item"
+                activeKey={itemId}
+                options={[
+                  { key: "", label: "Choose item" },
+                  ...sheet.categories.flatMap((c) => c.items.map((i) => ({ key: i.id, label: `${c.name}: ${i.title} (${i.hps ?? 0})` }))),
+                ]}
+                onSelect={(value) => {
+                  setItemId(value);
+                  setScore("");
+                  setBonusPoints("0");
+                  setBonusReason("");
+                  const chosen = sheet.categories.flatMap((c) => c.items).find((i) => i.id === value);
+                  setHps(String(chosen?.hps ?? ""));
+                  setReason("");
+                }}
+                icon="format-list-checks"
+              />
               {item && (
                 <>
                   <Text style={textStyle}>

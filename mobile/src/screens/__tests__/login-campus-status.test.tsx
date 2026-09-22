@@ -180,7 +180,7 @@ describe("Campus Front Door login status", () => {
 
     const copy = flattenText(renderer!.root);
     expect(copy).toContain("Welcome to Nexora");
-    expect(copy).toContain("Use your school account to continue");
+    expect(copy).toContain("Your lessons, classes, and progress are ready when you are.");
     expect(copy).toContain("GAT ANDRES BONIFACIO HIGH SCHOOL");
     expect(copy).not.toContain("Connected to https://");
     expect(mockedCheckServer).toHaveBeenCalledTimes(1);

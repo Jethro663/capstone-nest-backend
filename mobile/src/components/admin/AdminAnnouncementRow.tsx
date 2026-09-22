@@ -1,7 +1,8 @@
 import { mobileBrand } from "../../theme/mobileBrand";
 import { useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Alert, Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { AppAlert as Alert } from "../ui/AppAlert";
 import type { Announcement } from "../../types/announcement";
 import { RichTextContent } from "../ui/RichTextContent";
 import {

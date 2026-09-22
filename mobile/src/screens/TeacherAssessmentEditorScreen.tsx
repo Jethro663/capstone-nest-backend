@@ -1,18 +1,8 @@
 import { mobileBrand } from "../theme/mobileBrand";
 import * as Clipboard from "expo-clipboard";
 import { useEffect, useRef, useState } from "react";
-import {
-  Alert,
-  AppState,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  Share,
-  Text,
-  View,
-} from "react-native";
+import { AppState, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Share, Text, View } from "react-native";
+import { AppAlert as Alert } from "../components/ui/AppAlert";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -593,6 +583,7 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
     }
   }
   const diagnostics = `Class: ${activeClass?.subjectName ?? document.classId}\nSchool year: ${activeClass?.schoolYear ?? "unknown"}\nAssessment: ${assessmentId ?? "new"}\nAssigned period: ${document.settings.quarter ?? "missing"}\nRevision: ${document.revision}\n${reason}`;
+  const restrictedReview = Boolean(assessmentId && detail.data && !canPrepare);
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: theme.bg }}
@@ -635,11 +626,11 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
             accessibilityLiveRegion="polite"
             style={{ color: theme.subtext }}
           >
-            {document.isPublished ? "Ready to give" : "Draft"} ·{" "}
+            {restrictedReview ? "Read-only question review" : document.isPublished ? "Ready to give" : "Draft"} ·{" "}
             {saving ? "Saving…" : status}
           </Text>
         </View>
-        <View style={{ flexDirection: "row", padding: 8, gap: 8 }}>
+        {!restrictedReview ? <View style={{ flexDirection: "row", padding: 8, gap: 8 }}>
           {(["Questions", "Settings", "Preview"] as const).map((item) => (
             <Pressable
               key={item}
@@ -663,12 +654,19 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
               </Text>
             </Pressable>
           ))}
-        </View>
+        </View> : null}
         <ScrollView
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ padding: 16, gap: 18, paddingBottom: 32 }}
         >
           {!ready && <Text>Loading assessment…</Text>}
+          {restrictedReview ? (
+            <View style={{ borderRadius: 14, borderWidth: 1, borderColor: mobileBrand.border, backgroundColor: mobileBrand.navySoft, padding: 14, gap: 5 }}>
+              <Text style={{ color: mobileBrand.navy, fontWeight: "900", fontSize: 15 }}>Review restrictions</Text>
+              <Text style={{ color: mobileBrand.text, lineHeight: 20 }}>{reason}</Text>
+              <Text style={{ color: mobileBrand.muted, fontSize: 12 }}>Questions below are available to read. Editing and release controls remain disabled by academic policy.</Text>
+            </View>
+          ) : null}
           {(detail.isError || classes.isError) && (
             <Action
               onPress={() => {
@@ -783,7 +781,7 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
               ))}
             </View>
           )}
-          {tab === "Settings" && (
+          {!restrictedReview && tab === "Settings" && (
             <>
               {!assessmentId && (
                 <Choices
@@ -892,7 +890,7 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
               )}
             </>
           )}
-          {tab === "Questions" && (
+          {!restrictedReview && tab === "Questions" && (
             <>
               <Text style={{ color: theme.muted }}>
                 {document.questions.length} questions ·{" "}
@@ -1318,7 +1316,7 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
               )}
             </>
           )}
-          {tab === "Preview" && (
+          {(restrictedReview || tab === "Preview") && (
             <View style={{ gap: 18 }}>
               <Text style={{ color: theme.muted }}>
                 Student preview · no attempt will be created
@@ -1338,7 +1336,7 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
                 document.questions.map((question, index) => (
                   <View
                     key={question.clientId}
-                    style={{ gap: 12, paddingVertical: 12 }}
+                    style={{ gap: 12, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: mobileBrand.border, backgroundColor: mobileBrand.surface }}
                   >
                     <Text style={{ color: theme.muted }}>
                       {index + 1} · {question.points} points
@@ -1364,7 +1362,7 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
             </View>
           )}
         </ScrollView>
-        <View
+        {!restrictedReview ? <View
           style={{
             padding: 12,
             borderTopWidth: 1,
@@ -1425,7 +1423,7 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
             Saving and publication are separate. Incomplete questions can stay
             in a draft.
           </Text>
-        </View>
+        </View> : null}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

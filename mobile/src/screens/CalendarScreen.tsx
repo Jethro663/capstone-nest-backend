@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { queryKeys } from "../api/hooks";
 import { mobileWorkspaceApi } from "../api/services/mobile-workspace";
 import { peekAppError } from "../api/http";
@@ -29,6 +29,7 @@ import type { Announcement } from "../types/announcement";
 import type { SchoolEvent } from "../types/school-event";
 import { useAuth } from "../providers/AuthProvider";
 import { OfflineWorkspaceNotice } from "../components/offline/OfflineWorkspaceNotice";
+import { MobileFilterSheet } from "../components/ui/MobileFilterSheet";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Calendar">;
 
@@ -77,40 +78,6 @@ function getSupportingCopy(item: CalendarFeedItem) {
   if (item.kind === "holiday_break") return "School holiday or break";
   if (item.kind === "class_schedule") return "Scheduled class meeting";
   return "School event";
-}
-
-function FilterChip({
-  label,
-  active,
-  onPress,
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={{
-        borderRadius: 999,
-        borderWidth: 1,
-        borderColor: active ? theme.redLine : theme.border,
-        backgroundColor: active ? theme.redSoft : theme.surface,
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-      }}
-    >
-      <Text
-        style={{
-          fontSize: 11,
-          fontWeight: "700",
-          color: active ? theme.red : theme.text,
-        }}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
 }
 
 function getClassLabel(classId: string, classes: ClassItem[]) {
@@ -368,67 +335,25 @@ export function CalendarScreen({ navigation, route }: Props) {
         ) : null}
 
         {schoolYears.length > 1 ? (
-          <View>
-            <Text
-              style={{
-                fontSize: 10,
-                fontWeight: "600",
-                letterSpacing: 0.7,
-                textTransform: "uppercase",
-                color: theme.muted,
-              }}
-            >
-              School year
-            </Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: 8, paddingTop: 8 }}
-            >
-              {schoolYears.map((schoolYear) => (
-                <FilterChip
-                  key={schoolYear}
-                  label={schoolYear}
-                  active={selectedSchoolYear === schoolYear}
-                  onPress={() => setSelectedSchoolYear(schoolYear)}
-                />
-              ))}
-            </ScrollView>
-          </View>
+          <MobileFilterSheet
+            label="School year"
+            activeKey={resolvedSchoolYear}
+            options={schoolYears.map((schoolYear) => ({ key: schoolYear, label: schoolYear }))}
+            onSelect={setSelectedSchoolYear}
+            icon="calendar-range"
+          />
         ) : null}
 
-        <View>
-          <Text
-            style={{
-              fontSize: 10,
-              fontWeight: "600",
-              letterSpacing: 0.7,
-              textTransform: "uppercase",
-              color: theme.muted,
-            }}
-          >
-            Class filter
-          </Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: 8, paddingTop: 8 }}
-          >
-            <FilterChip
-              label="All classes"
-              active={selectedClassId === "all"}
-              onPress={() => setSelectedClassId("all")}
-            />
-            {scopedClasses.map((classItem) => (
-              <FilterChip
-                key={classItem.id}
-                label={classItem.subjectCode || classItem.subjectName}
-                active={selectedClassId === classItem.id}
-                onPress={() => setSelectedClassId(classItem.id)}
-              />
-            ))}
-          </ScrollView>
-        </View>
+        <MobileFilterSheet
+          label="Class filter"
+          activeKey={selectedClassId}
+          options={[
+            { key: "all", label: "All classes" },
+            ...scopedClasses.map((classItem) => ({ key: classItem.id, label: classItem.subjectCode || classItem.subjectName })),
+          ]}
+          onSelect={setSelectedClassId}
+          icon="book-open-variant"
+        />
 
         <View
           style={{

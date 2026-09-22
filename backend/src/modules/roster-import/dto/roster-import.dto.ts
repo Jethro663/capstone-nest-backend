@@ -1,5 +1,6 @@
 ﻿import {
   IsArray,
+  IsBoolean,
   IsEmail,
   IsNotEmpty,
   IsOptional,
@@ -114,14 +115,20 @@ export class RosterImportCommitDto {
   @ValidateNested({ each: true })
   @Type(() => CommitPendingRowDto)
   pendingRows: CommitPendingRowDto[];
+
+  @IsOptional()
+  @IsBoolean()
+  skipVerification?: boolean;
 }
 
 export class RosterImportCommitResponseDto {
   enrolledUserIds: string[];
+  /** Legacy key: newly created account IDs, including immediately active imports. */
   pendingRosterIds: string[];
   alreadyEnrolledSkipped: number;
   summary: {
     enrolled: number;
+    /** Legacy key: count of newly created accounts, regardless of activation mode. */
     pending: number;
     total: number;
   };

@@ -215,6 +215,7 @@ export function StudentClassCard({
 
         <View style={styles.secondaryActionRow}>
           <Pressable
+            testID="class-tasks-action"
             accessibilityRole="button"
             accessibilityLabel="View tasks"
             accessibilityState={{ disabled }}
@@ -237,6 +238,7 @@ export function StudentClassCard({
             </Text>
           </Pressable>
           <Pressable
+            testID="class-schedule-action"
             accessibilityRole="button"
             accessibilityLabel="View schedule"
             accessibilityState={{ disabled }}
@@ -419,13 +421,11 @@ const styles = StyleSheet.create({
   secondaryActionRow: {
     marginTop: 8,
     flexDirection: "row",
-    flexWrap: "wrap",
     alignItems: "stretch",
-    gap: 9,
+    gap: 12,
   },
   secondaryButton: {
-    flexGrow: 1,
-    flexBasis: 120,
+    flex: 1,
     minWidth: 0,
     minHeight: 52,
     overflow: "hidden",

@@ -3,7 +3,8 @@ import type {
   NativeStackNavigationProp,
   NativeStackScreenProps,
 } from "@react-navigation/native-stack";
-import { Alert, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import { AppAlert as Alert } from "../components/ui/AppAlert";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { classesApi } from "../api/services/classes";
 import { sectionsApi } from "../api/services/sections";

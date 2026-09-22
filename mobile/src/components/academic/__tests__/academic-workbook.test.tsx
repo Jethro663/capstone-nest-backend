@@ -51,6 +51,10 @@ jest.mock("../../admin/AdminMobilePrimitives", () => {
 jest.mock("../../teacher/MobileClassRecordWorkbook", () => ({
   MobileClassRecordWorkbook: () => null,
 }));
+jest.mock("../../ui/MobileFilterSheet", () => ({
+  MobileFilterSheet: (props: object) =>
+    React.createElement("FilterSheet", props),
+}));
 jest.mock("../AcademicAnnualPanel", () => ({
   AcademicAnnualPanel: () => null,
 }));
@@ -84,6 +88,7 @@ function mockEvidence(
   ready: boolean,
   stale = false,
   withScoreEvidence = false,
+  withoutRecords = false,
 ) {
   const values: Record<string, unknown> = {
     class: {
@@ -145,7 +150,9 @@ function mockEvidence(
     },
   };
   mockQuery.mockImplementation(({ queryKey }: { queryKey: string[] }) => ({
-    data: queryKey[0] === "class-records" ? [record] : values[queryKey[1]],
+    data: queryKey[0] === "class-records"
+      ? (withoutRecords ? [] : [record])
+      : withoutRecords && queryKey[1] === "record" ? undefined : values[queryKey[1]],
     isError: queryKey[1] === "record" && stale,
     isFetching: false,
   }));
@@ -154,27 +161,37 @@ beforeEach(() => {
   jest.clearAllMocks();
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 });
+it("selects the current policy period when no workbook exists", async () => {
+  mockEvidence(false, false, false, true);
+  let tree!: TestTree;
+  await act(async () => {
+    tree = TestRenderer.create(<AcademicWorkbook classId="class" />);
+  });
+  expect(tree.root.findAllByType("FilterSheet" as any)
+    .find((node) => node.props.label === "Grading period")!.props.activeKey).toBe("Q1");
+  expect(tree.root.findAllByType("Action" as any)
+    .some((node) => node.props.label === "Create Term 1")).toBe(true);
+  await act(async () => tree.unmount());
+});
 it("offers only policy periods and blocks finalization with unknown eligibility", async () => {
   mockEvidence(false);
   let tree!: TestTree;
   await act(async () => {
     tree = TestRenderer.create(<AcademicWorkbook classId="class" />);
   });
-  expect(
-    tree.root.findAllByType("Action" as any).map((n) => n.props.label),
-  ).toEqual(
-    expect.arrayContaining(["Term 1", "Create Term 2", "Create Term 3"]),
-  );
+  const periods = tree.root.findAllByType("FilterSheet" as any)
+    .find((node) => node.props.label === "Grading period")!;
+  expect(periods.props.options.map((option: { label: string }) => option.label))
+    .toEqual(expect.arrayContaining(["Term 1", "Term 2 · Not created", "Term 3 · Not created"]));
   expect(
     tree.root
       .findAllByType("Action" as any)
       .some((n) => /Q4|Term 4/.test(n.props.label)),
   ).toBe(false);
   await act(async () => {
-    tree.root
-      .findAllByType("Chip" as any)
-      .find((n) => n.props.label === "readiness")!
-      .props.onPress();
+    tree.root.findAllByType("FilterSheet" as any)
+      .find((node) => node.props.label === "Record view")!
+      .props.onSelect("readiness");
   });
   expect(
     tree.root
@@ -191,10 +208,9 @@ it("fails closed after readiness refresh errors even if old readiness was true",
     tree = TestRenderer.create(<AcademicWorkbook classId="class" />);
   });
   await act(async () => {
-    tree.root
-      .findAllByType("Chip" as any)
-      .find((n) => n.props.label === "readiness")!
-      .props.onPress();
+    tree.root.findAllByType("FilterSheet" as any)
+      .find((node) => node.props.label === "Record view")!
+      .props.onSelect("readiness");
   });
   expect(
     tree.root
@@ -215,13 +231,13 @@ it("requires a reason and sends explicit bonus evidence for a manual score", asy
 
   await act(async () => {
     tree.root
-      .findAllByType("Chip" as any)
-      .find((node) => node.props.label === "Cruz, Ana · Archived account")!
-      .props.onPress();
+      .findAllByType("FilterSheet" as any)
+      .find((node) => node.props.label === "Learner")!
+      .props.onSelect("student-1");
     tree.root
-      .findAllByType("Chip" as any)
-      .find((node) => node.props.label === "Written Work: Quiz (10)")!
-      .props.onPress();
+      .findAllByType("FilterSheet" as any)
+      .find((node) => node.props.label === "Assessment item")!
+      .props.onSelect("item-1");
   });
 
   const field = (label: string) =>
@@ -270,13 +286,13 @@ it("sends a manual credited score with its excused reason", async () => {
 
   await act(async () => {
     tree.root
-      .findAllByType("Chip" as any)
-      .find((node) => node.props.label === "Cruz, Ana · Archived account")!
-      .props.onPress();
+      .findAllByType("FilterSheet" as any)
+      .find((node) => node.props.label === "Learner")!
+      .props.onSelect("student-1");
     tree.root
-      .findAllByType("Chip" as any)
-      .find((node) => node.props.label === "Written Work: Quiz (10)")!
-      .props.onPress();
+      .findAllByType("FilterSheet" as any)
+      .find((node) => node.props.label === "Assessment item")!
+      .props.onSelect("item-1");
   });
 
   const field = (label: string) =>

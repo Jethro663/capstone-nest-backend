@@ -1,12 +1,7 @@
 import { useEffect, useState } from "react";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import {
-  Alert,
-  Image,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { Image, Text, TextInput, View } from "react-native";
+import { AppAlert as Alert } from "../components/ui/AppAlert";
 import {
   useAssessmentResult,
   useTeacherReturnGradeMutation,

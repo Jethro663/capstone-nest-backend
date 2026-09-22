@@ -1,5 +1,6 @@
 import { mobileBrand } from "../../theme/mobileBrand";
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
+import { AppAlert as Alert } from "../ui/AppAlert";
 import { useEffect, useState } from "react";
 import type {
   SpreadsheetCategory,

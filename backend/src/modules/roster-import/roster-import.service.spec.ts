@@ -463,193 +463,225 @@ describe('commitRoster', () => {
     ).rejects.toThrow('matching grade level');
   });
 
-  it('successfully enrolls and inserts pending rows', async () => {
-    dbStub.query.sections.findFirst.mockResolvedValue({
-      id: SECTION_ID,
-      isActive: true,
-      schoolYear: '2026-2027',
-      gradeLevel: '7',
-      name: 'HUMSS',
-      capacity: 10,
-    });
-    // helper that produces a fresh chain object with innerJoin
-    const freshChain = () => ({
-      from: jest.fn().mockReturnThis(),
-      where: jest.fn().mockResolvedValue([]),
-      innerJoin: jest.fn().mockReturnThis(),
-      returning: jest.fn().mockResolvedValue([]),
-      values: jest.fn().mockReturnThis(),
-      onConflictDoNothing: jest.fn().mockReturnThis(),
-    });
+  it.each([false, true])(
+    'enrolls new accounts with skipVerification=%s',
+    async (skipVerification) => {
+      dbStub.query.sections.findFirst.mockResolvedValue({
+        id: SECTION_ID,
+        isActive: true,
+        schoolYear: '2026-2027',
+        gradeLevel: '7',
+        name: 'HUMSS',
+        capacity: 10,
+      });
+      // helper that produces a fresh chain object with innerJoin
+      const freshChain = () => ({
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockResolvedValue([]),
+        innerJoin: jest.fn().mockReturnThis(),
+        returning: jest.fn().mockResolvedValue([]),
+        values: jest.fn().mockReturnThis(),
+        onConflictDoNothing: jest.fn().mockReturnThis(),
+      });
 
-    // capacity count returns 0
-    dbStub.select.mockReturnValueOnce({
-      from: jest.fn().mockReturnThis(),
-      where: jest.fn().mockResolvedValue([{ count: 0 }]),
-    });
-    // already enrolled returns []
-    dbStub.select.mockReturnValueOnce({
-      from: jest.fn().mockReturnThis(),
-      where: jest.fn().mockResolvedValue([]),
-    });
-    // student role verification: return a chain with innerJoin and custom where
-    const chainForRole = freshChain();
-    chainForRole.where = jest
-      .fn()
-      .mockResolvedValue([{ userId: STUDENT_USER_ID }]);
-    dbStub.select.mockReturnValueOnce(chainForRole);
-    // override transaction to simulate inserts for enrollments then pending rows
-    const enrollResult = [{ studentId: STUDENT_USER_ID }];
-    const createdUsers = [
-      { id: 'new-student-id', email: 'x@y.com' },
-      { id: 'second-student-id', email: 'second@y.com' },
-    ];
-    const insertedPendingEnrollment = [
-      { studentId: 'new-student-id' },
-      { studentId: 'second-student-id' },
-    ];
-    const insertedValues = jest.fn().mockReturnThis();
-    dbStub.transaction = jest.fn(async (cb: any) => {
-      const tx = {
-        select: dbStub.select,
-        update: dbStub.update,
-        query: {
-          studentProfiles: dbStub.query.studentProfiles,
-          enrollments: dbStub.query.enrollments,
-          roles: {
-            findFirst: jest.fn().mockResolvedValue({ id: 'student-role-id' }),
+      // capacity count returns 0
+      dbStub.select.mockReturnValueOnce({
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockResolvedValue([{ count: 0 }]),
+      });
+      // already enrolled returns []
+      dbStub.select.mockReturnValueOnce({
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockResolvedValue([]),
+      });
+      // student role verification: return a chain with innerJoin and custom where
+      const chainForRole = freshChain();
+      chainForRole.where = jest
+        .fn()
+        .mockResolvedValue([{ userId: STUDENT_USER_ID }]);
+      dbStub.select.mockReturnValueOnce(chainForRole);
+      // override transaction to simulate inserts for enrollments then pending rows
+      const enrollResult = [{ studentId: STUDENT_USER_ID }];
+      const createdUsers = [
+        { id: 'new-student-id', email: 'x@y.com' },
+        { id: 'second-student-id', email: 'second@y.com' },
+      ];
+      const insertedPendingEnrollment = [
+        { studentId: 'new-student-id' },
+        { studentId: 'second-student-id' },
+      ];
+      const insertedValues = jest.fn().mockReturnThis();
+      dbStub.transaction = jest.fn(async (cb: any) => {
+        const tx = {
+          select: dbStub.select,
+          update: dbStub.update,
+          query: {
+            studentProfiles: dbStub.query.studentProfiles,
+            enrollments: dbStub.query.enrollments,
+            roles: {
+              findFirst: jest.fn().mockResolvedValue({ id: 'student-role-id' }),
+            },
           },
-        },
-        insert: jest.fn().mockReturnValue({
-          values: insertedValues,
-          // returning call order: enrolled existing row, created users, enroll created users
-          returning: jest
-            .fn()
-            .mockResolvedValueOnce(enrollResult)
-            .mockResolvedValueOnce(createdUsers)
-            .mockResolvedValueOnce(insertedPendingEnrollment),
-          onConflictDoNothing: jest.fn().mockReturnThis(),
-        }),
-      } as any;
-      return cb(tx);
-    });
+          insert: jest.fn().mockReturnValue({
+            values: insertedValues,
+            // returning call order: enrolled existing row, created users, enroll created users
+            returning: jest
+              .fn()
+              .mockResolvedValueOnce(enrollResult)
+              .mockResolvedValueOnce(createdUsers)
+              .mockResolvedValueOnce(insertedPendingEnrollment),
+            onConflictDoNothing: jest.fn().mockReturnThis(),
+          }),
+        } as any;
+        return cb(tx);
+      });
 
-    const dto = {
-      sectionId: SECTION_ID,
-      enrolledRows: [
-        {
-          userId: STUDENT_USER_ID,
-          name: {
-            lastName: 'Dela Cruz',
-            firstName: 'Juan',
-            middleName: 'Andres',
+      const dto = {
+        sectionId: SECTION_ID,
+        skipVerification,
+        enrolledRows: [
+          {
+            userId: STUDENT_USER_ID,
+            name: {
+              lastName: 'Dela Cruz',
+              firstName: 'Juan',
+              middleName: 'Andres',
+            },
+            gradeLevel: '7',
+            lrn: '123456780001',
+            email: 'a@b.com',
           },
-          gradeLevel: '7',
-          lrn: '123456780001',
-          email: 'a@b.com',
-        },
-      ],
-      pendingRows: [
-        {
-          name: {
-            lastName: 'Unreg',
-            firstName: 'Person',
-            middleName: 'Middle',
-          },
-          gradeLevel: '7',
-          lrn: '000000000000',
-          email: 'x@y.com',
-        },
-        {
-          name: {
-            lastName: 'Second',
-            firstName: 'Student',
-            middleName: '',
-          },
-          gradeLevel: '7',
-          lrn: '000000000001',
-          email: 'second@y.com',
-        },
-      ],
-    };
-
-    const res = await service.commitRoster(SECTION_ID, dto as any, ADMIN_USER);
-    expect(res.enrolledUserIds).toEqual([
-      STUDENT_USER_ID,
-      'new-student-id',
-      'second-student-id',
-    ]);
-    expect(res.pendingRosterIds).toEqual([
-      'new-student-id',
-      'second-student-id',
-    ]);
-    expect(res.summary.enrolled).toBe(3);
-    expect(res.summary.pending).toBe(2);
-    expect(insertedValues).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({
-          email: 'x@y.com',
-          status: 'PENDING',
-          isEmailVerified: false,
-        }),
-        expect.objectContaining({
-          email: 'second@y.com',
-          status: 'PENDING',
-          isEmailVerified: false,
-        }),
-      ]),
-    );
-    const insertedAccounts = insertedValues.mock.calls
-      .map(([value]) => value)
-      .find(
-        (value) =>
-          Array.isArray(value) &&
-          value.some((account) => account.email === 'x@y.com'),
-      );
-    expect(insertedAccounts).toHaveLength(2);
-    expect(
-      new Set(
-        insertedAccounts.map(
-          (account: { password: string }) => account.password,
-        ),
-      ).size,
-    ).toBe(2);
-    expect(onboardingEvents.emitAsync).not.toHaveBeenCalled();
-    for (const effect of committedEffects) await effect();
-    expect(onboardingEvents.emit).not.toHaveBeenCalled();
-    expect(onboardingEvents.emitAsync).toHaveBeenCalledTimes(2);
-    const onboardingCredentials = onboardingEvents.emitAsync.mock.calls.map(
-      ([eventName, event]) => ({ eventName, event }),
-    );
-    expect(onboardingCredentials).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          eventName: 'user.created',
-          event: expect.objectContaining({
-            userId: 'new-student-id',
+        ],
+        pendingRows: [
+          {
+            name: {
+              lastName: 'Unreg',
+              firstName: 'Person',
+              middleName: 'Middle',
+            },
+            gradeLevel: '7',
+            lrn: '000000000000',
             email: 'x@y.com',
-            requiresOTP: true,
-            generatedPassword: expect.any(String),
-          }),
-        }),
-        expect.objectContaining({
-          eventName: 'user.created',
-          event: expect.objectContaining({
-            userId: 'second-student-id',
+          },
+          {
+            name: {
+              lastName: 'Second',
+              firstName: 'Student',
+              middleName: '',
+            },
+            gradeLevel: '7',
+            lrn: '000000000001',
             email: 'second@y.com',
-            requiresOTP: true,
-            generatedPassword: expect.any(String),
+          },
+        ],
+      };
+
+      const res = await service.commitRoster(
+        SECTION_ID,
+        dto as any,
+        ADMIN_USER,
+      );
+      expect(res.enrolledUserIds).toEqual([
+        STUDENT_USER_ID,
+        'new-student-id',
+        'second-student-id',
+      ]);
+      expect(res.pendingRosterIds).toEqual([
+        'new-student-id',
+        'second-student-id',
+      ]);
+      expect(res.summary.enrolled).toBe(3);
+      expect(res.summary.pending).toBe(2);
+      expect(insertedValues).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            email: 'x@y.com',
+            status: skipVerification ? 'ACTIVE' : 'PENDING',
+            isEmailVerified: skipVerification,
+          }),
+          expect.objectContaining({
+            email: 'second@y.com',
+            status: skipVerification ? 'ACTIVE' : 'PENDING',
+            isEmailVerified: skipVerification,
+          }),
+        ]),
+      );
+      const insertedAccounts = insertedValues.mock.calls
+        .map(([value]) => value)
+        .find(
+          (value) =>
+            Array.isArray(value) &&
+            value.some((account) => account.email === 'x@y.com'),
+        );
+      expect(insertedAccounts).toHaveLength(2);
+      expect(
+        new Set(
+          insertedAccounts.map(
+            (account: { password: string }) => account.password,
+          ),
+        ).size,
+      ).toBe(2);
+      expect(onboardingEvents.emitAsync).not.toHaveBeenCalled();
+      for (const effect of committedEffects) await effect();
+      expect(onboardingEvents.emit).not.toHaveBeenCalled();
+      expect(onboardingEvents.emitAsync).toHaveBeenCalledTimes(2);
+      const onboardingCredentials = onboardingEvents.emitAsync.mock.calls.map(
+        ([eventName, event]) => ({ eventName, event }),
+      );
+      expect(onboardingCredentials).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            eventName: 'user.created',
+            event: expect.objectContaining({
+              userId: 'new-student-id',
+              email: 'x@y.com',
+              requiresOTP: !skipVerification,
+              generatedPassword: expect.any(String),
+            }),
+          }),
+          expect.objectContaining({
+            eventName: 'user.created',
+            event: expect.objectContaining({
+              userId: 'second-student-id',
+              email: 'second@y.com',
+              requiresOTP: !skipVerification,
+              generatedPassword: expect.any(String),
+            }),
+          }),
+        ]),
+      );
+      expect(
+        new Set(
+          onboardingCredentials.map(
+            ({ event }) =>
+              (event as { generatedPassword: string }).generatedPassword,
+          ),
+        ).size,
+      ).toBe(2);
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            activationMode: skipVerification ? 'admin_attested' : 'email_otp',
           }),
         }),
-      ]),
-    );
-    expect(
-      new Set(
-        onboardingCredentials.map(
-          ({ event }) =>
-            (event as { generatedPassword: string }).generatedPassword,
-        ),
-      ).size,
-    ).toBe(2);
+      );
+    },
+  );
+
+  it('rejects teacher requests to skip account verification before creating credentials', async () => {
+    await expect(
+      service.commitRoster(
+        SECTION_ID,
+        {
+          sectionId: SECTION_ID,
+          enrolledRows: [],
+          pendingRows: [],
+          skipVerification: true,
+        },
+        TEACHER_USER,
+      ),
+    ).rejects.toThrow('Only an administrator');
+    expect(dbStub.transaction).not.toHaveBeenCalled();
+    expect(onboardingEvents.emitAsync).not.toHaveBeenCalled();
   });
 });

@@ -94,7 +94,7 @@ export function MobileCampusLogin({
       }}
     >
       <LinearGradient
-        colors={[campusColors.deepRed, campusColors.rose, campusColors.red]}
+        colors={[mobileBrand.navy, mobileBrand.navyRaised]}
         end={{ x: 1, y: 1 }}
         start={{ x: 0, y: 0 }}
         style={{
@@ -112,50 +112,14 @@ export function MobileCampusLogin({
             bottom: 0,
             height: "100%",
             left: 0,
-            opacity: split ? 0.82 : 0.76,
+            opacity: split ? 0.24 : 0.18,
             position: "absolute",
             right: 0,
             top: 0,
             width: "100%",
           }}
         />
-        <View
-          pointerEvents="none"
-          style={{
-            backgroundColor: split
-              ? mobileBrand.dangerSoft
-              : mobileBrand.dangerSoft,
-            bottom: 0,
-            left: 0,
-            position: "absolute",
-            right: 0,
-            top: 0,
-          }}
-        />
-        <View
-          pointerEvents="none"
-          style={{
-            backgroundColor: mobileBrand.inverseSurface,
-            borderRadius: 999,
-            height: split ? 410 : 260,
-            position: "absolute",
-            right: split ? -110 : -70,
-            top: split ? -80 : -110,
-            width: split ? 410 : 260,
-          }}
-        />
-        <View
-          pointerEvents="none"
-          style={{
-            backgroundColor: mobileBrand.warningSoft,
-            borderRadius: 999,
-            bottom: split ? -120 : -150,
-            height: split ? 360 : 280,
-            left: split ? -100 : -110,
-            position: "absolute",
-            width: split ? 360 : 280,
-          }}
-        />
+        <View pointerEvents="none" style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 5, backgroundColor: mobileBrand.red }} />
 
         <Animated.View
           style={{
@@ -163,7 +127,7 @@ export function MobileCampusLogin({
             opacity: entrance,
             paddingBottom: split ? Math.max(insets.bottom, 30) : 0,
             paddingHorizontal: split ? 42 : 22,
-            paddingTop: split ? Math.max(insets.top + 78, 104) : insets.top + 62,
+            paddingTop: split ? Math.max(insets.top + 78, 104) : insets.top + (layout.compact ? 26 : 40),
             zIndex: 2,
           }}
         >
@@ -207,11 +171,11 @@ export function MobileCampusLogin({
           </View>
 
           {!layout.compact ? (
-            <View style={{ marginTop: split ? 44 : 18, maxWidth: 480 }}>
+            <View style={{ marginTop: split ? 44 : 14, maxWidth: 480 }}>
               <Text
                 style={{
                   color: campusColors.white,
-                  fontSize: split ? 46 : 30,
+                  fontSize: split ? 46 : 27,
                   fontWeight: "900",
                   letterSpacing: split ? 2.8 : 2,
                   lineHeight: split ? 52 : 34,
@@ -331,11 +295,11 @@ export function MobileCampusLogin({
         <View
           style={{
             backgroundColor: campusColors.paper,
-            borderTopLeftRadius: split ? 36 : 30,
-            borderTopRightRadius: split ? 0 : 30,
+          borderTopLeftRadius: split ? 28 : 22,
+          borderTopRightRadius: split ? 0 : 22,
             flex: 1,
             marginLeft: split ? -26 : 0,
-            marginTop: split ? 0 : -24,
+          marginTop: split ? 0 : -14,
             overflow: "hidden",
           }}
         >

@@ -192,14 +192,14 @@ describe('TeacherPerformancePage', () => {
     } as Awaited<ReturnType<typeof performanceService.recomputeClass>>);
   });
 
-  it('labels combined guided and replay evidence as the After AI Plan', async () => {
+  it('keeps learner standing distinct from intervention follow-up evidence', async () => {
     render(<TeacherPerformancePage />);
 
     expect(
-      await screen.findByRole('columnheader', { name: 'After AI Plan' }),
+      await screen.findByText('Current standing'),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('columnheader', { name: 'After AI Plan Avg' }),
+      screen.getByRole('columnheader', { name: 'Follow-up' }),
     ).toBeInTheDocument();
   });
 
@@ -221,7 +221,7 @@ describe('TeacherPerformancePage', () => {
     render(<TeacherPerformancePage />);
 
     expect(await screen.findByText(/AI tools are paused/i)).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: /^Analyze$/i })).toBeDisabled();
+    expect(await screen.findByRole('button', { name: /Analyze work/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /Analyze Whole Class/i })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: /Lesson Plan/i }));
     expect(screen.getByRole('button', { name: /Generate Lesson Plan/i })).toBeDisabled();
@@ -247,7 +247,7 @@ describe('TeacherPerformancePage', () => {
     expect(screen.queryByText('No concept focus areas yet')).not.toBeInTheDocument();
     expect(screen.queryByText('sql detail')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Heatmap/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Concepts/i }));
     expect(
       screen.getByText('Diagnostics temporarily unavailable'),
     ).toBeInTheDocument();
@@ -272,17 +272,17 @@ describe('TeacherPerformancePage', () => {
   it('shows a successful empty diagnostics state only after diagnostics load', async () => {
     render(<TeacherPerformancePage />);
 
-    fireEvent.click(await screen.findByRole('button', { name: /Heatmap/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /Concepts/i }));
 
     expect(
-      await screen.findByText('No concept focus areas yet'),
+      await screen.findByText('No concept evidence yet'),
     ).toBeInTheDocument();
     expect(
       screen.queryByText('Diagnostics temporarily unavailable'),
     ).not.toBeInTheDocument();
   });
 
-  it('renders a dedicated concept mastery heatmap tab when concept hotspots are available', async () => {
+  it('renders one readable concept evidence table when hotspots are available', async () => {
     mockedPerformanceService.getClassDiagnostics.mockResolvedValueOnce({
       data: {
         classId: 'class-1',
@@ -310,13 +310,13 @@ describe('TeacherPerformancePage', () => {
 
     render(<TeacherPerformancePage />);
 
-    expect(await screen.findByRole('button', { name: /Heatmap/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Concepts/i })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Heatmap/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Concepts/i }));
 
-    expect(await screen.findByText(/Concept Mastery Heatmap/i)).toBeInTheDocument();
-    expect(screen.getAllByText('High mastery').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Critical').length).toBeGreaterThan(0);
+    expect(await screen.findByText(/Concept evidence/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Watch/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Critical/).length).toBeGreaterThan(0);
     expect(screen.getByRole('columnheader', { name: /Concept/i })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: /Mastery/i })).toBeInTheDocument();
     expect(screen.getAllByText('Fractions').length).toBeGreaterThan(0);
@@ -405,7 +405,7 @@ describe('TeacherPerformancePage', () => {
     expect(screen.queryByText(/^P This IS A Multi\.? P$/i)).not.toBeInTheDocument();
     expect(screen.getByText('This IS A Multi')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Heatmap/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Concepts/i }));
 
     expect(screen.getAllByText('Dropdown Time').length).toBeGreaterThan(0);
     expect(screen.queryByText(/^P Dropdown Time P$/i)).not.toBeInTheDocument();

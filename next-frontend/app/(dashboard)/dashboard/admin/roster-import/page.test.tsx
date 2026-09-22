@@ -290,6 +290,7 @@ describe('RosterImportPage', () => {
     await waitFor(() =>
       expect(mockedRosterImportService.commit).toHaveBeenCalledWith('section-1', {
         sectionId: 'section-1',
+        skipVerification: false,
         enrolledRows: [
           {
             userId: 'student-1',
@@ -315,6 +316,36 @@ describe('RosterImportPage', () => {
         ],
       }),
     );
+  });
+
+  it('requires explicit acknowledgement before activating new imported accounts without OTP', async () => {
+    const { container } = render(<RosterImportPage />);
+    fireEvent.change(await screen.findByLabelText('Target Section'), {
+      target: { value: 'section-1' },
+    });
+    fireEvent.change(container.querySelector('input[type="file"]') as HTMLInputElement, {
+      target: {
+        files: [new File(
+          ['Last Name,First Name,Middle Name,LRN,Email\nDela Cruz,Ana,Santos,202407000010,ana@nexora.edu'],
+          'roster.csv',
+          { type: 'text/csv' },
+        )],
+      },
+    });
+    await screen.findByRole('textbox', { name: /row 2, column A/i });
+    fireEvent.click(screen.getByRole('button', { name: 'Validate roster' }));
+    const activationButton = await screen.findByRole('button', { name: 'Enable skip verification' });
+    fireEvent.click(activationButton);
+    expect(screen.getByRole('button', { name: 'Commit Import' })).toBeDisabled();
+    expect(mockedRosterImportService.commit).not.toHaveBeenCalled();
+
+    expect(screen.getByText('Active after import')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('checkbox', { name: /I confirm this new account/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Commit Import' }));
+    await waitFor(() => expect(mockedRosterImportService.commit).toHaveBeenCalledWith(
+      'section-1',
+      expect.objectContaining({ skipVerification: true }),
+    ));
   });
 
   it('invalidates the server preview when an edited cell changes again', async () => {

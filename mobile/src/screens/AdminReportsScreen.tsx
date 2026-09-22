@@ -1,6 +1,7 @@
 import { mobileBrand } from "../theme/mobileBrand";
 import { useMemo, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, ScrollView, Text, View } from "react-native";
+import { AppAlert as Alert } from "../components/ui/AppAlert";
 import DateTimePicker, {
   type DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";

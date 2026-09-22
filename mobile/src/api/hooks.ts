@@ -129,6 +129,8 @@ export const queryKeys = {
     ["teacher-class-performance-summary", classId ?? "missing"] as const,
   teacherClassAtRisk: (classId?: string) =>
     ["teacher-class-at-risk", classId ?? "missing"] as const,
+  teacherClassDiagnostics: (classId?: string) =>
+    ["teacher-class-diagnostics", classId ?? "missing"] as const,
   teacherInterventionQuizComparison: (classId?: string) =>
     ["teacher-intervention-quiz-comparison", classId ?? "missing"] as const,
   teacherInterventionsQueue: (classId?: string) =>
@@ -568,6 +570,13 @@ export const useTeacherClassAtRisk = (classId?: string) =>
   useQuery({
     queryKey: queryKeys.teacherClassAtRisk(classId),
     queryFn: () => performanceApi.getClassAtRisk(classId!),
+    enabled: !!classId,
+  });
+
+export const useTeacherClassDiagnostics = (classId?: string) =>
+  useQuery({
+    queryKey: queryKeys.teacherClassDiagnostics(classId),
+    queryFn: () => performanceApi.getClassDiagnostics(classId!),
     enabled: !!classId,
   });
 

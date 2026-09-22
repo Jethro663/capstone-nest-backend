@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Alert, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import { AppAlert as Alert } from "../components/ui/AppAlert";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useLessonDetail } from "../api/hooks";
 import { toAppError } from "../api/http";

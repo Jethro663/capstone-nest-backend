@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Alert, Text, TextInput, View } from "react-native";
+import { Text, TextInput, View } from "react-native";
+import { AppAlert as Alert } from "../ui/AppAlert";
 import { useQuery } from "@tanstack/react-query";
 import { academicGradingService as grading } from "../../api/services/academic-grading";
 import { classRecordApi } from "../../api/services/class-record";

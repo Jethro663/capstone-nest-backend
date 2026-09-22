@@ -5,7 +5,6 @@ import {
   useMemo,
   useState,
   useCallback,
-  type CSSProperties,
 } from "react";
 import { RefreshCw } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
@@ -162,22 +161,22 @@ function trendBadgeClass(
   trend: InterventionQuizComparisonRow["trend"],
 ): string {
   if (trend === "improved") {
-    return "bg-emerald-500/20 text-emerald-100 border border-emerald-300/45";
+    return "bg-emerald-50 text-emerald-800 border border-emerald-200";
   }
   if (trend === "declined") {
-    return "bg-rose-500/18 text-rose-100 border border-rose-300/45";
+    return "bg-rose-50 text-rose-800 border border-rose-200";
   }
   if (trend === "unchanged") {
-    return "bg-slate-500/18 text-slate-100 border border-slate-300/45";
+    return "bg-slate-100 text-slate-700 border border-slate-200";
   }
-  return "bg-amber-500/18 text-amber-100 border border-amber-300/45";
+  return "bg-amber-50 text-amber-800 border border-amber-200";
 }
 
 function trendLabel(trend: InterventionQuizComparisonRow["trend"]): string {
   if (trend === "improved") return "Improved";
   if (trend === "declined") return "Declined";
   if (trend === "unchanged") return "Unchanged";
-  return "Awaiting Retry";
+  return "Awaiting follow-up";
 }
 
 function formatComparisonFilterLabel(
@@ -256,20 +255,6 @@ function classifyMasteryBand(score: number) {
     label: "Critical",
     tone: "bg-rose-500/18 border-rose-300/40 text-rose-50",
     fill: "linear-gradient(180deg, rgba(244,63,94,0.95), rgba(190,24,93,0.78))",
-  };
-}
-
-function buildHeatmapCellStyle(score: number): CSSProperties {
-  const clamped = Math.max(
-    0,
-    Math.min(100, Number.isFinite(score) ? score : 0),
-  );
-  const hue = Math.round((clamped / 100) * 120);
-  const alpha = 0.28 + ((100 - clamped) / 100) * 0.36;
-
-  return {
-    backgroundColor: `hsla(${hue}, 82%, 44%, ${alpha})`,
-    borderColor: `hsla(${hue}, 68%, 24%, 0.48)`,
   };
 }
 
@@ -403,7 +388,6 @@ export default function TeacherPerformancePage() {
             masteryScore,
             label: formatConceptLabel(concept.concept),
             band: classifyMasteryBand(masteryScore),
-            heatStyle: buildHeatmapCellStyle(masteryScore),
           };
         })
         .sort((left, right) => left.masteryScore - right.masteryScore),
@@ -450,33 +434,6 @@ export default function TeacherPerformancePage() {
     }),
     [filteredInterventionComparisons],
   );
-  const latestComparisonByStudent = useMemo(() => {
-    const map = new Map<string, InterventionQuizComparisonRow>();
-    const classAverageRows = (
-      interventionComparisons?.comparisons ?? []
-    ).filter(
-      (row) =>
-        (row.comparisonScope ?? "class_average") === "class_average" ||
-        row.filterId === "all",
-    );
-    for (const row of classAverageRows) {
-      const current = map.get(row.studentId);
-      if (!current) {
-        map.set(row.studentId, row);
-        continue;
-      }
-      const currentAfter = current.afterSubmittedAt
-        ? new Date(current.afterSubmittedAt).getTime()
-        : 0;
-      const nextAfter = row.afterSubmittedAt
-        ? new Date(row.afterSubmittedAt).getTime()
-        : 0;
-      if (nextAfter > currentAfter) {
-        map.set(row.studentId, row);
-      }
-    }
-    return map;
-  }, [interventionComparisons?.comparisons]);
   const lessonPlanMetadata = useMemo(() => {
     if (!lessonPlanDraft) return [];
     return [
@@ -1075,11 +1032,11 @@ export default function TeacherPerformancePage() {
           <TeacherHeaderMetric
             label="Doing Well"
             value={
-              summary && summary.totalStudents > 0
-                ? summary.totalStudents - summary.atRiskCount
+              summary && summary.studentsWithData > 0
+                ? Math.max(0, summary.studentsWithData - summary.atRiskCount)
                 : 0
             }
-            caption="Students currently above support threshold"
+            caption="Students with score data above support threshold"
             accent="teal"
           />
           <TeacherHeaderMetric
@@ -1174,7 +1131,7 @@ export default function TeacherPerformancePage() {
               className={`teacher-interventions-view-switcher__tab ${workspaceView === "heatmap" ? "is-active" : ""}`}
               onClick={() => setWorkspaceView("heatmap")}
             >
-              Heatmap
+              Concepts
             </button>
             <button
               type="button"
@@ -1217,94 +1174,38 @@ export default function TeacherPerformancePage() {
                     description="This class is currently stable based on recent computed scores."
                   />
                 ) : (
-                  <div className="teacher-table-shell">
-                    <Table>
-                      <TableHeader className="teacher-table-head [&_tr]:border-white/15">
-                        <TableRow className="border-white/10 hover:bg-transparent">
-                          <TableHead>Student</TableHead>
-                          <TableHead>Assessment Avg</TableHead>
-                          <TableHead>Class Record Avg</TableHead>
-                          <TableHead>Before Assessments</TableHead>
-                          <TableHead>After AI Plan</TableHead>
-                          <TableHead>Delta</TableHead>
-                          <TableHead>Overall Avg</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead className="text-right">AI</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody className="[&_tr:last-child]:border-0">
-                        {(atRisk?.students ?? []).map((student) => {
-                          const studentComparison =
-                            latestComparisonByStudent.get(student.studentId);
-                          return (
-                            <TableRow
-                              key={student.studentId}
-                              className="teacher-table-row border-white/10"
-                            >
-                              <TableCell className="font-semibold text-[var(--teacher-text-strong)]">
-                                {formatStudentName(student)}
-                              </TableCell>
-                              <TableCell className="text-[var(--teacher-text-strong)]">
-                                {toPercent(student.assessmentAverage)}
-                              </TableCell>
-                              <TableCell className="text-[var(--teacher-text-strong)]">
-                                {toPercent(student.classRecordAverage)}
-                              </TableCell>
-                              <TableCell className="text-[var(--teacher-text-strong)]">
-                                {toPercent(
-                                  studentComparison?.beforeScorePercent ?? null,
-                                )}
-                              </TableCell>
-                              <TableCell className="text-[var(--teacher-text-strong)]">
-                                {toPercent(
-                                  studentComparison?.afterScorePercent ?? null,
-                                )}
-                              </TableCell>
-                              <TableCell className="text-[var(--teacher-text-strong)]">
-                                {formatSignedDelta(
-                                  studentComparison?.deltaScorePercent ?? null,
-                                )}
-                              </TableCell>
-                              <TableCell className="font-semibold text-[var(--teacher-text-strong)]">
-                                {toPercent(student.blendedScore)}
-                              </TableCell>
-                              <TableCell className="space-y-1">
-                                <Badge className="teacher-badge-danger border-0">
-                                  Needs Support
-                                </Badge>
-                                {studentComparison ? (
-                                  <span
-                                    className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${trendBadgeClass(studentComparison.trend)}`}
-                                  >
-                                    {trendLabel(studentComparison.trend)}
-                                  </span>
-                                ) : null}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <Button
-                                  size="sm"
-                                  variant="teacherOutline"
-                                  className="rounded-lg"
-                                  disabled={aiUnavailable || analyzing}
-                                  onClick={() =>
-                                    handleAnalyze(student.studentId)
-                                  }
-                                >
-                                  Analyze
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
+                  <div className="divide-y divide-[var(--teacher-border)] rounded-xl border border-[var(--teacher-border)] bg-white">
+                    {(atRisk?.students ?? []).map((student) => (
+                      <article key={student.studentId} className="flex flex-wrap items-center gap-x-6 gap-y-3 p-4">
+                        <div className="min-w-[180px] flex-1">
+                          <p className="font-semibold text-slate-900">{formatStudentName(student)}</p>
+                          <p className="mt-1 text-xs text-slate-600">Assessment {toPercent(student.assessmentAverage)} · Class record {toPercent(student.classRecordAverage)}</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Current standing</p>
+                            <p className="font-semibold text-slate-900">{toPercent(student.blendedScore)}</p>
+                          </div>
+                          <Badge className="teacher-badge-danger border-0">Needs Support</Badge>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="teacherOutline"
+                          className="rounded-lg"
+                          disabled={aiUnavailable || analyzing}
+                          onClick={() => handleAnalyze(student.studentId)}
+                        >
+                          Analyze work
+                        </Button>
+                      </article>
+                    ))}
                   </div>
                 )}
               </TeacherSectionCard>
 
               <TeacherSectionCard
-                title="Intervention Progress Comparison"
-                description="Compare each learner's assessment average before intervention against completed AI-plan assessment averages."
+                title="Intervention response"
+                description="Review baseline and follow-up assessment evidence for each learner. Score changes describe the observed work; they do not prove the intervention caused the change."
                 className="teacher-figma-stagger"
               >
                 {(interventionComparisons?.comparisons.length ?? 0) === 0 ? (
@@ -1314,24 +1215,19 @@ export default function TeacherPerformancePage() {
                   />
                 ) : (
                   <div className="space-y-3">
-                    <div className="flex flex-wrap gap-2">
-                      {comparisonFilterOptions.map((filter) => (
-                        <button
-                          key={filter.id}
-                          type="button"
-                          onClick={() =>
-                            setSelectedComparisonFilterId(filter.id)
-                          }
-                          className={`rounded-full border px-3 py-1.5 text-xs font-black transition ${
-                            selectedComparisonFilterId === filter.id
-                              ? "border-cyan-200 bg-cyan-300/20 text-cyan-50 shadow-[0_0_18px_rgba(34,211,238,0.22)]"
-                              : "border-white/15 bg-white/5 text-[var(--teacher-text-muted)] hover:border-cyan-200/50 hover:text-cyan-50"
-                          }`}
-                        >
-                          {formatComparisonFilterLabel(filter)}
-                        </button>
-                      ))}
-                    </div>
+                    <label className="block max-w-md text-sm font-semibold text-[var(--teacher-text-strong)]">
+                      Assessment focus
+                      <select
+                        aria-label="Assessment focus"
+                        value={selectedComparisonFilterId}
+                        onChange={(event) => setSelectedComparisonFilterId(event.target.value)}
+                        className="mt-2 w-full rounded-xl border border-[var(--teacher-border)] bg-white px-3 py-2.5 text-sm text-slate-900"
+                      >
+                        {comparisonFilterOptions.map((filter) => (
+                          <option key={filter.id} value={filter.id}>{formatComparisonFilterLabel(filter)}</option>
+                        ))}
+                      </select>
+                    </label>
                     <div className="flex flex-wrap gap-2 text-xs">
                       <Badge variant="secondary">
                         Improved: {filteredComparisonCounts.improved}
@@ -1343,7 +1239,7 @@ export default function TeacherPerformancePage() {
                         Unchanged: {filteredComparisonCounts.unchanged}
                       </Badge>
                       <Badge variant="secondary">
-                        Awaiting AI Plan: {filteredComparisonCounts.awaiting}
+                        Awaiting follow-up: {filteredComparisonCounts.awaiting}
                       </Badge>
                     </div>
                     <div className="teacher-table-shell">
@@ -1352,10 +1248,10 @@ export default function TeacherPerformancePage() {
                           <TableRow className="border-white/10 hover:bg-transparent">
                             <TableHead>Student</TableHead>
                             <TableHead>Focus</TableHead>
-                            <TableHead>Before Avg</TableHead>
-                            <TableHead>After AI Plan Avg</TableHead>
-                            <TableHead>Delta</TableHead>
-                            <TableHead>Trend</TableHead>
+                            <TableHead>Baseline</TableHead>
+                            <TableHead>Follow-up</TableHead>
+                            <TableHead>Change</TableHead>
+                            <TableHead>Review</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody className="[&_tr:last-child]:border-0">
@@ -1388,6 +1284,7 @@ export default function TeacherPerformancePage() {
                                     {entry.beforeSampleSize} assessment
                                     {entry.beforeSampleSize === 1 ? "" : "s"}
                                   </div>
+                                  {entry.beforeSubmittedAt ? <div className="text-[10px] text-[var(--teacher-text-muted)]">Latest: {formatDateTime(entry.beforeSubmittedAt)}</div> : null}
                                 </TableCell>
                                 <TableCell className="text-[var(--teacher-text-strong)]">
                                   {toPercent(entry.afterScorePercent)}
@@ -1395,6 +1292,7 @@ export default function TeacherPerformancePage() {
                                     {entry.afterSampleSize} AI-plan assessment
                                     {entry.afterSampleSize === 1 ? "" : "s"}
                                   </div>
+                                  {entry.afterSubmittedAt ? <div className="text-[10px] text-[var(--teacher-text-muted)]">Latest: {formatDateTime(entry.afterSubmittedAt)}</div> : null}
                                 </TableCell>
                                 <TableCell className="text-[var(--teacher-text-strong)]">
                                   {formatSignedDelta(entry.deltaScorePercent)}
@@ -1504,243 +1402,63 @@ export default function TeacherPerformancePage() {
               </TeacherSectionCard>
             </>
           ) : workspaceView === "heatmap" ? (
-            <>
-              <TeacherSectionCard
-                title="Concept Mastery Heatmap"
-                description="Read the colors first, then use the table to decide what to reteach."
-                className="teacher-figma-stagger"
-              >
-                {diagnosticsStatus === "loading" ? (
-                  <Skeleton className="h-64 rounded-xl" />
-                ) : diagnosticsStatus ===
-                  "error" ? null : conceptHeatmapRows.length === 0 ? (
-                  <TeacherEmptyState
-                    title="No concept focus areas yet"
-                    description="Run assessments and recompute this class to surface concept-level mastery signals."
-                  />
-                ) : (
-                  <div className="space-y-4">
-                    <div className="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
-                      <div className="rounded-[16px] border border-[var(--teacher-border)] bg-white px-4 py-4 shadow-sm">
-                        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--teacher-text-muted)]">
-                          How to read this
-                        </p>
-                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                          {[
-                            {
-                              label: "High mastery",
-                              score: 92,
-                              note: "Doing well. Keep light review only.",
-                            },
-                            {
-                              label: "Watch",
-                              score: 76,
-                              note: "Monitor and add short reinforcement.",
-                            },
-                            {
-                              label: "Needs reteach",
-                              score: 61,
-                              note: "Plan reteaching before the next graded task.",
-                            },
-                            {
-                              label: "Critical",
-                              score: 32,
-                              note: "Address this first with guided support.",
-                            },
-                          ].map((item) => (
-                            <div
-                              key={item.label}
-                              className="flex items-start gap-3 rounded-[12px] border border-slate-200 px-3 py-3"
-                            >
-                              <span
-                                className="mt-0.5 h-4 w-4 shrink-0 rounded-[5px] border"
-                                style={buildHeatmapCellStyle(item.score)}
-                              />
-                              <div className="space-y-1">
-                                <p className="font-semibold text-[var(--teacher-text-strong)]">
-                                  {item.label}
-                                </p>
-                                <p className="text-xs leading-5 text-[var(--teacher-text-muted)]">
-                                  {item.note}
-                                </p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="rounded-[16px] border border-[var(--teacher-border)] bg-[#f8fafc] px-4 py-4 shadow-sm">
-                        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--teacher-text-muted)]">
-                          Class snapshot
-                        </p>
-                        <div className="mt-3 grid grid-cols-2 gap-3">
-                          <div className="rounded-[12px] border border-slate-200 bg-white px-3 py-3">
-                            <p className="text-xs text-[var(--teacher-text-muted)]">
-                              Tracked concepts
-                            </p>
-                            <p className="mt-1 text-2xl font-semibold text-[var(--teacher-text-strong)]">
-                              {conceptHeatmapRows.length}
-                            </p>
-                          </div>
-                          <div className="rounded-[12px] border border-slate-200 bg-white px-3 py-3">
-                            <p className="text-xs text-[var(--teacher-text-muted)]">
-                              Support threshold
-                            </p>
-                            <p className="mt-1 text-2xl font-semibold text-[var(--teacher-text-strong)]">
-                              {threshold !== null ? `${threshold}%` : "--"}
-                            </p>
-                          </div>
-                          <div className="rounded-[12px] border border-slate-200 bg-white px-3 py-3">
-                            <p className="text-xs text-[var(--teacher-text-muted)]">
-                              Lowest mastery
-                            </p>
-                            <p className="mt-1 text-lg font-semibold text-[var(--teacher-text-strong)]">
-                              {toPercent(
-                                conceptHeatmapRows[0]?.masteryScore ?? null,
-                              )}
-                            </p>
-                          </div>
-                          <div className="rounded-[12px] border border-slate-200 bg-white px-3 py-3">
-                            <p className="text-xs text-[var(--teacher-text-muted)]">
-                              Highest mastery
-                            </p>
-                            <p className="mt-1 text-lg font-semibold text-[var(--teacher-text-strong)]">
-                              {toPercent(
-                                conceptHeatmapRows[
-                                  conceptHeatmapRows.length - 1
-                                ]?.masteryScore ?? null,
-                              )}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="rounded-[16px] border border-[var(--teacher-border)] bg-white px-4 py-4 shadow-sm">
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--teacher-text-muted)]">
-                        Heat strip
-                      </p>
-                      <p className="mt-1 text-sm text-[var(--teacher-text-muted)]">
-                        Ordered from lowest mastery to highest mastery.
-                      </p>
-                      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                        {conceptHeatmapRows.map((concept) => (
-                          <div
-                            key={`${concept.concept}-tile`}
-                            className="rounded-[16px] border p-4 shadow-sm"
-                            style={concept.heatStyle}
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-semibold text-slate-950">
-                                  {concept.label}
-                                </p>
-                                <p className="mt-1 text-xs text-slate-800/80">
-                                  {toPercent(concept.masteryScore)} mastery
-                                </p>
-                              </div>
-                              <Badge
-                                className={`border bg-white/70 text-slate-900 ${concept.band.tone}`}
-                              >
-                                {concept.band.label}
-                              </Badge>
-                            </div>
-                            <div className="mt-4 flex items-end justify-between gap-3">
-                              <div>
-                                <p className="text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-slate-800/80">
-                                  Misses
-                                </p>
-                                <p className="text-lg font-semibold text-slate-950">
-                                  {concept.wrongCount}
-                                </p>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-slate-800/80">
-                                  Evidence
-                                </p>
-                                <p className="text-lg font-semibold text-slate-950">
-                                  {concept.evidenceCount}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="rounded-[16px] border border-[var(--teacher-border)] bg-white shadow-sm">
-                      <div className="teacher-table-shell">
-                        <Table>
-                          <TableHeader className="teacher-table-head [&_tr]:border-slate-200">
-                            <TableRow className="border-slate-200 hover:bg-transparent">
-                              <TableHead className="w-[96px]">Heat</TableHead>
-                              <TableHead>Concept</TableHead>
-                              <TableHead>Mastery</TableHead>
-                              <TableHead>Signal</TableHead>
-                              <TableHead>Misses</TableHead>
-                              <TableHead>Evidence</TableHead>
-                              <TableHead>Teacher Read</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody className="[&_tr:last-child]:border-0">
-                            {conceptHeatmapRows.map((concept) => (
-                              <TableRow
-                                key={`${concept.concept}-row`}
-                                className="teacher-table-row border-slate-200"
-                              >
-                                <TableCell>
-                                  <div
-                                    className="flex h-14 items-center justify-center rounded-[12px] border text-sm font-semibold text-slate-950"
-                                    style={concept.heatStyle}
-                                  >
-                                    {toPercent(concept.masteryScore)}
-                                  </div>
-                                </TableCell>
-                                <TableCell className="text-[var(--teacher-text-strong)]">
-                                  <div className="space-y-1">
-                                    <p className="font-semibold">
-                                      {concept.label}
-                                    </p>
-                                    <p className="text-xs text-[var(--teacher-text-muted)]">
-                                      Focus area for reteaching review
-                                    </p>
-                                  </div>
-                                </TableCell>
-                                <TableCell className="text-[var(--teacher-text-strong)]">
-                                  {toPercent(concept.masteryScore)}
-                                </TableCell>
-                                <TableCell>
-                                  <Badge
-                                    className={`${concept.band.tone} border`}
-                                  >
-                                    {concept.band.label}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell className="text-[var(--teacher-text-strong)]">
-                                  {concept.wrongCount}
-                                </TableCell>
-                                <TableCell className="text-[var(--teacher-text-strong)]">
-                                  {concept.evidenceCount}
-                                </TableCell>
-                                <TableCell className="text-[var(--teacher-text-muted)]">
-                                  {concept.masteryScore < 55
-                                    ? "Immediate reteach and guided practice"
-                                    : concept.masteryScore < 70
-                                      ? "Plan reteach before the next graded task"
-                                      : concept.masteryScore < 85
-                                        ? "Watch for drift and reinforce with checkpoints"
-                                        : "Maintain with spiral review"}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    </div>
+            <TeacherSectionCard
+              title="Concept evidence"
+              description="Start with the lowest mastery signals, then check the underlying assessment evidence before deciding what to reteach. These diagnostics are review aids, not official grades."
+              className="teacher-figma-stagger"
+            >
+              {diagnosticsStatus === "loading" ? (
+                <Skeleton className="h-64 rounded-xl" />
+              ) : diagnosticsStatus === "error" ? (
+                <TeacherEmptyState title="Concept evidence unavailable" description="Refresh the class diagnostics to review concept signals." />
+              ) : conceptHeatmapRows.length === 0 ? (
+                <TeacherEmptyState title="No concept evidence yet" description="Run assessments and recompute this class to surface concept-level signals." />
+              ) : (
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-[var(--teacher-border)] bg-white p-4 text-sm text-slate-700">
+                    <strong className="text-slate-900">{conceptHeatmapRows.length} concepts</strong>{" "}ordered from lowest to highest mastery.
+                    Use misses and evidence count alongside the score; a small sample needs review before changing instruction.
                   </div>
-                )}
-              </TeacherSectionCard>
-            </>
+                  <div className="teacher-table-shell">
+                    <Table>
+                      <TableHeader className="teacher-table-head [&_tr]:border-slate-200">
+                        <TableRow className="border-slate-200 hover:bg-transparent">
+                          <TableHead>Concept</TableHead>
+                          <TableHead>Mastery signal</TableHead>
+                          <TableHead>Evidence</TableHead>
+                          <TableHead>Suggested next step</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody className="[&_tr:last-child]:border-0">
+                        {conceptHeatmapRows.map((concept) => (
+                          <TableRow key={concept.concept} className="teacher-table-row border-slate-200">
+                            <TableCell className="font-semibold text-slate-900">{concept.label}</TableCell>
+                            <TableCell>
+                              <div className="min-w-36 space-y-1">
+                                <span className="font-semibold text-slate-900">{toPercent(concept.masteryScore)} · {concept.band.label}</span>
+                                <div className="h-2 overflow-hidden rounded-full bg-slate-200" aria-hidden="true">
+                                  <div className="h-full rounded-full bg-[#0C1D3A]" style={{ width: `${Math.max(0, Math.min(100, concept.masteryScore))}%` }} />
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-slate-800">{concept.wrongCount} misses · {concept.evidenceCount} observations</TableCell>
+                            <TableCell className="text-slate-700">
+                              {concept.evidenceCount < 3
+                                ? "Review more work before deciding"
+                                : concept.masteryScore < 70
+                                  ? "Check missed items and plan guided reteaching"
+                                  : concept.masteryScore < 85
+                                    ? "Reinforce and monitor the next task"
+                                    : "Maintain with light review"}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+            </TeacherSectionCard>
           ) : workspaceView === "lesson-plan" ? (
             <>
               <TeacherSectionCard
@@ -2648,11 +2366,10 @@ export default function TeacherPerformancePage() {
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
                           <p className="font-semibold text-[var(--teacher-text-strong)]">
-                            Concept Trends Snapshot
+                            Concept focus snapshot
                           </p>
                           <p className="mt-1 text-xs text-[var(--teacher-text-muted)]">
-                            Open the Heatmap tab for the full mastery table and
-                            color map.
+                            Open Concepts to review the evidence and suggested next steps.
                           </p>
                         </div>
                         <Badge className="border border-white/12 bg-white/8 text-[var(--teacher-text-strong)]">

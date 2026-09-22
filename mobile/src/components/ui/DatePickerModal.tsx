@@ -1,7 +1,8 @@
 import { mobileBrand } from "../../theme/mobileBrand";
 import { useEffect, useMemo, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Alert, Modal, Pressable, Text, TextInput, View } from "react-native";
+import { Modal, Pressable, Text, TextInput, View } from "react-native";
+import { AppAlert as Alert } from "./AppAlert";
 import { TeacherChip, TeacherActionButton, teacherTheme as theme } from "../teacher/TeacherMobilePrimitives";
 export function DatePickerModal({
   visible,

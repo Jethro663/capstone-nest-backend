@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Alert } from "react-native";
+import { AppAlert as Alert } from "../components/ui/AppAlert";
 import {
   useTeacherSectionDetail,
   useTeacherSectionRoster,

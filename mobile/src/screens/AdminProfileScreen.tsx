@@ -1,6 +1,7 @@
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import { useState } from "react";
-import { Alert, Text, View } from "react-native";
+import { Text, View } from "react-native";
+import { AppAlert as Alert } from "../components/ui/AppAlert";
 import { toAppError } from "../api/http";
 import { PasswordChangeForm } from "../components/account/PasswordChangeForm";
 import { AppVersionInfo } from "../components/AppVersionInfo";

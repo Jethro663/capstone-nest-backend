@@ -229,6 +229,14 @@ describe('MailService', () => {
       const [mailOptions] = mockTransporter.sendMail.mock.calls[0];
       expect(mailOptions.html).toContain(PASSWORD);
     });
+
+    it('does not instruct active roster imports to verify an email', async () => {
+      await service.sendPasswordEmail(EMAIL, PASSWORD, false);
+      const [mailOptions] = mockTransporter.sendMail.mock.calls[0];
+      expect(mailOptions.html).toContain('No verification code is needed');
+      expect(mailOptions.html).not.toContain('Verify your email first');
+      expect(mailOptions.text).toContain('account is active');
+    });
   });
 
   describe('sendPasswordEmail resend mode', () => {

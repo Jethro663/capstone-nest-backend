@@ -17,14 +17,14 @@ export function resolveCampusLoginLayout({
     return { mode: "split", compact: false, heroHeight: height };
   }
   if (keyboardVisible) {
-    return { mode: "stacked", compact: true, heroHeight: 118 };
+    return { mode: "stacked", compact: true, heroHeight: 112 };
   }
   if (height < 700) {
-    return { mode: "stacked", compact: true, heroHeight: 190 };
+    return { mode: "stacked", compact: true, heroHeight: 170 };
   }
   return {
     mode: "stacked",
     compact: false,
-    heroHeight: Math.min(340, Math.max(280, Math.floor(height * 0.38))),
+    heroHeight: Math.min(230, Math.max(200, Math.floor(height * 0.27))),
   };
 }

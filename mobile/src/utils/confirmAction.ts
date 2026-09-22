@@ -1,4 +1,5 @@
-import { Alert, Platform } from "react-native";
+import { Platform } from "react-native";
+import { AppAlert as Alert } from "../components/ui/AppAlert";
 
 export function confirmAction(
   title: string,

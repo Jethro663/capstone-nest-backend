@@ -6,7 +6,8 @@ import { DEFAULT_SETTINGS, QUESTION_TYPES as SUPPORTED_QUESTION_TYPES } from "..
 import type { AiAssessmentSettings } from "../types/assessment";
 import { assessmentSettingsSummary } from "../features/assessment-editor/settings-summary";
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import { AppAlert as Alert } from "../components/ui/AppAlert";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { aiApi } from "../api/services/ai";
 import { toAppError } from "../api/http";

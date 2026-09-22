@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { Alert, View } from "react-native";
+import { View } from "react-native";
+import { AppAlert as Alert } from "../components/ui/AppAlert";
 import { toAppError } from "../api/http";
 import { reportsApi } from "../api/services/reports";
 import {
@@ -15,7 +16,6 @@ import type { TeacherDrawerScreenProps } from "../navigation/types";
 import { useAuth } from "../providers/AuthProvider";
 import {
   TeacherActionButton,
-  TeacherChip,
   TeacherEmpty,
   TeacherRow,
   TeacherScreen,
@@ -254,19 +254,15 @@ export function TeacherReportsScreen({ navigation }: Props) {
 
       {viewMode === "types" ? (
       <TeacherFlatSection title="Report types" subtitle="Select the endpoint-backed dataset you need.">
-        <View style={{ paddingHorizontal: 14, paddingBottom: 14, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          {reportMeta.map((entry) => (
-            <TeacherChip
-              key={entry.key}
-              label={`${entry.label} (${entry.value})`}
-              active={selectedReport === entry.key}
-              onPress={() => {
-                setSelectedReport(entry.key);
-                setViewMode("results");
-              }}
-            />
-          ))}
-        </View>
+        <TeacherSelectMenu
+          label="Report dataset"
+          selectedValue={selectedReport}
+          options={reportMeta.map((entry) => ({ value: entry.key, label: `${entry.label} · ${entry.value} rows` }))}
+          onSelect={(value) => {
+            setSelectedReport(value);
+            setViewMode("results");
+          }}
+        />
         <View style={{ paddingHorizontal: 14, paddingBottom: 14, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
           <TeacherActionButton
             label="Official audited CSV"

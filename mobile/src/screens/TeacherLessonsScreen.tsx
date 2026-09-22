@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, View } from "react-native";
+import { View } from "react-native";
+import { AppAlert as Alert } from "../components/ui/AppAlert";
 import { lessonsApi } from "../api/services/lessons";
 import { useLessons, useTeacherClasses } from "../api/hooks";
 import { toAppError } from "../api/http";

@@ -1,6 +1,7 @@
 import { announcementPreview } from "../utils/announcementContent";
 import { useEffect, useMemo, useState } from "react";
-import { Alert, View } from "react-native";
+import { View } from "react-native";
+import { AppAlert as Alert } from "../components/ui/AppAlert";
 import { useAnnouncements, useTeacherAnnouncementMutation, useTeacherClasses, useTeacherDeleteAnnouncementMutation } from "../api/hooks";
 import { toAppError } from "../api/http";
 import type { TeacherDrawerScreenProps } from "../navigation/types";

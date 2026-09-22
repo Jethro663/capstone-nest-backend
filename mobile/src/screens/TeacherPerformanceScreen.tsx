@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import {
   useTeacherClassAtRisk,
+  useTeacherClassDiagnostics,
   useTeacherClassPerformanceSummary,
   useTeacherClasses,
   useTeacherInterventionQuizComparison,
@@ -16,6 +17,7 @@ import {
   TeacherScreen,
   TeacherSelectMenu,
   teacherTheme,
+  stripRichText,
 } from "../components/teacher/TeacherMobilePrimitives";
 import {
   TeacherFlatSection,
@@ -37,6 +39,18 @@ function toDelta(value: number | null | undefined) {
   return `${value.toFixed(1)} pts`;
 }
 
+function evidenceDate(value: string | Date | null | undefined) {
+  if (!value) return "date unavailable";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "date unavailable" : date.toLocaleDateString();
+}
+
+function evidenceSampleSize(count: number | null | undefined, kind: string) {
+  return typeof count === "number" && Number.isFinite(count)
+    ? `${count} ${kind}${count === 1 ? "" : "s"}`
+    : "sample size unavailable";
+}
+
 function trendLabel(trend: string | undefined) {
   switch (trend) {
     case "improved":
@@ -46,7 +60,7 @@ function trendLabel(trend: string | undefined) {
     case "unchanged":
       return "Unchanged";
     default:
-      return "Awaiting Retry";
+      return "Awaiting follow-up";
   }
 }
 
@@ -84,6 +98,19 @@ function formatFilterLabel(filter: {
   return category ? `${filter.label} - ${category}` : filter.label;
 }
 
+function conceptLabel(value: string) {
+  const cleaned = stripRichText(value).replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!cleaned || /^(unknown|unlabeled|concept)$/i.test(cleaned)) return "Unlabeled concept";
+  return cleaned.replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function conceptAction(score: number, evidenceCount: number) {
+  if (evidenceCount < 3) return "Review more work before deciding";
+  if (score < 70) return "Check missed items and plan guided reteaching";
+  if (score < 85) return "Reinforce and monitor the next task";
+  return "Maintain with light review";
+}
+
 export function TeacherPerformanceScreen({ navigation }: Props) {
   const { user } = useAuth();
   const teacherId = user?.userId || user?.id;
@@ -91,7 +118,7 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
   const [selectedClassId, setSelectedClassId] = useState<string>("");
   const [selectedComparisonFilterId, setSelectedComparisonFilterId] =
     useState<string>("all");
-  const [viewMode, setViewMode] = useState<"overview" | "at_risk" | "compare">("overview");
+  const [viewMode, setViewMode] = useState<"overview" | "at_risk" | "compare" | "concepts">("overview");
 
   useEffect(() => {
     if (!selectedClassId && classesQuery.data?.length) {
@@ -103,6 +130,9 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
     selectedClassId || undefined,
   );
   const atRiskQuery = useTeacherClassAtRisk(selectedClassId || undefined);
+  const diagnosticsQuery = useTeacherClassDiagnostics(
+    viewMode === "concepts" ? selectedClassId || undefined : undefined,
+  );
   const comparisonQuery = useTeacherInterventionQuizComparison(
     selectedClassId || undefined,
   );
@@ -114,6 +144,15 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
 
   const atRiskStudents = atRiskQuery.data?.students ?? [];
   const comparisonRows = comparisonQuery.data?.comparisons ?? [];
+  const summary = summaryQuery.data;
+  const classAverage = summary?.averages?.blended ?? summary?.averageBlendedScore;
+  const supportThreshold = summary?.threshold ?? summary?.thresholdApplied;
+  const scoreCoverage = summary?.studentsWithData;
+  const conceptRows = useMemo(
+    () => [...(diagnosticsQuery.data?.conceptHotspots ?? [])]
+      .sort((left, right) => left.masteryScore - right.masteryScore),
+    [diagnosticsQuery.data?.conceptHotspots],
+  );
   const comparisonFilters = comparisonQuery.data?.filterOptions?.length
     ? comparisonQuery.data.filterOptions
     : [
@@ -187,13 +226,14 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
   return (
     <TeacherScreen
       title="Performance"
-      subtitle="Inspect current standing, at-risk learners, or intervention comparisons."
+      subtitle="Review evidence, identify learners needing support, and monitor follow-up work."
       icon="chart-line"
       onBackPress={() => navigation.goBack()}
       refreshing={
         classesQuery.isRefetching ||
         summaryQuery.isRefetching ||
         atRiskQuery.isRefetching ||
+        diagnosticsQuery.isRefetching ||
         comparisonQuery.isRefetching
       }
       onRefresh={() => {
@@ -201,6 +241,7 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
           classesQuery.refetch(),
           summaryQuery.refetch(),
           atRiskQuery.refetch(),
+          ...(viewMode === "concepts" && selectedClassId ? [diagnosticsQuery.refetch()] : []),
           comparisonQuery.refetch(),
         ]);
       }}
@@ -217,7 +258,8 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
         items={[
           { key: "overview", label: "Overview" },
           { key: "at_risk", label: "At risk", count: atRiskStudents.length },
-          { key: "compare", label: "Compare", count: comparisonRows.length },
+          { key: "compare", label: "Response", count: comparisonRows.length },
+          { key: "concepts", label: "Concepts", count: viewMode === "concepts" ? conceptRows.length : undefined },
         ]}
         onSelect={setViewMode}
       />
@@ -228,11 +270,11 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
         items={[
           {
             label: "Average",
-            value: typeof summaryQuery.data?.averageBlendedScore === "number" ? `${boundAcademicPercentage(summaryQuery.data.averageBlendedScore).toFixed(1)}%` : "N/A",
+            value: typeof classAverage === "number" ? `${boundAcademicPercentage(classAverage).toFixed(1)}%` : "N/A",
             tone: "blue",
           },
-          { label: "At risk", value: atRiskStudents.length, tone: "amber" },
-          { label: "Students", value: summaryQuery.data?.totalStudents ?? "N/A", tone: "red" },
+          { label: "Needs support", value: summary?.atRiskCount ?? atRiskStudents.length, tone: "amber" },
+          { label: "Score coverage", value: scoreCoverage === undefined ? "N/A" : `${scoreCoverage}/${summary?.totalStudents ?? 0}`, tone: "blue" },
         ]}
       />
       <TeacherFlatSection
@@ -246,18 +288,22 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
         <TeacherRow
           title="Threshold"
           subtitle={
-            typeof summaryQuery.data?.thresholdApplied === "number"
-              ? toPercent(summaryQuery.data.thresholdApplied)
+            typeof supportThreshold === "number"
+              ? toPercent(supportThreshold)
               : "Not available"
           }
         />
         <TeacherRow
           title="Average current standing"
           subtitle={
-            typeof summaryQuery.data?.averageBlendedScore === "number"
-              ? toPercent(summaryQuery.data.averageBlendedScore)
+            typeof classAverage === "number"
+              ? toPercent(classAverage)
               : "Not available"
           }
+        />
+        <TeacherRow
+          title="Learners with score data"
+          subtitle={scoreCoverage === undefined ? "Not available" : `${scoreCoverage} of ${summary?.totalStudents ?? 0}`}
         />
       </TeacherFlatSection>
       </>
@@ -284,7 +330,8 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
               <TeacherRow
                 key={`${entry.studentId || index}`}
                 title={name}
-                subtitle={`Current standing: ${toPercent(entry.blendedScore)} | Threshold: ${toPercent(entry.thresholdApplied)} | Before avg: ${toPercent(comparison?.beforeScorePercent)} | After AI avg: ${toPercent(comparison?.afterScorePercent)} | Delta: ${toDelta(comparison?.deltaScorePercent)}`}
+                subtitle={`Current standing ${toPercent(entry.blendedScore)} · support threshold ${toPercent(entry.thresholdApplied)}${comparison ? `\nLatest response: ${trendLabel(comparison.trend)} · ${toDelta(comparison.deltaScorePercent)}` : "\nNo intervention follow-up evidence yet"}`}
+                onPress={comparison ? () => setViewMode("compare") : undefined}
                 right={
                   comparison ? (
                     <View
@@ -324,8 +371,8 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
 
       {viewMode === "compare" ? (
       <TeacherFlatSection
-        title="Intervention progress comparison"
-        subtitle="Before uses class assessment averages; after uses completed AI remedial quiz averages."
+        title="Intervention response"
+        subtitle="Baseline and follow-up describe observed assessment work. A score change alone does not prove the intervention caused it."
       >
         {comparisonRows.length ? (
           <>
@@ -356,7 +403,7 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
                   tone: "blue",
                 },
                 {
-                  label: "Awaiting AI",
+                  label: "Pending",
                   value: filteredComparisonCounts.awaiting,
                   tone: "amber",
                 },
@@ -372,8 +419,8 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
                 return (
                   <TeacherRow
                     key={`${row.caseId}-${row.assignmentId}-${row.assessmentId}`}
-                    title={`${studentName} - ${row.assessmentTitle}`}
-                    subtitle={`Before avg: ${toPercent(row.beforeScorePercent)} (${row.beforeSampleSize} assessment${row.beforeSampleSize === 1 ? "" : "s"}) | After AI avg: ${toPercent(row.afterScorePercent)} (${row.afterSampleSize} AI quiz${row.afterSampleSize === 1 ? "" : "zes"}) | Delta: ${toDelta(row.deltaScorePercent)}`}
+                    title={`${studentName} · ${row.assessmentTitle}`}
+                    subtitle={`Baseline ${toPercent(row.beforeScorePercent)} · ${evidenceSampleSize(row.beforeSampleSize, "assessment")} · ${evidenceDate(row.beforeSubmittedAt)}\nFollow-up ${toPercent(row.afterScorePercent)} · ${evidenceSampleSize(row.afterSampleSize, "AI-plan assessment")} · ${evidenceDate(row.afterSubmittedAt)}\nChange ${toDelta(row.deltaScorePercent)} · ${row.comparisonScope === "class_average" ? "class average" : row.comparisonScope === "assessment" ? "selected assessment" : "scope unavailable"}`}
                     right={
                       <View
                         style={{
@@ -410,11 +457,34 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
         ) : (
           <TeacherEmpty
             title="No intervention quiz data yet"
-            subtitle="Before averages appear after class assessments, and after averages appear once students submit AI remedial quizzes."
+            subtitle="Baseline appears after class assessments. Follow-up appears after learners complete AI-plan assessments."
             icon="chart-timeline-variant"
           />
         )}
       </TeacherFlatSection>
+      ) : null}
+
+      {viewMode === "concepts" ? (
+        <TeacherFlatSection
+          title="Concept evidence"
+          subtitle="Start with low mastery signals. Review the missed work and evidence count before changing instruction; these are review aids, not official grades."
+        >
+          {diagnosticsQuery.isLoading ? (
+            <TeacherEmpty title="Loading concept evidence" subtitle="Gathering recent assessment signals." icon="chart-box-outline" />
+          ) : diagnosticsQuery.isError ? (
+            <TeacherEmpty title="Concept evidence unavailable" subtitle="Pull to refresh this class and try again." icon="alert-circle-outline" />
+          ) : conceptRows.length ? (
+            conceptRows.map((concept) => (
+              <TeacherRow
+                key={concept.concept}
+                title={conceptLabel(concept.concept)}
+                subtitle={`Mastery signal ${toPercent(concept.masteryScore)} · ${concept.wrongCount} misses · ${concept.evidenceCount} observations\n${conceptAction(concept.masteryScore, concept.evidenceCount)}`}
+              />
+            ))
+          ) : (
+            <TeacherEmpty title="No concept evidence yet" subtitle="Run assessments and refresh this class to surface concept signals." icon="chart-box-outline" />
+          )}
+        </TeacherFlatSection>
       ) : null}
 
       <TeacherFlatSection

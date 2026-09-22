@@ -1,7 +1,8 @@
 import { mobileBrand } from "../../theme/mobileBrand";
 import { useEffect, useMemo, useState } from "react";
 import * as DocumentPicker from "expo-document-picker";
-import { Alert, AppState, Text, View } from "react-native";
+import { AppState, Text, View } from "react-native";
+import { AppAlert as Alert } from "../ui/AppAlert";
 import {
   useExtractionCancelMutation,
   useExtractionDeleteMutation,

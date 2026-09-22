@@ -8,24 +8,27 @@ import { ErrorModalProvider } from "./ErrorModalProvider";
 import { LiveNotificationProvider } from "./LiveNotificationProvider";
 import { StudentInterventionAlertProvider } from "./StudentInterventionAlertProvider";
 import { UpdateProvider } from "./UpdateProvider";
+import { AppAlertProvider } from "../components/ui/AppAlert";
 
 export function AppProviders({ children }: PropsWithChildren) {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <QueryClientProvider client={queryClient}>
-          <ErrorModalProvider>
-            <UpdateProvider>
-              <AuthProvider>
-                <StudentInterventionAlertProvider>
-                  <LiveNotificationProvider>
-                    {children}
-                  </LiveNotificationProvider>
-                </StudentInterventionAlertProvider>
-              </AuthProvider>
-            </UpdateProvider>
-          </ErrorModalProvider>
-        </QueryClientProvider>
+        <AppAlertProvider>
+          <QueryClientProvider client={queryClient}>
+            <ErrorModalProvider>
+              <UpdateProvider>
+                <AuthProvider>
+                  <StudentInterventionAlertProvider>
+                    <LiveNotificationProvider>
+                      {children}
+                    </LiveNotificationProvider>
+                  </StudentInterventionAlertProvider>
+                </AuthProvider>
+              </UpdateProvider>
+            </ErrorModalProvider>
+          </QueryClientProvider>
+        </AppAlertProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

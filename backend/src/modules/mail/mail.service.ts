@@ -157,13 +157,14 @@ export class MailService {
   async sendPasswordEmail(
     email: string,
     password: string,
+    requiresOTP = true,
   ): Promise<{ success: boolean; mode: 'development' | 'production' }> {
     try {
       return await this.sendMail({
         to: email,
         subject: 'Your Nexora Account Credentials',
-        html: this.getPasswordTemplate(password),
-        text: `Your temporary Nexora account password is: ${password}. Please log in and change it immediately after verifying your email.`,
+        html: this.getPasswordTemplate(password, requiresOTP),
+        text: `Your temporary Nexora account password is: ${password}. ${requiresOTP ? 'Verify your email with the separate code, then sign in and change this password.' : 'Your roster-imported account is active. Sign in and change this password immediately.'}`,
       });
     } catch (error) {
       this.logger.error(
@@ -223,7 +224,7 @@ export class MailService {
     `;
   }
 
-  private getPasswordTemplate(password: string) {
+  private getPasswordTemplate(password: string, requiresOTP: boolean) {
     return `
       <div style="margin:0;background-color:#fff7f5;padding:32px 18px;color:#1f2937;font-family:Arial,sans-serif;">
         <div style="max-width:560px;margin:0 auto;background:linear-gradient(180deg,#fffaf9 0%,#fff5f4 100%);border:1px solid #f3d6d3;">
@@ -250,7 +251,7 @@ export class MailService {
               Before you log in
             </p>
             <ol style="margin:0;padding-left:18px;font-size:14px;line-height:1.9;color:#6b4b4b;">
-              <li><strong style="color:#3f1518;">Verify your email first</strong> using the separate OTP email.</li>
+              ${requiresOTP ? '<li><strong style="color:#3f1518;">Verify your email first</strong> using the separate OTP email.</li>' : '<li><strong style="color:#3f1518;">Your roster-imported account is active.</strong> No verification code is needed.</li>'}
               <li><strong style="color:#3f1518;">Sign in to Nexora</strong> with the temporary password above.</li>
               <li><strong style="color:#3f1518;">Change your password</strong> after your first successful login.</li>
             </ol>

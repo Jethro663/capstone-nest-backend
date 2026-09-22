@@ -1,7 +1,8 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Alert, Pressable, Text, TextInput, View } from "react-native";
+import { Pressable, Text, TextInput, View } from "react-native";
+import { AppAlert as Alert } from "../components/ui/AppAlert";
 import { useTeacherClasses } from "../api/hooks";
 import { toAppError } from "../api/http";
 import { fileUploadApi } from "../api/services/file-upload";

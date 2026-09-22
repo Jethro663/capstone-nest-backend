@@ -398,14 +398,19 @@ export class RosterImportService {
   /**
    * Commits the approved roster:
    *  - Enrolls registered students into the section (skips already-enrolled ones).
-   *  - Creates unverified student accounts for unmatched rows and enrolls them.
-   *  - Starts the normal email activation flow after the import commits.
+   *  - Creates student accounts for unmatched rows and enrolls them.
+   *  - Starts OTP onboarding, or administrator-attested activation, after commit.
    */
   async commitRoster(
     sectionId: string,
     dto: RosterImportCommitDto,
     requestingUser: RosterRequestingUser,
   ): Promise<RosterImportCommitResponseDto> {
+    if (dto.skipVerification && !requestingUser.roles.includes('admin')) {
+      throw new ForbiddenException(
+        'Only an administrator can activate imported accounts without OTP',
+      );
+    }
     const maintenance = await this.adminMaintenanceService.resolveForActor(
       requestingUser.id,
       requestingUser.roles,
@@ -742,8 +747,10 @@ export class RosterImportService {
             firstName: row.name.firstName,
             middleName: row.name.middleName,
             lastName: row.name.lastName,
-            status: 'PENDING' as const,
-            isEmailVerified: false,
+            status: dto.skipVerification
+              ? ('ACTIVE' as const)
+              : ('PENDING' as const),
+            isEmailVerified: dto.skipVerification === true,
           };
         });
 
@@ -835,6 +842,7 @@ export class RosterImportService {
         schoolYear: section.schoolYear,
         enrolledStudentIds: enrolledUserIds,
         createdStudentIds: pendingRosterIds,
+        activationMode: dto.skipVerification ? 'admin_attested' : 'email_otp',
         alreadyEnrolledSkipped,
         ...(maintenanceAccess ? { maintenanceAccess } : {}),
       },
@@ -847,7 +855,7 @@ export class RosterImportService {
             userId: account.id,
             email: account.email,
             generatedPassword: account.temporaryPassword,
-            requiresOTP: true,
+            requiresOTP: !dto.skipVerification,
           }),
         ),
       );

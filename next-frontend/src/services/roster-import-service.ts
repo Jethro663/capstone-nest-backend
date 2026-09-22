@@ -66,6 +66,7 @@ export interface RosterImportCommitDto {
   sectionId: string;
   enrolledRows: CommitStudentRow[];
   pendingRows: CommitPendingRow[];
+  skipVerification?: boolean;
 }
 
 export interface PendingImportRow {

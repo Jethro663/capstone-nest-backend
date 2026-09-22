@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Alert, Text, View } from "react-native";
+import { Text, View } from "react-native";
+import { AppAlert as Alert } from "../components/ui/AppAlert";
 import { WebView } from "react-native-webview";
 import { useLessonDetail, useTeacherLessonDraftStateMutation } from "../api/hooks";
 import { toAppError } from "../api/http";

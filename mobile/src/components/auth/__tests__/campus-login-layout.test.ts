@@ -8,7 +8,7 @@ describe("campus login layout", () => {
         height: 568,
         keyboardVisible: false,
       }),
-    ).toEqual({ mode: "stacked", compact: true, heroHeight: 190 });
+    ).toEqual({ mode: "stacked", compact: true, heroHeight: 170 });
   });
 
   it("uses the full stacked entrance on a normal portrait phone", () => {
@@ -18,7 +18,7 @@ describe("campus login layout", () => {
         height: 844,
         keyboardVisible: false,
       }),
-    ).toEqual({ mode: "stacked", compact: false, heroHeight: 320 });
+    ).toEqual({ mode: "stacked", compact: false, heroHeight: 227 });
   });
 
   it("collapses the stacked hero while the keyboard is visible", () => {
@@ -28,7 +28,7 @@ describe("campus login layout", () => {
         height: 844,
         keyboardVisible: true,
       }),
-    ).toEqual({ mode: "stacked", compact: true, heroHeight: 118 });
+    ).toEqual({ mode: "stacked", compact: true, heroHeight: 112 });
   });
 
   it("uses split mode at the tablet threshold", () => {

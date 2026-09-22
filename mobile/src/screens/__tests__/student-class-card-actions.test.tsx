@@ -46,6 +46,8 @@ function resolvedStyle(style: unknown) {
 
 describe("StudentClassCard actions", () => {
   it("keeps every action bounded and aligns fixed icon and trailing slots", () => {
+    const openTasks = jest.fn();
+    const openSchedule = jest.fn();
     let renderer: TestRenderer.ReactTestRenderer;
     act(() => {
       renderer = TestRenderer.create(
@@ -65,8 +67,8 @@ describe("StudentClassCard actions", () => {
             status: "inProgress",
           }}
           onOpenClass={jest.fn()}
-          onOpenTasks={jest.fn()}
-          onOpenSchedule={jest.fn()}
+          onOpenTasks={openTasks}
+          onOpenSchedule={openSchedule}
         />,
       );
     });
@@ -77,6 +79,14 @@ describe("StudentClassCard actions", () => {
     expect(resolvedStyle(primary.props.style)).toMatchObject({ minHeight: 52, width: "100%" });
     expect(resolvedStyle(tasks.props.style).minHeight).toBeGreaterThanOrEqual(44);
     expect(resolvedStyle(schedule.props.style).minHeight).toBeGreaterThanOrEqual(44);
+    expect(resolvedStyle(tasks.props.style).flex).toBe(1);
+    expect(resolvedStyle(schedule.props.style).flex).toBe(1);
+    act(() => {
+      tasks.props.onPress();
+      schedule.props.onPress();
+    });
+    expect(openTasks).toHaveBeenCalledTimes(1);
+    expect(openSchedule).toHaveBeenCalledTimes(1);
 
     const iconSlots = renderer!.root.findAll(
       (node) => node.type === "View" && node.props.testID === "class-action-icon-slot",

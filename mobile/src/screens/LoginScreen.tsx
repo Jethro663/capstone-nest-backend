@@ -208,7 +208,7 @@ export function LoginScreen({ navigation }: Props) {
             marginTop: 6,
           }}
         >
-          Use your school account to continue
+          Your lessons, classes, and progress are ready when you are.
         </Text>
 
         <AuthFieldLabel>Email address</AuthFieldLabel>
@@ -216,8 +216,8 @@ export function LoginScreen({ navigation }: Props) {
           autoCapitalize="none"
           autoCorrect={false}
           containerStyle={{
-            backgroundColor: mobileBrand.warningSoft,
-            borderColor: mobileBrand.dangerBorder,
+            backgroundColor: mobileBrand.surface,
+            borderColor: mobileBrand.borderStrong,
           }}
           icon="email-outline"
           iconColor={campusColors.red}
@@ -235,8 +235,8 @@ export function LoginScreen({ navigation }: Props) {
           autoCapitalize="none"
           autoCorrect={false}
           containerStyle={{
-            backgroundColor: mobileBrand.warningSoft,
-            borderColor: mobileBrand.dangerBorder,
+            backgroundColor: mobileBrand.surface,
+            borderColor: mobileBrand.borderStrong,
           }}
           icon="lock-outline"
           iconColor={campusColors.red}
@@ -277,7 +277,7 @@ export function LoginScreen({ navigation }: Props) {
 
         <AuthPrimaryButton
           disabled={!email.trim() || !password.trim()}
-          gradientColors={[campusColors.deepRed, campusColors.rose]}
+          gradientColors={[mobileBrand.red, mobileBrand.redPressed]}
           label="Sign in"
           loading={loading}
           loadingLabel="Signing in..."

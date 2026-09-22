@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Alert, View } from "react-native";
+import { View } from "react-native";
+import { AppAlert as Alert } from "../components/ui/AppAlert";
 import { useTeacherCreateModuleMutation } from "../api/hooks";
 import { toAppError } from "../api/http";
 import type { RootStackParamList } from "../navigation/types";

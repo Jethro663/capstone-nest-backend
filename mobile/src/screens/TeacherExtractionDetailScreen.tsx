@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, AppState, Text, View } from "react-native";
+import { AppState, Text, View } from "react-native";
+import { AppAlert as Alert } from "../components/ui/AppAlert";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { extractionsApi } from "../api/services/extractions";
 import { addActiveExtraction, removeActiveExtraction } from "../api/teacher-extraction-jobs";

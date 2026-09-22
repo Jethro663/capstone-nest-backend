@@ -1,6 +1,7 @@
 import { mobileBrand } from "../theme/mobileBrand";
 import { useEffect, useMemo, useState } from "react";
-import { Alert, View } from "react-native";
+import { View } from "react-native";
+import { AppAlert as Alert } from "../components/ui/AppAlert";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import { adminApi } from "../api/services/admin";
