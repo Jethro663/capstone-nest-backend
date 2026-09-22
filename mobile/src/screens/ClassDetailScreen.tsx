@@ -9,6 +9,7 @@ import type {
   NativeStackScreenProps,
 } from "@react-navigation/native-stack";
 import { Pressable, ScrollView, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import {
   EmptyState,
   Refreshable,
@@ -894,6 +895,7 @@ export function StudentClassDetailContent({
   }
 
   return (
+    <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: theme.topbar }}>
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
       <ScreenScroll
         backgroundColor={theme.bg}
@@ -929,7 +931,7 @@ export function StudentClassDetailContent({
           >
             <MaterialCommunityIcons name="arrow-left" size={20} color={theme.redText} />
           </Pressable>
-          <Text numberOfLines={1} style={{ flex: 1, fontSize: 18, fontWeight: "900", color: theme.text }}>
+          <Text numberOfLines={1} style={{ flex: 1, fontSize: 18, fontWeight: "900", color: mobileBrand.white }}>
             Class workspace
           </Text>
           <Pressable
@@ -2481,6 +2483,7 @@ export function StudentClassDetailContent({
         </View>
       ) : null}
     </View>
+    </SafeAreaView>
   );
 }
 

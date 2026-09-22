@@ -467,20 +467,22 @@ export function CalendarScreen({ navigation, route }: Props) {
                         alignItems: "center",
                         justifyContent: "center",
                         backgroundColor: isSelected
-                          ? theme.blueSoft
+                          ? theme.red
                           : isToday
-                            ? theme.red
+                            ? theme.redSoft
                             : "transparent",
-                        borderWidth: isSelected ? 1 : 0,
-                        borderColor: isSelected
-                          ? theme.blueLine
+                        borderWidth: isToday && !isSelected ? 1 : 0,
+                        borderColor: isToday && !isSelected
+                          ? theme.redLine
                           : "transparent",
                       }}
                     >
                       <Text
                         style={{
-                          color: isToday
+                          color: isSelected
                             ? mobileBrand.white
+                            : isToday
+                              ? theme.redText
                             : cell.inMonth
                               ? theme.text
                               : theme.dim,

@@ -1,7 +1,7 @@
 import { mobileBrand } from "../theme/mobileBrand";
 import * as Clipboard from "expo-clipboard";
 import { useEffect, useRef, useState } from "react";
-import { AppState, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Share, Text, View } from "react-native";
+import { AppState, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Share, StatusBar, Text, View } from "react-native";
 import { AppAlert as Alert } from "../components/ui/AppAlert";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -589,6 +589,7 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
       style={{ flex: 1, backgroundColor: theme.bg }}
       edges={["bottom", "top"]}
     >
+      <StatusBar barStyle="dark-content" backgroundColor={theme.bg} />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -677,7 +678,7 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
               Could not load assessment. Retry
             </Action>
           )}
-          {route.params?.created && detail.data ? (
+          {!restrictedReview && route.params?.created && detail.data ? (
             <View
               accessibilityRole="summary"
               style={{
@@ -715,12 +716,12 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
               </Text>
             </View>
           ) : null}
-          {detail.data?.authoringRestrictions?.reason && (
+          {!restrictedReview && detail.data?.authoringRestrictions?.reason && (
             <Text style={{ color: theme.muted }}>
               {detail.data.authoringRestrictions.reason}
             </Text>
           )}
-          {reason && (
+          {!restrictedReview && reason && (
             <View
               style={{
                 padding: 14,
@@ -766,7 +767,7 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
               <Action onPress={reloadServer}>Review server version</Action>
             </View>
           )}
-          {issues.length > 0 && (
+          {!restrictedReview && issues.length > 0 && (
             <View style={{ gap: 6 }}>
               <Text style={{ color: theme.text, fontWeight: "700" }}>
                 Before Ready to give
@@ -1319,7 +1320,7 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
           {(restrictedReview || tab === "Preview") && (
             <View style={{ gap: 18 }}>
               <Text style={{ color: theme.muted }}>
-                Student preview · no attempt will be created
+                {restrictedReview ? "Question review" : "Student preview"} · no attempt will be created
               </Text>
               <Text
                 style={{ fontSize: 24, fontWeight: "700", color: theme.text }}

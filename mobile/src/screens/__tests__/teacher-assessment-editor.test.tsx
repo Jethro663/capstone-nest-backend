@@ -43,6 +43,7 @@ jest.mock("react-native", () => {
     KeyboardAvoidingView: component("KeyboardAvoidingView"),
     Pressable: component("Pressable"),
     ScrollView: component("ScrollView"),
+    StatusBar: component("StatusBar"),
     Text: component("Text"),
     View: component("View"),
   };
@@ -330,6 +331,11 @@ it("shows assessment questions without edit controls when preparation is restric
   const text = flatten(renderer.root);
   expect(text).toContain("Read-only question review");
   expect(text).toContain("Review restrictions");
+  expect(text).toMatch(/Question review\s*·\s*no attempt will be created/);
+  expect(text).not.toContain("Student preview");
+  expect(text).not.toContain("Refresh after repair");
+  expect(text).not.toContain("Copy diagnostic details");
+  expect(text).not.toContain("Before Ready to give");
   expect(text).not.toContain("Add question");
   expect(text).not.toContain("Save draft");
   expect(assessmentsApi.saveEditor).not.toHaveBeenCalled();

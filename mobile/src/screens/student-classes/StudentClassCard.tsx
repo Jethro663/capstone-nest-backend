@@ -191,10 +191,7 @@ export function StudentClassCard({
           accessibilityState={{ disabled }}
           disabled={disabled}
           onPress={onOpenClass}
-          style={({ pressed }) => [
-            styles.primaryButton,
-            pressed ? styles.pressed : null,
-          ]}
+          style={styles.primaryButton}
         >
           <View style={styles.primaryLabelSlot}>
             <Text numberOfLines={2} style={styles.primaryButtonText}>
@@ -221,10 +218,7 @@ export function StudentClassCard({
             accessibilityState={{ disabled }}
             disabled={disabled}
             onPress={onOpenTasks}
-            style={({ pressed }) => [
-              styles.secondaryButton,
-              pressed ? styles.pressed : null,
-            ]}
+            style={styles.secondaryButton}
           >
             <View testID="class-action-icon-slot" style={styles.actionIconSlot}>
               <MaterialCommunityIcons
@@ -244,10 +238,7 @@ export function StudentClassCard({
             accessibilityState={{ disabled }}
             disabled={disabled}
             onPress={onOpenSchedule}
-            style={({ pressed }) => [
-              styles.secondaryButton,
-              pressed ? styles.pressed : null,
-            ]}
+            style={styles.secondaryButton}
           >
             <View testID="class-action-icon-slot" style={styles.actionIconSlot}>
               <MaterialCommunityIcons
@@ -463,5 +454,4 @@ const styles = StyleSheet.create({
     lineHeight: 14,
     fontWeight: "900",
   },
-  pressed: { opacity: 0.72 },
 });
