@@ -204,6 +204,18 @@ async function registerMobileRelease({
       "binary_forced",
     );
   }
+  const optionalBuild =
+    manifest.requiresFullApk &&
+    manifest.minSupportedVersionCode < manifest.versionCode
+      ? manifest.minSupportedVersionCode
+      : null;
+  if (optionalBuild !== null) {
+    assertDecisionMatches(
+      manifest,
+      await checkPolicy(optionalBuild),
+      "binary_optional",
+    );
+  }
   assertDecisionMatches(
     manifest,
     await checkPolicy(manifest.versionCode),
@@ -220,6 +232,7 @@ async function registerMobileRelease({
     apkSizeBytes: manifest.platform === "android" ? liveSize : undefined,
     apkSha256: manifest.platform === "android" ? liveSha : undefined,
     checkedOldBuilds: oldBuilds,
+    checkedOptionalBuild: optionalBuild,
   };
 }
 
@@ -241,7 +254,7 @@ async function main() {
     ciSecret: process.env.CI_ADMIN_SECRET,
   });
   process.stdout.write(
-    `Registered and verified ${result.platform} ${result.nativeVersion} (build ${result.versionCode}), ${result.artifactSizeBytes} bytes, SHA-256 ${result.artifactSha256}; forced-update checks passed for builds ${result.checkedOldBuilds.join(", ") || "none"}.\n`,
+    `Registered and verified ${result.platform} ${result.nativeVersion} (build ${result.versionCode}), ${result.artifactSizeBytes} bytes, SHA-256 ${result.artifactSha256}; forced-update checks passed for builds ${result.checkedOldBuilds.join(", ") || "none"}; optional-update check passed for build ${result.checkedOptionalBuild ?? "none"}.\n`,
   );
 }
 

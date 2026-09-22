@@ -14,7 +14,7 @@ afterEach(async () => {
   );
 });
 
-async function fixture() {
+async function fixture({ minSupportedVersionCode = 41 } = {}) {
   const root = await mkdtemp(
     path.join(os.tmpdir(), "nexora-register-release-"),
   );
@@ -23,7 +23,7 @@ async function fixture() {
   const manifest = {
     platform: "android",
     versionCode: 41,
-    minSupportedVersionCode: 41,
+    minSupportedVersionCode,
     nativeVersion: "0.1.40",
     otaRuntimeVersion: "0.1.40",
     apkDownloadUrl: "https://frontend.example/downloads/release.apk",
@@ -101,8 +101,8 @@ function decision(inputManifest, updateAction) {
   };
 }
 
-test("registers only after the live package matches and verifies old and current clients", async () => {
-  const { apk, manifest, manifestPath } = await fixture();
+test("registers only after the live package matches and verifies forced, optional, and current clients", async () => {
+  const { apk, manifest, manifestPath } = await fixture({ minSupportedVersionCode: 40 });
   const posts = [];
   const checkedBuilds = [];
   const fetchImpl = async (input, init = {}) => {
@@ -118,7 +118,14 @@ test("registers only after the live package matches and verifies old and current
       checkedBuilds.push(build);
       return jsonResponse({
         success: true,
-        data: decision(manifest, build === 41 ? "none" : "binary_forced"),
+        data: decision(
+          manifest,
+          build === 41
+            ? "none"
+            : build === 40
+              ? "binary_optional"
+              : "binary_forced",
+        ),
       });
     }
     throw new Error(`Unexpected URL ${url}`);
@@ -133,7 +140,8 @@ test("registers only after the live package matches and verifies old and current
   });
 
   assert.deepEqual(result.checkedOldBuilds, [1, 39]);
-  assert.deepEqual(checkedBuilds, [1, 39, 41]);
+  assert.equal(result.checkedOptionalBuild, 40);
+  assert.deepEqual(checkedBuilds, [1, 39, 40, 41]);
   assert.equal(posts.length, 1);
   assert.deepEqual(posts[0].payload, canonicalManifest(manifest));
   assert.equal(posts[0].init.headers["x-ci-secret"], "test-ci-secret");
@@ -195,6 +203,7 @@ test("registers an immutable iOS IPA with platform-neutral policy checks", async
   });
 
   assert.deepEqual(result.checkedOldBuilds, [1, 45]);
+  assert.equal(result.checkedOptionalBuild, null);
   assert.deepEqual(checkedBuilds, [1, 45, 47]);
   assert.deepEqual(posts, [manifest]);
   assert.equal(result.artifactSha256, manifest.artifactSha256);
