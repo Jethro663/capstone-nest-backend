@@ -34,6 +34,7 @@ const mockedToast = toast as unknown as { success: jest.Mock; error: jest.Mock }
 type SectionListResponse = Awaited<ReturnType<typeof sectionService.getAll>>;
 type PendingResponse = Awaited<ReturnType<typeof rosterImportService.getPending>>;
 type PreviewResponse = Awaited<ReturnType<typeof rosterImportService.preview>>;
+type CommitResponse = Awaited<ReturnType<typeof rosterImportService.commit>>;
 
 function readBlobAsArrayBuffer(blob: Blob) {
   return new Promise<ArrayBuffer>((resolve, reject) => {
@@ -127,6 +128,18 @@ describe('RosterImportPage', () => {
         },
       },
     } as PreviewResponse);
+    mockedRosterImportService.commit.mockResolvedValue({
+      success: true,
+      data: {
+        enrolledUserIds: ['student-1', 'new-student-1'],
+        pendingRosterIds: ['new-student-1'],
+        alreadyEnrolledSkipped: 0,
+        activationMode: 'email_otp',
+        createdActiveCount: 0,
+        createdPendingCount: 1,
+        summary: { enrolled: 2, pending: 1, total: 3 },
+      },
+    } as CommitResponse);
   });
 
   it('validates the edited roster draft without committing it', async () => {
@@ -319,6 +332,18 @@ describe('RosterImportPage', () => {
   });
 
   it('requires explicit acknowledgement before activating new imported accounts without OTP', async () => {
+    mockedRosterImportService.commit.mockResolvedValueOnce({
+      success: true,
+      data: {
+        enrolledUserIds: ['student-1', 'new-student-1'],
+        pendingRosterIds: ['new-student-1'],
+        alreadyEnrolledSkipped: 0,
+        activationMode: 'admin_attested',
+        createdActiveCount: 1,
+        createdPendingCount: 0,
+        summary: { enrolled: 2, pending: 1, total: 3 },
+      },
+    } as CommitResponse);
     const { container } = render(<RosterImportPage />);
     fireEvent.change(await screen.findByLabelText('Target Section'), {
       target: { value: 'section-1' },
@@ -334,7 +359,9 @@ describe('RosterImportPage', () => {
     });
     await screen.findByRole('textbox', { name: /row 2, column A/i });
     fireEvent.click(screen.getByRole('button', { name: 'Validate roster' }));
-    const activationButton = await screen.findByRole('button', { name: 'Enable skip verification' });
+    const activationButton = await screen.findByRole('button', {
+      name: 'Activate new accounts now (skip OTP)',
+    });
     fireEvent.click(activationButton);
     expect(screen.getByRole('button', { name: 'Commit Import' })).toBeDisabled();
     expect(mockedRosterImportService.commit).not.toHaveBeenCalled();
@@ -346,6 +373,56 @@ describe('RosterImportPage', () => {
       'section-1',
       expect.objectContaining({ skipVerification: true }),
     ));
+    expect(mockedToast.success).toHaveBeenCalledWith(
+      'Server confirmed: 1 new account is active immediately; OTP was skipped. Temporary password delivery has been requested.',
+    );
+  });
+
+  it('does not claim immediate activation when the server applies OTP mode', async () => {
+    const { container } = render(<RosterImportPage />);
+    fireEvent.change(await screen.findByLabelText('Target Section'), {
+      target: { value: 'section-1' },
+    });
+    fireEvent.change(
+      container.querySelector('input[type="file"]') as HTMLInputElement,
+      {
+        target: {
+          files: [
+            new File(
+              [
+                'Last Name,First Name,Middle Name,LRN,Email\nDela Cruz,Ana,Santos,202407000010,ana@nexora.edu',
+              ],
+              'roster.csv',
+              { type: 'text/csv' },
+            ),
+          ],
+        },
+      },
+    );
+    await screen.findByRole('textbox', { name: /row 2, column A/i });
+    fireEvent.click(screen.getByRole('button', { name: 'Validate roster' }));
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Activate new accounts now (skip OTP)',
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: /I confirm this new account/i }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Commit Import' }));
+
+    await waitFor(() =>
+      expect(mockedRosterImportService.commit).toHaveBeenCalledWith(
+        'section-1',
+        expect.objectContaining({ skipVerification: true }),
+      ),
+    );
+    expect(mockedToast.success).toHaveBeenCalledWith(
+      'Server confirmed: 1 new account is pending OTP verification.',
+    );
+    expect(mockedToast.success).not.toHaveBeenCalledWith(
+      expect.stringContaining('active immediately'),
+    );
   });
 
   it('invalidates the server preview when an edited cell changes again', async () => {

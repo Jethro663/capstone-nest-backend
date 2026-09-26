@@ -126,6 +126,9 @@ export class RosterImportCommitResponseDto {
   /** Legacy key: newly created account IDs, including immediately active imports. */
   pendingRosterIds: string[];
   alreadyEnrolledSkipped: number;
+  activationMode: 'admin_attested' | 'email_otp';
+  createdActiveCount: number;
+  createdPendingCount: number;
   summary: {
     enrolled: number;
     /** Legacy key: count of newly created accounts, regardless of activation mode. */

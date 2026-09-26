@@ -69,6 +69,22 @@ export interface RosterImportCommitDto {
   skipVerification?: boolean;
 }
 
+export interface RosterImportCommitResult {
+  enrolledUserIds: string[];
+  /** Legacy key: IDs of all newly created accounts, including active imports. */
+  pendingRosterIds: string[];
+  alreadyEnrolledSkipped: number;
+  activationMode: 'admin_attested' | 'email_otp';
+  createdActiveCount: number;
+  createdPendingCount: number;
+  summary: {
+    enrolled: number;
+    /** Legacy key: count of all newly created accounts. */
+    pending: number;
+    total: number;
+  };
+}
+
 export interface PendingImportRow {
   id: string;
   sectionId: string;
@@ -97,7 +113,7 @@ export const rosterImportService = {
   },
 
   /** POST /roster-import/:sectionId/commit — Admin, Teacher */
-  async commit(sectionId: string, dto: RosterImportCommitDto): Promise<{ success: boolean; message?: string; data: unknown }> {
+  async commit(sectionId: string, dto: RosterImportCommitDto): Promise<{ success: boolean; message?: string; data: RosterImportCommitResult }> {
     const { data } = await api.post(`/roster-import/${sectionId}/commit`, dto);
     return data;
   },

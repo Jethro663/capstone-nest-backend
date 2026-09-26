@@ -592,6 +592,11 @@ describe('commitRoster', () => {
       ]);
       expect(res.summary.enrolled).toBe(3);
       expect(res.summary.pending).toBe(2);
+      expect(res.activationMode).toBe(
+        skipVerification ? 'admin_attested' : 'email_otp',
+      );
+      expect(res.createdActiveCount).toBe(skipVerification ? 2 : 0);
+      expect(res.createdPendingCount).toBe(skipVerification ? 0 : 2);
       expect(insertedValues).toHaveBeenCalledWith(
         expect.arrayContaining([
           expect.objectContaining({

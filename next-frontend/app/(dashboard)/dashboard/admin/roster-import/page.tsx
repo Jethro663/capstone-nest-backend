@@ -238,7 +238,7 @@ export default function RosterImportPage() {
 
     try {
       setCommitting(true);
-      await rosterImportService.commit(sectionId, {
+      const response = await rosterImportService.commit(sectionId, {
         sectionId,
         skipVerification: activateNewAccounts,
         enrolledRows: preview.registered.map((row) => ({
@@ -253,9 +253,18 @@ export default function RosterImportPage() {
           email: row.email,
         })),
       });
-      toast.success(activateNewAccounts
-        ? 'Roster committed. New accounts are active; temporary password delivery has been requested.'
-        : 'Roster uploaded successfully. Import committed.');
+      const result = response.data;
+      if (result.activationMode === 'admin_attested' && result.createdActiveCount > 0) {
+        toast.success(
+          `Server confirmed: ${result.createdActiveCount} new ${result.createdActiveCount === 1 ? 'account is' : 'accounts are'} active immediately; OTP was skipped. Temporary password delivery has been requested.`,
+        );
+      } else if (result.activationMode === 'email_otp' && result.createdPendingCount > 0) {
+        toast.success(
+          `Server confirmed: ${result.createdPendingCount} new ${result.createdPendingCount === 1 ? 'account is' : 'accounts are'} pending OTP verification.`,
+        );
+      } else {
+        toast.success('Roster committed. No new accounts were created.');
+      }
       setPreview(null);
       clearSelectedFile();
       fetchPending();
@@ -518,7 +527,9 @@ export default function RosterImportPage() {
                   }}
                   disabled={committing}
                 >
-                  {activateNewAccounts ? 'Skip verification: On' : 'Enable skip verification'}
+                  {activateNewAccounts
+                    ? 'Immediate activation: On'
+                    : 'Activate new accounts now (skip OTP)'}
                 </Button>
               </div>
               {activateNewAccounts ? (

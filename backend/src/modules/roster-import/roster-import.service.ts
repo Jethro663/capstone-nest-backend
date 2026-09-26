@@ -493,6 +493,10 @@ export class RosterImportService {
       }
     }
 
+    const activationMode =
+      dto.skipVerification === true ? 'admin_attested' : 'email_otp';
+    const activatesNewAccounts = activationMode === 'admin_attested';
+
     const enrolledUserIds: string[] = [];
     let alreadyEnrolledSkipped = 0;
     const pendingRosterIds: string[] = [];
@@ -747,10 +751,10 @@ export class RosterImportService {
             firstName: row.name.firstName,
             middleName: row.name.middleName,
             lastName: row.name.lastName,
-            status: dto.skipVerification
+            status: activatesNewAccounts
               ? ('ACTIVE' as const)
               : ('PENDING' as const),
-            isEmailVerified: dto.skipVerification === true,
+            isEmailVerified: activatesNewAccounts,
           };
         });
 
@@ -842,7 +846,7 @@ export class RosterImportService {
         schoolYear: section.schoolYear,
         enrolledStudentIds: enrolledUserIds,
         createdStudentIds: pendingRosterIds,
-        activationMode: dto.skipVerification ? 'admin_attested' : 'email_otp',
+        activationMode,
         alreadyEnrolledSkipped,
         ...(maintenanceAccess ? { maintenanceAccess } : {}),
       },
@@ -855,7 +859,7 @@ export class RosterImportService {
             userId: account.id,
             email: account.email,
             generatedPassword: account.temporaryPassword,
-            requiresOTP: !dto.skipVerification,
+            requiresOTP: !activatesNewAccounts,
           }),
         ),
       );
@@ -864,6 +868,9 @@ export class RosterImportService {
       enrolledUserIds,
       pendingRosterIds,
       alreadyEnrolledSkipped,
+      activationMode,
+      createdActiveCount: activatesNewAccounts ? pendingRosterIds.length : 0,
+      createdPendingCount: activatesNewAccounts ? 0 : pendingRosterIds.length,
       summary: {
         enrolled: enrolledUserIds.length,
         pending: pendingRosterIds.length,

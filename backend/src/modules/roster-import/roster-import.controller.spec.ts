@@ -83,7 +83,10 @@ describe('RosterImportController', () => {
         enrolledUserIds: [],
         pendingRosterIds: [],
         alreadyEnrolledSkipped: 0,
-        summary: {},
+        activationMode: 'email_otp',
+        createdActiveCount: 0,
+        createdPendingCount: 0,
+        summary: { enrolled: 0, pending: 0, total: 0 },
       };
       mockService.commitRoster.mockResolvedValue(resp);
 
