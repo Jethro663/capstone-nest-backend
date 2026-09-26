@@ -4,6 +4,7 @@
 
 **Snapshot:** `developement` at `a11ab492deaf12906b58db26a2427cf84b7e1559`
 **Scope:** Student evaluation discovery, rating interaction, submission, history, and mobile navigation. This document records the completed Phase 0 analysis that governed the approved implementation.
+**Disposition:** Implemented and released on 2026-09-26; the original evidence below remains the pre-change isolation baseline.
 
 ## 1. Executive verdict
 

@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-26
 
-**Status:** Approved implementation packaged as Android 0.1.50/build 51; deployment verification in progress
+**Status:** Shipped and verified as Android 0.1.50/build 51
 
 **Source design:** `docs/superpowers/specs/2026-09-26-student-evaluation-web-mobile-redesign.md`
 
@@ -254,9 +254,17 @@ Acceptance requires all relevant checks to pass. A successful build is not a phy
 - Remove the duplicate root `StudentEvaluations` route only after tab navigation tests are green.
 - Do not touch unrelated OpenSpec tasks or the user's pre-existing modified analysis file.
 
-### Boundaries not verified during Phase 0
+### Shipped evidence
 
-- Authenticated browser/device visual acceptance and physical-device installation depend on available runtime accounts/targets.
+- Feature source: `da3238beb2c328dc3b9d87e61b04b5f385c231c6`; package revision: `ba7329e5f52bc4a507fef86a2b37d4d911cfde87`.
+- Exact package-revision CI: [run 36237572227](https://github.com/Jethro663/capstone-nest-backend/actions/runs/36237572227), all jobs successful.
+- Exact tested-revision Railway release: [run 36237818842](https://github.com/Jethro663/capstone-nest-backend/actions/runs/36237818842), with backend `dcea106c-1ec3-42ee-bb25-f55feaa06045`, frontend `1e9e8eb0-8816-41d5-92a8-d719e2424dfc`, and AI `3e216c89-4284-42d1-95b0-c6c320e25e3f` successful.
+- Live backend health and frontend returned HTTP 200. The live immutable APK matched 37,653,982 bytes and SHA-256 `6031caf0767f9300b78dbadfa9b084d53c24283e5b57183133f9d906f264dd24`.
+- The release policy was registered through the repository-owned verifier. Public policy checks returned `binary_forced` for build 50 and `none` for build 51.
+
+### Boundaries not verified during release
+
+- Authenticated browser visual/submission acceptance and physical-device installation remain unverified because no student credentials or connected Android target were available.
 - No production submission will be created solely as a release test without a safe assigned form; read-only and non-durable checks are preferred.
 
 ## Plan self-review
