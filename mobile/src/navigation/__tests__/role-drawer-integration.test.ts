@@ -67,6 +67,25 @@ describe("role drawer integration", () => {
     expect(appNavigator).toContain("component={studentStackScreens.Calendar}");
   });
 
+  it("owns Student Evaluations in the student tab drawer without a duplicate root route", () => {
+    const studentTabsSource = appNavigator.slice(
+      appNavigator.indexOf("function StudentTabs"),
+      appNavigator.indexOf("function StudentNavigator"),
+    );
+    const studentNavigatorSource = appNavigator.slice(
+      appNavigator.indexOf("function StudentNavigator"),
+      appNavigator.indexOf("function TeacherDrawerNavigator"),
+    );
+    expect(appNavigator).toContain('case "StudentEvaluations"');
+    expect(appNavigator).toContain(
+      "component={studentTabScreens.StudentEvaluations}",
+    );
+    expect(studentTabsSource).toContain('backBehavior="history"');
+    expect(studentNavigatorSource).not.toContain(
+      '<RootStack.Screen name="StudentEvaluations"',
+    );
+  });
+
   it.each([
     "../../screens/TeacherCalendarScreen.tsx",
     "../../screens/TeacherLessonsScreen.tsx",

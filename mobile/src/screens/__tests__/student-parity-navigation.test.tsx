@@ -28,5 +28,7 @@ describe("student parity navigation", () => {
     expect(studentSupportRouteInventory.map((route) => route.name)).toEqual(studentSupportRouteNames);
     expect(stackRoutes).toContain("Calendar");
     expect(stackRoutes).toContain("Lessons");
+    expect(tabRoutes).toContain("StudentEvaluations");
+    expect(stackRoutes).not.toContain("StudentEvaluations");
   });
 });

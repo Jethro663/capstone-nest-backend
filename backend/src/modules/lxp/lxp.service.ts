@@ -454,11 +454,11 @@ export class LxpService {
           : Number.parseInt(String(rawValue), 10);
       if (
         !Number.isInteger(parsedValue) ||
-        parsedValue < 1 ||
+        parsedValue < 0 ||
         parsedValue > 5
       ) {
         throw new BadRequestException(
-          `Rating "${category.key}" must be an integer from 1 to 5.`,
+          `Rating "${category.key}" must be an integer from 0 to 5.`,
         );
       }
       normalized[category.key] = parsedValue;

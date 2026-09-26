@@ -133,6 +133,11 @@ export const ROLE_DRAWER_GROUPS = {
           kind: "tab",
           icon: "clipboard-text-outline",
         },
+      ],
+    },
+    {
+      label: "School life",
+      items: [
         {
           label: "Calendar",
           route: "StudentCalendar",
@@ -145,6 +150,17 @@ export const ROLE_DRAWER_GROUPS = {
           route: "Announcements",
           kind: "tab",
           icon: "bullhorn-outline",
+        },
+      ],
+    },
+    {
+      label: "Feedback",
+      items: [
+        {
+          label: "Evaluations",
+          route: "StudentEvaluations",
+          kind: "tab",
+          icon: "clipboard-check-outline",
         },
       ],
     },

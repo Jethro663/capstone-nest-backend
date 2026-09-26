@@ -106,6 +106,25 @@ const studentEntries = [
   ),
   routeDesign(
     "student",
+    "StudentEvaluations",
+    "StudentEvaluationsScreen.tsx",
+    "migrated",
+    "student-workspace-v2",
+    [
+      "assigned evaluation inbox",
+      "deliberate zero-to-five ratings",
+      "teacher and system evaluation submission",
+      "drawer and tab history",
+    ],
+    deviceAcceptancePending,
+    [
+      "screens/__tests__/student-evaluations.test.tsx",
+      "navigation/__tests__/role-drawer-integration.test.ts",
+      ...sourceMigrationEvidence,
+    ],
+  ),
+  routeDesign(
+    "student",
     "Profile",
     "ProfileScreen.tsx",
     "migrated",

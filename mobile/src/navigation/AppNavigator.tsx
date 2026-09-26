@@ -247,6 +247,7 @@ const studentTabScreens = {
   StudentCalendar: StudentCalendarRouteScreen,
   JA: JaRouteScreen,
   Announcements: AnnouncementsScreen,
+  StudentEvaluations: StudentEvaluationsScreen,
   Profile: ProfileScreen,
 } satisfies { [K in StudentTabRouteName]: TabScreenComponent<K> };
 
@@ -318,6 +319,14 @@ function renderStudentTabScreen(name: StudentTabRouteName) {
           key={name}
           name={name}
           component={studentTabScreens.Announcements}
+        />
+      );
+    case "StudentEvaluations":
+      return (
+        <Tab.Screen
+          key={name}
+          name={name}
+          component={studentTabScreens.StudentEvaluations}
         />
       );
     case "Profile":
@@ -696,10 +705,6 @@ function StudentNavigator() {
       <RootStack.Screen
         name="StudentJaReviewAssessment"
         component={StudentJaReviewAssessmentScreen}
-      />
-      <RootStack.Screen
-        name="StudentEvaluations"
-        component={StudentEvaluationsScreen}
       />
       {renderStudentSupportScreen(aiTutorRouteName)}
     </RootStack.Navigator>

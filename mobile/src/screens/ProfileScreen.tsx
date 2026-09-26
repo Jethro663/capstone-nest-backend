@@ -1192,9 +1192,7 @@ export function ProfileScreen(props: Props) {
             icon="clipboard-check-outline"
             iconColor={theme.purple}
             label="Evaluations"
-            onPress={() =>
-              props.navigation.navigate("StudentEvaluations" as never)
-            }
+            onPress={() => props.navigation.navigate("StudentEvaluations")}
           />
         </View>
 

@@ -36,6 +36,9 @@ describe('LxpService', () => {
         findFirst: jest.fn(),
         findMany: jest.fn(),
       },
+      classRecords: { findMany: jest.fn() },
+      jaSessions: { findMany: jest.fn() },
+      teacherEvaluationSubmissions: { findFirst: jest.fn(), findMany: jest.fn() },
       lessons: { findMany: jest.fn() },
       assessments: { findFirst: jest.fn(), findMany: jest.fn() },
     },
@@ -1731,6 +1734,116 @@ describe('LxpService', () => {
       'ja_hub',
     ]);
     expect(result.pending[0].questions).toHaveLength(5);
+  });
+
+  it('accepts an intentional zero teacher-evaluation rating and rejects values outside zero to five', () => {
+    const normalizeTeacherRatings = (
+      ratings: Record<string, unknown>,
+    ): Record<string, number> =>
+      (
+        service as unknown as {
+          normalizeTeacherEvaluationRatings: (
+            evaluationType: 'teacher_class',
+            values: Record<string, unknown>,
+          ) => Record<string, number>;
+        }
+      ).normalizeTeacherEvaluationRatings('teacher_class', ratings);
+    const validRatings = {
+      teaching_clarity: 0,
+      learning_materials: 1,
+      fairness_feedback: 2,
+      teacher_support: 4,
+      learning_engagement: 5,
+    };
+
+    expect(normalizeTeacherRatings(validRatings)).toEqual(validRatings);
+    expect(() =>
+      normalizeTeacherRatings({ ...validRatings, teaching_clarity: -1 }),
+    ).toThrow(BadRequestException);
+    expect(() =>
+      normalizeTeacherRatings({ ...validRatings, teaching_clarity: 6 }),
+    ).toThrow(BadRequestException);
+    const { teacher_support: _omitted, ...missingRating } = validRatings;
+    expect(() => normalizeTeacherRatings(missingRating)).toThrow(
+      BadRequestException,
+    );
+    expect(() =>
+      normalizeTeacherRatings({ ...validRatings, unexpected: 3 }),
+    ).toThrow(BadRequestException);
+  });
+
+  it('includes zero ratings in teacher-evaluation summary averages', async () => {
+    mockDb.query.classes.findMany.mockResolvedValue([
+      {
+        id: 'class-1',
+        subjectName: 'Mathematics 7',
+        subjectCode: 'MATH-7',
+        schoolYear: '2025-2026',
+        teacherId: 'teacher-1',
+        section: { id: 'section-1', name: 'Bonifacio', gradeLevel: '7' },
+      },
+    ]);
+    mockDb.query.classRecords.findMany.mockResolvedValue([
+      {
+        id: 'record-1',
+        classId: 'class-1',
+        gradingPeriod: 'Q2',
+        finalGrades: [{ studentId: 'student-1' }, { studentId: 'student-2' }],
+      },
+    ]);
+    mockDb.query.jaSessions.findMany.mockResolvedValue([]);
+    mockDb.query.lxpProgress.findMany.mockResolvedValue([]);
+    mockDb.query.interventionCases.findMany.mockResolvedValue([]);
+    mockDb.query.teacherEvaluationSubmissions.findMany.mockResolvedValue([
+      {
+        id: 'submission-zero',
+        classId: 'class-1',
+        gradingPeriod: 'Q2',
+        ratingsJson: {
+          teaching_clarity: 0,
+          learning_materials: 0,
+          fairness_feedback: 0,
+          teacher_support: 0,
+          learning_engagement: 0,
+        },
+        comment: null,
+        submittedAt: new Date('2026-05-02T00:00:00.000Z'),
+      },
+      {
+        id: 'submission-four',
+        classId: 'class-1',
+        gradingPeriod: 'Q2',
+        ratingsJson: {
+          teaching_clarity: 4,
+          learning_materials: 4,
+          fairness_feedback: 4,
+          teacher_support: 4,
+          learning_engagement: 4,
+        },
+        comment: null,
+        submittedAt: new Date('2026-05-01T00:00:00.000Z'),
+      },
+    ]);
+
+    const result = await service.getTeacherEvaluationSummary(
+      { userId: 'admin-1', roles: ['admin'] },
+      {
+        evaluationType: 'teacher_class',
+        classId: 'class-1',
+        gradingPeriod: 'Q2',
+      },
+    );
+
+    expect(result.overview).toMatchObject({
+      responseCount: 2,
+      averageOverall: 2,
+    });
+    expect(result.categoryAverages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: 'teaching_clarity', average: 2 }),
+        expect.objectContaining({ key: 'learning_engagement', average: 2 }),
+      ]),
+    );
   });
 
   it('submits an assigned system evaluation and accepts explicit zero-star ratings', async () => {

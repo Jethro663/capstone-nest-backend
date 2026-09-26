@@ -54,6 +54,39 @@ const FILTERS: Array<{ value: EvaluationFilter; label: string }> = [
   { value: 'teacher', label: 'Teachers' },
 ];
 
+export const EVALUATION_RATING_SCALE = [
+  {
+    value: 0,
+    label: 'Not observed',
+    description: 'The behavior or result was not demonstrated.',
+  },
+  {
+    value: 1,
+    label: 'Rarely',
+    description: 'It was demonstrated only in a few instances.',
+  },
+  {
+    value: 2,
+    label: 'Sometimes',
+    description: 'It was demonstrated in some instances, but not regularly.',
+  },
+  {
+    value: 3,
+    label: 'Usually',
+    description: 'It was demonstrated in most instances.',
+  },
+  {
+    value: 4,
+    label: 'Consistently',
+    description: 'It was demonstrated reliably across the experience.',
+  },
+  {
+    value: 5,
+    label: 'Excellent',
+    description: 'It was demonstrated at an exceptional level throughout.',
+  },
+] as const;
+
 function classLabel(item: StudentTeacherEvaluationItem | StudentTeacherEvaluationCompletedItem) {
   if (!item.class) return 'Class not available';
   const section = item.class.section
@@ -84,45 +117,141 @@ function filterLabel(value: EvaluationFilter) {
   return 'All';
 }
 
-function StarRating({
+function RatingScale({
   questionKey,
+  questionLabel,
   value,
   onChange,
 }: {
   questionKey: string;
+  questionLabel: string;
   value: number | null;
   onChange: (value: number) => void;
 }) {
+  const [explainedRating, setExplainedRating] = useState<number | null>(null);
+  const selectedOption = EVALUATION_RATING_SCALE.find(
+    (option) => option.value === value,
+  );
+
   return (
-    <div className="inline-flex flex-wrap gap-1 rounded-full border border-[var(--student-outline)] bg-[var(--student-white)] p-1">
-      {[0, 1, 2, 3, 4, 5].map((rating) => (
-        <button
-          key={rating}
-          type="button"
-          aria-label={`${questionKey} ${rating} stars`}
-          onClick={() => onChange(rating)}
-          className={
-            value === rating
-              ? 'inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-[var(--student-navy)] px-2.5 text-xs font-semibold text-white shadow-sm'
-              : 'inline-flex h-8 min-w-8 items-center justify-center rounded-full px-2.5 text-xs font-semibold text-[var(--student-text-muted)] hover:bg-white hover:text-[var(--student-text-strong)]'
-          }
-        >
-          {rating === 0 ? (
-            '0'
-          ) : (
-            <span className="inline-flex items-center gap-1">
-              {rating}
-              <Star className="h-3 w-3" />
+    <div>
+      <div
+        role="radiogroup"
+        aria-label={`Rating for ${questionLabel}`}
+        className="grid grid-cols-2 gap-2 sm:grid-cols-3 2xl:grid-cols-6"
+      >
+        {EVALUATION_RATING_SCALE.map((option) => {
+          const tooltipId = `${questionKey}-${option.value}-meaning`;
+          const buttonId = `${questionKey}-${option.value}-rating`;
+          const selected = value === option.value;
+          const explained = explainedRating === option.value;
+
+          return (
+            <div key={option.value} className="relative min-w-0">
+              <button
+                id={buttonId}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                tabIndex={value === null ? (option.value === 0 ? 0 : -1) : selected ? 0 : -1}
+                aria-describedby={explained ? tooltipId : undefined}
+                aria-label={`${option.value} stars, ${option.label}. ${option.description}`}
+                onClick={() => onChange(option.value)}
+                onMouseEnter={() => setExplainedRating(option.value)}
+                onMouseLeave={() => setExplainedRating(null)}
+                onFocus={() => setExplainedRating(option.value)}
+                onBlur={() => setExplainedRating(null)}
+                onKeyDown={(event) => {
+                  const currentIndex = EVALUATION_RATING_SCALE.findIndex(
+                    (candidate) => candidate.value === option.value,
+                  );
+                  let nextIndex: number | null = null;
+                  if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+                    nextIndex = (currentIndex + 1) % EVALUATION_RATING_SCALE.length;
+                  } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+                    nextIndex =
+                      (currentIndex - 1 + EVALUATION_RATING_SCALE.length) %
+                      EVALUATION_RATING_SCALE.length;
+                  } else if (event.key === 'Home') {
+                    nextIndex = 0;
+                  } else if (event.key === 'End') {
+                    nextIndex = EVALUATION_RATING_SCALE.length - 1;
+                  }
+                  if (nextIndex === null) return;
+                  event.preventDefault();
+                  const nextOption = EVALUATION_RATING_SCALE[nextIndex];
+                  onChange(nextOption.value);
+                  document
+                    .getElementById(`${questionKey}-${nextOption.value}-rating`)
+                    ?.focus();
+                }}
+                className={cn(
+                  'flex min-h-12 w-full items-center gap-2 rounded-lg border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--student-navy)] focus-visible:ring-offset-2',
+                  selected
+                    ? 'border-[var(--student-navy)] bg-[var(--student-navy)] text-white'
+                    : 'border-[var(--student-outline)] bg-white text-[var(--student-text-strong)] hover:border-[var(--student-navy)] hover:bg-[var(--student-white)]',
+                )}
+              >
+                <span
+                  className={cn(
+                    'inline-flex h-7 min-w-7 items-center justify-center rounded-md text-xs font-bold',
+                    selected
+                      ? 'bg-white/15 text-white'
+                      : 'bg-[var(--student-white)] text-[var(--student-navy)]',
+                  )}
+                >
+                  {option.value}
+                  {option.value > 0 ? <Star className="ml-0.5 h-3 w-3" /> : null}
+                </span>
+                <span className="min-w-0 text-xs font-semibold leading-4">
+                  {option.label}
+                </span>
+              </button>
+              {explained ? (
+                <div
+                  id={tooltipId}
+                  role="tooltip"
+                  className="absolute bottom-[calc(100%+0.5rem)] left-1/2 z-30 w-56 -translate-x-1/2 rounded-lg bg-[var(--student-navy)] px-3 py-2 text-xs leading-5 text-white shadow-lg"
+                >
+                  <span className="font-bold">
+                    {option.value} · {option.label}
+                  </span>
+                  <span className="mt-0.5 block text-white/80">
+                    {option.description}
+                  </span>
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+      <div
+        aria-live="polite"
+        className={cn(
+          'mt-3 min-h-14 rounded-lg border px-3 py-2 text-sm',
+          selectedOption
+            ? 'border-[var(--student-outline)] bg-[var(--student-white)] text-[var(--student-text-strong)]'
+            : 'border-dashed border-[var(--student-outline)] text-[var(--student-text-muted)]',
+        )}
+      >
+        {selectedOption ? (
+          <>
+            <span className="font-bold">
+              {selectedOption.value} · {selectedOption.label}
             </span>
-          )}
-        </button>
-      ))}
+            <span className="ml-2">{selectedOption.description}</span>
+          </>
+        ) : (
+          'Choose a rating. Hover or focus an option to read what it means.'
+        )}
+      </div>
     </div>
   );
 }
 
 export function StudentTeacherEvaluationsPage() {
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [systemDashboard, setSystemDashboard] = useState<{
     pending: AssignedSystemEvaluationItem[];
     completed: AssignedSystemEvaluationItem[];
@@ -138,6 +267,7 @@ export function StudentTeacherEvaluationsPage() {
   const fetchDashboard = async () => {
     try {
       setLoading(true);
+      setLoadError(null);
       const [systemResponse, teacherResponse] = await Promise.all([
         lxpService.getMySystemEvaluations(),
         lxpService.getStudentTeacherEvaluationDashboard(),
@@ -146,6 +276,9 @@ export function StudentTeacherEvaluationsPage() {
       setTeacherDashboard(teacherResponse.data);
     } catch {
       toast.error('Failed to load evaluation dashboard');
+      setLoadError(
+        "We couldn't load your assigned evaluations. Check your connection and try again.",
+      );
       setSystemDashboard(null);
       setTeacherDashboard(null);
     } finally {
@@ -220,6 +353,12 @@ export function StudentTeacherEvaluationsPage() {
         (question) => ratings[question.key] === null || ratings[question.key] === undefined,
       )
     : true;
+  const answeredCount = activeItem
+    ? activeItem.questions.filter(
+        (question) =>
+          ratings[question.key] !== null && ratings[question.key] !== undefined,
+      ).length
+    : 0;
 
   useEffect(() => {
     if (!activeItem) {
@@ -274,7 +413,7 @@ export function StudentTeacherEvaluationsPage() {
   };
 
   return (
-    <main className="mx-auto max-w-7xl space-y-6 px-4 pb-10 pt-3 text-[var(--student-text-strong)]">
+    <main className="mx-auto max-w-[1600px] space-y-6 px-4 pb-10 pt-3 text-[var(--student-text-strong)] sm:px-6">
       <header className="flex flex-col gap-4 border-b border-[var(--student-outline)] pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--student-text-muted)]">
@@ -314,8 +453,28 @@ export function StudentTeacherEvaluationsPage() {
         </div>
       </header>
 
-      <div className="grid gap-5 xl:grid-cols-[24rem_minmax(0,1fr)]">
-        <aside className="space-y-5">
+      {loadError ? (
+        <section
+          role="alert"
+          className="rounded-2xl border border-[var(--student-red)] bg-white px-6 py-10 text-center shadow-sm"
+        >
+          <h2 className="text-lg font-bold text-[var(--student-text-strong)]">
+            Evaluations unavailable
+          </h2>
+          <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[var(--student-text-muted)]">
+            {loadError}
+          </p>
+          <Button
+            type="button"
+            onClick={() => void fetchDashboard()}
+            className="mt-5 bg-[var(--student-navy)] text-white hover:bg-[var(--student-navy)]/90"
+          >
+            Retry loading evaluations
+          </Button>
+        </section>
+      ) : (
+      <div className="grid items-start gap-5 lg:grid-cols-[20rem_minmax(0,1fr)]">
+        <aside className="space-y-5 lg:sticky lg:top-4">
           <section>
             <div className="mb-3">
               <h2 className="text-base font-bold text-[var(--student-text-strong)]">Pending Evaluations</h2>
@@ -357,17 +516,17 @@ export function StudentTeacherEvaluationsPage() {
                         <span
                           className={cn(
                             'text-[11px] font-semibold',
-                            selected ? 'text-[var(--student-text-muted)]' : 'text-[var(--student-text-muted)]',
+                            selected ? 'text-white/75' : 'text-[var(--student-text-muted)]',
                           )}
                         >
                           Open
                         </span>
                       </div>
                       <p className="mt-3 text-sm font-semibold">{item.title}</p>
-                      <p className={cn('mt-1 text-xs', selected ? 'text-[var(--student-text-muted)]' : 'text-[var(--student-text-muted)]')}>
+                      <p className={cn('mt-1 text-xs', selected ? 'text-white/75' : 'text-[var(--student-text-muted)]')}>
                         {item.subtitle}
                       </p>
-                      <p className={cn('mt-2 line-clamp-2 text-sm', selected ? 'text-[var(--student-text-muted)]' : 'text-[var(--student-text-muted)]')}>
+                      <p className={cn('mt-2 line-clamp-2 text-sm', selected ? 'text-white/75' : 'text-[var(--student-text-muted)]')}>
                         {item.description}
                       </p>
                     </button>
@@ -406,7 +565,7 @@ export function StudentTeacherEvaluationsPage() {
           </section>
         </aside>
 
-        <section className="mx-auto w-full max-w-4xl rounded-2xl border border-[var(--student-outline)] bg-white shadow-sm">
+        <section className="w-full overflow-visible rounded-2xl border border-[var(--student-outline)] bg-white shadow-sm">
           <div className="flex flex-col gap-2 border-b border-[var(--student-outline)] px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h2 className="text-lg font-bold text-[var(--student-text-strong)]">
@@ -433,40 +592,45 @@ export function StudentTeacherEvaluationsPage() {
             </div>
           ) : (
             <div>
-              <div className="max-h-[30rem] overflow-auto">
-                <table className="w-full min-w-[720px] border-separate border-spacing-0">
-                  <thead className="sticky top-0 z-10 bg-[var(--student-white)] text-left text-xs font-bold uppercase tracking-[0.14em] text-[var(--student-text-muted)]">
-                    <tr>
-                      <th className="border-b border-[var(--student-outline)] px-5 py-3">Question</th>
-                      <th className="w-[19rem] border-b border-[var(--student-outline)] px-5 py-3">Rating</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {activeItem.questions.map((question, index) => (
-                      <tr key={question.key} className="border-b border-[var(--student-outline)]">
-                        <td className="border-b border-[var(--student-outline)] px-5 py-4 align-top">
-                          <div className="flex gap-3">
-                            <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--student-white)] text-xs font-bold text-[var(--student-text-muted)]">
-                              {index + 1}
-                            </span>
-                            <p className="text-sm font-semibold leading-6 text-[var(--student-text-strong)]">
-                              {question.label}
-                            </p>
-                          </div>
-                        </td>
-                        <td className="border-b border-[var(--student-outline)] px-5 py-4 align-top">
-                          <StarRating
-                            questionKey={question.key}
-                            value={ratings[question.key] ?? null}
-                            onChange={(value) =>
-                              setRatings((current) => ({ ...current, [question.key]: value }))
-                            }
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="flex flex-col gap-3 border-b border-[var(--student-outline)] bg-[var(--student-white)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-[var(--student-text-strong)]">
+                    Choose one rating for every question
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-[var(--student-text-muted)]">
+                    Hover or focus a choice for its meaning. Zero is a valid answer;
+                    unanswered questions stay blank.
+                  </p>
+                </div>
+                <span className="shrink-0 text-sm font-bold text-[var(--student-navy)]">
+                  {answeredCount} of {activeItem.questions.length} answered
+                </span>
+              </div>
+
+              <div>
+                {activeItem.questions.map((question, index) => (
+                  <fieldset
+                    key={question.key}
+                    className="border-b border-[var(--student-outline)] px-5 py-5 last:border-b-0 sm:px-6"
+                  >
+                    <legend className="flex w-full gap-3 pb-4">
+                      <span className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--student-navy)] text-xs font-bold text-white">
+                        {index + 1}
+                      </span>
+                      <span className="text-sm font-semibold leading-6 text-[var(--student-text-strong)] sm:text-base">
+                        {question.label}
+                      </span>
+                    </legend>
+                    <RatingScale
+                      questionKey={question.key}
+                      questionLabel={question.label}
+                      value={ratings[question.key] ?? null}
+                      onChange={(value) =>
+                        setRatings((current) => ({ ...current, [question.key]: value }))
+                      }
+                    />
+                  </fieldset>
+                ))}
               </div>
 
               <div className="border-t border-[var(--student-outline)] px-5 py-4">
@@ -499,6 +663,7 @@ export function StudentTeacherEvaluationsPage() {
           )}
         </section>
       </div>
+      )}
     </main>
   );
 }

@@ -106,7 +106,12 @@ describe("role drawer destination contracts", () => {
     ).toBe(true);
   });
 
-  it("preserves student destinations and exposes the complete grouped admin workspace", () => {
+  it("categorizes the complete student workspace and exposes evaluations exactly once", () => {
+    expect(ROLE_DRAWER_GROUPS.student.map((group) => group.label)).toEqual([
+      "Learning",
+      "School life",
+      "Feedback",
+    ]);
     expect(
       flattenRoleDrawerDestinations("student").map((item) => item.route),
     ).toEqual([
@@ -116,7 +121,16 @@ describe("role drawer destination contracts", () => {
       "StudentCalendar",
       "JA",
       "Announcements",
+      "StudentEvaluations",
     ]);
+    expect(
+      flattenRoleDrawerDestinations("student").filter(
+        (item) => item.route === "StudentEvaluations",
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("exposes the complete grouped admin workspace", () => {
     expect(ROLE_DRAWER_GROUPS.admin.map((group) => group.label)).toEqual([
       "Overview",
       "School Setup",

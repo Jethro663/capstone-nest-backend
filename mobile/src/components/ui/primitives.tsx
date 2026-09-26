@@ -162,10 +162,12 @@ export function ScreenScroll({
   refreshControl,
   backgroundColor,
   stickyHeaderIndices,
+  keyboardShouldPersistTaps,
 }: PropsWithChildren<{
   refreshControl?: React.ComponentProps<typeof ScrollView>["refreshControl"];
   backgroundColor?: string;
   stickyHeaderIndices?: number[];
+  keyboardShouldPersistTaps?: React.ComponentProps<typeof ScrollView>["keyboardShouldPersistTaps"];
 }>) {
   const refreshState = resolveRefreshControlState(refreshControl);
   const isAndroidCustomRefresh = Platform.OS === "android" && !!refreshState?.onRefresh;
@@ -223,6 +225,7 @@ export function ScreenScroll({
           stickyHeaderIndices={stickyHeaderIndices}
           contentContainerStyle={{ paddingBottom: 112 }}
           refreshControl={nativeRefreshControl}
+          keyboardShouldPersistTaps={keyboardShouldPersistTaps}
           style={{ flex: 1, backgroundColor: resolvedBackground }}
           onScroll={
             isAndroidCustomRefresh

@@ -129,7 +129,6 @@ export type RootStackParamList = {
     attemptId?: string;
     title?: string;
   };
-  StudentEvaluations: undefined;
   Chatbot: { classId?: string } | undefined;
   Performance: undefined;
   Transcript: undefined;
@@ -237,6 +236,7 @@ export type MainTabParamList = {
   TeacherEvaluations: undefined;
   JA: JaRouteParams | undefined;
   Announcements: undefined;
+  StudentEvaluations: undefined;
   Profile: undefined;
   More: undefined;
   // Deprecated keys kept temporarily for migration-only screen compatibility.

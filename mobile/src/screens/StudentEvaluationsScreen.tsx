@@ -1,9 +1,9 @@
 import { mobileBrand } from "../theme/mobileBrand";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
+import { BackHandler, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { AppAlert as Alert } from "../components/ui/AppAlert";
 import {
   evaluationsApi,
@@ -12,14 +12,15 @@ import {
   type TeacherEvaluationType,
 } from "../api/services/evaluations";
 import { toAppError } from "../api/http";
-import type { RootStackParamList } from "../navigation/types";
+import type { MainTabParamList } from "../navigation/types";
 import { Refreshable, ScreenScroll } from "../components/ui/primitives";
 import { studentDarkTheme as theme } from "../theme/studentDark";
 
 import { useStudentClasses } from "../api/hooks";
 import { useAuth } from "../providers/AuthProvider";
+import { RoleHeaderNavigationButton } from "../components/navigation/RoleNavigationDrawer";
 
-type Props = NativeStackScreenProps<RootStackParamList, "StudentEvaluations">;
+type Props = BottomTabScreenProps<MainTabParamList, "StudentEvaluations">;
 type TabFilter = "pending" | "submitted";
 type EvaluationListItem = {
   key: string;
@@ -38,23 +39,129 @@ type EvaluationListItem = {
   questions: TeacherEvaluationQuestion[];
 };
 
-function StarRating({ label, rating, onChange }: { label: string; rating: number; onChange: (val: number) => void }) {
+export const EVALUATION_RATING_SCALE = [
+  {
+    value: 0,
+    label: "Not observed",
+    description: "The behavior or result was not demonstrated.",
+  },
+  {
+    value: 1,
+    label: "Rarely",
+    description: "It was demonstrated only in a few instances.",
+  },
+  {
+    value: 2,
+    label: "Sometimes",
+    description: "It was demonstrated in some instances, but not regularly.",
+  },
+  {
+    value: 3,
+    label: "Usually",
+    description: "It was demonstrated in most instances.",
+  },
+  {
+    value: 4,
+    label: "Consistently",
+    description: "It was demonstrated reliably across the experience.",
+  },
+  {
+    value: 5,
+    label: "Excellent",
+    description: "It was demonstrated at an exceptional level throughout.",
+  },
+] as const;
+
+function RatingScale({
+  label,
+  rating,
+  onChange,
+}: {
+  label: string;
+  rating: number | null;
+  onChange: (val: number) => void;
+}) {
+  const selectedOption = EVALUATION_RATING_SCALE.find(
+    (option) => option.value === rating,
+  );
+
   return (
-    <View style={{ marginBottom: 12 }}>
-      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-        <Text style={{ fontSize: 12, fontWeight: "700", color: theme.text }}>{label}</Text>
-        <Text style={{ fontSize: 12, fontWeight: "900", color: theme.amber }}>{rating} / 5</Text>
+    <View style={{ marginTop: 14 }}>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        {EVALUATION_RATING_SCALE.map((option) => {
+          const selected = rating === option.value;
+          return (
+            <Pressable
+              key={option.value}
+              accessibilityRole="radio"
+              accessibilityLabel={`${option.value} stars, ${option.label}, for ${label}`}
+              accessibilityHint={option.description}
+              accessibilityState={{ checked: selected }}
+              onPress={() => onChange(option.value)}
+              style={{
+                width: "31%",
+                minHeight: 52,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: selected ? theme.blue : theme.border,
+                backgroundColor: selected ? theme.blue : theme.bg,
+                paddingHorizontal: 8,
+                paddingVertical: 8,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 14,
+                  fontWeight: "900",
+                  color: selected ? mobileBrand.white : theme.text,
+                }}
+              >
+                {option.value}
+              </Text>
+              <Text
+                numberOfLines={1}
+                style={{
+                  marginTop: 2,
+                  fontSize: 9,
+                  fontWeight: "800",
+                  color: selected ? mobileBrand.white : theme.muted,
+                }}
+              >
+                {option.label}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
-      <View style={{ flexDirection: "row", gap: 8 }}>
-        {[1, 2, 3, 4, 5].map((star) => (
-          <Pressable key={star} onPress={() => onChange(star)} style={{ padding: 4 }}>
-            <MaterialCommunityIcons
-              name={star <= rating ? "star" : "star-outline"}
-              size={24}
-              color={star <= rating ? theme.amber : theme.muted}
-            />
-          </Pressable>
-        ))}
+      <View
+        accessibilityLiveRegion="polite"
+        style={{
+          minHeight: 62,
+          marginTop: 10,
+          borderRadius: 12,
+          borderWidth: 1,
+          borderStyle: selectedOption ? "solid" : "dashed",
+          borderColor: theme.border,
+          backgroundColor: theme.bg,
+          padding: 10,
+        }}
+      >
+        {selectedOption ? (
+          <>
+            <Text style={{ fontSize: 12, fontWeight: "900", color: theme.text }}>
+              {selectedOption.value} · {selectedOption.label}
+            </Text>
+            <Text style={{ marginTop: 3, fontSize: 11, lineHeight: 16, color: theme.muted }}>
+              {selectedOption.description}
+            </Text>
+          </>
+        ) : (
+          <Text style={{ fontSize: 11, lineHeight: 16, color: theme.muted }}>
+            Choose a rating. Zero is valid and different from unanswered.
+          </Text>
+        )}
       </View>
     </View>
   );
@@ -68,7 +175,7 @@ export function StudentEvaluationsScreen({ navigation }: Props) {
   const [activeTab, setActiveTab] = useState<TabFilter>("pending");
   const [selectedClassId, setSelectedClassId] = useState<string>("all");
   const [selectedEvaluation, setSelectedEvaluation] = useState<EvaluationListItem | null>(null);
-  const [ratings, setRatings] = useState<Record<string, number>>({});
+  const [ratings, setRatings] = useState<Record<string, number | null>>({});
   const [comments, setComments] = useState("");
 
   const inboxQuery = useQuery({
@@ -180,16 +287,227 @@ export function StudentEvaluationsScreen({ navigation }: Props) {
     return list;
   }, [activeTab, pendingItems, selectedClassId, submittedItems]);
 
+  const answeredCount = selectedEvaluation
+    ? selectedEvaluation.questions.filter(
+        (question) => ratings[question.key] !== null && ratings[question.key] !== undefined,
+      ).length
+    : 0;
+  const hasMissingRating = selectedEvaluation
+    ? answeredCount !== selectedEvaluation.questions.length
+    : true;
+
+  useEffect(() => {
+    if (!selectedEvaluation) return undefined;
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      setSelectedEvaluation(null);
+      return true;
+    });
+    return () => subscription.remove();
+  }, [selectedEvaluation]);
+
   const handleSubmit = () => {
-    if (!selectedEvaluation) return;
-    submitMutation.mutate({ item: selectedEvaluation, values: ratings, comment: comments.trim() || undefined });
+    if (!selectedEvaluation || hasMissingRating) return;
+    const values = Object.fromEntries(
+      selectedEvaluation.questions.map((question) => [
+        question.key,
+        Number(ratings[question.key]),
+      ]),
+    );
+    submitMutation.mutate({ item: selectedEvaluation, values, comment: comments.trim() || undefined });
   };
 
   const openEvaluation = (item: EvaluationListItem) => {
-    setRatings(Object.fromEntries(item.questions.map((question) => [question.key, 5])));
+    setRatings(Object.fromEntries(item.questions.map((question) => [question.key, null])));
     setComments("");
     setSelectedEvaluation(item);
   };
+
+  if (selectedEvaluation) {
+    return (
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={8}
+        style={{ flex: 1 }}
+      >
+      <ScreenScroll backgroundColor={theme.bg} keyboardShouldPersistTaps="handled">
+        <View
+          style={{
+            backgroundColor: theme.header,
+            borderBottomWidth: 1,
+            borderBottomColor: theme.border,
+          }}
+        >
+          <View
+            style={{
+              paddingHorizontal: 16,
+              paddingTop: 7,
+              paddingBottom: 10,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
+            <RoleHeaderNavigationButton
+              onBackPress={() => setSelectedEvaluation(null)}
+              preferBack
+            />
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{
+                  fontSize: 10,
+                  fontWeight: "700",
+                  letterSpacing: 0.6,
+                  textTransform: "uppercase",
+                  color: theme.muted,
+                }}
+              >
+                {selectedEvaluation.subjectCode} · {selectedEvaluation.subjectName}
+              </Text>
+              <Text style={{ marginTop: 2, fontSize: 18, fontWeight: "900", color: theme.text }}>
+                {selectedEvaluation.title}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 28 }}>
+          <View
+            style={{
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: theme.border,
+              backgroundColor: theme.surface,
+              padding: 14,
+            }}
+          >
+            <Text style={{ fontSize: 12, lineHeight: 18, color: theme.muted }}>
+              {selectedEvaluation.description}
+            </Text>
+            <View
+              style={{
+                marginTop: 12,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+              }}
+            >
+              <Text style={{ flex: 1, fontSize: 11, lineHeight: 16, color: theme.muted }}>
+                Choose one answer per question. Zero is valid; blank means unanswered.
+              </Text>
+              <Text style={{ fontSize: 12, fontWeight: "900", color: theme.blue }}>
+                {answeredCount} of {selectedEvaluation.questions.length}
+              </Text>
+            </View>
+          </View>
+
+          <View style={{ marginTop: 12, gap: 12 }}>
+            {selectedEvaluation.questions.map((question, index) => (
+              <View
+                key={question.key}
+                style={{
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  backgroundColor: theme.surface,
+                  padding: 14,
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+                  <View
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: 8,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: theme.header,
+                    }}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: "900", color: mobileBrand.white }}>
+                      {index + 1}
+                    </Text>
+                  </View>
+                  <Text style={{ flex: 1, fontSize: 13, lineHeight: 19, fontWeight: "800", color: theme.text }}>
+                    {question.label}
+                  </Text>
+                </View>
+                <RatingScale
+                  label={question.label}
+                  rating={ratings[question.key] ?? null}
+                  onChange={(value) =>
+                    setRatings((current) => ({ ...current, [question.key]: value }))
+                  }
+                />
+              </View>
+            ))}
+          </View>
+
+          <View
+            style={{
+              marginTop: 12,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: theme.border,
+              backgroundColor: theme.surface,
+              padding: 14,
+            }}
+          >
+            <Text style={{ fontSize: 12, fontWeight: "800", color: theme.text }}>
+              Optional comment
+            </Text>
+            <TextInput
+              multiline
+              numberOfLines={4}
+              value={comments}
+              onChangeText={setComments}
+              placeholder="Share constructive feedback about this experience."
+              placeholderTextColor={theme.muted}
+              style={{
+                minHeight: 96,
+                marginTop: 8,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: theme.border,
+                backgroundColor: theme.bg,
+                padding: 12,
+                fontSize: 12,
+                lineHeight: 18,
+                color: theme.text,
+                textAlignVertical: "top",
+              }}
+            />
+          </View>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Submit Evaluation"
+            onPress={handleSubmit}
+            disabled={submitMutation.isPending || hasMissingRating}
+            style={{
+              minHeight: 50,
+              marginTop: 14,
+              borderRadius: 12,
+              backgroundColor: theme.red,
+              alignItems: "center",
+              justifyContent: "center",
+              opacity: submitMutation.isPending || hasMissingRating ? 0.45 : 1,
+            }}
+          >
+            <Text style={{ color: mobileBrand.white, fontSize: 14, fontWeight: "900" }}>
+              {submitMutation.isPending ? "Submitting..." : "Submit Evaluation"}
+            </Text>
+          </Pressable>
+          {hasMissingRating ? (
+            <Text style={{ marginTop: 8, textAlign: "center", fontSize: 11, color: theme.muted }}>
+              Complete every rating before submitting.
+            </Text>
+          ) : null}
+        </View>
+      </ScreenScroll>
+      </KeyboardAvoidingView>
+    );
+  }
 
   return (
     <ScreenScroll
@@ -204,9 +522,7 @@ export function StudentEvaluationsScreen({ navigation }: Props) {
       <View style={{ backgroundColor: theme.header, borderBottomWidth: 1, borderBottomColor: theme.border }}>
         <View style={{ paddingHorizontal: 16, paddingTop: 7, paddingBottom: 7 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => navigation.goBack()} style={{ width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: theme.redSoft }}>
-              <MaterialCommunityIcons name="arrow-left" size={20} color={theme.redText} />
-            </Pressable>
+            <RoleHeaderNavigationButton onBackPress={navigation.goBack} />
             <View
               style={{
                 width: 38,
@@ -274,6 +590,9 @@ export function StudentEvaluationsScreen({ navigation }: Props) {
       {/* Tabs */}
       <View style={{ marginHorizontal: 16, marginTop: 14, flexDirection: "row", gap: 8 }}>
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Show pending evaluations"
+          accessibilityState={{ selected: activeTab === "pending" }}
           onPress={() => setActiveTab("pending")}
           style={{
             flex: 1,
@@ -290,6 +609,9 @@ export function StudentEvaluationsScreen({ navigation }: Props) {
           </Text>
         </Pressable>
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Show submitted evaluations"
+          accessibilityState={{ selected: activeTab === "submitted" }}
           onPress={() => setActiveTab("submitted")}
           style={{
             flex: 1,
@@ -307,8 +629,40 @@ export function StudentEvaluationsScreen({ navigation }: Props) {
         </Pressable>
       </View>
 
+      <View
+        style={{
+          marginHorizontal: 16,
+          marginTop: 12,
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: theme.border,
+          backgroundColor: theme.surface,
+          paddingHorizontal: 12,
+          paddingVertical: 10,
+        }}
+      >
+        <Text style={{ fontSize: 11, lineHeight: 17, color: theme.muted }}>
+          Rating guide: <Text style={{ fontWeight: "900", color: theme.text }}>0 Not observed</Text>
+          {" to "}
+          <Text style={{ fontWeight: "900", color: theme.text }}>5 Excellent</Text>. Nothing is selected until you choose it.
+        </Text>
+      </View>
+
       {/* Evaluation List */}
-      {inboxQuery.isError || systemInboxQuery.isError ? (
+      {inboxQuery.isLoading || systemInboxQuery.isLoading ? (
+        <View
+          accessibilityLiveRegion="polite"
+          style={{ marginHorizontal: 16, marginTop: 20, borderRadius: 16, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.surface, padding: 24, alignItems: "center" }}
+        >
+          <MaterialCommunityIcons name="clock-outline" size={32} color={theme.blue} />
+          <Text style={{ marginTop: 10, fontSize: 14, fontWeight: "800", color: theme.text }}>
+            Loading evaluations...
+          </Text>
+          <Text style={{ marginTop: 4, textAlign: "center", fontSize: 12, color: theme.muted }}>
+            Checking your assigned and submitted forms.
+          </Text>
+        </View>
+      ) : inboxQuery.isError || systemInboxQuery.isError ? (
         <View style={{ marginHorizontal: 16, marginTop: 20, borderRadius: 16, borderWidth: 1, borderColor: theme.red, backgroundColor: theme.surface, padding: 24, alignItems: "center" }}>
           <MaterialCommunityIcons name="alert-circle-outline" size={32} color={theme.red} />
           <Text style={{ marginTop: 10, fontSize: 14, fontWeight: "800", color: theme.text }}>Evaluations unavailable</Text>
@@ -316,6 +670,8 @@ export function StudentEvaluationsScreen({ navigation }: Props) {
             {toAppError(inboxQuery.error ?? systemInboxQuery.error).message}
           </Text>
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading evaluations"
             onPress={() => void Promise.all([inboxQuery.refetch(), systemInboxQuery.refetch()])}
             style={{ marginTop: 12, borderRadius: 999, backgroundColor: theme.blue, paddingHorizontal: 14, paddingVertical: 8 }}
           >
@@ -334,22 +690,16 @@ export function StudentEvaluationsScreen({ navigation }: Props) {
         </View>
       ) : (
         <View style={{ marginHorizontal: 16, marginTop: 12, gap: 10 }}>
-          {visibleItems.map((item) => (
-            <Pressable
-              key={item.key}
-              onPress={() => {
-                if (item.status === "pending") {
-                  openEvaluation(item);
-                }
-              }}
-              style={{
+          {visibleItems.map((item) => {
+            const cardStyle = {
                 borderRadius: 14,
                 borderWidth: 1,
                 borderColor: theme.border,
                 backgroundColor: theme.surface,
                 padding: 14,
-              }}
-            >
+              };
+            const cardContent = (
+              <>
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                 <Text style={{ fontSize: 11, fontWeight: "800", color: theme.blue, textTransform: "uppercase" }}>
                   {item.subjectCode} - {item.subjectName}
@@ -376,85 +726,32 @@ export function StudentEvaluationsScreen({ navigation }: Props) {
                   <Text style={{ color: mobileBrand.white, fontSize: 11, fontWeight: "800" }}>Start Evaluation</Text>
                 </View>
               ) : null}
-            </Pressable>
-          ))}
+              </>
+            );
+
+            return item.status === "pending" ? (
+              <Pressable
+                key={item.key}
+                accessibilityRole="button"
+                accessibilityLabel={`Start ${item.title}`}
+                onPress={() => openEvaluation(item)}
+                style={cardStyle}
+              >
+                {cardContent}
+              </Pressable>
+            ) : (
+              <View
+                key={item.key}
+                accessible
+                accessibilityLabel={`Submitted ${item.title}`}
+                style={cardStyle}
+              >
+                {cardContent}
+              </View>
+            );
+          })}
         </View>
       )}
-
-      {/* Evaluation Form Modal */}
-      <Modal visible={Boolean(selectedEvaluation)} transparent animationType="slide" onRequestClose={() => setSelectedEvaluation(null)}>
-        <View style={{ flex: 1, backgroundColor: mobileBrand.scrimStrong, justifyContent: "flex-end" }}>
-          <View style={{ backgroundColor: theme.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: "90%" }}>
-            <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 14 }}>
-              <View style={{ flex: 1, paddingRight: 12 }}>
-                <Text style={{ fontSize: 11, fontWeight: "800", color: theme.blue, textTransform: "uppercase" }}>
-                  {selectedEvaluation?.subjectCode} | {selectedEvaluation?.subjectName}
-                </Text>
-                <Text style={{ marginTop: 2, fontSize: 16, fontWeight: "800", color: theme.text }}>
-                  {selectedEvaluation?.title}
-                </Text>
-              </View>
-              <Pressable onPress={() => setSelectedEvaluation(null)} style={{ padding: 4 }}>
-                <MaterialCommunityIcons name="close" size={20} color={theme.muted} />
-              </Pressable>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator style={{ marginBottom: 16 }}>
-              <Text style={{ fontSize: 12, fontWeight: "700", color: theme.muted, marginBottom: 14 }}>
-                {selectedEvaluation?.description || "Rate each category from 1 (Needs Improvement) to 5 (Excellent)."}
-              </Text>
-
-              {(selectedEvaluation?.questions ?? []).map((question, index) => (
-                <StarRating
-                  key={question.key}
-                  label={`${index + 1}. ${question.label}`}
-                  rating={ratings[question.key] ?? 5}
-                  onChange={(value) => setRatings((current) => ({ ...current, [question.key]: value }))}
-                />
-              ))}
-
-              <Text style={{ fontSize: 12, fontWeight: "700", color: theme.text, marginTop: 8, marginBottom: 6 }}>
-                Qualitative Feedback / Comments (Optional):
-              </Text>
-              <TextInput
-                multiline
-                numberOfLines={3}
-                value={comments}
-                onChangeText={setComments}
-                placeholder="Write constructive feedback for your instructor..."
-                placeholderTextColor={theme.muted}
-                style={{
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: theme.border,
-                  backgroundColor: theme.bg,
-                  padding: 12,
-                  fontSize: 12,
-                  color: theme.text,
-                  textAlignVertical: "top",
-                  minHeight: 80,
-                }}
-              />
-            </ScrollView>
-
-            <Pressable
-              onPress={handleSubmit}
-              disabled={submitMutation.isPending}
-              style={{
-                borderRadius: 12,
-                backgroundColor: theme.blue,
-                paddingVertical: 12,
-                alignItems: "center",
-                opacity: submitMutation.isPending ? 0.7 : 1,
-              }}
-            >
-              <Text style={{ color: mobileBrand.white, fontSize: 14, fontWeight: "800" }}>
-                {submitMutation.isPending ? "Submitting..." : "Submit Evaluation"}
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
     </ScreenScroll>
   );
 }
