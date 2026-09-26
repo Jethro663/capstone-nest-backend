@@ -107,7 +107,7 @@ describe('StudentProfilePage', () => {
     };
   });
 
-  it('uses profile and account tabs, defaulting to the profile form', async () => {
+  it('uses four focused profile sections and keeps their content isolated', async () => {
     mockedProfileService.getMine.mockResolvedValue({
       success: true,
       data: buildStudentProfile(),
@@ -115,16 +115,37 @@ describe('StudentProfilePage', () => {
 
     render(<StudentProfilePage />);
 
-    const profileTab = await screen.findByRole('tab', { name: /profile/i });
-    const accountTab = screen.getByRole('tab', { name: /account/i });
+    const profileTab = await screen.findByRole('tab', { name: /^profile$/i });
+    const requirementsTab = screen.getByRole('tab', { name: /requirements/i });
+    const securityTab = screen.getByRole('tab', { name: /^security$/i });
+    const accountTab = screen.getByRole('tab', { name: /^account$/i });
 
     expect(profileTab).toHaveAttribute('data-state', 'active');
+    expect(requirementsTab).toHaveAttribute('data-state', 'inactive');
+    expect(securityTab).toHaveAttribute('data-state', 'inactive');
     expect(accountTab).toHaveAttribute('data-state', 'inactive');
     expect(
       screen.getByRole('tabpanel', { name: /profile/i }),
     ).toBeInTheDocument();
     expect(screen.getByText('Student Identity')).toBeInTheDocument();
     expect(screen.queryByText('Profile Security Card')).not.toBeInTheDocument();
+
+    fireEvent.mouseDown(requirementsTab, { button: 0 });
+    fireEvent.click(requirementsTab);
+
+    await waitFor(() => {
+      expect(requirementsTab).toHaveAttribute('data-state', 'active');
+    });
+    expect(screen.getByText(/all required fields are complete/i)).toBeInTheDocument();
+    expect(screen.queryByText('Student Identity')).not.toBeInTheDocument();
+
+    fireEvent.mouseDown(securityTab, { button: 0 });
+    fireEvent.click(securityTab);
+
+    await waitFor(() => {
+      expect(securityTab).toHaveAttribute('data-state', 'active');
+    });
+    expect(screen.getByText('Profile Security Card')).toBeInTheDocument();
 
     fireEvent.mouseDown(accountTab, { button: 0 });
     fireEvent.click(accountTab);
@@ -133,11 +154,37 @@ describe('StudentProfilePage', () => {
       expect(accountTab).toHaveAttribute('data-state', 'active');
     });
 
-    expect(screen.queryByText('Student Identity')).not.toBeInTheDocument();
-    expect(screen.getByText('Profile Security Card')).toBeInTheDocument();
+    expect(screen.queryByText('Profile Security Card')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /transcript/i })).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: /assessment history/i }),
     ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /evaluations/i })).toBeInTheDocument();
+  });
+
+  it('routes all Account record actions to their existing student pages', async () => {
+    mockedProfileService.getMine.mockResolvedValue({
+      success: true,
+      data: buildStudentProfile(),
+    } as GetMineResponse);
+
+    render(<StudentProfilePage />);
+
+    const accountTab = await screen.findByRole('tab', { name: /^account$/i });
+    fireEvent.mouseDown(accountTab, { button: 0 });
+    fireEvent.click(accountTab);
+
+    await waitFor(() => {
+      expect(accountTab).toHaveAttribute('data-state', 'active');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /transcript/i }));
+    fireEvent.click(screen.getByRole('button', { name: /assessment history/i }));
+    fireEvent.click(screen.getByRole('button', { name: /evaluations/i }));
+
+    expect(pushMock).toHaveBeenCalledWith('/dashboard/student/transcript');
+    expect(pushMock).toHaveBeenCalledWith('/dashboard/student/assessment-history');
+    expect(pushMock).toHaveBeenCalledWith('/dashboard/student/evaluations');
   });
 
   it('opens the profile help guide, walks through all pages, and closes it', async () => {
@@ -255,6 +302,7 @@ describe('StudentProfilePage', () => {
     expect(screen.getByDisplayValue('jamie@nexora.edu')).toHaveAttribute(
       'readonly',
     );
+    expect(screen.getAllByText('Required')).toHaveLength(7);
   });
 
   it('limits student phone typing to an 11-digit local mobile number', async () => {

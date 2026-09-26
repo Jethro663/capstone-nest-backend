@@ -9545,6 +9545,66 @@ body {
   max-width: 100%;
 }
 
+.student-profile-settings {
+  display: grid;
+  grid-template-columns: minmax(13rem, 15rem) minmax(0, 1fr);
+  align-items: start;
+  gap: 1.25rem;
+}
+
+.student-profile-section-rail {
+  position: sticky;
+  top: 1rem;
+}
+
+.student-profile-section-tabs {
+  display: grid;
+  width: 100%;
+  height: auto;
+  gap: 0.25rem;
+  border: 1px solid var(--student-outline);
+  border-radius: 0.5rem;
+  background: var(--student-elevated);
+  padding: 0.4rem;
+}
+
+.student-profile-section-tab {
+  display: flex;
+  width: 100%;
+  min-height: 2.9rem;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 0.375rem;
+  padding: 0.65rem 0.75rem;
+  color: var(--student-text-muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.student-profile-section-tab[data-state='active'] {
+  background: var(--student-accent-soft);
+  color: var(--student-accent);
+  box-shadow: inset 3px 0 0 var(--student-accent);
+}
+
+.student-profile-section-count {
+  display: inline-flex;
+  min-width: 1.45rem;
+  height: 1.45rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--student-danger-bg);
+  color: var(--student-danger-text);
+  padding-inline: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.student-profile-section-content {
+  min-width: 0;
+}
+
 .student-profile-header {
   border: 1px solid color-mix(in srgb, var(--student-navy) 90%, transparent);
   background: linear-gradient(135deg, var(--student-navy) 0%, var(--student-navy-soft) 100%);
@@ -9762,6 +9822,23 @@ body {
   font-weight: 700;
 }
 
+.student-profile-required-indicator {
+  color: var(--student-danger-text);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.student-profile-required-note {
+  margin: 0;
+  color: var(--student-danger-text);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.student-profile-field--missing .student-profile-input {
+  border-color: var(--student-danger-border);
+}
+
 .student-profile-input {
   height: 2.85rem;
   border-radius: 999px;
@@ -9870,6 +9947,154 @@ body {
   color: var(--student-text-muted);
   font-size: 0.84rem;
   line-height: 1.45;
+}
+
+.student-profile-support-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.student-profile-support-heading h2 {
+  margin: 0;
+  color: var(--student-text-strong);
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.student-profile-support-heading p {
+  margin: 0.25rem 0 0;
+  color: var(--student-text-muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.student-profile-requirement-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--student-outline);
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.student-profile-requirement-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 3.6rem;
+  border-bottom: 1px solid var(--student-outline);
+  padding: 0.7rem 0.85rem;
+}
+
+.student-profile-requirement-list li:last-child {
+  border-bottom: 0;
+}
+
+.student-profile-requirement-icon {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.student-profile-requirement-icon.is-complete {
+  background: var(--student-success-bg);
+  color: var(--student-success-text);
+}
+
+.student-profile-requirement-icon.is-missing {
+  background: var(--student-danger-bg);
+  color: var(--student-danger-text);
+}
+
+.student-profile-requirement-copy {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.student-profile-requirement-copy strong {
+  color: var(--student-text-strong);
+  font-size: 0.88rem;
+}
+
+.student-profile-requirement-copy small {
+  color: var(--student-text-muted);
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.student-profile-security-section {
+  max-width: 48rem;
+}
+
+.student-profile-account-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.student-profile-account-action {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 6rem;
+  border: 1px solid var(--student-outline);
+  border-radius: 0.5rem;
+  background: var(--student-elevated);
+  padding: 0.9rem;
+  text-align: left;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.student-profile-account-action:hover,
+.student-profile-account-action:focus-visible {
+  border-color: var(--student-accent);
+  background: var(--student-accent-soft);
+}
+
+.student-profile-account-action__icon {
+  display: inline-flex;
+  width: 2.4rem;
+  height: 2.4rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  background: var(--student-navy);
+  color: var(--student-white);
+}
+
+.student-profile-account-action__icon svg {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.student-profile-account-action > span:nth-child(2) {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.student-profile-account-action strong {
+  color: var(--student-text-strong);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.student-profile-account-action small {
+  color: var(--student-text-muted);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.student-profile-account-action__arrow {
+  width: 1rem;
+  color: var(--student-text-muted);
 }
 
 .student-profile-missing-checklist-copy {
@@ -11411,12 +11636,46 @@ body {
 }
 
 @media (max-width: 980px) {
+  .student-profile-settings {
+    grid-template-columns: 1fr;
+  }
+
+  .student-profile-section-rail {
+    position: static;
+  }
+
+  .student-profile-section-tabs {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .student-profile-section-tab[data-state='active'] {
+    box-shadow: inset 0 -3px 0 var(--student-accent);
+  }
+
+  .student-profile-account-actions {
+    grid-template-columns: 1fr;
+  }
+
   .student-profile-support-grid {
     grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 760px) {
+  .student-profile-section-tabs {
+    display: flex;
+    overflow-x: auto;
+  }
+
+  .student-profile-section-tab {
+    flex: 0 0 auto;
+    min-width: 7.3rem;
+  }
+
+  .student-profile-support-heading {
+    flex-direction: column;
+  }
+
   .student-profile-header {
     padding: 1rem;
   }

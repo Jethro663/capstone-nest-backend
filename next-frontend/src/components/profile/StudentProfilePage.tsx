@@ -3,10 +3,14 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import {
   AlertTriangle,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  ClipboardCheck,
   CircleHelp,
+  FileText,
   GraduationCap,
+  History,
   IdCard,
   Lock,
   Loader2,
@@ -14,7 +18,6 @@ import {
   MapPin,
   Phone,
   Save,
-  ShieldCheck,
   Upload,
   UserRound,
 } from 'lucide-react';
@@ -31,7 +34,7 @@ import { profileService } from '@/services/profile-service';
 import type { StudentProfile } from '@/types/profile';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -61,6 +64,7 @@ type StudentProfileForm = {
 };
 
 type ProfileGuideScreen = 'overview' | 'identity' | 'editing' | 'account';
+type ProfileSection = 'profile' | 'requirements' | 'security' | 'account';
 
 const FIELD_LIMITS = {
   phone: 11,
@@ -139,7 +143,7 @@ const profileGuidePages: Array<{
       },
       {
         action: 'Switch',
-        body: 'Move between the Profile and Account tabs depending on whether you are editing details or reviewing account tools.',
+        body: 'Move between Profile, Requirements, Security, and Account so each page has one clear purpose.',
       },
     ],
   },
@@ -190,21 +194,21 @@ const profileGuidePages: Array<{
   },
   {
     title: 'Use the account tools and history shortcuts',
-    description: 'The Account tab keeps your password tools and learning-history shortcuts in one place after your profile details are reviewed.',
+    description: 'Security owns password updates, while Account keeps the three academic record destinations together.',
     screen: 'account',
-    reminder: 'Use the Account tab for security and record-review tools, not for editing the main profile form.',
+    reminder: 'Use Security for your password. Use Account for Transcript, Assessment History, and Evaluations.',
     steps: [
       {
         action: 'Open',
-        body: 'Go to the Account tab when you need password controls or support tools instead of editable profile fields.',
+        body: 'Go to Security when you need to update your password.',
       },
       {
         action: 'Review',
-        body: 'Check the profile status card to confirm whether all required details are already complete.',
+        body: 'Open Requirements to see every required detail and which items still need attention.',
       },
       {
         action: 'Visit',
-        body: 'Use View Transcript and Assessment History to open your academic record pages from the same workspace.',
+        body: 'Use Transcript, Assessment History, and Evaluations in Account to open the existing academic pages.',
       },
     ],
   },
@@ -228,6 +232,7 @@ export default function StudentProfilePage() {
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [helpPage, setHelpPage] = useState(0);
+  const [activeSection, setActiveSection] = useState<ProfileSection>('profile');
   const inlineErrors = useMemo(() => getInlineFieldError(form), [form]);
 
   useEffect(() => {
@@ -294,6 +299,15 @@ export default function StudentProfilePage() {
     familyContact: form.familyContact,
   });
   const isComplete = missingRequiredFields.length === 0;
+  const requirementItems = [
+    { label: 'Date of Birth', complete: Boolean(form.dateOfBirth.trim()) },
+    { label: 'Gender', complete: Boolean(form.gender.trim()) },
+    { label: 'Student Contact Number', complete: Boolean(form.phone.trim()) },
+    { label: 'Home Address', complete: Boolean(form.address.trim()) },
+    { label: 'Guardian Name', complete: Boolean(form.familyName.trim()) },
+    { label: 'Relationship', complete: Boolean(form.familyRelationship.trim()) },
+    { label: 'Guardian Contact Number', complete: Boolean(form.familyContact.trim()) },
+  ].sort((left, right) => Number(left.complete) - Number(right.complete));
   const activeGuidePage = profileGuidePages[helpPage];
 
   const handleFieldChange = (field: keyof StudentProfileForm, value: string) => {
@@ -465,18 +479,34 @@ export default function StudentProfilePage() {
           </div>
         </section>
 
-        <Tabs defaultValue="profile" className="space-y-5">
-          <section className="flex justify-start">
-            <TabsList className="student-tab-list h-auto flex-wrap justify-start">
-              <TabsTrigger value="profile" className="student-tab min-w-[144px] px-5 py-3 text-sm font-semibold">
+        <Tabs
+          value={activeSection}
+          onValueChange={(value) => setActiveSection(value as ProfileSection)}
+          className="student-profile-settings"
+        >
+          <aside className="student-profile-section-rail">
+            <TabsList className="student-profile-section-tabs">
+              <TabsTrigger value="profile" className="student-profile-section-tab">
                 Profile
               </TabsTrigger>
-              <TabsTrigger value="account" className="student-tab min-w-[144px] px-5 py-3 text-sm font-semibold">
+              <TabsTrigger value="requirements" className="student-profile-section-tab">
+                <span>Requirements</span>
+                {missingRequiredFields.length > 0 ? (
+                  <span className="student-profile-section-count">
+                    {missingRequiredFields.length}
+                  </span>
+                ) : null}
+              </TabsTrigger>
+              <TabsTrigger value="security" className="student-profile-section-tab">
+                Security
+              </TabsTrigger>
+              <TabsTrigger value="account" className="student-profile-section-tab">
                 Account
               </TabsTrigger>
             </TabsList>
-          </section>
+          </aside>
 
+          <div className="student-profile-section-content">
           <TabsContent value="profile" className="mt-0">
             <section className="student-profile-card">
               <CardContent className="space-y-5 px-6 py-6 md:px-7">
@@ -571,20 +601,32 @@ export default function StudentProfilePage() {
                     <ProfileField label="Grade Level" icon={GraduationCap} immutable>
                       <Input className={readonlyFieldClass} value={form.gradeLevel} readOnly />
                     </ProfileField>
-                    <ProfileField label="Date of Birth" icon={IdCard}>
+                    <ProfileField
+                      label="Date of Birth"
+                      icon={IdCard}
+                      required
+                      missing={!form.dateOfBirth.trim()}
+                    >
                       <Input
                         type="date"
                         className={fieldClass}
                         value={form.dateOfBirth}
                         onChange={(event) => handleFieldChange('dateOfBirth', event.target.value)}
                         disabled={isLocked}
+                        required
                       />
                     </ProfileField>
-                    <ProfileField label="Gender" icon={UserRound}>
+                    <ProfileField
+                      label="Gender"
+                      icon={UserRound}
+                      required
+                      missing={!form.gender.trim()}
+                    >
                       <select
                         value={form.gender}
                         onChange={(event) => handleFieldChange('gender', event.target.value)}
                         disabled={isLocked}
+                        required
                         className={cn(fieldClass, 'w-full pr-10 disabled:cursor-not-allowed disabled:opacity-60')}
                       >
                         <option value="">Select</option>
@@ -592,7 +634,12 @@ export default function StudentProfilePage() {
                         <option value="Female">Female</option>
                       </select>
                     </ProfileField>
-                    <ProfileField label="Student Contact Number" icon={Phone}>
+                    <ProfileField
+                      label="Student Contact Number"
+                      icon={Phone}
+                      required
+                      missing={!form.phone.trim()}
+                    >
                       <Input
                         className={fieldClass}
                         value={form.phone}
@@ -601,16 +648,23 @@ export default function StudentProfilePage() {
                         placeholder="09XXXXXXXXX"
                         maxLength={FIELD_LIMITS.phone}
                         inputMode="tel"
+                        required
                       />
                       {inlineErrors.phone ? <p className="text-xs text-rose-600">{inlineErrors.phone}</p> : null}
                     </ProfileField>
-                    <ProfileField label="Home Address" icon={MapPin}>
+                    <ProfileField
+                      label="Home Address"
+                      icon={MapPin}
+                      required
+                      missing={!form.address.trim()}
+                    >
                       <Input
                         className={fieldClass}
                         value={form.address}
                         onChange={(event) => handleFieldChange('address', event.target.value)}
                         disabled={isLocked}
                         maxLength={FIELD_LIMITS.address}
+                        required
                       />
                     </ProfileField>
                   </div>
@@ -619,21 +673,33 @@ export default function StudentProfilePage() {
                 <div className="student-profile-section space-y-3.5">
                   <h3 className="student-profile-section__title">Emergency Contact</h3>
                   <div className="grid grid-cols-1 gap-x-5 gap-y-3.5 md:grid-cols-3">
-                    <ProfileField label="Guardian Name" icon={UserRound}>
+                    <ProfileField
+                      label="Guardian Name"
+                      icon={UserRound}
+                      required
+                      missing={!form.familyName.trim()}
+                    >
                       <Input
                         className={fieldClass}
                         value={form.familyName}
                         onChange={(event) => handleFieldChange('familyName', event.target.value)}
                         disabled={isLocked}
                         maxLength={FIELD_LIMITS.familyName}
+                        required
                       />
                       {inlineErrors.familyName ? <p className="text-xs text-rose-600">{inlineErrors.familyName}</p> : null}
                     </ProfileField>
-                    <ProfileField label="Relationship" icon={UserRound}>
+                    <ProfileField
+                      label="Relationship"
+                      icon={UserRound}
+                      required
+                      missing={!form.familyRelationship.trim()}
+                    >
                       <select
                         value={form.familyRelationship}
                         onChange={(event) => handleFieldChange('familyRelationship', event.target.value)}
                         disabled={isLocked}
+                        required
                         className={cn(fieldClass, 'w-full pr-10 disabled:cursor-not-allowed disabled:opacity-60')}
                       >
                         <option value="">Select</option>
@@ -644,7 +710,12 @@ export default function StudentProfilePage() {
                         <option value="Other">Other</option>
                       </select>
                     </ProfileField>
-                    <ProfileField label="Guardian Contact Number" icon={Phone}>
+                    <ProfileField
+                      label="Guardian Contact Number"
+                      icon={Phone}
+                      required
+                      missing={!form.familyContact.trim()}
+                    >
                       <Input
                         className={fieldClass}
                         value={form.familyContact}
@@ -653,6 +724,7 @@ export default function StudentProfilePage() {
                         placeholder="09XXXXXXXXX"
                         maxLength={FIELD_LIMITS.familyContact}
                         inputMode="tel"
+                        required
                       />
                       {inlineErrors.familyContact ? <p className="text-xs text-rose-600">{inlineErrors.familyContact}</p> : null}
                     </ProfileField>
@@ -663,7 +735,12 @@ export default function StudentProfilePage() {
                   <Button
                     type="button"
                     onClick={handleSaveAttempt}
-                    disabled={isLocked || saving}
+                    disabled={
+                      isLocked ||
+                      saving ||
+                      !isComplete ||
+                      Object.keys(inlineErrors).length > 0
+                    }
                     className="student-profile-save-button"
                   >
                     {saving ? (
@@ -673,6 +750,8 @@ export default function StudentProfilePage() {
                       </>
                     ) : isLocked ? (
                       'Profile Locked'
+                    ) : !isComplete ? (
+                      `Complete ${missingRequiredFields.length} Required ${missingRequiredFields.length === 1 ? 'Field' : 'Fields'}`
                     ) : (
                       <>
                         <Save className="h-4 w-4" />
@@ -685,17 +764,15 @@ export default function StudentProfilePage() {
             </section>
           </TabsContent>
 
-          <TabsContent value="account" className="mt-0">
-            <section className="student-profile-support-grid">
-              <ProfileSecurityCard appearance="student" />
-
-              <Card className="student-profile-support-card">
-                <CardContent className="space-y-3 p-5">
-                  <h3 className="student-profile-support-title">
-                    <ShieldCheck className="h-4 w-4" />
-                    Profile Status
-                  </h3>
-                  <div
+          <TabsContent value="requirements" className="mt-0">
+            <section className="student-profile-support-card">
+              <CardContent className="space-y-4 p-5 md:p-6">
+                <div className="student-profile-support-heading">
+                  <div>
+                    <h2>Profile requirements</h2>
+                    <p>See exactly what still needs attention before you save.</p>
+                  </div>
+                  <span
                     className={cn(
                       'student-profile-status-chip',
                       isComplete
@@ -704,33 +781,114 @@ export default function StudentProfilePage() {
                     )}
                   >
                     {isComplete
-                      ? 'All required student details are complete.'
-                      : `${missingRequiredFields.length} required field(s) still need attention.`}
-                  </div>
-                  <p className="student-profile-support-text">
-                    Your profile information is visible to administrators and relevant staff to support
-                    official school records.
-                  </p>
-                  <div className="flex flex-wrap gap-2 pt-1">
+                      ? 'All required fields are complete.'
+                      : `${missingRequiredFields.length} missing`}
+                  </span>
+                </div>
+
+                <ul
+                  className="student-profile-requirement-list"
+                  aria-label="Student profile requirements"
+                >
+                  {requirementItems.map((item) => (
+                    <li key={item.label}>
+                      <span
+                        className={cn(
+                          'student-profile-requirement-icon',
+                          item.complete ? 'is-complete' : 'is-missing',
+                        )}
+                        aria-hidden="true"
+                      >
+                        {item.complete ? (
+                          <CheckCircle2 className="h-4 w-4" />
+                        ) : (
+                          <AlertTriangle className="h-4 w-4" />
+                        )}
+                      </span>
+                      <span className="student-profile-requirement-copy">
+                        <strong>{item.label}</strong>
+                        <small>{item.complete ? 'Complete' : 'Required before saving'}</small>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+
+                {isComplete ? null : (
+                  <div className="flex justify-end">
                     <Button
                       type="button"
-                      variant="outline"
-                      onClick={() => router.push('/dashboard/student/transcript')}
+                      onClick={() => setActiveSection('profile')}
+                      className="student-button-solid"
                     >
-                      View Transcript
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => router.push('/dashboard/student/assessment-history')}
-                    >
-                      Assessment History
+                      Review in Profile
                     </Button>
                   </div>
-                </CardContent>
-              </Card>
+                )}
+              </CardContent>
             </section>
           </TabsContent>
+
+          <TabsContent value="security" className="mt-0">
+            <section className="student-profile-security-section">
+              <ProfileSecurityCard appearance="student" />
+            </section>
+          </TabsContent>
+
+          <TabsContent value="account" className="mt-0">
+            <section>
+              <div className="student-profile-support-heading mb-4">
+                <div>
+                  <h2>Academic records</h2>
+                  <p>Open your transcript, assessment history, or assigned evaluations.</p>
+                </div>
+              </div>
+              <div className="student-profile-account-actions">
+                <button
+                  type="button"
+                  className="student-profile-account-action"
+                  onClick={() => router.push('/dashboard/student/transcript')}
+                >
+                  <span className="student-profile-account-action__icon">
+                    <FileText />
+                  </span>
+                  <span>
+                    <strong>Transcript</strong>
+                    <small>View official grades and academic records by school year.</small>
+                  </span>
+                  <ChevronRight className="student-profile-account-action__arrow" />
+                </button>
+                <button
+                  type="button"
+                  className="student-profile-account-action"
+                  onClick={() => router.push('/dashboard/student/assessment-history')}
+                >
+                  <span className="student-profile-account-action__icon">
+                    <History />
+                  </span>
+                  <span>
+                    <strong>Assessment History</strong>
+                    <small>Review submissions, scores, feedback, and attempt details.</small>
+                  </span>
+                  <ChevronRight className="student-profile-account-action__arrow" />
+                </button>
+                <button
+                  type="button"
+                  className="student-profile-account-action"
+                  onClick={() => router.push('/dashboard/student/evaluations')}
+                >
+                  <span className="student-profile-account-action__icon">
+                    <ClipboardCheck />
+                  </span>
+                  <span>
+                    <strong>Evaluations</strong>
+                    <small>Complete teacher and school evaluations assigned to you.</small>
+                  </span>
+                  <ChevronRight className="student-profile-account-action__arrow" />
+                </button>
+              </div>
+            </section>
+          </TabsContent>
+          </div>
         </Tabs>
       </div>
 
@@ -909,6 +1067,8 @@ function StudentProfileGuideScreenshot({
             </div>
             <div className="student-profile-guide-shell__tabs">
               <b>Profile</b>
+              <span>Requirements</span>
+              <span>Security</span>
               <span>Account</span>
             </div>
             <div className="student-profile-guide-shell__hero">
@@ -992,27 +1152,24 @@ function StudentProfileGuideScreenshot({
           <div className="student-profile-guide-shell">
             <div className="student-profile-guide-shell__tabs">
               <span>Profile</span>
+              <span>Requirements</span>
+              <span>Security</span>
               <b>Account</b>
             </div>
             <div className="student-profile-guide-shell__account-grid">
               <section>
-                <small>Security</small>
-                <strong>Password card</strong>
-                <p />
-                <p className="is-short" />
-              </section>
-              <section>
-                <small>Status</small>
-                <strong>Transcript and history</strong>
+                <small>Academic records</small>
+                <strong>Three clear destinations</strong>
                 <div className="student-profile-guide-shell__shortcut-row">
-                  <b>View Transcript</b>
+                  <b>Transcript</b>
                   <b>Assessment History</b>
+                  <b>Evaluations</b>
                 </div>
               </section>
             </div>
           </div>
           <em className="teacher-intervention-workspace__manual-pin student-profile-guide-pin is-student-guide-security">
-            Security card
+            Security section
           </em>
           <em className="teacher-intervention-workspace__manual-pin student-profile-guide-pin is-student-guide-shortcuts">
             Record shortcuts
@@ -1028,14 +1185,23 @@ function ProfileField({
   icon: Icon,
   children,
   immutable = false,
+  required = false,
+  missing = false,
 }: {
   label: string;
   icon: typeof UserRound;
   children: ReactNode;
   immutable?: boolean;
+  required?: boolean;
+  missing?: boolean;
 }) {
   return (
-    <div className="space-y-1.5">
+    <div
+      className={cn(
+        'student-profile-field space-y-1.5',
+        missing ? 'student-profile-field--missing' : undefined,
+      )}
+    >
       <div className="flex items-center justify-between gap-3">
         <Label className="student-profile-field-label">
           <Icon className="h-4 w-4" />
@@ -1046,10 +1212,17 @@ function ProfileField({
             <Lock className="h-3.5 w-3.5" />
             School-managed
           </span>
+        ) : required ? (
+          <span className="student-profile-required-indicator">Required</span>
         ) : null}
       </div>
       {immutable ? <p className="student-profile-immutable-note">Not editable by students.</p> : null}
       {children}
+      {missing ? (
+        <p className="student-profile-required-note">
+          This field is required before you can save.
+        </p>
+      ) : null}
     </div>
   );
 }

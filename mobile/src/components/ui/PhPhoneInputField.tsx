@@ -78,17 +78,6 @@ export function PhPhoneInputField({
       {/* Label and Carrier Badge Header */}
       <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: 5 }}>
         <View style={{ alignItems: "center", flexDirection: "row" }}>
-          {required ? (
-            <View
-              style={{
-                backgroundColor: theme.red,
-                borderRadius: 999,
-                height: 5,
-                marginRight: 5,
-                width: 5,
-              }}
-            />
-          ) : null}
           <Text
             style={{
               color: theme.muted,
@@ -100,6 +89,18 @@ export function PhPhoneInputField({
           >
             {label}
           </Text>
+          {required ? (
+            <Text
+              style={{
+                color: theme.red,
+                fontSize: 9,
+                fontWeight: "700",
+                marginLeft: 7,
+              }}
+            >
+              Required
+            </Text>
+          ) : null}
         </View>
 
         {analysis.telecomCarrier ? (

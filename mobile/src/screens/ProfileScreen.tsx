@@ -9,7 +9,14 @@ import {
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
-import { Image, Pressable, Text, TextInput, View } from "react-native";
+import {
+  Image,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { StudentScreen } from "../components/student/StudentWorkspacePrimitives";
 import {
   useProfile,
@@ -34,6 +41,15 @@ type ProfileStatusItem = {
   label: string;
   value?: string | null;
 };
+
+type ProfileSection = "profile" | "requirements" | "security" | "account";
+
+const profileSections: Array<{ id: ProfileSection; label: string }> = [
+  { id: "profile", label: "Profile" },
+  { id: "requirements", label: "Requirements" },
+  { id: "security", label: "Security" },
+  { id: "account", label: "Account" },
+];
 
 const assetBaseUrl = API_BASE_URL.replace(/\/api$/, "");
 
@@ -127,17 +143,6 @@ function FieldLabel({
     <View
       style={{ alignItems: "center", flexDirection: "row", marginBottom: 5 }}
     >
-      {required ? (
-        <View
-          style={{
-            backgroundColor: theme.red,
-            borderRadius: 999,
-            height: 5,
-            marginRight: 5,
-            width: 5,
-          }}
-        />
-      ) : null}
       <Text
         style={{
           color: theme.muted,
@@ -149,6 +154,18 @@ function FieldLabel({
       >
         {label}
       </Text>
+      {required ? (
+        <Text
+          style={{
+            color: theme.red,
+            fontSize: 9,
+            fontWeight: "700",
+            marginLeft: 7,
+          }}
+        >
+          Required
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -252,11 +269,13 @@ function QuickLink({
   icon,
   iconColor,
   label,
+  description,
   onPress,
 }: {
   icon: ComponentProps<typeof MaterialCommunityIcons>["name"];
   iconColor: string;
   label: string;
+  description: string;
   onPress: () => void;
 }) {
   return (
@@ -268,26 +287,28 @@ function QuickLink({
         borderColor: theme.border,
         borderRadius: 10,
         borderWidth: 1,
-        flex: 1,
         flexDirection: "row",
-        minHeight: 44,
-        paddingHorizontal: 12,
-        paddingVertical: 11,
+        minHeight: 72,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
       }}
     >
       <MaterialCommunityIcons color={iconColor} name={icon} size={15} />
-      <Text
-        numberOfLines={2}
-        style={{
-          color: theme.text,
-          flex: 1,
-          fontSize: 12,
-          fontWeight: "700",
-          marginLeft: 8,
-        }}
-      >
-        {label}
-      </Text>
+      <View style={{ flex: 1, marginLeft: 10 }}>
+        <Text style={{ color: theme.text, fontSize: 13, fontWeight: "700" }}>
+          {label}
+        </Text>
+        <Text
+          style={{
+            color: theme.muted,
+            fontSize: 11,
+            lineHeight: 15,
+            marginTop: 3,
+          }}
+        >
+          {description}
+        </Text>
+      </View>
       <MaterialCommunityIcons
         color={theme.dim}
         name="chevron-right"
@@ -297,8 +318,88 @@ function QuickLink({
   );
 }
 
+function ProfileSectionSwitcher({
+  activeSection,
+  missingCount,
+  onChange,
+}: {
+  activeSection: ProfileSection;
+  missingCount: number;
+  onChange: (section: ProfileSection) => void;
+}) {
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={{
+        backgroundColor: theme.surface,
+        borderBottomColor: theme.border,
+        borderBottomWidth: 1,
+      }}
+      contentContainerStyle={{ paddingHorizontal: 8 }}
+    >
+      {profileSections.map((section) => {
+        const active = activeSection === section.id;
+        return (
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
+            key={section.id}
+            onPress={() => onChange(section.id)}
+            style={{
+              alignItems: "center",
+              borderBottomColor: active ? theme.red : "transparent",
+              borderBottomWidth: 3,
+              flexDirection: "row",
+              justifyContent: "center",
+              minHeight: 48,
+              paddingHorizontal: 11,
+            }}
+          >
+            <Text
+              style={{
+                color: active ? theme.text : theme.muted,
+                fontSize: 12,
+                fontWeight: active ? "700" : "600",
+              }}
+            >
+              {section.label}
+            </Text>
+            {section.id === "requirements" && missingCount > 0 ? (
+              <View
+                style={{
+                  alignItems: "center",
+                  backgroundColor: theme.red,
+                  borderRadius: 999,
+                  height: 20,
+                  justifyContent: "center",
+                  marginLeft: 5,
+                  minWidth: 20,
+                  paddingHorizontal: 5,
+                }}
+              >
+                <Text
+                  style={{
+                    color: mobileBrand.white,
+                    fontSize: 10,
+                    fontWeight: "700",
+                  }}
+                >
+                  {missingCount}
+                </Text>
+              </View>
+            ) : null}
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
 export function ProfileScreen(props: Props) {
   const { user, logout } = useAuth();
+  const [activeSection, setActiveSection] =
+    useState<ProfileSection>("profile");
   const profileQuery = useProfile();
   const profile = profileQuery.data;
   const updateMutation = useProfileUpdateMutation(user?.userId || user?.id);
@@ -384,9 +485,6 @@ export function ProfileScreen(props: Props) {
 
   const statusItems = useMemo<ProfileStatusItem[]>(
     () => [
-      { label: "First Name", value: currentFirstName },
-      { label: "Last Name", value: currentLastName },
-      { label: "Grade Level", value: currentGradeLevel },
       { label: "Date of Birth", value: dateOfBirth },
       { label: "Gender", value: gender },
       { label: "Contact Number", value: phoneAnalysis.isValid ? phone : null },
@@ -400,9 +498,6 @@ export function ProfileScreen(props: Props) {
     ],
     [
       address,
-      currentFirstName,
-      currentGradeLevel,
-      currentLastName,
       dateOfBirth,
       familyContact,
       familyContactAnalysis.isValid,
@@ -417,6 +512,14 @@ export function ProfileScreen(props: Props) {
   const requiredCount = statusItems.filter(
     (item) => !hasValue(item.value),
   ).length;
+  const orderedStatusItems = useMemo(
+    () =>
+      [...statusItems].sort(
+        (left, right) =>
+          Number(hasValue(left.value)) - Number(hasValue(right.value)),
+      ),
+    [statusItems],
+  );
   const canSaveProfile = isContactSectionValid && requiredCount === 0;
   const refreshBusy =
     profileQuery.isRefetching ||
@@ -425,7 +528,7 @@ export function ProfileScreen(props: Props) {
   const completionHeadline =
     requiredCount === 0
       ? "All required fields are complete."
-      : `${requiredCount} required ${pluralize(requiredCount, "field still needs", "fields still need")} attention.`;
+      : `${requiredCount} required ${pluralize(requiredCount, "field needs", "fields need")} attention.`;
   const completionSubcopy =
     requiredCount === 0
       ? "Your student record is complete and ready for review."
@@ -710,6 +813,12 @@ export function ProfileScreen(props: Props) {
           </View>
         </View>
 
+        <ProfileSectionSwitcher
+          activeSection={activeSection}
+          missingCount={requiredCount}
+          onChange={setActiveSection}
+        />
+
         {profileQuery.error ? (
           <View
             style={{
@@ -743,44 +852,6 @@ export function ProfileScreen(props: Props) {
             </Text>
           </View>
         ) : null}
-
-        <View
-          style={{
-            alignItems: "flex-start",
-            backgroundColor:
-              requiredCount === 0 ? theme.greenSoft : theme.redSoft,
-            borderColor: requiredCount === 0 ? theme.greenLine : theme.redLine,
-            borderRadius: 10,
-            borderWidth: 1,
-            flexDirection: "row",
-            marginHorizontal: 16,
-            marginTop: 12,
-            paddingHorizontal: 13,
-            paddingVertical: 10,
-          }}
-        >
-          <MaterialCommunityIcons
-            color={requiredCount === 0 ? theme.green : theme.red}
-            name={
-              requiredCount === 0
-                ? "check-circle-outline"
-                : "alert-circle-outline"
-            }
-            size={15}
-            style={{ marginRight: 9, marginTop: 1 }}
-          />
-          <Text
-            style={{
-              color: requiredCount === 0 ? theme.green : theme.redText,
-              flex: 1,
-              fontSize: 11,
-              lineHeight: 16,
-            }}
-          >
-            <Text style={{ fontWeight: "600" }}>{completionHeadline} </Text>
-            {completionSubcopy}
-          </Text>
-        </View>
 
         {error ? (
           <View
@@ -816,10 +887,14 @@ export function ProfileScreen(props: Props) {
           </View>
         ) : null}
 
-        <SectionHeader
-          badge={requiredCount === 0 ? "Complete" : `${requiredCount} required`}
-          title="Student Identity"
-        />
+        {activeSection === "profile" ? (
+          <>
+            <SectionHeader
+              badge={
+                requiredCount === 0 ? "Complete" : `${requiredCount} required`
+              }
+              title="Student Identity"
+            />
 
         <View
           style={{
@@ -842,11 +917,7 @@ export function ProfileScreen(props: Props) {
                 paddingRight: 12,
               }}
             >
-              <ReadOnlyField
-                label="First Name"
-                required
-                value={currentFirstName}
-              />
+              <ReadOnlyField label="First Name" value={currentFirstName} />
             </View>
             <View style={{ flex: 1, paddingLeft: 12 }}>
               <ReadOnlyField label="Middle Name" value={currentMiddleName} />
@@ -862,11 +933,7 @@ export function ProfileScreen(props: Props) {
                 paddingRight: 12,
               }}
             >
-              <ReadOnlyField
-                label="Last Name"
-                required
-                value={currentLastName}
-              />
+              <ReadOnlyField label="Last Name" value={currentLastName} />
             </View>
             <View style={{ flex: 1, paddingLeft: 12 }}>
               <ReadOnlyField compact label="Email" value={currentEmail} />
@@ -885,11 +952,7 @@ export function ProfileScreen(props: Props) {
               <ReadOnlyField compact label="LRN" value={currentLrn} />
             </View>
             <View style={{ flex: 1, paddingLeft: 12 }}>
-              <ReadOnlyField
-                label="Grade Level"
-                required
-                value={currentGradeLevel}
-              />
+              <ReadOnlyField label="Grade Level" value={currentGradeLevel} />
             </View>
           </FormRow>
 
@@ -1025,31 +1088,31 @@ export function ProfileScreen(props: Props) {
 
         <View style={{ marginHorizontal: 16, marginTop: 12 }}>
           <Pressable
-            disabled={updateMutation.isPending || !isContactSectionValid}
+            disabled={updateMutation.isPending || !canSaveProfile}
             onPress={() => void handleSave()}
             style={{
               alignItems: "center",
-              backgroundColor: isContactSectionValid
+              backgroundColor: canSaveProfile
                 ? theme.red
                 : theme.surface,
-              borderColor: isContactSectionValid ? theme.red : theme.border,
+              borderColor: canSaveProfile ? theme.red : theme.border,
               borderRadius: 10,
               borderWidth: 1,
               justifyContent: "center",
               opacity:
-                updateMutation.isPending || !isContactSectionValid ? 0.6 : 1,
+                updateMutation.isPending || !canSaveProfile ? 0.6 : 1,
               paddingVertical: 12,
             }}
           >
             <View style={{ alignItems: "center", flexDirection: "row" }}>
               <MaterialCommunityIcons
-                color={isContactSectionValid ? mobileBrand.white : theme.dim}
+                color={canSaveProfile ? mobileBrand.white : theme.dim}
                 name="content-save-outline"
                 size={14}
               />
               <Text
                 style={{
-                  color: isContactSectionValid ? mobileBrand.white : theme.dim,
+                  color: canSaveProfile ? mobileBrand.white : theme.dim,
                   fontSize: 13,
                   fontWeight: "600",
                   marginLeft: 7,
@@ -1059,13 +1122,20 @@ export function ProfileScreen(props: Props) {
                   ? "Saving Profile Changes..."
                   : !isContactSectionValid
                     ? "Fix Invalid PH Contact Numbers to Save"
+                    : requiredCount > 0
+                      ? `Complete ${requiredCount} Required ${pluralize(requiredCount, "Field", "Fields")}`
                     : "Save Profile Changes"}
               </Text>
             </View>
           </Pressable>
         </View>
 
-        <SectionHeader title="Profile Status" />
+          </>
+        ) : null}
+
+        {activeSection === "requirements" ? (
+          <>
+        <SectionHeader title="Profile Requirements" />
 
         <View
           style={{
@@ -1104,7 +1174,7 @@ export function ProfileScreen(props: Props) {
                 marginLeft: 8,
               }}
             >
-              {completionHeadline}
+              {completionHeadline} {completionSubcopy}
             </Text>
             <View
               style={{
@@ -1127,7 +1197,7 @@ export function ProfileScreen(props: Props) {
             </View>
           </View>
 
-          {statusItems.map((item, index) => {
+          {orderedStatusItems.map((item, index) => {
             const complete = hasValue(item.value);
             return (
               <View
@@ -1135,10 +1205,11 @@ export function ProfileScreen(props: Props) {
                 style={{
                   alignItems: "center",
                   borderBottomColor:
-                    index === statusItems.length - 1
+                    index === orderedStatusItems.length - 1
                       ? "transparent"
                       : theme.border,
-                  borderBottomWidth: index === statusItems.length - 1 ? 0 : 1,
+                  borderBottomWidth:
+                    index === orderedStatusItems.length - 1 ? 0 : 1,
                   flexDirection: "row",
                   paddingHorizontal: 14,
                   paddingVertical: 10,
@@ -1173,80 +1244,134 @@ export function ProfileScreen(props: Props) {
                 >
                   {item.label}
                 </Text>
+                <Text
+                  style={{
+                    color: complete ? theme.green : theme.red,
+                    fontSize: 10,
+                    fontWeight: "600",
+                  }}
+                >
+                  {complete ? "Complete" : "Required"}
+                </Text>
               </View>
             );
           })}
         </View>
 
-        <View
-          style={{ flexDirection: "row", marginHorizontal: 16, marginTop: 12 }}
-        >
-          <QuickLink
-            icon="file-document-outline"
-            iconColor={theme.blue}
-            label="View Transcript"
-            onPress={() => props.navigation.navigate("Transcript" as never)}
-          />
-          <View style={{ width: 9 }} />
-          <QuickLink
-            icon="clipboard-check-outline"
-            iconColor={theme.purple}
-            label="Evaluations"
-            onPress={() => props.navigation.navigate("StudentEvaluations")}
-          />
-        </View>
-
-        <SectionHeader title="Security" />
-
-        <View
-          style={{
-            backgroundColor: theme.surface,
-            borderColor: theme.border,
-            borderRadius: 0,
-            borderWidth: 0,
-            borderTopWidth: 1,
-            borderBottomWidth: 1,
-            marginHorizontal: 0,
-            overflow: "hidden",
-          }}
-        >
-          <View style={{ padding: 14 }}>
-            <PasswordChangeForm />
-          </View>
-        </View>
-
-        <View style={{ marginHorizontal: 16, marginTop: 12 }}>
-          <Pressable
-            onPress={() => void logout()}
-            style={{
-              alignItems: "center",
-              backgroundColor: theme.redSoft,
-              borderColor: theme.redLine,
-              borderRadius: 10,
-              borderWidth: 1,
-              flexDirection: "row",
-              justifyContent: "center",
-              paddingVertical: 12,
-            }}
-          >
-            <MaterialCommunityIcons color={theme.red} name="logout" size={16} />
-            <Text
+        {requiredCount > 0 ? (
+          <View style={{ marginHorizontal: 16, marginTop: 12 }}>
+            <Pressable
+              onPress={() => setActiveSection("profile")}
               style={{
-                color: theme.red,
-                fontSize: 13,
-                fontWeight: "600",
-                marginLeft: 8,
+                alignItems: "center",
+                backgroundColor: theme.red,
+                borderRadius: 10,
+                justifyContent: "center",
+                minHeight: 44,
+                paddingHorizontal: 16,
               }}
             >
-              Sign Out
-            </Text>
-          </Pressable>
-        </View>
+              <Text
+                style={{
+                  color: mobileBrand.white,
+                  fontSize: 13,
+                  fontWeight: "700",
+                }}
+              >
+                Review in Profile
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
+          </>
+        ) : null}
 
-        <AppVersionInfo
-          color={theme.dim}
-          style={{ marginHorizontal: 16, marginTop: 16 }}
-        />
+        {activeSection === "security" ? (
+          <>
+            <SectionHeader title="Password & Security" />
+            <View
+              style={{
+                backgroundColor: theme.surface,
+                borderBottomColor: theme.border,
+                borderBottomWidth: 1,
+                borderTopColor: theme.border,
+                borderTopWidth: 1,
+              }}
+            >
+              <View style={{ padding: 14 }}>
+                <PasswordChangeForm />
+              </View>
+            </View>
+          </>
+        ) : null}
+
+        {activeSection === "account" ? (
+          <>
+            <SectionHeader title="Academic Records" />
+            <View style={{ gap: 9, marginHorizontal: 16 }}>
+              <QuickLink
+                description="View official grades and academic records by school year."
+                icon="file-document-outline"
+                iconColor={theme.blue}
+                label="Transcript"
+                onPress={() => props.navigation.navigate("Transcript" as never)}
+              />
+              <QuickLink
+                description="Review submissions, scores, feedback, and attempt details."
+                icon="clipboard-text-clock-outline"
+                iconColor={theme.amber}
+                label="Assessment History"
+                onPress={() =>
+                  props.navigation.navigate("AssessmentHistory" as never)
+                }
+              />
+              <QuickLink
+                description="Complete teacher and school evaluations assigned to you."
+                icon="clipboard-check-outline"
+                iconColor={theme.purple}
+                label="Evaluations"
+                onPress={() => props.navigation.navigate("StudentEvaluations")}
+              />
+            </View>
+
+            <View style={{ marginHorizontal: 16, marginTop: 16 }}>
+              <Pressable
+                onPress={() => void logout()}
+                style={{
+                  alignItems: "center",
+                  backgroundColor: theme.redSoft,
+                  borderColor: theme.redLine,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  flexDirection: "row",
+                  justifyContent: "center",
+                  minHeight: 44,
+                }}
+              >
+                <MaterialCommunityIcons
+                  color={theme.red}
+                  name="logout"
+                  size={16}
+                />
+                <Text
+                  style={{
+                    color: theme.red,
+                    fontSize: 13,
+                    fontWeight: "600",
+                    marginLeft: 8,
+                  }}
+                >
+                  Sign Out
+                </Text>
+              </Pressable>
+            </View>
+
+            <AppVersionInfo
+              color={theme.dim}
+              style={{ marginHorizontal: 16, marginTop: 16 }}
+            />
+          </>
+        ) : null}
       </View>
     </StudentScreen>
   );

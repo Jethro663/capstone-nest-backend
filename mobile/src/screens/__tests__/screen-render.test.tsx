@@ -630,6 +630,15 @@ function findPressableByText(
   );
 }
 
+function findPressableByExactText(
+  root: TestRenderer.ReactTestInstance,
+  text: string,
+) {
+  return root.find(
+    (node) => node.type === "Pressable" && flattenText(node).trim() === text,
+  );
+}
+
 function findPressableByIcon(
   root: TestRenderer.ReactTestInstance,
   iconName: string,
@@ -5668,12 +5677,22 @@ describe("mobile rendered screen flows", () => {
           flattenText(node).includes("Student Identity"),
       ),
     ).toBeTruthy();
+    expect(findPressableByExactText(testRenderer!.root, "Profile")).toBeTruthy();
+    expect(findPressableByExactText(testRenderer!.root, "Requirements")).toBeTruthy();
+    expect(findPressableByExactText(testRenderer!.root, "Security")).toBeTruthy();
+    expect(findPressableByExactText(testRenderer!.root, "Account")).toBeTruthy();
     expect(
-      testRenderer!.root.find(
+      testRenderer!.root.findAll(
+        (node) => node.type === "Text" && flattenText(node) === "Required",
+      ).length,
+    ).toBeGreaterThanOrEqual(7);
+    expect(
+      testRenderer!.root.findAll(
         (node) =>
-          node.type === "Text" && flattenText(node).includes("Profile Status"),
+          node.type === "Text" &&
+          flattenText(node).includes("Current password"),
       ),
-    ).toBeTruthy();
+    ).toHaveLength(0);
 
     const saveButton = findPressableByText(
       testRenderer!.root,
@@ -5695,7 +5714,57 @@ describe("mobile rendered screen flows", () => {
     });
   });
 
-  it("opens transcript from the profile quick actions", async () => {
+  it("shows named missing fields in Requirements and returns to Profile", async () => {
+    mockedUseProfile.mockReturnValue(
+      createQueryState({
+        phone: "",
+        address: "",
+        familyName: "Parent",
+        familyRelationship: "",
+        familyContact: "09990002222",
+        profilePicture: "",
+        dateOfBirth: "2000-01-01",
+        gender: "Female",
+      }) as ReturnType<typeof useProfile>,
+    );
+
+    const { ProfileScreen } = require("../ProfileScreen");
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      testRenderer = TestRenderer.create(
+        React.createElement(ProfileScreen, {
+          navigation: {} as never,
+          route: { key: "Profile", name: "Profile" } as never,
+        }),
+      );
+    });
+
+    await act(async () => {
+      findPressableByText(testRenderer!.root, "Requirements").props.onPress();
+    });
+
+    const requirementText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+    expect(requirementText).toContain("3 required fields need attention");
+    expect(requirementText).toContain("Contact Number");
+    expect(requirementText).toContain("Home Address");
+    expect(requirementText).toContain("Relationship");
+
+    await act(async () => {
+      findPressableByExactText(testRenderer!.root, "Review in Profile").props.onPress();
+    });
+    expect(
+      testRenderer!.root.find(
+        (node) =>
+          node.type === "Text" &&
+          flattenText(node).includes("Student Identity"),
+      ),
+    ).toBeTruthy();
+  });
+
+  it("opens all academic records from the Account section", async () => {
     const { ProfileScreen } = require("../ProfileScreen");
     const navigate = jest.fn();
     let testRenderer: TestRenderer.ReactTestRenderer;
@@ -5709,15 +5778,31 @@ describe("mobile rendered screen flows", () => {
       );
     });
 
+    await act(async () => {
+      findPressableByExactText(testRenderer!.root, "Account").props.onPress();
+    });
+
     const openTranscript = findPressableByText(
       testRenderer!.root,
-      "View Transcript",
+      "Transcript",
+    );
+    const openHistory = findPressableByText(
+      testRenderer!.root,
+      "Assessment History",
+    );
+    const openEvaluations = findPressableByText(
+      testRenderer!.root,
+      "Evaluations",
     );
     await act(async () => {
       openTranscript.props.onPress();
+      openHistory.props.onPress();
+      openEvaluations.props.onPress();
     });
 
     expect(navigate).toHaveBeenCalledWith("Transcript");
+    expect(navigate).toHaveBeenCalledWith("AssessmentHistory");
+    expect(navigate).toHaveBeenCalledWith("StudentEvaluations");
   });
 
   it("shows profile save error when update mutation fails", async () => {
