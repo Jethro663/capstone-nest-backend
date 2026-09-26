@@ -200,10 +200,12 @@ Verify drawer ordering, single destination, Profile/footer/logout, typed route i
 - Modify: `next-frontend/public/downloads/nexora-student-mobile-release.json`
 
 - [x] **Step 1: Bump from `0.1.49`/50 to the next valid native version/build**
-- [ ] **Step 2: Build ARM64 release with explicit production `EXPO_PUBLIC_API_URL`**
-- [ ] **Step 3: Generate release metadata with truthful evaluation/drawer notes**
-- [ ] **Step 4: Run release tests/verifier and check package, version, ABI, signature, alignment, installer permission, API URL, size, and SHA-256**
-- [ ] **Step 5: Install/launch on an available emulator or device; report physical-device evidence separately**
+- [x] **Step 2: Build ARM64 release with explicit production `EXPO_PUBLIC_API_URL`**
+- [x] **Step 3: Generate release metadata with truthful evaluation/drawer notes**
+- [x] **Step 4: Run release tests/verifier and check package, version, ABI, signature, alignment, installer permission, API URL, size, and SHA-256**
+- [x] **Step 5: Install/launch on an available emulator or device; report physical-device evidence separately**
+
+  Build 51 is a 37,653,982-byte ARM64 APK for `com.nexora.lms.mobile` version `0.1.50`, signed by certificate SHA-256 `46cbcee985a7e0ecfda5a8fddfbdd679d9f0312ee07d96a593817302eb7c0a39`, aligned for 16 KB pages, and hashed as `6031caf0767f9300b78dbadfa9b084d53c24283e5b57183133f9d906f264dd24`. The production API occurs in the rebuilt bundle, installer permission is embedded, archive integrity passed, and release metadata binds the immutable artifact to source `da3238beb2c328dc3b9d87e61b04b5f385c231c6`. `adb devices -l` found no connected emulator or physical device, so install/launch and physical-device acceptance remain unverified rather than inferred.
 
 ### Task 7: Ship and observe the exact revision
 
@@ -211,7 +213,7 @@ Verify drawer ordering, single destination, Profile/footer/logout, typed route i
 - Stage only task-owned source, tests, plans, and release artifacts.
 
 - [x] **Step 1: Fetch origin and verify no unexpected outgoing commits**
-- [ ] **Step 2: Review staged diff and commit on `developement`**
+- [x] **Step 2: Review staged diff and commit on `developement`**
 - [ ] **Step 3: Push and confirm local/upstream divergence is `0 0`**
 - [ ] **Step 4: Identify and wait for CI run(s) matching the exact pushed SHA**
 - [ ] **Step 5: Correlate Railway deployment to the tested SHA and verify provider success/health**
