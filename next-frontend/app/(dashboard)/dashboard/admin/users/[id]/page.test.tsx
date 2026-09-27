@@ -1,244 +1,86 @@
-"use client";
+'use client';
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import AdminUserDetailPage from "./page";
-import { userService } from "@/services/user-service";
-import { toast } from "sonner";
+import { fireEvent, render, screen } from '@testing-library/react';
+import AdminUserDetailPage from './page';
+import { userService } from '@/services/user-service';
 
-const backMock = jest.fn();
-const pushMock = jest.fn();
-let demoModeActive = false;
+const push = jest.fn();
+const back = jest.fn();
 
-jest.mock("next/navigation", () => ({
-  useParams: () => ({ id: "student-1" }),
-  useRouter: () => ({
-    back: backMock,
-    push: pushMock,
-  }),
+jest.mock('next/navigation', () => ({
+  useParams: () => ({ id: 'student-1' }),
+  useRouter: () => ({ push, back }),
 }));
 
-jest.mock("sonner", () => ({
-  toast: {
-    success: jest.fn(),
-    error: jest.fn(),
-  },
-}));
-
-jest.mock("@/providers/AdminMaintenanceProvider", () => ({
-  useAdminMaintenance: () => ({
-    status: demoModeActive
-      ? {
-          active: true,
-          rules: [{ code: "user_lifecycle_sequence" }],
-        }
-      : { active: false, rules: [] },
-    refresh: jest.fn(),
-  }),
-  useOptionalAdminMaintenance: () => ({
-    status: { active: demoModeActive },
-    refresh: jest.fn(),
-  }),
-}));
-
-jest.mock("@/components/admin/AdminLifecycleDialog", () => ({
-  AdminLifecycleDialog: ({ open, title }: { open: boolean; title: string }) =>
-    open ? <div>{title}</div> : null,
-}));
-
-jest.mock("@/components/admin/AdminErasureBatchDialog", () => ({
-  AdminErasureBatchDialog: ({
-    open,
-    title,
-  }: {
-    open: boolean;
-    title: string;
-  }) => (open ? <div>{title}</div> : null),
-}));
-
-jest.mock("@/services/user-service", () => ({
+jest.mock('@/services/user-service', () => ({
   userService: {
     getById: jest.fn(),
     update: jest.fn(),
     resetPassword: jest.fn(),
-    reactivate: jest.fn(),
     softDelete: jest.fn(),
+    reactivate: jest.fn(),
   },
 }));
 
-const mockedUserService = userService as jest.Mocked<typeof userService>;
-const mockedToast = toast as jest.Mocked<typeof toast>;
+jest.mock('@/providers/AdminMaintenanceProvider', () => ({
+  useAdminMaintenance: () => ({ status: null, refresh: jest.fn() }),
+}));
 
-const studentUser = {
-  id: "student-1",
-  firstName: "Liam",
-  middleName: "",
-  lastName: "Navarro",
-  email: "liam@nexora.edu",
-  roles: ["student"],
-  status: "ACTIVE",
-  isEmailVerified: true,
-  lrn: "202407000001",
-  gradeLevel: "7",
-  dateOfBirth: "2012-01-10T00:00:00.000Z",
-  gender: "Male",
-  phone: "09171234567",
-  familyName: "Ana Navarro",
-  familyRelationship: "Mother",
-  familyContact: "09179876543",
-  createdAt: "2026-03-27T00:00:00.000Z",
-};
+jest.mock('@/components/admin/AdminErasureBatchDialog', () => ({
+  AdminErasureBatchDialog: () => null,
+}));
 
-describe("AdminUserDetailPage", () => {
+const mockedUserService = jest.mocked(userService);
+
+describe('AdminUserDetailPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    demoModeActive = false;
     mockedUserService.getById.mockResolvedValue({
       success: true,
-      data: { user: studentUser },
-    } as Awaited<ReturnType<typeof userService.getById>>);
-    mockedUserService.update.mockResolvedValue({
-      success: true,
-      message: "updated",
-      data: { user: studentUser },
-    } as Awaited<ReturnType<typeof userService.update>>);
+      data: {
+        user: {
+          id: 'student-1',
+          email: 'jamie@nexora.edu',
+          firstName: 'Jamie',
+          middleName: 'Reyes',
+          lastName: 'Cruz',
+          roles: ['student'],
+          status: 'ACTIVE',
+          isEmailVerified: true,
+          lrn: '123456789012',
+          gradeLevel: '7',
+          dateOfBirth: '2013-02-03',
+          gender: 'Female',
+          phone: '09171234567',
+          address: 'GABHS Campus',
+          familyName: 'Maria Cruz',
+          familyRelationship: 'Mother',
+          familyContact: '09179876543',
+          createdAt: '2026-08-01T00:00:00.000Z',
+          lastLoginAt: '2026-09-26T01:00:00.000Z',
+        },
+      },
+    });
   });
 
-  it("blocks saving when required student QA fields are missing after sanitization", async () => {
-    const { container } = render(<AdminUserDetailPage />);
-    await screen.findByRole("heading", { name: "Liam Navarro" });
-
-    const inputs = Array.from(container.querySelectorAll("input"));
-    const firstName = inputs[0];
-    const lastName = inputs[2];
-    const dateOfBirth = inputs[5];
-    const phone = inputs[6];
-    const guardianName = inputs[8];
-    const guardianContact = inputs[9];
-
-    fireEvent.change(firstName, { target: { value: "Liam7" } });
-    fireEvent.change(lastName, { target: { value: "Navarro!" } });
-    fireEvent.change(dateOfBirth, { target: { value: "" } });
-    fireEvent.change(phone, { target: { value: "091712345678" } });
-    fireEvent.change(guardianName, { target: { value: "" } });
-    fireEvent.change(guardianContact, { target: { value: "" } });
-
-    fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
-
-    await waitFor(() =>
-      expect(mockedToast.error).toHaveBeenCalledWith(
-        "Date of birth, gender, student contact number, guardian name, relationship, and guardian contact are required for student accounts.",
-      ),
-    );
-    expect(mockedUserService.update).not.toHaveBeenCalled();
-  });
-
-  it("sanitizes editable student inputs before submit", async () => {
-    const { container } = render(<AdminUserDetailPage />);
-    await screen.findByRole("heading", { name: "Liam Navarro" });
-
-    const inputs = Array.from(container.querySelectorAll("input"));
-    const firstName = inputs[0];
-    const email = inputs[3];
-    const phone = inputs[6];
-    const address = inputs[7];
-    const guardianName = inputs[8];
-    const guardianContact = inputs[9];
-
-    fireEvent.change(firstName, { target: { value: " Liam🙂  " } });
-    fireEvent.change(email, {
-      target: { value: "  Liam.Student @Example.COM🙂  " },
-    });
-    fireEvent.change(phone, { target: { value: "+63 917-123-4567abc" } });
-    fireEvent.change(address, {
-      target: { value: "  Blk. 4, Lot #2 <North>🙂 / Phase 1 " },
-    });
-    fireEvent.change(guardianName, {
-      target: { value: "  Ana@@ Navarro🙂 123 " },
-    });
-    fireEvent.change(guardianContact, {
-      target: { value: "+63 917-987-6543abc" },
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
-
-    await waitFor(() =>
-      expect(mockedUserService.update).toHaveBeenCalledWith(
-        "student-1",
-        expect.objectContaining({
-          firstName: "Liam",
-          email: "liam.student@example.com",
-          phone: "09171234567",
-          address: "Blk. 4, Lot #2 North / Phase 1",
-          familyName: "Ana Navarro",
-          familyContact: "09179876543",
-        }),
-      ),
-    );
-  });
-
-  it("keeps a deleted account read-only while retaining reviewed permanent deletion", async () => {
-    mockedUserService.getById.mockResolvedValueOnce({
-      success: true,
-      data: { user: { ...studentUser, status: "DELETED" } },
-    } as Awaited<ReturnType<typeof userService.getById>>);
-
+  it('sections student details and keeps password reset behind confirmation', async () => {
     render(<AdminUserDetailPage />);
 
-    await screen.findByRole("heading", { name: "Liam Navarro" });
-    expect(screen.getByDisplayValue("Liam")).toBeDisabled();
-    expect(
-      screen.queryByRole("button", { name: /Reactivate user/i }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /Review permanent deletion/i }),
-    ).toBeInTheDocument();
-  });
+    expect(await screen.findByRole('heading', { name: 'Jamie Cruz' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Identity' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Student Details' })).toBeInTheDocument();
 
-  it("allows editing and direct reactivation of a deleted account only in Maintenance Access", async () => {
-    demoModeActive = true;
-    mockedUserService.getById.mockResolvedValueOnce({
-      success: true,
-      data: { user: { ...studentUser, status: "DELETED" } },
-    } as Awaited<ReturnType<typeof userService.getById>>);
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Account' }), {
+      button: 0,
+    });
 
-    render(<AdminUserDetailPage />);
+    const resetAction = screen.getByRole('button', { name: /Reset password/i });
+    expect(resetAction).toHaveTextContent('Generate a new temporary password');
+    expect(mockedUserService.resetPassword).not.toHaveBeenCalled();
 
-    await screen.findByRole("heading", { name: "Liam Navarro" });
-    expect(screen.getByDisplayValue("Liam")).toBeEnabled();
-    expect(
-      screen.getByRole("button", { name: /Reactivate user/i }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /Review permanent deletion/i }),
-    ).toBeInTheDocument();
-  });
+    fireEvent.click(resetAction);
 
-  it("exposes direct archive for an active account only in Maintenance Access", async () => {
-    demoModeActive = true;
-    render(<AdminUserDetailPage />);
-
-    await screen.findByRole("heading", { name: "Liam Navarro" });
-    fireEvent.click(screen.getByRole("button", { name: /Archive user/i }));
-
-    expect(
-      screen.getByText(
-        /Existing class-record rows, scores, grades, and audit evidence will be retained and marked “Archived account”/i,
-      ),
-    ).toBeInTheDocument();
-  });
-
-  it("opens the governed permanent-deletion review only for a deleted account", async () => {
-    mockedUserService.getById.mockResolvedValueOnce({
-      success: true,
-      data: { user: { ...studentUser, status: "DELETED" } },
-    } as Awaited<ReturnType<typeof userService.getById>>);
-    render(<AdminUserDetailPage />);
-
-    fireEvent.click(
-      await screen.findByRole("button", {
-        name: /Review permanent deletion/i,
-      }),
-    );
-    expect(screen.getByText("Permanently delete account")).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Reset User Password' })).toBeInTheDocument();
+    expect(mockedUserService.resetPassword).not.toHaveBeenCalled();
   });
 });

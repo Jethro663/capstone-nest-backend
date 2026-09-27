@@ -6,6 +6,7 @@ import { Archive, Copy, KeyRound, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { userService } from "@/services/user-service";
 import {
+  AdminActionCard,
   AdminPageShell,
   AdminSectionCard,
 } from "@/components/admin/AdminPageShell";
@@ -21,6 +22,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 import { getApiErrorMessage } from "@/lib/api-error";
 import {
   sanitizeAddressInput,
@@ -56,6 +63,8 @@ type UserFormState = {
   familyRelationship: string;
   familyContact: string;
 };
+
+type UserDetailSection = "identity" | "student" | "account";
 
 const EMPTY_FORM: UserFormState = {
   firstName: "",
@@ -149,6 +158,8 @@ export default function AdminUserDetailPage() {
     useState<ConfirmationDialogConfig | null>(null);
   const [showPurgeConfirm, setShowPurgeConfirm] = useState(false);
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
+  const [activeSection, setActiveSection] =
+    useState<UserDetailSection>("identity");
 
   const role = useMemo(() => form.role, [form.role]);
   const isStudent = role === "student";
@@ -375,60 +386,16 @@ export default function AdminUserDetailPage() {
     <AdminPageShell
       badge="Admin Users"
       title={`${form.firstName} ${form.lastName}`.trim()}
-      description="Review and update account details in the same compact form layout used for new users."
+      description={`${form.email} · ${role} account`}
       variant="compact-form"
       actions={
-        <>
-          <Button
-            variant="outline"
-            className="admin-button-outline h-9 rounded-lg px-4 text-sm font-semibold"
-            onClick={() => router.back()}
-          >
-            Back
-          </Button>
-          <Button
-            variant="outline"
-            className="admin-button-outline h-9 rounded-lg px-4 text-sm font-semibold"
-            onClick={() => setShowResetConfirm(true)}
-            disabled={resetting || isDeletedReadOnly}
-          >
-            <KeyRound className="h-4 w-4" />
-            {resetting ? "Resetting..." : "Reset Password"}
-          </Button>
-          {canRelaxUserLifecycle && !isDeleted ? (
-            <Button
-              variant="outline"
-              className="h-9 rounded-lg border-rose-200 px-4 text-sm font-semibold text-rose-700 hover:bg-rose-50"
-              onClick={() => openLifecycleConfirmation("archive")}
-              disabled={lifecycleBusy}
-            >
-              <Archive className="h-4 w-4" />
-              Archive user
-            </Button>
-          ) : null}
-          {canRelaxUserLifecycle && isDeleted ? (
-            <Button
-              variant="outline"
-              className="admin-button-outline h-9 rounded-lg px-4 text-sm font-semibold"
-              onClick={() => openLifecycleConfirmation("reactivate")}
-              disabled={lifecycleBusy}
-            >
-              <RotateCcw className="h-4 w-4" />
-              Reactivate user
-            </Button>
-          ) : null}
-          {isDeleted ? (
-            <Button
-              variant="outline"
-              className="h-9 rounded-lg border-rose-200 px-4 text-sm font-semibold text-rose-700 hover:bg-rose-50"
-              onClick={() => setShowPurgeConfirm(true)}
-              disabled={lifecycleBusy}
-            >
-              <Trash2 className="h-4 w-4" />
-              Review permanent deletion
-            </Button>
-          ) : null}
-        </>
+        <Button
+          variant="outline"
+          className="admin-button-outline h-9 rounded-lg px-4 text-sm font-semibold"
+          onClick={() => router.back()}
+        >
+          Back
+        </Button>
       }
       meta={
         <>
@@ -447,199 +414,295 @@ export default function AdminUserDetailPage() {
         </>
       }
     >
-      <fieldset disabled={isDeletedReadOnly} className="contents">
-        <AdminSectionCard
-          title="Account Details"
-          description="Core identity, email, and role assignment."
-          density="compact"
-          contentClassName="space-y-4"
-        >
-          <p className="text-xs text-[var(--admin-text-muted)]">
-            User ID:{" "}
-            <span className="font-semibold text-[var(--admin-text-strong)] break-all">
-              {user.id}
-            </span>
-          </p>
+      <Tabs
+        value={activeSection}
+        onValueChange={(value) => setActiveSection(value as UserDetailSection)}
+        className="admin-workspace-tabs"
+        orientation="vertical"
+      >
+        <aside className="admin-workspace-rail" aria-label="User profile sections">
+          <p className="admin-workspace-rail__label">Profile sections</p>
+          <TabsList className="admin-workspace-tab-list">
+            <TabsTrigger value="identity" className="admin-workspace-tab">
+              Identity
+            </TabsTrigger>
+            {isStudent ? (
+              <TabsTrigger value="student" className="admin-workspace-tab">
+                Student Details
+              </TabsTrigger>
+            ) : null}
+            <TabsTrigger value="account" className="admin-workspace-tab">
+              Account
+            </TabsTrigger>
+          </TabsList>
+        </aside>
 
-          <div className="admin-form-grid admin-form-grid--three">
-            <Field label="First Name">
-              <Input
-                value={form.firstName}
-                onChange={(event) => setField("firstName", event.target.value)}
-                className="admin-input rounded-lg"
-              />
-            </Field>
-            <Field label="Middle Name">
-              <Input
-                value={form.middleName}
-                onChange={(event) => setField("middleName", event.target.value)}
-                className="admin-input rounded-lg"
-              />
-            </Field>
-            <Field label="Last Name">
-              <Input
-                value={form.lastName}
-                onChange={(event) => setField("lastName", event.target.value)}
-                className="admin-input rounded-lg"
-              />
-            </Field>
-          </div>
-
-          <div className="admin-form-grid admin-form-grid--two">
-            <Field label="Email Address">
-              <Input
-                type="email"
-                value={form.email}
-                onChange={(event) => setField("email", event.target.value)}
-                className="admin-input rounded-lg"
-              />
-            </Field>
-            <Field label="Role">
-              <select
-                value={form.role}
-                onChange={(event) =>
-                  setField(
-                    "role",
-                    event.target.value as "student" | "teacher" | "admin",
-                  )
-                }
-                className="admin-select w-full rounded-lg text-sm font-semibold"
+        <div className="admin-workspace-content">
+          <TabsContent value="identity" className="m-0">
+            <fieldset disabled={isDeletedReadOnly} className="space-y-4">
+              <AdminSectionCard
+                title="Identity"
+                description="Core name, email, and role information used across Nexora."
+                density="compact"
+                contentClassName="space-y-4"
               >
-                <option value="student">Student</option>
-                <option value="teacher">Teacher</option>
-                <option value="admin">Admin</option>
-              </select>
-            </Field>
-          </div>
-        </AdminSectionCard>
+                <p className="text-xs text-[var(--admin-text-muted)]">
+                  User ID:{" "}
+                  <span className="break-all font-semibold text-[var(--admin-text-strong)]">
+                    {user.id}
+                  </span>
+                </p>
 
-        {isStudent ? (
-          <AdminSectionCard
-            title="Student Profile"
-            description="Student details stay available in the same compact layout."
-            density="compact"
-            contentClassName="space-y-4"
-          >
-            <div className="admin-form-grid admin-form-grid--three">
-              <Field label="LRN">
-                <Input
-                  value={form.lrn}
-                  onChange={(event) => setField("lrn", event.target.value)}
-                  placeholder="12-digit LRN"
-                  inputMode="numeric"
-                  maxLength={12}
-                  className="admin-input rounded-lg"
-                />
-              </Field>
-              <Field label="Grade Level">
-                <select
-                  value={form.gradeLevel}
-                  onChange={(event) =>
-                    setField("gradeLevel", event.target.value)
-                  }
-                  className="admin-select w-full rounded-lg text-sm font-semibold"
+                <div className="admin-form-grid admin-form-grid--three">
+                  <Field label="First Name">
+                    <Input
+                      value={form.firstName}
+                      onChange={(event) =>
+                        setField("firstName", event.target.value)
+                      }
+                      className="admin-input rounded-lg"
+                    />
+                  </Field>
+                  <Field label="Middle Name">
+                    <Input
+                      value={form.middleName}
+                      onChange={(event) =>
+                        setField("middleName", event.target.value)
+                      }
+                      className="admin-input rounded-lg"
+                    />
+                  </Field>
+                  <Field label="Last Name">
+                    <Input
+                      value={form.lastName}
+                      onChange={(event) =>
+                        setField("lastName", event.target.value)
+                      }
+                      className="admin-input rounded-lg"
+                    />
+                  </Field>
+                </div>
+
+                <div className="admin-form-grid admin-form-grid--two">
+                  <Field label="Email Address">
+                    <Input
+                      type="email"
+                      value={form.email}
+                      onChange={(event) =>
+                        setField("email", event.target.value)
+                      }
+                      className="admin-input rounded-lg"
+                    />
+                  </Field>
+                  <Field label="Role">
+                    <select
+                      value={form.role}
+                      onChange={(event) =>
+                        setField(
+                          "role",
+                          event.target.value as
+                            | "student"
+                            | "teacher"
+                            | "admin",
+                        )
+                      }
+                      className="admin-select w-full rounded-lg text-sm font-semibold"
+                    >
+                      <option value="student">Student</option>
+                      <option value="teacher">Teacher</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </Field>
+                </div>
+              </AdminSectionCard>
+
+              <SaveUserButton saving={saving} onClick={handleSave} />
+            </fieldset>
+          </TabsContent>
+
+          {isStudent ? (
+            <TabsContent value="student" className="m-0">
+              <fieldset disabled={isDeletedReadOnly} className="space-y-4">
+                <AdminSectionCard
+                  title="Student Details"
+                  description="Academic identity, contact, and guardian information."
+                  density="compact"
+                  contentClassName="space-y-4"
                 >
-                  <option value="">Select grade</option>
-                  <option value="7">Grade 7</option>
-                  <option value="8">Grade 8</option>
-                  <option value="9">Grade 9</option>
-                  <option value="10">Grade 10</option>
-                </select>
-              </Field>
-              <Field label="Date of Birth">
-                <Input
-                  type="date"
-                  value={form.dateOfBirth}
-                  onChange={(event) =>
-                    setField("dateOfBirth", event.target.value)
-                  }
-                  className="admin-input rounded-lg"
-                />
-              </Field>
-            </div>
+                  <div className="admin-form-grid admin-form-grid--three">
+                    <Field label="LRN">
+                      <Input
+                        value={form.lrn}
+                        onChange={(event) => setField("lrn", event.target.value)}
+                        placeholder="12-digit LRN"
+                        inputMode="numeric"
+                        maxLength={12}
+                        className="admin-input rounded-lg"
+                      />
+                    </Field>
+                    <Field label="Grade Level">
+                      <select
+                        value={form.gradeLevel}
+                        onChange={(event) =>
+                          setField("gradeLevel", event.target.value)
+                        }
+                        className="admin-select w-full rounded-lg text-sm font-semibold"
+                      >
+                        <option value="">Select grade</option>
+                        <option value="7">Grade 7</option>
+                        <option value="8">Grade 8</option>
+                        <option value="9">Grade 9</option>
+                        <option value="10">Grade 10</option>
+                      </select>
+                    </Field>
+                    <Field label="Date of Birth">
+                      <Input
+                        type="date"
+                        value={form.dateOfBirth}
+                        onChange={(event) =>
+                          setField("dateOfBirth", event.target.value)
+                        }
+                        className="admin-input rounded-lg"
+                      />
+                    </Field>
+                  </div>
 
-            <div className="admin-form-grid admin-form-grid--two">
-              <Field label="Gender">
-                <select
-                  value={form.gender}
-                  onChange={(event) => setField("gender", event.target.value)}
-                  className="admin-select w-full rounded-lg text-sm font-semibold"
-                >
-                  <option value="">Select gender</option>
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                </select>
-              </Field>
-              <Field label="Phone">
-                <Input
-                  value={form.phone}
-                  onChange={(event) => setField("phone", event.target.value)}
-                  inputMode="tel"
-                  maxLength={13}
-                  className="admin-input rounded-lg"
-                />
-              </Field>
-            </div>
+                  <div className="admin-form-grid admin-form-grid--two">
+                    <Field label="Gender">
+                      <select
+                        value={form.gender}
+                        onChange={(event) =>
+                          setField("gender", event.target.value)
+                        }
+                        className="admin-select w-full rounded-lg text-sm font-semibold"
+                      >
+                        <option value="">Select gender</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                      </select>
+                    </Field>
+                    <Field label="Phone">
+                      <Input
+                        value={form.phone}
+                        onChange={(event) =>
+                          setField("phone", event.target.value)
+                        }
+                        inputMode="tel"
+                        maxLength={13}
+                        className="admin-input rounded-lg"
+                      />
+                    </Field>
+                  </div>
 
-            <Field label="Address">
-              <Input
-                value={form.address}
-                onChange={(event) => setField("address", event.target.value)}
-                className="admin-input rounded-lg"
+                  <Field label="Address">
+                    <Input
+                      value={form.address}
+                      onChange={(event) =>
+                        setField("address", event.target.value)
+                      }
+                      className="admin-input rounded-lg"
+                    />
+                  </Field>
+
+                  <div className="admin-form-grid admin-form-grid--three">
+                    <Field label="Guardian Name">
+                      <Input
+                        value={form.familyName}
+                        onChange={(event) =>
+                          setField("familyName", event.target.value)
+                        }
+                        className="admin-input rounded-lg"
+                      />
+                    </Field>
+                    <Field label="Relationship">
+                      <select
+                        value={form.familyRelationship}
+                        onChange={(event) =>
+                          setField("familyRelationship", event.target.value)
+                        }
+                        className="admin-select w-full rounded-lg text-sm font-semibold"
+                      >
+                        <option value="">Select relationship</option>
+                        <option value="Father">Father</option>
+                        <option value="Mother">Mother</option>
+                        <option value="Guardian">Guardian</option>
+                        <option value="Sibling">Sibling</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </Field>
+                    <Field label="Guardian Contact">
+                      <Input
+                        value={form.familyContact}
+                        onChange={(event) =>
+                          setField("familyContact", event.target.value)
+                        }
+                        inputMode="tel"
+                        maxLength={13}
+                        className="admin-input rounded-lg"
+                      />
+                    </Field>
+                  </div>
+                </AdminSectionCard>
+
+                <SaveUserButton saving={saving} onClick={handleSave} />
+              </fieldset>
+            </TabsContent>
+          ) : null}
+
+          <TabsContent value="account" className="m-0">
+            <AdminSectionCard
+              title="Account Actions"
+              description="Each action explains its effect before anything changes."
+              density="compact"
+              contentClassName="space-y-3"
+            >
+              <AdminActionCard
+                icon={KeyRound}
+                title="Reset password"
+                description="Generate a new temporary password and email it to this account. You will confirm before the reset runs."
+                actionLabel={resetting ? "Resetting..." : "Review reset"}
+                onClick={() => setShowResetConfirm(true)}
+                disabled={resetting || isDeletedReadOnly}
               />
-            </Field>
 
-            <div className="admin-form-grid admin-form-grid--three">
-              <Field label="Guardian Name">
-                <Input
-                  value={form.familyName}
-                  onChange={(event) =>
-                    setField("familyName", event.target.value)
-                  }
-                  className="admin-input rounded-lg"
+              {canRelaxUserLifecycle && !isDeleted ? (
+                <AdminActionCard
+                  icon={Archive}
+                  title="Archive user"
+                  description="Remove sign-in access while preserving identity, class records, grades, and audit evidence."
+                  actionLabel="Review archive"
+                  onClick={() => openLifecycleConfirmation("archive")}
+                  disabled={lifecycleBusy}
+                  tone="danger"
                 />
-              </Field>
-              <Field label="Relationship">
-                <select
-                  value={form.familyRelationship}
-                  onChange={(event) =>
-                    setField("familyRelationship", event.target.value)
-                  }
-                  className="admin-select w-full rounded-lg text-sm font-semibold"
-                >
-                  <option value="">Select relationship</option>
-                  <option value="Father">Father</option>
-                  <option value="Mother">Mother</option>
-                  <option value="Guardian">Guardian</option>
-                  <option value="Sibling">Sibling</option>
-                  <option value="Other">Other</option>
-                </select>
-              </Field>
-              <Field label="Guardian Contact">
-                <Input
-                  value={form.familyContact}
-                  onChange={(event) =>
-                    setField("familyContact", event.target.value)
-                  }
-                  inputMode="tel"
-                  maxLength={13}
-                  className="admin-input rounded-lg"
-                />
-              </Field>
-            </div>
-          </AdminSectionCard>
-        ) : null}
+              ) : null}
 
-        <div className="admin-form-actions">
-          <Button
-            className="admin-button-solid h-9 rounded-lg px-4 text-sm font-semibold"
-            onClick={handleSave}
-            disabled={saving}
-          >
-            {saving ? "Saving..." : "Save Changes"}
-          </Button>
+              {canRelaxUserLifecycle && isDeleted ? (
+                <AdminActionCard
+                  icon={RotateCcw}
+                  title="Reactivate user"
+                  description="Restore account access while keeping the existing identity and history."
+                  actionLabel="Review reactivation"
+                  onClick={() => openLifecycleConfirmation("reactivate")}
+                  disabled={lifecycleBusy}
+                />
+              ) : null}
+
+              {isDeleted ? (
+                <AdminActionCard
+                  icon={Trash2}
+                  title="Permanently delete account"
+                  description="Preview blockers and retained evidence before requesting irreversible erasure."
+                  actionLabel="Review deletion"
+                  onClick={() => setShowPurgeConfirm(true)}
+                  disabled={lifecycleBusy}
+                  tone="danger"
+                />
+              ) : null}
+            </AdminSectionCard>
+          </TabsContent>
         </div>
-      </fieldset>
+      </Tabs>
 
       <Dialog open={showResetConfirm} onOpenChange={setShowResetConfirm}>
         <DialogContent
@@ -760,6 +823,26 @@ function Field({
         {label}
       </Label>
       {children}
+    </div>
+  );
+}
+
+function SaveUserButton({
+  saving,
+  onClick,
+}: {
+  saving: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <div className="admin-form-actions">
+      <Button
+        className="admin-button-solid h-9 rounded-lg px-4 text-sm font-semibold"
+        onClick={onClick}
+        disabled={saving}
+      >
+        {saving ? "Saving..." : "Save Changes"}
+      </Button>
     </div>
   );
 }

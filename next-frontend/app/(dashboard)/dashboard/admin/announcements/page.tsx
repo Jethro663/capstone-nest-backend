@@ -2,14 +2,13 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
-import { BellRing, Megaphone, Pin, School2 } from 'lucide-react';
+import { Pin } from 'lucide-react';
 import { announcementService } from '@/services/announcement-service';
 import { classService } from '@/services/class-service';
 import {
   AdminEmptyState,
   AdminPageShell,
   AdminSectionCard,
-  AdminStatCard,
 } from '@/components/admin/AdminPageShell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -151,12 +150,12 @@ export default function AdminAnnouncementsPage() {
           </Button>
         </>
       )}
-      stats={(
+      meta={(
         <>
-          <AdminStatCard label="Classes" value={classes.length} caption="Available for announcement posting" icon={School2} accent="emerald" />
-          <AdminStatCard label="Visible Posts" value={announcements.length} caption={selectedClass ? `For ${selectedClass.subjectName}` : 'Select a class to load posts'} icon={BellRing} accent="sky" />
-          <AdminStatCard label="Pinned" value={announcements.filter((a) => a.isPinned).length} caption="Pinned posts stay prominent" icon={Pin} accent="amber" />
-          <AdminStatCard label="Posting Flow" value={selectedClassId ? 'Ready' : 'Waiting'} caption={selectedClassId ? 'Class selected for posting' : 'Choose a class first'} icon={Megaphone} accent="rose" />
+          <AnnouncementMeta label="Classes available" value={String(classes.length)} />
+          <AnnouncementMeta label="Selected class" value={selectedClass?.subjectName ?? 'None'} />
+          <AnnouncementMeta label="Visible posts" value={String(announcements.length)} />
+          <AnnouncementMeta label="Pinned posts" value={String(announcements.filter((announcement) => announcement.isPinned).length)} />
         </>
       )}
     >
@@ -224,5 +223,14 @@ export default function AdminAnnouncementsPage() {
 
       <ConfirmationDialog config={confirmation} onClose={() => setConfirmation(null)} />
     </AdminPageShell>
+  );
+}
+
+function AnnouncementMeta({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="admin-compact-meta__item">
+      <span className="admin-compact-meta__label">{label}</span>
+      <span>{value}</span>
+    </div>
   );
 }

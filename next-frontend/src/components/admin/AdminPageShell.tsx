@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import type { LucideIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/utils/cn';
 
@@ -126,5 +126,103 @@ export function AdminEmptyState({
         {action ? <div className="pt-2">{action}</div> : null}
       </div>
     </div>
+  );
+}
+
+export function AdminPagination({
+  page,
+  totalPages,
+  total,
+  pageSize,
+  itemLabel = 'items',
+  loading = false,
+  onPageChange,
+}: {
+  page: number;
+  totalPages: number;
+  total: number;
+  pageSize: number;
+  itemLabel?: string;
+  loading?: boolean;
+  onPageChange: (page: number) => void;
+}) {
+  const safeTotalPages = Math.max(totalPages, 1);
+  const safePage = Math.min(Math.max(page, 1), safeTotalPages);
+  const firstItem = total === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const lastItem = total === 0 ? 0 : Math.min(total, safePage * pageSize);
+
+  return (
+    <nav className="admin-pagination" aria-label={`${itemLabel} pagination`}>
+      <p className="admin-pagination__summary" aria-live="polite">
+        Showing {firstItem}–{lastItem} of {total} {itemLabel}
+      </p>
+      <div className="admin-pagination__controls">
+        <button
+          type="button"
+          className="admin-pagination__button"
+          aria-label="Previous page"
+          disabled={loading || safePage <= 1}
+          onClick={() => onPageChange(Math.max(1, safePage - 1))}
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Previous
+        </button>
+        <span className="admin-pagination__page">
+          Page {safePage} of {safeTotalPages}
+        </span>
+        <button
+          type="button"
+          className="admin-pagination__button"
+          aria-label="Next page"
+          disabled={loading || safePage >= safeTotalPages}
+          onClick={() => onPageChange(Math.min(safeTotalPages, safePage + 1))}
+        >
+          Next
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+    </nav>
+  );
+}
+
+export function AdminActionCard({
+  icon: Icon,
+  title,
+  description,
+  actionLabel,
+  onClick,
+  disabled = false,
+  tone = 'default',
+}: {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  actionLabel: string;
+  onClick: () => void;
+  disabled?: boolean;
+  tone?: 'default' | 'danger';
+}) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        'admin-action-card',
+        tone === 'danger' && 'admin-action-card--danger',
+      )}
+      onClick={onClick}
+      disabled={disabled}
+    >
+      <span className="admin-action-card__icon" aria-hidden="true">
+        <Icon className="h-5 w-5" />
+      </span>
+      <span className="admin-action-card__copy">
+        <strong>{title}</strong>
+        <small>{description}</small>
+      </span>
+      <span className="admin-action-card__cta">
+        {actionLabel}
+        <ChevronRight className="h-4 w-4" aria-hidden="true" />
+      </span>
+    </button>
   );
 }

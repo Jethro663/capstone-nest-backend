@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { sanitizeSubjectCodeInput } from "@/lib/input-policy";
 import { ROOM_OPTIONS, ROOM_OPTIONS_HELP_TEXT } from "@/lib/room-options";
 import { toast } from "sonner";
@@ -141,7 +142,10 @@ type ClassFormProps = {
   onTemplateChange?: (templateId: string) => void;
   onValuesChange?: (values: ClassFormValues) => void;
   showGradingProfile?: boolean;
+  layout?: "flat" | "sectioned";
 };
+
+type ClassFormSection = "details" | "assignment" | "schedule";
 
 export default function ClassForm({
   initialValues,
@@ -160,6 +164,7 @@ export default function ClassForm({
   onTemplateChange,
   onValuesChange,
   showGradingProfile = false,
+  layout = "flat",
 }: ClassFormProps) {
   const { status: maintenanceStatus } = useAdminMaintenance();
   const canRelaxScheduleCollisions = hasAdminMaintenanceRule(
@@ -184,6 +189,8 @@ export default function ClassForm({
       quarterlyAssessment: String(DEFAULT_GRADING_PROFILE.quarterlyAssessment),
     });
   const [isEditingGrading, setIsEditingGrading] = useState(false);
+  const [activeSection, setActiveSection] =
+    useState<ClassFormSection>("details");
 
   useEffect(() => {
     setForm(initialValues);
@@ -583,18 +590,49 @@ export default function ClassForm({
   };
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--admin-outline)] bg-[#f8fbff] px-4 py-3">
-        <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[var(--admin-text-muted)]">
-          Class Setup
-        </p>
-        <p className="flex-1 text-sm leading-5 text-[var(--admin-text-muted)]">
-          Keep the teaching assignment and schedule in one view, with the
-          required details visible first and the scheduler right below.
-        </p>
-      </div>
+    <Tabs
+      value={activeSection}
+      onValueChange={(value) => setActiveSection(value as ClassFormSection)}
+      className={layout === "sectioned" ? "admin-workspace-tabs" : undefined}
+      orientation={layout === "sectioned" ? "vertical" : "horizontal"}
+    >
+      {layout === "sectioned" ? (
+        <aside className="admin-workspace-rail" aria-label="Class editor sections">
+          <p className="admin-workspace-rail__label">Class sections</p>
+          <TabsList className="admin-workspace-tab-list">
+            <TabsTrigger value="details" className="admin-workspace-tab">
+              Details
+            </TabsTrigger>
+            <TabsTrigger value="assignment" className="admin-workspace-tab">
+              Assignment
+            </TabsTrigger>
+            <TabsTrigger value="schedule" className="admin-workspace-tab">
+              Schedule
+            </TabsTrigger>
+          </TabsList>
+        </aside>
+      ) : null}
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className={layout === "sectioned" ? "admin-workspace-content space-y-5" : "space-y-5"}>
+        {layout === "flat" ? (
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--admin-outline)] bg-[#f8fbff] px-4 py-3">
+            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[var(--admin-text-muted)]">
+              Class Setup
+            </p>
+            <p className="flex-1 text-sm leading-5 text-[var(--admin-text-muted)]">
+              Keep the teaching assignment and schedule in one view, with the
+              required details visible first and the scheduler right below.
+            </p>
+          </div>
+        ) : null}
+
+        <section
+          role={layout === "sectioned" ? "tabpanel" : undefined}
+          aria-label={layout === "sectioned" ? "Details" : undefined}
+          hidden={layout === "sectioned" && activeSection !== "details"}
+          className="space-y-5"
+        >
+          <div className="grid gap-4 md:grid-cols-2">
         <Field label="Subject Name">
           <div className="space-y-3">
             <select
@@ -681,12 +719,13 @@ export default function ClassForm({
             onChange={(event) => setField("subjectCode", event.target.value)}
             placeholder="e.g. MATH-7"
             maxLength={20}
+            aria-label="Subject Code"
             className="admin-input h-10 rounded-xl"
           />
         </Field>
-      </div>
+          </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2">
         <Field label="Grade Level">
           <select
             value={form.subjectGradeLevel}
@@ -719,9 +758,16 @@ export default function ClassForm({
             ))}
           </select>
         </Field>
-      </div>
+          </div>
+        </section>
 
-      <div className="grid gap-4 md:grid-cols-2">
+        <section
+          role={layout === "sectioned" ? "tabpanel" : undefined}
+          aria-label={layout === "sectioned" ? "Assignment" : undefined}
+          hidden={layout === "sectioned" && activeSection !== "assignment"}
+          className="space-y-5"
+        >
+          <div className="grid gap-4 md:grid-cols-2">
         <Field label="Section">
           <select
             value={form.sectionId}
@@ -747,6 +793,7 @@ export default function ClassForm({
             value={form.teacherId}
             onChange={(event) => setField("teacherId", event.target.value)}
             className={SELECT_CLS}
+            aria-label="Teacher"
           >
             <option value="">Select teacher</option>
             {teachers.map((teacher) => {
@@ -787,9 +834,9 @@ export default function ClassForm({
             </p>
           ) : null}
         </Field>
-      </div>
+          </div>
 
-      <Field label="Room">
+          <Field label="Room">
         <select
           value={form.room}
           onChange={(event) => setField("room", event.target.value)}
@@ -817,9 +864,9 @@ export default function ClassForm({
         <p className="text-[11px] text-[var(--admin-text-muted)]">
           {roomHelpText}
         </p>
-      </Field>
+          </Field>
 
-      {showGradingProfile && (
+          {showGradingProfile && (
         <Field label="Modern policy classification for other subjects">
           <select
             aria-label="Modern subject classification"
@@ -843,8 +890,8 @@ export default function ClassForm({
             frozen policy weights.
           </p>
         </Field>
-      )}
-      {showGradingProfile ? (
+          )}
+          {showGradingProfile ? (
         <div className="rounded-xl border border-[var(--admin-outline)] bg-[#f8fbff] p-3">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
@@ -904,9 +951,15 @@ export default function ClassForm({
             </div>
           </div>
         </div>
-      ) : null}
+          ) : null}
+        </section>
 
-      <div className="space-y-3">
+        <section
+          role={layout === "sectioned" ? "tabpanel" : undefined}
+          aria-label={layout === "sectioned" ? "Schedule" : undefined}
+          hidden={layout === "sectioned" && activeSection !== "schedule"}
+          className="space-y-3"
+        >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="space-y-1">
             <p className="text-sm font-black text-[var(--admin-text-strong)]">
@@ -933,9 +986,9 @@ export default function ClassForm({
           allowExistingConflicts={canRelaxScheduleCollisions}
           disabled={!isScheduleReady || loadingSection}
         />
-      </div>
+        </section>
 
-      <div className="flex flex-col gap-3 border-t border-[var(--admin-outline)] pt-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 border-t border-[var(--admin-outline)] pt-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
           <p className="text-sm font-black text-[var(--admin-text-strong)]">
             Save Class
@@ -966,8 +1019,9 @@ export default function ClassForm({
             {saving ? "Saving..." : submitLabel}
           </Button>
         </div>
+        </div>
       </div>
-    </div>
+    </Tabs>
   );
 }
 

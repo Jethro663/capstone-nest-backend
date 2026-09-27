@@ -53,7 +53,6 @@ import {
   AdminEmptyState,
   AdminPageShell,
   AdminSectionCard,
-  AdminStatCard,
 } from "@/components/admin/AdminPageShell";
 import {
   TeacherEmptyState,
@@ -400,50 +399,7 @@ export function ClassRecordReportsPage({
     </div>
   );
 
-  const statCards = isAdmin ? (
-    <>
-      <AdminStatCard
-        label="Classes Connected"
-        value={classes.length}
-        caption="Data sources ready for reporting"
-        icon={Layers3}
-        accent="sky"
-      />
-      <AdminStatCard
-        label="Report Windows"
-        value={records.length}
-        caption={
-          loadingRecords
-            ? "Refreshing grading records..."
-            : "Available grading periods"
-        }
-        icon={FileBarChart2}
-        accent="violet"
-      />
-      <AdminStatCard
-        label="Class Average"
-        value={
-          average
-            ? `${boundAcademicPercentage(average.average).toFixed(1)}%`
-            : "--"
-        }
-        caption={
-          selectedClass?.subjectCode
-            ? `${selectedClass.subjectCode} snapshot`
-            : "Choose a class"
-        }
-        icon={BarChart3}
-        accent="amber"
-      />
-      <AdminStatCard
-        label="Intervention Queue"
-        value={average?.interventionCount ?? 0}
-        caption="Students flagged from this record"
-        icon={GraduationCap}
-        accent="rose"
-      />
-    </>
-  ) : (
+  const statCards = isAdmin ? null : (
     <>
       <TeacherStatCard
         label="Classes Connected"
@@ -555,11 +511,13 @@ export function ClassRecordReportsPage({
     <Tabs
       value={activeTab}
       onValueChange={(value) => setActiveTab(value as ReportTab)}
+      className={isAdmin ? "admin-report-tabs" : undefined}
+      orientation={isAdmin ? "vertical" : "horizontal"}
     >
       <TabsList
         className={
           isAdmin
-            ? "admin-tab-list h-auto flex-wrap justify-start"
+            ? "admin-report-tab-list admin-workspace-tab-list"
             : "teacher-tab-list h-auto flex-wrap justify-start"
         }
       >
@@ -569,7 +527,7 @@ export function ClassRecordReportsPage({
             value={tab.value}
             className={
               isAdmin
-                ? "admin-tab px-4 py-2.5 text-sm font-bold"
+                ? "admin-workspace-tab px-4 py-2.5 text-sm font-bold"
                 : "teacher-tab px-4 py-2.5 text-sm font-bold"
             }
           >
@@ -579,7 +537,7 @@ export function ClassRecordReportsPage({
       </TabsList>
 
       <TabsContent value="classRecord" className="space-y-6">
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className={isAdmin ? "admin-compact-meta" : "grid gap-4 md:grid-cols-2 xl:grid-cols-4"}>
           <SummaryCard
             adminMode={isAdmin}
             label="Class"
@@ -794,7 +752,7 @@ export function ClassRecordReportsPage({
       </TabsContent>
 
       <TabsContent value="systemUsage" className="space-y-6">
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className={isAdmin ? "admin-compact-meta" : "grid gap-4 md:grid-cols-2 xl:grid-cols-4"}>
           <SummaryCard
             adminMode={isAdmin}
             label="Lesson Completions"
@@ -843,7 +801,23 @@ export function ClassRecordReportsPage({
       title={heading}
       description={description}
       actions={shellActions}
-      stats={statCards}
+      meta={(
+        <>
+          <ReportMeta label="Classes" value={String(classes.length)} />
+          <ReportMeta
+            label="Report windows"
+            value={loadingRecords ? "Loading" : String(records.length)}
+          />
+          <ReportMeta
+            label="Class average"
+            value={average ? `${boundAcademicPercentage(average.average).toFixed(1)}%` : "--"}
+          />
+          <ReportMeta
+            label="Interventions"
+            value={String(average?.interventionCount ?? 0)}
+          />
+        </>
+      )}
     >
       {filterCard}
       {loadingState}
@@ -900,29 +874,20 @@ function SummaryCard({
 }: SummaryCardProps) {
   if (adminMode) {
     return (
-      <div
-        className={cn(
-          "rounded-[1.5rem] border border-[var(--admin-outline)] bg-white px-5 py-5 shadow-[var(--admin-shadow)]",
-          tone === "accent" && "bg-[linear-gradient(180deg,#f8fbff,#ffffff)]",
-          tone === "danger" && "bg-[linear-gradient(180deg,#fff2f2,#ffffff)]",
-        )}
-      >
-        <p className="text-[11px] font-black uppercase tracking-[0.24em] text-[var(--admin-text-muted)]">
-          {label}
-        </p>
-        <p
+      <div className="admin-compact-meta__item">
+        <span className="admin-compact-meta__label">{label}</span>
+        <strong
           className={cn(
-            "mt-3 text-3xl font-black tracking-tight text-[var(--admin-text-strong)]",
+            "text-sm text-[var(--admin-text-strong)]",
             tone === "danger" && "text-rose-600",
-            tone === "accent" && "text-[#2563eb]",
           )}
         >
           {value}
-        </p>
+        </strong>
         {caption ? (
-          <p className="mt-2 text-xs font-medium text-[var(--admin-text-muted)]">
+          <small className="text-[0.7rem] text-[var(--admin-text-muted)]">
             {caption}
-          </p>
+          </small>
         ) : null}
       </div>
     );
@@ -952,6 +917,15 @@ function SummaryCard({
           {caption}
         </p>
       ) : null}
+    </div>
+  );
+}
+
+function ReportMeta({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="admin-compact-meta__item">
+      <span className="admin-compact-meta__label">{label}</span>
+      <span>{value}</span>
     </div>
   );
 }

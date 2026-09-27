@@ -130,6 +130,10 @@ describe('AdminDashboardPage', () => {
     expect(
       await screen.findByRole('heading', { name: 'Admin Dashboard' }),
     ).toBeInTheDocument();
+    expect(screen.queryByText('Platform Pulse')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Current Activity' })).toBeInTheDocument();
+    expect(screen.getByText('Assessment submissions')).toBeInTheDocument();
+    expect(screen.getByText('10')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /refresh/i }));
 

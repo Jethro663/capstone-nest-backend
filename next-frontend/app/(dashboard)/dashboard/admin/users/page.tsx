@@ -17,6 +17,7 @@ import {
 } from "@/services/user-service";
 import {
   AdminEmptyState,
+  AdminPagination,
   AdminPageShell,
   AdminSectionCard,
 } from "@/components/admin/AdminPageShell";
@@ -81,6 +82,8 @@ const GRADE_LEVEL_FILTER_LABELS: Record<GradeLevelFilter, string> = {
   "10": "Grade 10",
   graduated: "Graduated",
 };
+
+const PAGE_SIZE = 20;
 
 function getStudentLevel(user: User) {
   if (user.profile?.graduatedAt || user.graduatedAt) return "Graduated";
@@ -210,6 +213,10 @@ export default function UserManagementPage() {
   const [tableLoading, setTableLoading] = useState(false);
   const [tab, setTab] = useState<StatusTab>("active");
   const [search, setSearch] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
   const [gradeLevelFilter, setGradeLevelFilter] =
     useState<GradeLevelFilter>("all");
@@ -231,10 +238,18 @@ export default function UserManagementPage() {
           status: STATUS_MAP[tab],
           role: roleFilter === "all" ? undefined : roleFilter,
           gradeLevel: gradeLevelFilter === "all" ? undefined : gradeLevelFilter,
-          limit: 100,
+          page,
+          limit: PAGE_SIZE,
+          search: searchQuery || undefined,
           includeStatusCounts: true,
         });
         setUsers(res.users || []);
+        setTotal(res.total ?? 0);
+        const nextTotalPages = Math.max(res.totalPages ?? 1, 1);
+        setTotalPages(nextTotalPages);
+        if (page > nextTotalPages) {
+          setPage(nextTotalPages);
+        }
         if (res.statusCounts) {
           setStatusCounts({
             active: res.statusCounts.ACTIVE,
@@ -253,8 +268,17 @@ export default function UserManagementPage() {
         }
       }
     },
-    [gradeLevelFilter, roleFilter, tab],
+    [gradeLevelFilter, page, roleFilter, searchQuery, tab],
   );
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setPage(1);
+      setSearchQuery(search.trim());
+    }, 250);
+
+    return () => window.clearTimeout(timer);
+  }, [search]);
 
   useEffect(() => {
     if (!["all", "student"].includes(roleFilter)) {
@@ -268,19 +292,7 @@ export default function UserManagementPage() {
     void fetchUsers(mode);
   }, [fetchUsers]);
 
-  const filtered = useMemo(() => {
-    if (!search) return users;
-    const query = search.toLowerCase();
-    return users.filter((entry) => {
-      const primaryRole = getRoleName(entry.roles?.[0]).toLowerCase();
-      return (
-        entry.firstName?.toLowerCase().includes(query) ||
-        entry.lastName?.toLowerCase().includes(query) ||
-        entry.email?.toLowerCase().includes(query) ||
-        primaryRole.includes(query)
-      );
-    });
-  }, [search, users]);
+  const filtered = users;
 
   const selectableVisibleIds = useMemo(
     () =>
@@ -517,6 +529,7 @@ export default function UserManagementPage() {
           onValueChange={(value) => {
             setSelectedUserIds([]);
             setShowPurgeConfirm(false);
+            setPage(1);
             setTab(value as StatusTab);
           }}
           className="space-y-5"
@@ -561,9 +574,10 @@ export default function UserManagementPage() {
                 <select
                   aria-label="Filter users by role"
                   value={roleFilter}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    setPage(1);
                     setRoleFilter(event.target.value as RoleFilter)
-                  }
+                  }}
                   className="admin-select min-w-[11rem] appearance-none rounded-[1rem] py-2 pl-9 pr-10 text-sm font-bold text-[#6f83a3]"
                 >
                   {Object.entries(ROLE_FILTER_LABELS).map(([value, label]) => (
@@ -580,11 +594,12 @@ export default function UserManagementPage() {
                   <select
                     aria-label="Filter students by grade level"
                     value={gradeLevelFilter}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      setPage(1);
                       setGradeLevelFilter(
                         event.target.value as GradeLevelFilter,
-                      )
-                    }
+                      );
+                    }}
                     className="admin-select min-w-[12rem] appearance-none rounded-[1rem] py-2 pl-9 pr-10 text-sm font-bold text-[#6f83a3]"
                   >
                     {Object.entries(GRADE_LEVEL_FILTER_LABELS).map(
@@ -867,6 +882,15 @@ export default function UserManagementPage() {
               </Table>
             </div>
           )}
+          <AdminPagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            pageSize={PAGE_SIZE}
+            itemLabel="users"
+            loading={tableLoading}
+            onPageChange={setPage}
+          />
         </Tabs>
       </AdminSectionCard>
 

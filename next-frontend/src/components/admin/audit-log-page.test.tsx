@@ -185,4 +185,52 @@ describe('AuditLogPage', () => {
     );
     expect(screen.getByText('Page 1 of 1')).toBeInTheDocument();
   });
+
+  it('opens the complete returned audit row including nested metadata', async () => {
+    mockedAdminService.getAuditLogs.mockResolvedValue({
+      success: true,
+      data: [
+        {
+          id: 'log-detail-1',
+          actorId: 'actor-99',
+          action: 'Updated learner record',
+          targetType: 'student_profile',
+          targetId: 'student-22',
+          metadata: {
+            ip: '10.0.0.25',
+            targetLabel: 'Jamie Cruz',
+            before: { gradeLevel: '7' },
+            after: { gradeLevel: '8' },
+            reason: 'Annual promotion',
+          },
+          createdAt: '2026-03-27T09:00:00.000Z',
+          actor: {
+            id: 'actor-99',
+            firstName: 'Alex',
+            lastName: 'Rivera',
+            email: 'alex@nexora.edu',
+          },
+        },
+      ],
+      page: 1,
+      limit: 20,
+      total: 1,
+      totalPages: 1,
+    } as AuditLogsResponse);
+
+    render(<AuditLogPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'View audit log' }));
+
+    expect(screen.getByRole('heading', { name: 'Audit Entry Details' })).toBeInTheDocument();
+    expect(screen.getByText('alex@nexora.edu')).toBeInTheDocument();
+    expect(screen.getByText('actor-99')).toBeInTheDocument();
+    expect(screen.getByText('student_profile')).toBeInTheDocument();
+    expect(screen.getByText('student-22')).toBeInTheDocument();
+    expect(screen.getAllByText('10.0.0.25').length).toBeGreaterThan(1);
+    expect(screen.getByText(/"gradeLevel": "7"/)).toBeInTheDocument();
+    expect(screen.getByText(/"gradeLevel": "8"/)).toBeInTheDocument();
+    expect(screen.getByText(/"reason": "Annual promotion"/)).toBeInTheDocument();
+    expect(screen.getByText('2026-03-27T09:00:00.000Z')).toBeInTheDocument();
+  });
 });

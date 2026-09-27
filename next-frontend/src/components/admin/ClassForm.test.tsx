@@ -82,6 +82,39 @@ describe("ClassForm", () => {
     });
   });
 
+  it("keeps one form state across sectioned class editing", async () => {
+    render(
+      <ClassForm
+        {...baseProps}
+        layout="sectioned"
+        initialValues={{
+          ...createEmptyClassForm("2026-2027"),
+          subjectName: "Mathematics",
+          subjectCode: "MATH-7",
+          subjectGradeLevel: "7",
+          sectionId: "section-1",
+          teacherId: "teacher-1",
+          room: "201",
+          schedules: [],
+        }}
+      />,
+    );
+
+    expect(screen.getByRole("tab", { name: "Details" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Subject Code"), {
+      target: { value: "MATH-7A" },
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Assignment" }));
+    expect(screen.getByLabelText("Teacher")).toHaveValue("teacher-1");
+
+    fireEvent.click(screen.getByRole("tab", { name: "Details" }));
+    expect(screen.getByLabelText("Subject Code")).toHaveValue("MATH-7A");
+
+    fireEvent.click(screen.getByRole("tab", { name: "Schedule" }));
+    expect(screen.getByTestId("schedule-calendar")).toBeInTheDocument();
+  });
+
   const waitForClassLookups = async (expectedCalls = 2) => {
     await waitFor(() =>
       expect(classService.getAll).toHaveBeenCalledTimes(expectedCalls),

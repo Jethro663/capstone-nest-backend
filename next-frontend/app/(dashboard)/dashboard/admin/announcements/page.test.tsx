@@ -30,10 +30,10 @@ jest.mock('@/services/announcement-service', () => ({
 }));
 
 jest.mock('@/components/admin/AdminPageShell', () => ({
-  AdminPageShell: ({ actions, children }: { actions: React.ReactNode; children: React.ReactNode }) => <div>{actions}{children}</div>,
+  AdminPageShell: ({ actions, meta, children }: { actions: React.ReactNode; meta?: React.ReactNode; children: React.ReactNode }) => <div>{actions}{meta}{children}</div>,
   AdminSectionCard: ({ children }: { children: React.ReactNode }) => <section>{children}</section>,
   AdminEmptyState: ({ action }: { action?: React.ReactNode }) => <div>{action}</div>,
-  AdminStatCard: () => null,
+  AdminStatCard: () => <div>Legacy announcement stat card</div>,
 }));
 
 jest.mock('@/components/shared/ConfirmationDialog', () => ({
@@ -58,6 +58,8 @@ describe('AdminAnnouncementsPage dialog theme', () => {
     });
 
     render(<AdminAnnouncementsPage />);
+    expect(screen.queryByText('Legacy announcement stat card')).not.toBeInTheDocument();
+    expect(await screen.findByText('Classes available')).toBeInTheDocument();
     fireEvent.change(await screen.findByRole('combobox'), {
       target: { value: 'class-1' },
     });

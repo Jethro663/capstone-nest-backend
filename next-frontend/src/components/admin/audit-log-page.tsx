@@ -7,6 +7,14 @@ import { adminService } from '@/services/admin-service';
 import type { AuditLogEntry } from '@/types/audit';
 import { AdminEmptyState, AdminPageShell, AdminSectionCard } from '@/components/admin/AdminPageShell';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -114,6 +122,7 @@ export function AuditLogPage() {
   const [actorFilter, setActorFilter] = useState('all');
   const [actionFilter, setActionFilter] = useState('all');
   const [dateRange, setDateRange] = useState<DateRange>('all');
+  const [selectedRow, setSelectedRow] = useState<AuditRow | null>(null);
 
   const fetchRows = useCallback(async () => {
     setLoading(true);
@@ -298,11 +307,24 @@ export function AuditLogPage() {
                   <th>Target</th>
                   <th>Timestamp</th>
                   <th>IP</th>
+                  <th className="text-right">Details</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredRows.map((row) => (
-                  <tr key={row.id}>
+                  <tr
+                    key={row.id}
+                    tabIndex={0}
+                    className="cursor-pointer"
+                    aria-label={`Open audit entry ${row.action}`}
+                    onClick={() => setSelectedRow(row)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        setSelectedRow(row);
+                      }
+                    }}
+                  >
                     <td>
                       <div className="admin-audit-actor">
                         <span className="admin-audit-avatar">{row.actorInitials}</span>
@@ -313,6 +335,17 @@ export function AuditLogPage() {
                     <td>{row.targetLabel}</td>
                     <td>{formatTimestamp(row.createdAt)}</td>
                     <td>{row.ipLabel}</td>
+                    <td className="text-right">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        aria-label="View audit log"
+                        onClick={() => setSelectedRow(row)}
+                      >
+                        View
+                      </Button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -354,6 +387,81 @@ export function AuditLogPage() {
           </div>
         </div>
       </AdminSectionCard>
+
+      <Dialog
+        open={Boolean(selectedRow)}
+        onOpenChange={(open) => !open && setSelectedRow(null)}
+      >
+        <DialogContent
+          variant="admin"
+          className="max-h-[88vh] overflow-y-auto rounded-[1.1rem] border border-[var(--admin-outline)] bg-white shadow-xl sm:max-w-2xl"
+        >
+          <DialogHeader>
+            <DialogTitle>Audit Entry Details</DialogTitle>
+            <DialogDescription>
+              Complete data recorded for this audit entry. No additional fields are inferred.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedRow ? (
+            <div className="space-y-5">
+              <section className="admin-detail-list" aria-label="Audit summary">
+                <AuditDetail label="Action" value={selectedRow.action} />
+                <AuditDetail label="Audit ID" value={selectedRow.id} />
+                <AuditDetail label="Actor" value={selectedRow.actorLabel} />
+                <AuditDetail label="Actor email" value={selectedRow.actor?.email ?? 'Not recorded'} />
+                <AuditDetail label="Actor ID" value={selectedRow.actorId} />
+                <AuditDetail label="IP address" value={selectedRow.ipLabel} />
+                <AuditDetail label="Target type" value={selectedRow.targetType} />
+                <AuditDetail label="Target ID" value={selectedRow.targetId} />
+                <AuditDetail label="Target" value={selectedRow.targetLabel} />
+                <AuditDetail label="Local timestamp" value={formatTimestamp(selectedRow.createdAt)} />
+              </section>
+
+              <section className="space-y-2">
+                <p className="admin-compact-meta__label">Exact timestamp</p>
+                <code className="block break-all rounded-lg border border-[var(--admin-outline)] bg-slate-50 p-3 text-xs text-[var(--admin-text-strong)]">
+                  {selectedRow.createdAt}
+                </code>
+              </section>
+
+              <section className="space-y-2">
+                <p className="admin-compact-meta__label">Recorded metadata</p>
+                {selectedRow.metadata && Object.keys(selectedRow.metadata).length > 0 ? (
+                  <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-[var(--admin-outline)] bg-slate-950 p-4 text-xs leading-6 text-slate-100">
+                    {JSON.stringify(selectedRow.metadata, null, 2)}
+                  </pre>
+                ) : (
+                  <p className="rounded-lg border border-[var(--admin-outline)] bg-slate-50 p-3 text-sm text-[var(--admin-text-muted)]">
+                    No additional metadata was recorded.
+                  </p>
+                )}
+              </section>
+            </div>
+          ) : null}
+
+          <DialogFooter>
+            <Button
+              type="button"
+              className="admin-button-solid"
+              onClick={() => setSelectedRow(null)}
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AdminPageShell>
+  );
+}
+
+function AuditDetail({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-[var(--admin-outline)] bg-slate-50 p-3">
+      <p className="admin-compact-meta__label">{label}</p>
+      <p className="mt-1 break-all text-sm font-semibold text-[var(--admin-text-strong)]">
+        {value}
+      </p>
+    </div>
   );
 }

@@ -1,12 +1,11 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import Link from 'next/link';
 import {
   Activity,
   ArrowRight,
   BookOpen,
-  GraduationCap,
   RefreshCcw,
   School,
   Shield,
@@ -18,128 +17,12 @@ import { performanceService } from '@/services/performance-service';
 import { useAutoRefresh } from '@/hooks/use-auto-refresh';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AdminPageShell, AdminSectionCard, AdminStatCard } from '@/components/admin/AdminPageShell';
+import { AdminPageShell, AdminSectionCard } from '@/components/admin/AdminPageShell';
 
 type AdminOverviewData = AdminOverviewResponse['data'];
 type AdminDashboardStats = AdminOverviewData['stats'];
 type UsageSummary = AdminOverviewData['usageSummary'];
 type HealthReadiness = AdminOverviewData['readiness'];
-
-function formatGrowth(value: number) {
-  return value > 0 ? `+ ${value} new this week` : 'No weekly delta';
-}
-
-function buildPulseSeries(
-  students: number,
-  teachers: number,
-  submissions: number,
-  completions: number,
-) {
-  const loginBase = Math.max(24, Math.round((students + teachers) / 10));
-  const submissionBase = Math.max(18, Math.round((submissions + completions) / 14));
-
-  return {
-    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-    logins: [
-      Math.round(loginBase * 0.76),
-      Math.round(loginBase * 0.88),
-      Math.round(loginBase * 0.8),
-      Math.round(loginBase * 0.98),
-      Math.round(loginBase * 0.87),
-      Math.round(loginBase * 0.41),
-      Math.round(loginBase * 0.3),
-    ],
-    submissions: [
-      Math.round(submissionBase * 0.48),
-      Math.round(submissionBase * 0.62),
-      Math.round(submissionBase * 0.57),
-      Math.round(submissionBase * 0.79),
-      Math.round(submissionBase * 0.69),
-      Math.round(submissionBase * 0.22),
-      Math.round(submissionBase * 0.15),
-    ],
-  };
-}
-
-function buildChartPath(points: number[], width: number, height: number) {
-  const max = Math.max(...points, 1);
-  const step = width / Math.max(points.length - 1, 1);
-  return points
-    .map((point, index) => {
-      const x = index * step;
-      const y = height - (point / max) * (height - 12) - 6;
-      return `${index === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`;
-    })
-    .join(' ');
-}
-
-function PulseChart({
-  labels,
-  logins,
-  submissions,
-}: {
-  labels: string[];
-  logins: number[];
-  submissions: number[];
-}) {
-  const width = 460;
-  const height = 212;
-  const loginPath = buildChartPath(logins, width, height);
-  const submissionPath = buildChartPath(submissions, width, height);
-  const max = Math.max(...logins, ...submissions, 1);
-  const ticks = [0, Math.round(max * 0.25), Math.round(max * 0.5), Math.round(max * 0.75), max];
-
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-end gap-4 text-sm text-[#8ea0bc]">
-        <div className="flex items-center gap-5 text-base font-medium">
-          <span className="inline-flex items-center gap-2">
-            <span className="h-3 w-3 rounded-full bg-[#ff3038]" />
-            Logins
-          </span>
-          <span className="inline-flex items-center gap-2">
-            <span className="h-3 w-3 rounded-full bg-[#5d9bff]" />
-            Submissions
-          </span>
-        </div>
-      </div>
-      <div className="grid grid-cols-[3rem_minmax(0,1fr)] gap-3">
-        <div className="flex h-[212px] flex-col justify-between text-[11px] font-semibold text-[#a1b3cd]">
-          {ticks.slice().reverse().map((tick) => (
-            <span key={tick}>{tick}</span>
-          ))}
-        </div>
-        <div className="space-y-3">
-          <div className="relative h-[212px] overflow-hidden rounded-[1.15rem] border border-[#eef3fa] bg-[linear-gradient(180deg,#ffffff,#fcfdff)]">
-            <svg viewBox={`0 0 ${width} ${height}`} className="relative z-10 h-full w-full">
-              {ticks.map((_, index) => {
-                const y = (height / 4) * index;
-                return (
-                  <line
-                    key={index}
-                    x1="0"
-                    y1={y}
-                    x2={width}
-                    y2={y}
-                    stroke="rgba(213,223,236,0.8)"
-                    strokeDasharray="4 6"
-                  />
-                );
-              })}
-              <path d={submissionPath} fill="none" stroke="#5d9bff" strokeWidth="4" strokeLinecap="round" />
-              <path d={loginPath} fill="none" stroke="#ff3038" strokeWidth="4" strokeLinecap="round" />
-            </svg>
-          </div>
-          <div className="grid grid-cols-7 gap-2 text-center text-[11px] font-semibold text-[#a1b3cd]">
-            {labels.map((label) => (
-              <span key={label}>{label}</span>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function UserMixChart({
   students,
@@ -269,16 +152,6 @@ export default function AdminDashboardPage() {
   useAutoRefresh(fetchData, interval, autoRefresh, true);
 
   const totalUsers = (stats?.totalStudents ?? 0) + (stats?.totalTeachers ?? 0) + (stats?.totalAdmins ?? 0);
-  const pulseSeries = useMemo(
-    () =>
-      buildPulseSeries(
-        stats?.totalStudents ?? 0,
-        stats?.totalTeachers ?? 0,
-        usageSummary?.assessmentSubmissions ?? 0,
-        usageSummary?.lessonCompletions ?? 0,
-      ),
-    [stats?.totalStudents, stats?.totalTeachers, usageSummary?.assessmentSubmissions, usageSummary?.lessonCompletions],
-  );
 
   if (loading) {
     return (
@@ -347,42 +220,35 @@ export default function AdminDashboardPage() {
           </Button>
         </div>
       )}
-      stats={(
+      meta={(
         <>
-          <AdminStatCard
-            label="Total Users"
-            value={totalUsers.toLocaleString()}
-            caption={formatGrowth(Math.max(totalUsers - ((usageSummary?.activeTeachers ?? 0) + (usageSummary?.activeStudents ?? 0)), 0))}
-            icon={Users}
-            accent="rose"
-          />
-          <AdminStatCard
-            label="Teachers"
-            value={(stats?.totalTeachers ?? 0).toLocaleString()}
-            caption={`${usageSummary?.activeTeachers ?? 0} active now`}
-            icon={GraduationCap}
-            accent="sky"
-          />
-          <AdminStatCard
-            label="Students"
-            value={(stats?.totalStudents ?? 0).toLocaleString()}
-            caption={formatGrowth(Math.max((stats?.totalStudents ?? 0) - (usageSummary?.activeStudents ?? 0), 0))}
-            icon={School}
-            accent="emerald"
-          />
-          <AdminStatCard
-            label="Active Classes"
-            value={(stats?.activeClasses ?? 0).toLocaleString()}
-            caption={`${stats?.totalSections ?? 0} sections tracked`}
-            icon={BookOpen}
-            accent="violet"
-          />
+          <DashboardMeta label="Total users" value={totalUsers.toLocaleString()} />
+          <DashboardMeta label="Students" value={(stats?.totalStudents ?? 0).toLocaleString()} />
+          <DashboardMeta label="Teachers" value={(stats?.totalTeachers ?? 0).toLocaleString()} />
+          <DashboardMeta label="Active classes" value={(stats?.activeClasses ?? 0).toLocaleString()} />
         </>
       )}
     >
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_380px]">
-        <AdminSectionCard title="Platform Pulse" description="Daily logins and submissions" contentClassName="space-y-5">
-          <PulseChart {...pulseSeries} />
+        <AdminSectionCard
+          title="Current Activity"
+          description="Observed usage totals returned by the admin overview service."
+        >
+          <div className="grid gap-3 sm:grid-cols-2">
+            {[
+              { label: 'Active teachers', value: usageSummary?.activeTeachers ?? 0 },
+              { label: 'Active students', value: usageSummary?.activeStudents ?? 0 },
+              { label: 'Assessment submissions', value: usageSummary?.assessmentSubmissions ?? 0 },
+              { label: 'Lesson completions', value: usageSummary?.lessonCompletions ?? 0 },
+              { label: 'Intervention opens', value: usageSummary?.interventionOpens ?? 0 },
+              { label: 'Intervention closures', value: usageSummary?.interventionClosures ?? 0 },
+            ].map((item) => (
+              <div key={item.label} className="flex items-center justify-between gap-4 border-b border-[var(--admin-outline)] px-1 py-3 last:border-b-0">
+                <span className="text-sm font-semibold text-[var(--admin-text-muted)]">{item.label}</span>
+                <strong className="text-base text-[var(--admin-text-strong)]">{item.value.toLocaleString()}</strong>
+              </div>
+            ))}
+          </div>
         </AdminSectionCard>
 
         <AdminSectionCard title="User Mix" contentClassName="space-y-5">
@@ -508,5 +374,14 @@ export default function AdminDashboardPage() {
         </AdminSectionCard>
       </div>
     </AdminPageShell>
+  );
+}
+
+function DashboardMeta({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="admin-compact-meta__item">
+      <span className="admin-compact-meta__label">{label}</span>
+      <span>{value}</span>
+    </div>
   );
 }

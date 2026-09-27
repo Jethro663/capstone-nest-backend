@@ -127,7 +127,7 @@ describe("ClassRecordReportsPage", () => {
   });
 
   it("offers separate CSV and PDF export actions in the reports hub", async () => {
-    render(
+    const { container } = render(
       <ClassRecordReportsPage
         heading="Reports"
         description="Admin reports"
@@ -139,6 +139,10 @@ describe("ClassRecordReportsPage", () => {
       name: /download csv/i,
     });
     const pdfButton = screen.getByRole("button", { name: /download pdf/i });
+
+    expect(container.querySelector(".admin-stat-card")).not.toBeInTheDocument();
+    await screen.findByRole("tab", { name: "Class Record" });
+    expect(container.querySelector(".admin-report-tabs")).toBeInTheDocument();
 
     fireEvent.click(pdfButton);
 
@@ -199,5 +203,21 @@ describe("ClassRecordReportsPage", () => {
     expect(
       await screen.findByText("Cruz, Ana · Archived account"),
     ).toBeInTheDocument();
+  });
+
+  it("keeps the established teacher report presentation", async () => {
+    const { container } = render(
+      <ClassRecordReportsPage
+        heading="Reports"
+        description="Teacher reports"
+        scope="teacher"
+      />,
+    );
+
+    expect(await screen.findByText("Classes Connected")).toBeInTheDocument();
+    expect(container.querySelector(".teacher-figma-stat")).toBeInTheDocument();
+    expect(await screen.findByRole("tab", { name: "Class Record" })).toHaveClass(
+      "teacher-tab",
+    );
   });
 });

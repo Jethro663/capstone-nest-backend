@@ -1,8 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Activity, Search, UsersRound } from 'lucide-react';
-import { AdminEmptyState, AdminPageShell, AdminSectionCard } from '@/components/admin/AdminPageShell';
+import {
+  AdminEmptyState,
+  AdminPagination,
+  AdminPageShell,
+  AdminSectionCard,
+} from '@/components/admin/AdminPageShell';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -15,6 +20,8 @@ import { toast } from 'sonner';
 
 type StatusFilter = 'all' | 'ACTIVE' | 'PENDING' | 'SUSPENDED' | 'DELETED';
 type RoleFilter = 'all' | 'student' | 'teacher' | 'admin';
+
+const PAGE_SIZE = 20;
 
 function formatDateTime(value?: string | null): string {
   if (!value) return 'Never';
@@ -88,6 +95,10 @@ export default function AdminUserReportsPage() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [tableLoading, setTableLoading] = useState(false);
   const [search, setSearch] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
 
@@ -103,9 +114,17 @@ export default function AdminUserReportsPage() {
         const response = await userService.getMonitoringReport({
           status: statusFilter === 'all' ? undefined : statusFilter,
           role: roleFilter === 'all' ? undefined : roleFilter,
-          limit: 300,
+          page,
+          limit: PAGE_SIZE,
+          search: searchQuery || undefined,
         });
         setRows(response.data.data || []);
+        setTotal(response.data.total ?? 0);
+        const nextTotalPages = Math.max(response.data.totalPages ?? 1, 1);
+        setTotalPages(nextTotalPages);
+        if (page > nextTotalPages) {
+          setPage(nextTotalPages);
+        }
       } catch (error) {
         toast.error(
           getApiErrorMessage(error, 'Failed to load user monitoring reports'),
@@ -118,8 +137,17 @@ export default function AdminUserReportsPage() {
         }
       }
     },
-    [roleFilter, statusFilter],
+    [page, roleFilter, searchQuery, statusFilter],
   );
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setPage(1);
+      setSearchQuery(search.trim());
+    }, 250);
+
+    return () => window.clearTimeout(timer);
+  }, [search]);
 
   useEffect(() => {
     const mode = hasLoadedRef.current ? 'table' : 'initial';
@@ -127,21 +155,7 @@ export default function AdminUserReportsPage() {
     void fetchReports(mode);
   }, [fetchReports]);
 
-  const filteredRows = useMemo(() => {
-    const normalized = search.trim().toLowerCase();
-    if (!normalized) return rows;
-
-    return rows.filter((entry) => {
-      const name = `${entry.firstName ?? ''} ${entry.lastName ?? ''}`.trim();
-      const roles = getRoleNames(entry).join(' ');
-      return (
-        name.toLowerCase().includes(normalized) ||
-        entry.email?.toLowerCase().includes(normalized) ||
-        roles.includes(normalized) ||
-        entry.activityIp?.toLowerCase().includes(normalized)
-      );
-    });
-  }, [rows, search]);
+  const filteredRows = rows;
 
   if (initialLoading) {
     return (
@@ -175,6 +189,7 @@ export default function AdminUserReportsPage() {
               aria-label="Filter by account status"
               value={statusFilter}
               onChange={(event) => {
+                setPage(1);
                 setStatusFilter(event.target.value as StatusFilter);
               }}
               className="admin-select min-w-[10rem] rounded-[1rem] px-3 py-2 text-sm font-bold text-[#6f83a3]"
@@ -189,6 +204,7 @@ export default function AdminUserReportsPage() {
               aria-label="Filter by role"
               value={roleFilter}
               onChange={(event) => {
+                setPage(1);
                 setRoleFilter(event.target.value as RoleFilter);
               }}
               className="admin-select min-w-[10rem] rounded-[1rem] px-3 py-2 text-sm font-bold text-[#6f83a3]"
@@ -292,6 +308,15 @@ export default function AdminUserReportsPage() {
             </Table>
           </div>
         )}
+        <AdminPagination
+          page={page}
+          totalPages={totalPages}
+          total={total}
+          pageSize={PAGE_SIZE}
+          itemLabel="users"
+          loading={tableLoading}
+          onPageChange={setPage}
+        />
       </AdminSectionCard>
     </AdminPageShell>
   );

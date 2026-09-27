@@ -6,7 +6,7 @@ import { ArrowLeft, School2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import ClassForm, { createEmptyClassForm, type ClassFormValues } from '@/components/admin/ClassForm';
-import { AdminPageShell, AdminSectionCard } from '@/components/admin/AdminPageShell';
+import { AdminPageShell } from '@/components/admin/AdminPageShell';
 import { classService } from '@/services/class-service';
 import { sectionService } from '@/services/section-service';
 import { userService } from '@/services/user-service';
@@ -166,23 +166,18 @@ export default function EditClassPage() {
         </>
       )}
     >
-      <AdminSectionCard
-        title={`${classItem.subjectName} (${classItem.subjectCode})`}
-        description="Keep the class details up to date without the oversized cards around the form."
-        density="compact"
-      >
-        <ClassForm
-          initialValues={initialValues}
-          sections={sections}
-          teachers={teachers}
-          schoolYears={availableSchoolYears}
-          saving={saving}
-          submitLabel="Save Changes"
-          onSubmit={handleSubmit}
-          onCancel={() => router.push('/dashboard/admin/classes')}
-          editingClassId={classId}
-        />
-      </AdminSectionCard>
+      <ClassForm
+        layout="sectioned"
+        initialValues={initialValues}
+        sections={sections}
+        teachers={teachers}
+        schoolYears={availableSchoolYears}
+        saving={saving}
+        submitLabel="Save Changes"
+        onSubmit={handleSubmit}
+        onCancel={() => router.push('/dashboard/admin/classes')}
+        editingClassId={classId}
+      />
     </AdminPageShell>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, School, UserPlus } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Pencil, School, UserPlus, UsersRound } from 'lucide-react';
 import { sectionService, type RosterStudent } from '@/services/section-service';
 import { academicStateService } from '@/services/academic-state-service';
 import { adminLifecycleService } from '@/services/admin-lifecycle-service';
@@ -23,12 +23,16 @@ import { SectionScheduleViewer } from '@/components/shared/SectionScheduleViewer
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { Section } from '@/types/section';
 import {
+  AdminActionCard,
   AdminEmptyState,
   AdminPageShell,
   AdminSectionCard,
 } from '@/components/admin/AdminPageShell';
 import { AdminLifecycleDialog } from '@/components/admin/AdminLifecycleDialog';
 import type { AcademicPeriodKey } from '@/types/admin-lifecycle';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
+type RosterSection = 'overview' | 'schedule' | 'students' | 'actions';
 
 function getInitials(firstName?: string, lastName?: string) {
   const firstInitial = firstName?.trim()?.charAt(0) || '';
@@ -49,6 +53,7 @@ export default function AdminSectionRosterPage() {
   const [destinationSectionId, setDestinationSectionId] = useState('');
   const [destinationSections, setDestinationSections] = useState<Section[]>([]);
   const [activePeriod, setActivePeriod] = useState<AcademicPeriodKey>('Q1');
+  const [activeSection, setActiveSection] = useState<RosterSection>('overview');
 
   const fetchData = useCallback(async () => {
     try {
@@ -111,19 +116,10 @@ export default function AdminSectionRosterPage() {
       icon={School}
       variant="compact-form"
       actions={(
-        <>
-          <Button variant="outline" className="admin-button-outline rounded-xl font-black" onClick={() => router.push('/dashboard/admin/sections')}>
-            <ArrowLeft className="h-4 w-4" />
-            Back to Sections
-          </Button>
-          <Button variant="outline" className="admin-button-outline rounded-xl font-black" onClick={() => router.push(`/dashboard/admin/sections/${sectionId}/edit`)}>
-            Edit Section
-          </Button>
-          <Button className="admin-button-solid rounded-xl font-black" onClick={() => router.push(`/dashboard/admin/sections/${sectionId}/students/add`)}>
-            <UserPlus className="h-4 w-4" />
-            Add Students
-          </Button>
-        </>
+        <Button variant="outline" className="admin-button-outline rounded-xl font-black" onClick={() => router.push('/dashboard/admin/sections')}>
+          <ArrowLeft className="h-4 w-4" />
+          Back to Sections
+        </Button>
       )}
       meta={(
         <>
@@ -146,93 +142,170 @@ export default function AdminSectionRosterPage() {
         </>
       )}
     >
-      <AdminSectionCard
-        title="Weekly Schedule"
-        description="See how this section is distributed across the week without the extra nested card chrome."
-        density="compact"
+      <Tabs
+        value={activeSection}
+        onValueChange={(value) => setActiveSection(value as RosterSection)}
+        className="admin-workspace-tabs"
+        orientation="vertical"
       >
-        <SectionScheduleViewer sectionId={sectionId} chrome="flat" />
-      </AdminSectionCard>
+        <aside className="admin-workspace-rail" aria-label="Roster sections">
+          <p className="admin-workspace-rail__label">Roster sections</p>
+          <TabsList className="admin-workspace-tab-list">
+            <TabsTrigger value="overview" className="admin-workspace-tab">Overview</TabsTrigger>
+            <TabsTrigger value="schedule" className="admin-workspace-tab">Schedule</TabsTrigger>
+            <TabsTrigger value="students" className="admin-workspace-tab">Students</TabsTrigger>
+            <TabsTrigger value="actions" className="admin-workspace-tab">Actions</TabsTrigger>
+          </TabsList>
+        </aside>
 
-      <AdminSectionCard
-        title={`Students (${dedupedRoster.length})`}
-        description="Browse learners and resolve corrections, withdrawals, or transfers with a reviewed impact preview."
-        density="compact"
-      >
-        {dedupedRoster.length === 0 ? (
-          <AdminEmptyState
-            title="No students in this section yet"
-            description="This section is ready, but no roster entries have been assigned yet."
-            action={(
-              <Button className="admin-button-solid rounded-xl font-black" onClick={() => router.push(`/dashboard/admin/sections/${sectionId}/students/add`)}>
-                <UserPlus className="h-4 w-4" />
-                Add Students
-              </Button>
-            )}
-          />
-        ) : (
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--admin-outline)] bg-[#fbfcfe] px-4 py-3">
-              <p className="text-sm font-semibold text-[var(--admin-text-strong)]">
-                {dedupedRoster.length} student{dedupedRoster.length === 1 ? '' : 's'} enrolled
-              </p>
-              <p className="text-xs uppercase tracking-[0.14em] text-[var(--admin-text-muted)]">
-                Select a student name to open the full profile
-              </p>
-            </div>
+        <div className="admin-workspace-content">
+          <TabsContent value="overview" className="m-0">
+            <AdminSectionCard
+              title="Section Overview"
+              description="The current academic placement and roster ownership for this section."
+              density="compact"
+            >
+              <dl className="admin-detail-list">
+                <InfoRow label="Section" value={section?.name} />
+                <InfoRow label="Grade Level" value={section?.gradeLevel ? `Grade ${section.gradeLevel}` : undefined} />
+                <InfoRow label="School Year" value={section?.schoolYear} />
+                <InfoRow label="Adviser" value={adviserName} />
+                <InfoRow label="Roster Capacity" value={`${dedupedRoster.length} of ${section?.capacity ?? '-'} students`} />
+              </dl>
+            </AdminSectionCard>
+          </TabsContent>
 
-            <div className="admin-table-shell">
-              <Table>
-                <TableHeader className="admin-table-head">
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead>#</TableHead>
-                    <TableHead>Student</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>LRN</TableHead>
-                    <TableHead>Grade</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody className="[&_tr:last-child]:border-0">
-                  {dedupedRoster.map((student, index) => (
-                    <TableRow key={student.id} className="admin-table-row">
-                      <TableCell>{index + 1}</TableCell>
-                      <TableCell>
-                        <button
-                          type="button"
-                          onClick={() => router.push(`/dashboard/admin/users/${student.id}`)}
-                          className="flex items-center gap-3 rounded-xl px-1 py-1 text-left transition-colors hover:bg-red-50/70"
-                        >
-                          <Avatar className="h-9 w-9 border border-[var(--admin-outline)]">
-                            {student.profilePicture ? (
-                              <AvatarImage src={student.profilePicture} alt={`${student.firstName || ''} ${student.lastName || ''}`.trim()} />
-                            ) : null}
-                            <AvatarFallback>{getInitials(student.firstName, student.lastName)}</AvatarFallback>
-                          </Avatar>
-                          <span className="font-semibold text-[var(--admin-text-strong)]">
-                            {student.firstName} {student.lastName}
-                          </span>
-                        </button>
-                      </TableCell>
-                      <TableCell className="text-[var(--admin-text-muted)]">{student.email || 'N/A'}</TableCell>
-                      <TableCell className="text-[var(--admin-text-muted)]">{student.lrn || 'N/A'}</TableCell>
-                      <TableCell className="text-[var(--admin-text-muted)]">{student.gradeLevel || 'N/A'}</TableCell>
-                      <TableCell className="space-x-1 text-right">
-                        <Button variant="ghost" size="sm" className="rounded-xl" onClick={() => setSelectedStudent(student)}>
-                          View
-                        </Button>
-                        <Button variant="ghost" size="sm" className="rounded-xl text-rose-600 hover:bg-rose-50 hover:text-rose-700" onClick={() => openLifecycle(student)}>
-                          Resolve membership
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
-        )}
-      </AdminSectionCard>
+          <TabsContent value="schedule" className="m-0">
+            <AdminSectionCard
+              title="Weekly Schedule"
+              description="See how this section is distributed across the school week."
+              density="compact"
+            >
+              <SectionScheduleViewer sectionId={sectionId} chrome="flat" />
+            </AdminSectionCard>
+          </TabsContent>
+
+          <TabsContent value="students" className="m-0">
+            <AdminSectionCard
+              title={`Students (${dedupedRoster.length})`}
+              description="Browse learners and resolve corrections, withdrawals, or transfers with a reviewed impact preview."
+              density="compact"
+            >
+              {dedupedRoster.length === 0 ? (
+                <AdminEmptyState
+                  title="No students in this section yet"
+                  description="This section is ready, but no roster entries have been assigned yet."
+                  action={(
+                    <Button className="admin-button-solid rounded-xl font-black" onClick={() => router.push(`/dashboard/admin/sections/${sectionId}/students/add`)}>
+                      <UserPlus className="h-4 w-4" />
+                      Add Students
+                    </Button>
+                  )}
+                />
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--admin-outline)] bg-[#fbfcfe] px-4 py-3">
+                    <p className="text-sm font-semibold text-[var(--admin-text-strong)]">
+                      {dedupedRoster.length} student{dedupedRoster.length === 1 ? '' : 's'} enrolled
+                    </p>
+                    <p className="text-xs uppercase tracking-[0.14em] text-[var(--admin-text-muted)]">
+                      Select a student name to open the full profile
+                    </p>
+                  </div>
+
+                  <div className="admin-table-shell">
+                    <Table>
+                      <TableHeader className="admin-table-head">
+                        <TableRow className="hover:bg-transparent">
+                          <TableHead>#</TableHead>
+                          <TableHead>Student</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>LRN</TableHead>
+                          <TableHead>Grade</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody className="[&_tr:last-child]:border-0">
+                        {dedupedRoster.map((student, index) => (
+                          <TableRow key={student.id} className="admin-table-row">
+                            <TableCell>{index + 1}</TableCell>
+                            <TableCell>
+                              <button
+                                type="button"
+                                onClick={() => router.push(`/dashboard/admin/users/${student.id}`)}
+                                className="flex items-center gap-3 rounded-xl px-1 py-1 text-left transition-colors hover:bg-red-50/70"
+                              >
+                                <Avatar className="h-9 w-9 border border-[var(--admin-outline)]">
+                                  {student.profilePicture ? (
+                                    <AvatarImage src={student.profilePicture} alt={`${student.firstName || ''} ${student.lastName || ''}`.trim()} />
+                                  ) : null}
+                                  <AvatarFallback>{getInitials(student.firstName, student.lastName)}</AvatarFallback>
+                                </Avatar>
+                                <span className="font-semibold text-[var(--admin-text-strong)]">
+                                  {student.firstName} {student.lastName}
+                                </span>
+                              </button>
+                            </TableCell>
+                            <TableCell className="text-[var(--admin-text-muted)]">{student.email || 'N/A'}</TableCell>
+                            <TableCell className="text-[var(--admin-text-muted)]">{student.lrn || 'N/A'}</TableCell>
+                            <TableCell className="text-[var(--admin-text-muted)]">{student.gradeLevel || 'N/A'}</TableCell>
+                            <TableCell className="space-x-1 text-right">
+                              <Button variant="ghost" size="sm" className="rounded-xl" onClick={() => setSelectedStudent(student)}>
+                                View
+                              </Button>
+                              <Button variant="ghost" size="sm" className="rounded-xl text-rose-600 hover:bg-rose-50 hover:text-rose-700" onClick={() => openLifecycle(student)}>
+                                Resolve membership
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+            </AdminSectionCard>
+          </TabsContent>
+
+          <TabsContent value="actions" className="m-0">
+            <AdminSectionCard
+              title="Section Actions"
+              description="Choose a task with its outcome visible before leaving this roster."
+              density="compact"
+              contentClassName="space-y-3"
+            >
+              <AdminActionCard
+                icon={Pencil}
+                title="Edit section"
+                description="Update the name, grade, adviser, capacity, room, and academic placement."
+                actionLabel="Open editor"
+                onClick={() => router.push(`/dashboard/admin/sections/${sectionId}/edit`)}
+              />
+              <AdminActionCard
+                icon={UserPlus}
+                title="Add students"
+                description="Find eligible learners and add them to this section roster."
+                actionLabel="Choose students"
+                onClick={() => router.push(`/dashboard/admin/sections/${sectionId}/students/add`)}
+              />
+              <AdminActionCard
+                icon={UsersRound}
+                title="Review students"
+                description="View profiles or resolve a learner's current section membership."
+                actionLabel="View roster"
+                onClick={() => setActiveSection('students')}
+              />
+              <AdminActionCard
+                icon={CalendarDays}
+                title="Review schedule"
+                description="Check the weekly timetable assigned to this section."
+                actionLabel="View schedule"
+                onClick={() => setActiveSection('schedule')}
+              />
+            </AdminSectionCard>
+          </TabsContent>
+        </div>
+      </Tabs>
 
       <Dialog open={!!selectedStudent} onOpenChange={(open) => !open && setSelectedStudent(null)}>
         <DialogContent variant="admin" className="rounded-[1.6rem] border-[var(--admin-outline)] bg-white shadow-2xl">
