@@ -12,6 +12,20 @@
         "EXPO_PUBLIC_API_URL": "https://capstone-backend-v2-production.up.railway.app/api"
       },
       "distribution": "internal"
+    },
+    "production": {
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://capstone-backend-v2-production.up.railway.app/api",
+        "NEXORA_IOS_BUNDLE_IDENTIFIER": "com.nexora.lms.mobile.7A4H2D888M"
+      },
+      "distribution": "store"
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "ascAppId": "6816592125"
+      }
     }
   }
 }

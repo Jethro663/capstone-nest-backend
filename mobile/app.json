@@ -12,7 +12,11 @@
     ],
     "ios": {
       "bundleIdentifier": "com.nexora.lms.mobile",
-      "buildNumber": "53"
+      "buildNumber": "53",
+      "icon": "./assets/ios/icon.png",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.nexora.lms.mobile",
@@ -32,11 +36,22 @@
       "expo-document-picker",
       "expo-notifications",
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Nexora to select photos for assignments, announcements, and profile content.",
+          "cameraPermission": "Allow Nexora to use the camera to attach photos to assignments, announcements, and profile content.",
+          "microphonePermission": false
+        }
+      ],
+      [
         "expo-build-properties",
         {
           "android": {
             "kotlinVersion": "2.1.20",
             "kspVersion": "2.1.20-2.0.1"
+          },
+          "ios": {
+            "deploymentTarget": "15.1"
           }
         }
       ],
