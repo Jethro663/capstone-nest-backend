@@ -234,7 +234,7 @@ Split tabs into URLs such as `/profile`, `/account`, `/schedule`. This improves 
 - [x] Run the repository-required frontend test suite: 203 suites and 907 tests passed.
 - [x] Attempt `npm run dev:smoke` and browser-level checks: the frontend can build, but the integrated local runtime is blocked before authentication because the local PostgreSQL database lacks the existing `system_reset_state` migration. No migration was run as part of this UI-only change; authenticated visual evidence remains explicitly unverified.
 - [x] Review `git diff --check`, the plan checklist, route/contracts, and the final diff; confirm no unrelated file is staged.
-- [ ] Commit the plan, implementation, and tests on `developement`; push the exact commit; observe applicable CI/deployment and report the exact revision and any live-auth visual boundary.
+- [x] Commit the plan, implementation, and tests on `developement`; implementation revision `1081a0a12bb9386f5630a98e08bf7bfd5b4eeb15` was pushed, CI run `36306776007` passed all eight jobs, and Railway run `36306995661` successfully deployed the tested revision to backend, frontend, and AI services. The public login endpoint returned HTTP 200 with the production security headers; authenticated route-level visual proof remains bounded by unavailable admin credentials/local runtime.
 
 ## 10. Verification matrix and acceptance criteria
 
@@ -258,6 +258,14 @@ Split tabs into URLs such as `/profile`, `/account`, `/schedule`. This improves 
 - Observability: existing API errors continue through route toasts; CI/Jest/build and deployed frontend status are the release signals.
 - Cleanup: remove only dead UI helpers/imports made obsolete by the redesign, notably synthetic dashboard pulse helpers and unused stat-card imports.
 - Unverified boundary: visual correctness behind an authenticated live admin session remains unverified until browser access is available. This does not weaken static, unit, build, CI, or contract evidence and must be reported distinctly.
+
+## 13. Release evidence
+
+- Implementation revision: `1081a0a12bb9386f5630a98e08bf7bfd5b4eeb15` on `origin/developement`.
+- GitHub CI: run `36306776007`, conclusion `success`; all eight jobs completed successfully, including frontend lint, typecheck, 907-test suite, production build, and production security-browser checks.
+- Railway deployment: run `36306995661`, conclusion `success`; logs prove backend, frontend, and AI jobs checked out and deployed the CI-tested implementation revision above.
+- Railway deployment IDs: backend `ebedc6ec-7ec9-41ba-9671-ea05d85b8dae`, frontend `087d1ada-b3cd-460f-b4fa-f09c285fbf5b`, AI service `5aa40061-bcaf-4490-ac1a-2880693ac53a`.
+- Public health boundary: `https://nexora-lms.com/login` returned HTTP 200 after deployment with CSP, HSTS, frame-deny, and content-type security headers. Authenticated admin-route visual evidence was not claimed.
 
 ## 12. Self-review result
 
