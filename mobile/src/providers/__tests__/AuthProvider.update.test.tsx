@@ -15,6 +15,7 @@ jest.mock("../../api/client", () => ({
   getAccessToken: jest.fn(),
   getRefreshToken: jest.fn(),
   refreshSession: jest.fn(),
+  subscribeAuthSessionExpired: jest.fn(() => jest.fn()),
 }));
 jest.mock("../../api/services/auth", () => ({
   authApi: { getCurrentUser: jest.fn() },

@@ -3,7 +3,11 @@ import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { AuthProvider, useAuth } from "../AuthProvider";
 import { authApi } from "../../api/services/auth";
-import { clearAuthSession, refreshSession } from "../../api/client";
+import {
+  clearAuthSession,
+  refreshSession,
+  subscribeAuthSessionExpired,
+} from "../../api/client";
 import { readSessionSnapshot, writeSessionSnapshot } from "../../api/storage";
 import type { AuthSession } from "../../types/auth";
 
@@ -28,6 +32,7 @@ jest.mock("../../api/client", () => ({
   refreshSession: jest.fn(),
   getAccessToken: jest.fn(),
   getRefreshToken: jest.fn(),
+  subscribeAuthSessionExpired: jest.fn(),
 }));
 jest.mock("../../api/storage", () => ({
   readSessionSnapshot: jest.fn(),
@@ -49,6 +54,7 @@ const session = (role: string, verified: boolean): AuthSession => ({
 });
 let auth: ReturnType<typeof useAuth>;
 let renderer: { unmount: () => void };
+let sessionExpiredListener: (() => void) | undefined;
 function Probe() {
   auth = useAuth();
   return null;
@@ -64,7 +70,12 @@ async function mount() {
 }
 beforeEach(() => {
   jest.resetAllMocks();
+  sessionExpiredListener = undefined;
   jest.mocked(refreshSession).mockResolvedValue(null);
+  jest.mocked(subscribeAuthSessionExpired).mockImplementation((listener) => {
+    sessionExpiredListener = listener;
+    return jest.fn();
+  });
 });
 afterEach(() => {
   if (renderer) act(() => renderer.unmount());
@@ -112,6 +123,25 @@ it("best-effort revokes the current push installation before logout clears auth"
   expect(offlineStore.workspaceSnapshotStore.purgeUser).toHaveBeenCalledWith(
     "user-1",
   );
+});
+
+it("clears the rendered session when refresh credentials expire", async () => {
+  await mount();
+  jest.mocked(authApi.login).mockResolvedValue(session("student", true));
+  await act(async () => {
+    await auth.login("student@example.invalid", "password");
+  });
+  expect(auth.isAuthenticated).toBe(true);
+  expect(subscribeAuthSessionExpired).toHaveBeenCalledTimes(1);
+
+  await act(async () => {
+    sessionExpiredListener?.();
+    await Promise.resolve();
+  });
+
+  expect(auth.isAuthenticated).toBe(false);
+  expect(auth.user).toBeNull();
+  expect(writeSessionSnapshot).toHaveBeenLastCalledWith(null);
 });
 
 it("purges the previous account snapshot when a different account signs in", async () => {

@@ -24,6 +24,7 @@ let refreshPromise: Promise<{
   accessToken: string;
   refreshToken: string;
 } | null> | null = null;
+const authSessionExpiredListeners = new Set<() => void>();
 
 export function getAccessToken() {
   return accessToken;
@@ -31,6 +32,13 @@ export function getAccessToken() {
 
 export function getRefreshToken() {
   return refreshToken;
+}
+
+export function subscribeAuthSessionExpired(listener: () => void) {
+  authSessionExpiredListeners.add(listener);
+  return () => {
+    authSessionExpiredListeners.delete(listener);
+  };
 }
 
 async function hydrateTokens() {
@@ -144,14 +152,8 @@ function createApiClient(): AxiosInstance {
         originalRequest._retry = true;
         const failedToken = accessToken;
 
-        if (!refreshPromise) {
-          refreshPromise = refreshSession().finally(() => {
-            refreshPromise = null;
-          });
-        }
-
         try {
-          const nextTokens = await refreshPromise;
+          const nextTokens = await refreshSession();
 
           if (nextTokens?.accessToken) {
             originalRequest.headers.Authorization = `Bearer ${nextTokens.accessToken}`;
@@ -160,12 +162,12 @@ function createApiClient(): AxiosInstance {
 
           // Only clear if no concurrent refresh set a newer token
           if (!accessToken || accessToken === failedToken) {
-            await clearAuthSession();
+            await expireAuthSession();
           }
         } catch (error) {
           if (isAppUpdateError(error)) throw error;
           if (!accessToken || accessToken === failedToken) {
-            await clearAuthSession();
+            await expireAuthSession();
           }
         }
       }
@@ -177,7 +179,7 @@ function createApiClient(): AxiosInstance {
   return client;
 }
 
-export async function refreshSession() {
+async function performRefreshSession() {
   await hydrateTokens();
   if (!refreshToken) {
     return null;
@@ -207,14 +209,38 @@ export async function refreshSession() {
     if (isAppUpdateError(err)) throw err;
     // Only wipe session on definitive auth rejection, not transient errors
     if (err?.response?.status === 401 || err?.response?.status === 403) {
-      await clearAuthSession();
+      await expireAuthSession();
     }
     return null;
   }
+}
+
+export function refreshSession() {
+  if (!refreshPromise) {
+    refreshPromise = performRefreshSession().finally(() => {
+      refreshPromise = null;
+    });
+  }
+
+  return refreshPromise;
 }
 
 export async function clearAuthSession() {
   accessToken = null;
   refreshToken = null;
   await clearSecureSession();
+}
+
+async function expireAuthSession() {
+  const hadActiveCredentials = Boolean(accessToken || refreshToken);
+  await clearAuthSession();
+  if (!hadActiveCredentials) return;
+
+  for (const listener of authSessionExpiredListeners) {
+    try {
+      listener();
+    } catch {
+      // Session cleanup must continue even if a UI listener has unmounted.
+    }
+  }
 }

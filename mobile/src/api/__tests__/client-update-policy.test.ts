@@ -4,6 +4,8 @@ import {
   publicClient,
   persistAuthTokens,
   getAccessToken,
+  refreshSession,
+  subscribeAuthSessionExpired,
 } from "../client";
 import {
   setAndroidAdmission,
@@ -79,6 +81,83 @@ describe("mobile client update contract", () => {
         jest.requireMock("../storage").clearSecureSession,
       ).not.toHaveBeenCalled();
     } finally {
+      publicClient.defaults.adapter = originalAdapter;
+    }
+  });
+
+  it("shares one refresh rotation across simultaneous direct callers", async () => {
+    const originalAdapter = publicClient.defaults.adapter;
+    let releaseRefresh!: () => void;
+    const refreshGate = new Promise<void>((resolve) => {
+      releaseRefresh = resolve;
+    });
+    const adapter = jest.fn(async (config) => {
+      await refreshGate;
+      return {
+        data: {
+          data: {
+            accessToken: "next-access-token",
+            refreshToken: "next-refresh-token",
+          },
+        },
+        status: 201,
+        statusText: "Created",
+        headers: {},
+        config,
+      };
+    });
+    publicClient.defaults.adapter = adapter;
+
+    try {
+      const firstRefresh = refreshSession();
+      const secondRefresh = refreshSession();
+      await Promise.resolve();
+      releaseRefresh();
+
+      await expect(Promise.all([firstRefresh, secondRefresh])).resolves.toEqual([
+        {
+          accessToken: "next-access-token",
+          refreshToken: "next-refresh-token",
+        },
+        {
+          accessToken: "next-access-token",
+          refreshToken: "next-refresh-token",
+        },
+      ]);
+      expect(adapter).toHaveBeenCalledTimes(1);
+    } finally {
+      publicClient.defaults.adapter = originalAdapter;
+    }
+  });
+
+  it("notifies the auth root when refresh credentials are rejected", async () => {
+    const originalAdapter = publicClient.defaults.adapter;
+    const onSessionExpired = jest.fn();
+    const unsubscribe = subscribeAuthSessionExpired(onSessionExpired);
+    publicClient.defaults.adapter = async (config) => {
+      throw new AxiosError(
+        "Refresh token rejected",
+        "ERR_BAD_REQUEST",
+        config,
+        undefined,
+        {
+          config,
+          status: 401,
+          statusText: "Unauthorized",
+          headers: {},
+          data: { message: "Invalid refresh token" },
+        },
+      );
+    };
+
+    try {
+      await expect(refreshSession()).resolves.toBeNull();
+      expect(onSessionExpired).toHaveBeenCalledTimes(1);
+      expect(
+        jest.requireMock("../storage").clearSecureSession,
+      ).toHaveBeenCalledTimes(1);
+    } finally {
+      unsubscribe();
       publicClient.defaults.adapter = originalAdapter;
     }
   });

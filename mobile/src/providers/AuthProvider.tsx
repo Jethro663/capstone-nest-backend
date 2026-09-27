@@ -15,6 +15,7 @@ import {
   getAccessToken,
   getRefreshToken,
   refreshSession,
+  subscribeAuthSessionExpired,
 } from "../api/client";
 import { readSessionSnapshot, writeSessionSnapshot } from "../api/storage";
 import type { AuthSession } from "../types/auth";
@@ -75,6 +76,15 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setSession(next);
     await writeSessionSnapshot(next);
   }, []);
+
+  useEffect(
+    () =>
+      subscribeAuthSessionExpired(() => {
+        setSession(null);
+        void persistSession(null);
+      }),
+    [persistSession],
+  );
 
   const updateLocalUser = useCallback(
     async (user: User | null) => {

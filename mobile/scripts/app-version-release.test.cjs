@@ -217,10 +217,10 @@ test("mobile release identity keeps iOS build number aligned with Android versio
     "utf8",
   );
 
-  assert.equal(appJson.expo.version, "0.1.51");
-  assert.equal(appJson.expo.android.versionCode, 52);
-  assert.match(buildGradle, /\bversionCode\s+52\b/);
-  assert.match(buildGradle, /\bversionName\s+["']0\.1\.51["']/);
+  assert.equal(appJson.expo.version, "0.1.52");
+  assert.equal(appJson.expo.android.versionCode, 53);
+  assert.match(buildGradle, /\bversionCode\s+53\b/);
+  assert.match(buildGradle, /\bversionName\s+["']0\.1\.52["']/);
   assert.equal(
     appJson.expo.ios.buildNumber,
     String(appJson.expo.android.versionCode),
