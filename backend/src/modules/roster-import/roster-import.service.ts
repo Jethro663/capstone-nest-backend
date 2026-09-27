@@ -65,6 +65,7 @@ interface PreparedAccountCredential {
 @Injectable()
 export class RosterImportService {
   private static readonly PASSWORD_HASH_ROUNDS = 10;
+  private static readonly BYPASS_DEFAULT_PASSWORD = 'Student123!';
 
   constructor(
     private readonly databaseService: DatabaseService,
@@ -419,10 +420,14 @@ export class RosterImportService {
     const preparedCredentials: PreparedAccountCredential[] = [];
     for (const row of dto.pendingRows) {
       let temporaryPassword: string;
-      do {
-        temporaryPassword = PasswordGenerator.generate();
-      } while (issuedPasswords.has(temporaryPassword));
-      issuedPasswords.add(temporaryPassword);
+      if (dto.skipVerification === true) {
+        temporaryPassword = RosterImportService.BYPASS_DEFAULT_PASSWORD;
+      } else {
+        do {
+          temporaryPassword = PasswordGenerator.generate();
+        } while (issuedPasswords.has(temporaryPassword));
+        issuedPasswords.add(temporaryPassword);
+      }
       preparedCredentials.push({
         email: row.email.toLowerCase(),
         temporaryPassword,
@@ -847,6 +852,9 @@ export class RosterImportService {
         enrolledStudentIds: enrolledUserIds,
         createdStudentIds: pendingRosterIds,
         activationMode,
+        initialCredentialMode: activatesNewAccounts
+          ? 'shared_default'
+          : 'generated_unique',
         alreadyEnrolledSkipped,
         ...(maintenanceAccess ? { maintenanceAccess } : {}),
       },

@@ -3,6 +3,7 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
 import { RosterImportService } from './roster-import.service';
 import { DatabaseService } from '../../database/database.service';
 import { AdminMaintenanceService } from '../admin-maintenance/admin-maintenance.service';
@@ -662,11 +663,33 @@ describe('commitRoster', () => {
               (event as { generatedPassword: string }).generatedPassword,
           ),
         ).size,
-      ).toBe(2);
+      ).toBe(skipVerification ? 1 : 2);
+      const issuedOnboardingPasswords = onboardingCredentials.map(
+        ({ event }) =>
+          (event as { generatedPassword: string }).generatedPassword,
+      );
+      if (skipVerification) {
+        expect(issuedOnboardingPasswords).toEqual([
+          'Student123!',
+          'Student123!',
+        ]);
+        for (const account of insertedAccounts as Array<{
+          password: string;
+        }>) {
+          await expect(
+            bcrypt.compare('Student123!', account.password),
+          ).resolves.toBe(true);
+        }
+      } else {
+        expect(issuedOnboardingPasswords).not.toContain('Student123!');
+      }
       expect(mockAuditService.log).toHaveBeenCalledWith(
         expect.objectContaining({
           metadata: expect.objectContaining({
             activationMode: skipVerification ? 'admin_attested' : 'email_otp',
+            initialCredentialMode: skipVerification
+              ? 'shared_default'
+              : 'generated_unique',
           }),
         }),
       );
