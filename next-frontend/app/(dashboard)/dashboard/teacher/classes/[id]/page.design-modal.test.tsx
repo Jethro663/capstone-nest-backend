@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import TeacherClassDetailPage from './page';
+import TeacherClassDetailPage, { TeacherDiscussionAttachmentGallery } from './page';
 import { announcementService } from '@/services/announcement-service';
 import { assessmentService } from '@/services/assessment-service';
 import { classRecordService } from '@/services/class-record-service';
@@ -91,6 +91,7 @@ jest.mock('@/services/class-service', () => ({
 jest.mock('@/services/discussion-board-service', () => ({
   discussionBoardService: {
     listThreads: jest.fn(),
+    loadAttachment: jest.fn(),
   },
 }));
 
@@ -148,6 +149,9 @@ describe('TeacherClassDetailPage design modal', () => {
     jest.clearAllMocks();
     URL.createObjectURL = jest.fn(() => 'blob:module-cover-preview');
     URL.revokeObjectURL = jest.fn();
+    mockedDiscussionBoardService.loadAttachment.mockResolvedValue(
+      new Blob(['image-bytes'], { type: 'image/png' }),
+    );
 
     mockedClassService.getById.mockResolvedValue({
       success: true,
@@ -250,6 +254,37 @@ describe('TeacherClassDetailPage design modal', () => {
         },
       },
     });
+  });
+
+  it('loads teacher discussion images through the authenticated attachment transport', async () => {
+    const sourceUrl =
+      `/api/classes/${classId}/discussion-threads/thread-1/attachments/attachment-1/inline`;
+
+    render(
+      <TeacherDiscussionAttachmentGallery
+        attachments={[
+          {
+            id: 'attachment-1',
+            type: 'image',
+            fileId: 'file-1',
+            originalName: 'teacher-screenshot.png',
+            mimeType: 'image/png',
+            sizeBytes: 24,
+            inlineUrl: sourceUrl,
+          },
+        ]}
+      />,
+    );
+
+    expect(
+      await screen.findByRole('img', { name: 'teacher-screenshot.png' }),
+    ).toHaveAttribute('src', 'blob:module-cover-preview');
+    expect(mockedDiscussionBoardService.loadAttachment).toHaveBeenCalledWith(
+      sourceUrl,
+    );
+    expect(
+      screen.getByRole('link', { name: /teacher-screenshot\.png/i }),
+    ).toHaveAttribute('href', 'blob:module-cover-preview');
   });
 
   it('shows image controls only in image mode and uploads custom covers only on save', async () => {

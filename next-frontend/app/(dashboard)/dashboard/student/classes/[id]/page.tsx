@@ -55,6 +55,7 @@ import { DashboardStatePanel } from "@/components/layout/DashboardStatePanel";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { AuthenticatedDiscussionImageLink } from "@/components/discussion/AuthenticatedDiscussionImageLink";
 import "./student-class-detail.css";
 import type { Assessment, AssessmentAttempt } from "@/types/assessment";
 import type { Announcement } from "@/types/announcement";
@@ -1138,37 +1139,39 @@ function DiscussionAttachmentList({
             ? attachment.linkLabel || attachment.linkUrl || "Shared link"
             : attachment.originalName || "Attachment";
 
+        if (isDiscussionImageAttachment(attachment) && href !== "#") {
+          return (
+            <AuthenticatedDiscussionImageLink
+              key={attachment.id}
+              sourceUrl={href}
+              alt={label}
+              sizes={compact ? "96px" : "(max-width: 768px) 100vw, 220px"}
+              className="student-discussion-attachment student-discussion-attachment--image"
+              previewClassName="student-discussion-attachment__preview"
+            >
+              <span className="student-discussion-attachment__copy">
+                <strong>{label}</strong>
+                <small>{formatAttachmentMeta(attachment)}</small>
+              </span>
+            </AuthenticatedDiscussionImageLink>
+          );
+        }
+
         return (
           <a
             key={attachment.id}
             href={href}
             target="_blank"
             rel="noreferrer"
-            className={`student-discussion-attachment${
-              isDiscussionImageAttachment(attachment)
-                ? " student-discussion-attachment--image"
-                : ""
-            }`}
+            className="student-discussion-attachment"
           >
-            {isDiscussionImageAttachment(attachment) && href !== "#" ? (
-              <div className="student-discussion-attachment__preview">
-                <Image
-                  src={href}
-                  alt={label}
-                  fill
-                  unoptimized
-                  sizes={compact ? "96px" : "(max-width: 768px) 100vw, 220px"}
-                />
-              </div>
-            ) : (
-              <span className="student-discussion-attachment__icon">
-                {attachment.type === "link" ? (
-                  <ExternalLink className="h-4 w-4" />
-                ) : (
-                  <Paperclip className="h-4 w-4" />
-                )}
-              </span>
-            )}
+            <span className="student-discussion-attachment__icon">
+              {attachment.type === "link" ? (
+                <ExternalLink className="h-4 w-4" />
+              ) : (
+                <Paperclip className="h-4 w-4" />
+              )}
+            </span>
             <span className="student-discussion-attachment__copy">
               <strong>{label}</strong>
               <small>{formatAttachmentMeta(attachment)}</small>

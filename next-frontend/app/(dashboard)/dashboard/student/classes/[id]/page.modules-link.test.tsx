@@ -106,6 +106,7 @@ jest.mock("@/services/discussion-board-service", () => ({
     deleteComment: jest.fn(),
     setReaction: jest.fn(),
     removeReaction: jest.fn(),
+    loadAttachment: jest.fn(),
   },
 }));
 
@@ -131,6 +132,14 @@ const mockedDiscussionBoardService = discussionBoardService as jest.Mocked<
 describe("StudentClassDetailPage module links", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: jest.fn(() => "blob:discussion-image"),
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: jest.fn(),
+    });
     currentView = "modules";
     notificationSubscriber = null;
     subscribeMock.mockImplementation((handler) => {
@@ -303,6 +312,9 @@ describe("StudentClassDetailPage module links", () => {
         },
       },
     } as Awaited<ReturnType<typeof discussionBoardService.removeReaction>>);
+    mockedDiscussionBoardService.loadAttachment.mockResolvedValue(
+      new Blob(["image-bytes"], { type: "image/png" }),
+    );
   });
 
   it("routes module card open link to student module detail page", async () => {
@@ -824,7 +836,8 @@ describe("StudentClassDetailPage module links", () => {
                 type: "image",
                 originalName: "experiment.jpg",
                 mimeType: "image/jpeg",
-                inlineUrl: "/api/files/experiment.jpg",
+                inlineUrl:
+                  "/api/classes/class-1/discussion-threads/thread-1/attachments/thread-file-1/inline",
               },
             ],
           },
@@ -866,7 +879,8 @@ describe("StudentClassDetailPage module links", () => {
             type: "image",
             originalName: "experiment.jpg",
             mimeType: "image/jpeg",
-            inlineUrl: "/api/files/experiment.jpg",
+            inlineUrl:
+              "/api/classes/class-1/discussion-threads/thread-1/attachments/thread-file-1/inline",
           },
         ],
         comments: [
@@ -898,7 +912,8 @@ describe("StudentClassDetailPage module links", () => {
                 type: "image",
                 originalName: "notes.png",
                 mimeType: "image/png",
-                inlineUrl: "/api/files/notes.png",
+                inlineUrl:
+                  "/api/classes/class-1/discussion-threads/thread-1/comments/comment-1/attachments/comment-file-1/inline",
               },
             ],
           },
@@ -916,6 +931,22 @@ describe("StudentClassDetailPage module links", () => {
     expect(await screen.findByText("Post a reply")).toBeInTheDocument();
     expect(screen.getAllByText("Jamie Cruz").length).toBeGreaterThan(0);
     expect(screen.getByText("notes.png")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(mockedDiscussionBoardService.loadAttachment).toHaveBeenCalledWith(
+        "/api/classes/class-1/discussion-threads/thread-1/attachments/thread-file-1/inline",
+      );
+      expect(mockedDiscussionBoardService.loadAttachment).toHaveBeenCalledWith(
+        "/api/classes/class-1/discussion-threads/thread-1/comments/comment-1/attachments/comment-file-1/inline",
+      );
+    });
+    expect(screen.getAllByRole("img", { name: "experiment.jpg" })[0]).toHaveAttribute(
+      "src",
+      "blob:discussion-image",
+    );
+    expect(screen.getByRole("img", { name: "notes.png" })).toHaveAttribute(
+      "src",
+      "blob:discussion-image",
+    );
     expect(
       screen.queryByPlaceholderText("Write your comment..."),
     ).not.toBeInTheDocument();

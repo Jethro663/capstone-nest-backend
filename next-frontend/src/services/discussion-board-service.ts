@@ -17,6 +17,21 @@ export interface DiscussionThreadsQuery {
   limit?: number;
 }
 
+const DISCUSSION_ATTACHMENT_ROUTE =
+  /^\/classes\/[^/?#]+\/discussion-threads\/[^/?#]+\/(?:attachments\/[^/?#]+|comments\/[^/?#]+\/attachments\/[^/?#]+)\/(?:inline|download)$/;
+
+function normalizeDiscussionAttachmentUrl(sourceUrl: string): string {
+  const normalizedUrl = sourceUrl.startsWith('/api/')
+    ? sourceUrl.slice('/api'.length)
+    : sourceUrl;
+
+  if (!DISCUSSION_ATTACHMENT_ROUTE.test(normalizedUrl)) {
+    throw new Error('Invalid discussion attachment URL.');
+  }
+
+  return normalizedUrl;
+}
+
 export const discussionBoardService = {
   async listThreads(
     classId: string,
@@ -200,6 +215,12 @@ export const discussionBoardService = {
       formData,
       { headers: { 'Content-Type': 'multipart/form-data' } },
     );
+    return data;
+  },
+
+  async loadAttachment(sourceUrl: string): Promise<Blob> {
+    const normalizedUrl = normalizeDiscussionAttachmentUrl(sourceUrl);
+    const { data } = await api.get(normalizedUrl, { responseType: 'blob' });
     return data;
   },
 

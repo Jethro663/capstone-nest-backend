@@ -83,6 +83,7 @@ import {
 } from "@/components/shared/ConfirmationDialog";
 import { AiOutageNotice } from "@/components/student/AiOutageNotice";
 import { AiDraftJobsPanel } from "@/components/teacher/assessment/AiDraftJobsPanel";
+import { AuthenticatedDiscussionImageLink } from "@/components/discussion/AuthenticatedDiscussionImageLink";
 import { useTeacherClassRecord } from "@/hooks/use-teacher-class-record";
 import { useAiAvailability } from "@/hooks/use-ai-availability";
 import { useAuth } from "@/providers/AuthProvider";
@@ -1315,7 +1316,7 @@ function TeacherDiscussionReactionSummary({
   );
 }
 
-function TeacherDiscussionAttachmentGallery({
+export function TeacherDiscussionAttachmentGallery({
   attachments,
 }: {
   attachments: DiscussionThreadSummary["attachments"];
@@ -1326,6 +1327,23 @@ function TeacherDiscussionAttachmentGallery({
     <div className="teacher-discussion-media-grid">
       {attachments.map((attachment) => {
         const href = getDiscussionAttachmentHref(attachment);
+        const label =
+          attachment.originalName || attachment.linkLabel || "Attachment";
+
+        if (isDiscussionImageAttachment(attachment) && href !== "#") {
+          return (
+            <AuthenticatedDiscussionImageLink
+              key={attachment.id}
+              sourceUrl={href}
+              alt={attachment.originalName || "Thread attachment"}
+              sizes="160px"
+              className="teacher-discussion-media-card is-image"
+              previewClassName="teacher-discussion-media-card__image"
+            >
+              <span>{label}</span>
+            </AuthenticatedDiscussionImageLink>
+          );
+        }
 
         return (
           <a
@@ -1333,26 +1351,9 @@ function TeacherDiscussionAttachmentGallery({
             href={href}
             target="_blank"
             rel="noreferrer"
-            className={`teacher-discussion-media-card${
-              isDiscussionImageAttachment(attachment) && href !== "#"
-                ? " is-image"
-                : ""
-            }`}
+            className="teacher-discussion-media-card"
           >
-            {isDiscussionImageAttachment(attachment) && href !== "#" ? (
-              <div className="teacher-discussion-media-card__image">
-                <Image
-                  src={href}
-                  alt={attachment.originalName || "Thread attachment"}
-                  fill
-                  unoptimized
-                  sizes="160px"
-                />
-              </div>
-            ) : null}
-            <span>
-              {attachment.originalName || attachment.linkLabel || "Attachment"}
-            </span>
+            <span>{label}</span>
           </a>
         );
       })}

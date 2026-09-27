@@ -91,6 +91,31 @@ describe('discussionBoardService', () => {
     );
   });
 
+  it('loads a protected discussion attachment as a blob through the authenticated API client', async () => {
+    const blob = new Blob(['image-bytes'], { type: 'image/png' });
+    mockedApi.get.mockResolvedValue({ data: blob });
+
+    const result = await discussionBoardService.loadAttachment(
+      '/api/classes/class-1/discussion-threads/thread-1/attachments/attachment-1/inline',
+    );
+
+    expect(mockedApi.get).toHaveBeenCalledWith(
+      '/classes/class-1/discussion-threads/thread-1/attachments/attachment-1/inline',
+      { responseType: 'blob' },
+    );
+    expect(result).toBe(blob);
+  });
+
+  it('rejects attachment URLs outside the same-origin discussion route', async () => {
+    await expect(
+      discussionBoardService.loadAttachment(
+        'https://malicious.example/classes/class-1/discussion-threads/thread-1/attachments/attachment-1/inline',
+      ),
+    ).rejects.toThrow('Invalid discussion attachment URL.');
+
+    expect(mockedApi.get).not.toHaveBeenCalled();
+  });
+
   it('resolves inline preview URL from the thread attachment list', () => {
     const result = discussionBoardService.previewUrl(
       {
