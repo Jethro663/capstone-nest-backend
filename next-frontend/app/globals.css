@@ -299,6 +299,8 @@
 }
 
 :root {
+  --student-sidebar-text: #b8c7db;
+  --student-sidebar-text-hover: #f4f7fb;
   --color-background: #ffffff;
   --color-foreground: #111827;
   --color-primary: #dc2626;
@@ -8268,7 +8270,7 @@ body {
 
 .student-sidebar__item {
   border-radius: 0.78rem;
-  color: #b8c7db;
+  color: var(--student-sidebar-text);
   gap: 0.64rem;
   padding: 0.64rem 0.72rem;
   border: 1px solid transparent;
@@ -8281,7 +8283,7 @@ body {
 
 .student-sidebar__item:hover {
   background: color-mix(in srgb, var(--student-white) 6%, transparent);
-  color: #f4f7fb;
+  color: var(--student-sidebar-text-hover);
 }
 
 .student-sidebar__item--active {

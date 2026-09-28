@@ -166,7 +166,9 @@ describe('Teacher Section Roster Page', () => {
       expect(mockedSectionService.removeStudent).toHaveBeenCalledTimes(2);
     });
 
-    expect(screen.queryByText('Jamie Cruz')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText('Jamie Cruz')).not.toBeInTheDocument();
+    });
     expect(screen.getByText('John Rivera')).toBeInTheDocument();
     expect(screen.getByText('1 selected')).toBeInTheDocument();
   });

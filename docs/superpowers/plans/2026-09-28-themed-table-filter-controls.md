@@ -316,7 +316,7 @@ git commit -m "refactor: theme teacher table filters"
 - Consumes: final implementation and established release workflows.
 - Produces: a pushed exact SHA with CI, Railway, and live-bundle evidence.
 
-- [ ] **Step 1: Run focused and static checks**
+- [x] **Step 1: Run focused and static checks**
 
 ```bash
 cd next-frontend
@@ -326,7 +326,7 @@ npm run lint
 npm run typecheck
 ```
 
-- [ ] **Step 2: Run complete frontend verification**
+- [x] **Step 2: Run complete frontend verification**
 
 ```bash
 cd next-frontend
@@ -336,7 +336,7 @@ npm run build
 
 Expected: zero test/type/palette failures, lint within the repository warning ceiling, and a successful production build.
 
-- [ ] **Step 3: Verify browser behavior**
+- [x] **Step 3: Verify browser behavior**
 
 Inspect at least one student, teacher, and admin filter at desktop and narrow widths. Confirm open/select/focus behavior and unchanged filtered results. If authenticated roles are unavailable, record that boundary and do not claim authenticated production visuals.
 
