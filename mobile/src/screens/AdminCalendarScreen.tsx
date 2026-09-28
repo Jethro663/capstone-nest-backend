@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
 import { AppAlert as Alert } from "../components/ui/AppAlert";
 import DateTimePicker, {
@@ -8,6 +8,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import { schoolEventsApi } from "../api/services/school-events";
 import { toAppError } from "../api/http";
+import { useCurrentAcademicState } from "../hooks/useCurrentAcademicState";
 import type { MainTabParamList } from "../navigation/types";
 import type { SchoolEvent, SchoolEventType } from "../types/school-event";
 import {
@@ -30,15 +31,14 @@ export function AdminCalendarScreen(_props: Props) {
     queryKey: ["admin-school-events"],
     queryFn: () => schoolEventsApi.getAll(),
   });
+  const academicState = useCurrentAcademicState();
   const [editing, setEditing] = useState<SchoolEvent | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [eventType, setEventType] = useState<SchoolEventType>("school_event");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState("");
-  const [schoolYear, setSchoolYear] = useState(
-    `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`,
-  );
+  const [schoolYear, setSchoolYear] = useState("");
   const [startsAt, setStartsAt] = useState(
     () => new Date(Date.now() + 86400000),
   );
@@ -46,6 +46,10 @@ export function AdminCalendarScreen(_props: Props) {
   const [picker, setPicker] = useState<Picker>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    const officialYear = academicState.data?.schoolYear;
+    if (!editing && !schoolYear && officialYear) setSchoolYear(officialYear);
+  }, [academicState.data?.schoolYear, editing, schoolYear]);
   const reset = () => {
     setEditing(null);
     setShowForm(false);
@@ -53,6 +57,7 @@ export function AdminCalendarScreen(_props: Props) {
     setTitle("");
     setDescription("");
     setLocation("");
+    setSchoolYear(academicState.data?.schoolYear ?? "");
     setStartsAt(new Date(Date.now() + 86400000));
     setEndsAt(new Date(Date.now() + 90000000));
     setPicker(null);
@@ -155,6 +160,32 @@ export function AdminCalendarScreen(_props: Props) {
           tone="red"
         />
       ) : null}
+      {academicState.isError ? (
+        <View style={{ gap: 8 }}>
+          <AdminNotice
+            title="Academic state unavailable"
+            description="The official school year could not be loaded. Retry before creating an event, or enter an explicit planning year."
+            tone="red"
+          />
+          <AdminButton
+            label="Retry academic state"
+            onPress={() => void academicState.refetch()}
+          />
+        </View>
+      ) : null}
+      {events.isError ? (
+        <View style={{ gap: 8 }}>
+          <AdminNotice
+            title="Calendar entries unavailable"
+            description={toAppError(events.error).message}
+            tone="red"
+          />
+          <AdminButton
+            label="Retry calendar entries"
+            onPress={() => void events.refetch()}
+          />
+        </View>
+      ) : null}
       {showForm ? (
         <AdminSection
           title={editing ? "Edit event" : "Create event"}
@@ -238,7 +269,11 @@ export function AdminCalendarScreen(_props: Props) {
       ) : null}
       <AdminSection
         title="Events"
-        subtitle={`${events.data?.length ?? 0} scheduled records`}
+        subtitle={
+          events.isError
+            ? "Calendar entries could not be loaded"
+            : `${events.data?.length ?? 0} scheduled records`
+        }
       >
         {(events.data ?? []).map((event) => (
           <View

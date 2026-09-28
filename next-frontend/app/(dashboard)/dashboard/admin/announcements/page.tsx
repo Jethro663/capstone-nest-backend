@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { Pin } from 'lucide-react';
 import { announcementService } from '@/services/announcement-service';
@@ -49,29 +49,48 @@ export default function AdminAnnouncementsPage() {
   const [selectedClassId, setSelectedClassId] = useState('');
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
+  const [classesError, setClassesError] = useState(false);
+  const [announcementsError, setAnnouncementsError] = useState(false);
+  const announcementsClassIdRef = useRef<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [confirmation, setConfirmation] = useState<ConfirmationDialogConfig | null>(null);
 
-  useEffect(() => {
-    const fetchClasses = async () => {
-      try {
-        const res = await classService.getAll();
-        setClasses(res.data?.data || []);
-      } catch {}
+  const fetchClasses = useCallback(async () => {
+    setLoading(true);
+    setClassesError(false);
+    try {
+      const res = await classService.getAll();
+      setClasses(res.data?.data || []);
+    } catch {
+      setClassesError(true);
+    } finally {
       setLoading(false);
-    };
-    fetchClasses();
+    }
   }, []);
 
+  useEffect(() => {
+    void fetchClasses();
+  }, [fetchClasses]);
+
   const fetchAnnouncements = useCallback(async () => {
-    if (!selectedClassId) { setAnnouncements([]); return; }
+    if (!selectedClassId) {
+      announcementsClassIdRef.current = null;
+      setAnnouncements([]);
+      setAnnouncementsError(false);
+      return;
+    }
+    if (announcementsClassIdRef.current !== selectedClassId) {
+      setAnnouncements([]);
+    }
+    setAnnouncementsError(false);
     try {
       const res = await announcementService.getByClass(selectedClassId);
       setAnnouncements(Array.isArray(res.data) ? res.data : []);
+      announcementsClassIdRef.current = selectedClassId;
     } catch {
-      setAnnouncements([]);
+      setAnnouncementsError(true);
     }
   }, [selectedClassId]);
 
@@ -152,19 +171,34 @@ export default function AdminAnnouncementsPage() {
       )}
       meta={(
         <>
-          <AnnouncementMeta label="Classes available" value={String(classes.length)} />
+          <AnnouncementMeta label="Classes available" value={classesError ? 'Unavailable' : String(classes.length)} />
           <AnnouncementMeta label="Selected class" value={selectedClass?.subjectName ?? 'None'} />
-          <AnnouncementMeta label="Visible posts" value={String(announcements.length)} />
+          <AnnouncementMeta label="Visible posts" value={announcementsError ? 'Unavailable' : String(announcements.length)} />
           <AnnouncementMeta label="Pinned posts" value={String(announcements.filter((announcement) => announcement.isPinned).length)} />
         </>
       )}
     >
       <AdminSectionCard title="Admin Bulletin Board" description="Announcements now read like a cleaner bulletin surface instead of a plain list of cards.">
-        {!selectedClassId ? (
+        {classesError ? (
+          <AdminEmptyState
+            title="Class list unavailable"
+            description="The class list could not be loaded. Retry before selecting a bulletin."
+            action={<Button className="admin-button-outline rounded-xl px-4 font-black" variant="outline" onClick={() => void fetchClasses()}>Retry class list</Button>}
+          />
+        ) : !selectedClassId ? (
           <AdminEmptyState title="Select a class to begin" description="Choose a class above to load its announcements and open the posting dialog." />
-        ) : announcements.length === 0 ? (
+        ) : null}
+        {selectedClassId && announcementsError ? (
+          <AdminEmptyState
+            title="Announcements unavailable"
+            description="The bulletin could not be refreshed. Previously loaded posts remain visible."
+            action={<Button className="admin-button-outline rounded-xl px-4 font-black" variant="outline" onClick={() => void fetchAnnouncements()}>Retry announcements</Button>}
+          />
+        ) : null}
+        {selectedClassId && !announcementsError && announcements.length === 0 ? (
           <AdminEmptyState title="No announcements for this class yet" description="Create the first post and it will appear here in the upgraded bulletin layout." action={<Button className="admin-button-solid rounded-xl px-4 font-black" onClick={() => setShowCreate(true)}>Create Announcement</Button>} />
-        ) : (
+        ) : null}
+        {selectedClassId && announcements.length > 0 ? (
           <div className="space-y-4">
             {announcements.map((ann) => (
               <div key={ann.id} className="admin-grid-card">
@@ -195,7 +229,7 @@ export default function AdminAnnouncementsPage() {
               </div>
             ))}
           </div>
-        )}
+        ) : null}
       </AdminSectionCard>
 
       <Dialog open={showCreate} onOpenChange={setShowCreate}>

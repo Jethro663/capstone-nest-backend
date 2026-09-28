@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CalendarDays,
   ChevronLeft,
@@ -22,6 +22,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { classService } from '@/services/class-service';
 import { schoolEventService } from '@/services/school-event-service';
+import { academicStateService } from '@/services/academic-state-service';
 import { getCurrentToFutureSchoolYears } from '@/lib/school-year';
 import type { ClassItem } from '@/types/class';
 import type {
@@ -287,63 +288,64 @@ export default function AdminCalendarPage() {
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [events, setEvents] = useState<SchoolEvent[]>([]);
   const [selectedSchoolYear, setSelectedSchoolYear] = useState('');
+  const [initializationError, setInitializationError] = useState<
+    'academic' | 'classes' | null
+  >(null);
+  const [eventsError, setEventsError] = useState(false);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [form, setForm] = useState<SchoolEventFormState>(emptyFormState());
 
+  const initialize = useCallback(async () => {
+    setLoading(true);
+    setInitializationError(null);
+    const [academicResult, classResult] = await Promise.allSettled([
+      academicStateService.getCurrent(),
+      classService.getAll({ limit: 100 }),
+    ]);
+
+    if (academicResult.status === 'fulfilled') {
+      setSelectedSchoolYear(academicResult.value.data.schoolYear);
+    } else {
+      setInitializationError('academic');
+    }
+
+    if (classResult.status === 'fulfilled') {
+      setClasses(classResult.value.data?.data || []);
+    } else {
+      setClasses([]);
+      setInitializationError((current) => current ?? 'classes');
+    }
+    setLoading(false);
+  }, []);
+
   useEffect(() => {
     let active = true;
-
-    const initialize = async () => {
-      try {
-        setLoading(true);
-        let activeSchoolYear = '';
-        try {
-          const activeRes = await fetch('/api/academic-state/active');
-          if (activeRes.ok) {
-            const activeJson = await activeRes.json();
-            if (activeJson.data?.schoolYear) {
-              activeSchoolYear = activeJson.data.schoolYear;
-            }
-          }
-        } catch {}
-
-        const classResponse = await classService.getAll({ limit: 100 });
-        if (!active) return;
-        const classRows = classResponse.data?.data || [];
-        setClasses(classRows);
-
-        const currentYearDefault = getCurrentToFutureSchoolYears(1)[0];
-        setSelectedSchoolYear(activeSchoolYear || currentYearDefault);
-      } catch {
-        if (!active) return;
-        setClasses([]);
-        setSelectedSchoolYear(getCurrentToFutureSchoolYears(1)[0]);
-      } finally {
-        if (active) setLoading(false);
-      }
-    };
-
-    void initialize();
+    if (active) void initialize();
     return () => {
       active = false;
     };
-  }, []);
+  }, [initialize]);
 
   const schoolYearOptions = useMemo(() => {
     const fromData = buildSchoolYearList(classes, events);
-    return [...new Set([...fromData, ...getCurrentToFutureSchoolYears(4)])].sort((left, right) =>
-      right.localeCompare(left),
-    );
-  }, [classes, events]);
+    return [
+      ...new Set(
+        [selectedSchoolYear, ...fromData, ...getCurrentToFutureSchoolYears(4)].filter(
+          Boolean,
+        ),
+      ),
+    ].sort((left, right) => right.localeCompare(left));
+  }, [classes, events, selectedSchoolYear]);
 
   const refreshEvents = async (schoolYear: string) => {
     if (!schoolYear) return;
     setLoading(true);
+    setEventsError(false);
     try {
       const response = await schoolEventService.getAll({ schoolYear });
       setEvents(response.data || []);
     } catch {
-      setEvents([]);
+      setEventsError(true);
     } finally {
       setLoading(false);
     }
@@ -356,12 +358,13 @@ export default function AdminCalendarPage() {
     const fetchEvents = async () => {
       try {
         setLoading(true);
+        setEventsError(false);
         const response = await schoolEventService.getAll({ schoolYear: selectedSchoolYear });
         if (!active) return;
         setEvents(response.data || []);
       } catch {
         if (!active) return;
-        setEvents([]);
+        setEventsError(true);
       } finally {
         if (active) setLoading(false);
       }
@@ -517,6 +520,11 @@ export default function AdminCalendarPage() {
               value={selectedSchoolYear}
               onChange={(event) => setSelectedSchoolYear(event.target.value)}
             >
+              {!selectedSchoolYear ? (
+                <option value="" disabled>
+                  Select school year
+                </option>
+              ) : null}
               {schoolYearOptions.map((year) => (
                 <option key={year} value={year}>
                   {year}
@@ -544,6 +552,31 @@ export default function AdminCalendarPage() {
         </div>
       }
     >
+      {initializationError ? (
+        <div
+          role="alert"
+          className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-rose-900"
+        >
+          <strong className="block text-sm font-black">
+            {initializationError === 'academic'
+              ? 'Academic state unavailable'
+              : 'Class list unavailable'}
+          </strong>
+          <p className="mt-1 text-sm">
+            {initializationError === 'academic'
+              ? 'The official school year could not be loaded. No calendar year was assumed.'
+              : 'Classes could not be loaded. Existing calendar entries can still be reviewed.'}
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-3 rounded-xl"
+            onClick={() => void initialize()}
+          >
+            Retry calendar setup
+          </Button>
+        </div>
+      ) : null}
       <section className={styles.calendarHero} aria-label="Calendar overview">
         <div className={styles.heroCopy}>
           <span className={styles.heroKicker}>
@@ -717,12 +750,34 @@ export default function AdminCalendarPage() {
           description="Items in this school year are visible in teacher calendar views."
           className={styles.timelineCard}
         >
-          {events.length === 0 ? (
+          {eventsError ? (
+            <div
+              role="alert"
+              className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-rose-900"
+            >
+              <strong className="block text-sm font-black">
+                Calendar entries unavailable
+              </strong>
+              <p className="mt-1 text-sm">
+                The last loaded entries remain visible. Retry when the server is reachable.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-3 rounded-xl"
+                onClick={() => void refreshEvents(selectedSchoolYear)}
+              >
+                Retry calendar entries
+              </Button>
+            </div>
+          ) : null}
+          {!eventsError && selectedSchoolYear && events.length === 0 ? (
             <div className={styles.emptyState}>
               <CalendarDays className="h-5 w-5" />
               <p>No entries yet for {selectedSchoolYear}.</p>
             </div>
-          ) : (
+          ) : null}
+          {events.length > 0 ? (
             <div className={styles.eventList}>
               {events.map((event) => {
                 const isBreak = event.eventType === 'holiday_break';
@@ -776,7 +831,7 @@ export default function AdminCalendarPage() {
                 );
               })}
             </div>
-          )}
+          ) : null}
         </AdminSectionCard>
       </div>
     </AdminPageShell>

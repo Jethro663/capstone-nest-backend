@@ -1,5 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ForbiddenException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/pg-proxy';
@@ -13,6 +16,7 @@ import { PerformanceStatusChangedEvent } from '../../common/events';
 import { AuditService } from '../audit/audit.service';
 import { PerformanceSnapshotReadService } from './performance-snapshot-read.service';
 import { ClassRecordService } from '../class-record/class-record.service';
+import { PerformanceAnalysisQueueService } from './performance-analysis-queue.service';
 
 function buildMockDb() {
   const subqueryWhere = jest.fn((condition: any) => {
@@ -32,7 +36,7 @@ function buildMockDb() {
       assessmentAttempts: { findMany: jest.fn() },
       classRecords: { findMany: jest.fn() },
       studentConceptMastery: { findMany: jest.fn() },
-      aiGenerationOutputs: { findMany: jest.fn() },
+      aiGenerationOutputs: { findFirst: jest.fn(), findMany: jest.fn() },
       interventionCases: { findFirst: jest.fn(), findMany: jest.fn() },
       interventionAssignments: { findMany: jest.fn() },
       generatedGuidedAssessmentAttempts: { findMany: jest.fn() },
@@ -40,7 +44,7 @@ function buildMockDb() {
       performanceSnapshots: { findFirst: jest.fn(), findMany: jest.fn() },
       performanceLogs: { findMany: jest.fn() },
       aiGenerationJobs: { findFirst: jest.fn() },
-      enrollments: { findMany: jest.fn() },
+      enrollments: { findFirst: jest.fn(), findMany: jest.fn() },
       users: { findFirst: jest.fn() },
     },
     insert: jest.fn(),
@@ -102,6 +106,7 @@ describe('PerformanceService', () => {
   let auditService: { log: jest.Mock };
   let snapshotReadService: { findForStudentClasses: jest.Mock };
   let classRecordService: { getCanonicalStudentStanding: jest.Mock };
+  let analysisQueue: { enqueue: jest.Mock };
 
   beforeEach(async () => {
     db = buildMockDb();
@@ -113,6 +118,7 @@ describe('PerformanceService', () => {
     classRecordService = {
       getCanonicalStudentStanding: jest.fn(),
     };
+    analysisQueue = { enqueue: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -125,10 +131,87 @@ describe('PerformanceService', () => {
           useValue: snapshotReadService,
         },
         { provide: ClassRecordService, useValue: classRecordService },
+        { provide: PerformanceAnalysisQueueService, useValue: analysisQueue },
       ],
     }).compile();
 
     service = module.get<PerformanceService>(PerformanceService);
+  });
+
+  it('durably enqueues a newly persisted performance analysis job', async () => {
+    db.query.classes.findFirst.mockResolvedValue({
+      id: 'class-1',
+      teacherId: 'teacher-1',
+      isActive: true,
+      section: { id: 'section-1', isActive: true },
+    });
+    mockInsertReturning(db, [{ id: 'job-1' }]);
+
+    const result = await service.createPerformanceAnalysisJob(
+      'class-1',
+      {},
+      'teacher-1',
+      ['teacher'],
+    );
+
+    expect(analysisQueue.enqueue).toHaveBeenCalledWith({
+      jobId: 'job-1',
+      classId: 'class-1',
+      teacherId: 'teacher-1',
+    });
+    expect(result).toEqual(
+      expect.objectContaining({ jobId: 'job-1', status: 'pending' }),
+    );
+  });
+
+  it('marks the database job failed and rejects when durable enqueue fails', async () => {
+    db.query.classes.findFirst.mockResolvedValue({
+      id: 'class-1',
+      teacherId: 'teacher-1',
+      isActive: true,
+      section: { id: 'section-1', isActive: true },
+    });
+    mockInsertReturning(db, [{ id: 'job-1' }]);
+    const where = jest.fn().mockResolvedValue(undefined);
+    const set = jest.fn().mockReturnValue({ where });
+    db.update.mockReturnValueOnce({ set });
+    analysisQueue.enqueue.mockRejectedValueOnce(new Error('redis unavailable'));
+
+    await expect(
+      service.createPerformanceAnalysisJob('class-1', {}, 'teacher-1', [
+        'teacher',
+      ]),
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
+    expect(set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'failed',
+        errorMessage:
+          'Performance analysis could not be completed. Please try again.',
+      }),
+    );
+  });
+
+  it('repairs a nonterminal job with an existing output without duplicating it', async () => {
+    db.query.aiGenerationJobs.findFirst.mockResolvedValue({
+      status: 'processing',
+    });
+    db.query.aiGenerationOutputs.findFirst.mockResolvedValue({
+      id: 'output-1',
+    });
+    const where = jest.fn().mockResolvedValue(undefined);
+    const set = jest.fn().mockReturnValue({ where });
+    db.update.mockReturnValueOnce({ set });
+
+    await service.processPerformanceAnalysisJob(
+      'job-1',
+      'class-1',
+      'teacher-1',
+    );
+
+    expect(db.insert).not.toHaveBeenCalled();
+    expect(set).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'completed', errorMessage: null }),
+    );
   });
 
   it('qualifies target and excluded columns in the complete concept mastery upsert', () => {

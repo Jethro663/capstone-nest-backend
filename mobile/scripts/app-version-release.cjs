@@ -198,6 +198,40 @@ function parseAaptPermissions(output) {
   ].map((match) => match[1]);
 }
 
+function decodeGradleProperty(value) {
+  return value
+    .replaceAll("\\:", ":")
+    .replaceAll("\\=", "=")
+    .replaceAll("\\ ", " ")
+    .replaceAll("\\\\", "\\");
+}
+
+async function resolveAndroidSdkRoot(options = {}) {
+  if (options.sdkRoot) return options.sdkRoot;
+
+  const env = options.env ?? process.env;
+  const environmentRoot = env.ANDROID_HOME || env.ANDROID_SDK_ROOT;
+  if (environmentRoot) return environmentRoot;
+
+  const localPropertiesPath =
+    options.localPropertiesPath ||
+    path.resolve(__dirname, "../android/local.properties");
+  try {
+    const localProperties = await readFile(localPropertiesPath, "utf8");
+    const sdkProperty = localProperties
+      .split(/\r?\n/)
+      .map((line) => line.match(/^\s*sdk\.dir\s*=\s*(.+?)\s*$/))
+      .find(Boolean);
+    if (sdkProperty) return decodeGradleProperty(sdkProperty[1]);
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+
+  throw new Error(
+    `Android SDK was not found. Set ANDROID_HOME or ANDROID_SDK_ROOT, pass an explicit SDK root, or define sdk.dir in ${localPropertiesPath}.`,
+  );
+}
+
 async function resolveAapt(options = {}) {
   const explicit = options.aaptPath || process.env.AAPT_PATH;
   if (explicit) {
@@ -205,12 +239,7 @@ async function resolveAapt(options = {}) {
     return explicit;
   }
 
-  const sdkRoot = process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT;
-  if (!sdkRoot) {
-    throw new Error(
-      "aapt was not found. Set AAPT_PATH, ANDROID_HOME, or ANDROID_SDK_ROOT.",
-    );
-  }
+  const sdkRoot = await resolveAndroidSdkRoot(options);
 
   const buildToolsRoot = path.join(sdkRoot, "build-tools");
   const entries = await readdir(buildToolsRoot, { withFileTypes: true });
@@ -241,12 +270,7 @@ async function resolveApksigner(options = {}) {
     return explicit;
   }
 
-  const sdkRoot = process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT;
-  if (!sdkRoot) {
-    throw new Error(
-      "apksigner was not found. Set APKSIGNER_PATH, ANDROID_HOME, or ANDROID_SDK_ROOT.",
-    );
-  }
+  const sdkRoot = await resolveAndroidSdkRoot(options);
   const buildToolsRoot = path.join(sdkRoot, "build-tools");
   const entries = await readdir(buildToolsRoot, { withFileTypes: true });
   const versions = entries
@@ -528,6 +552,12 @@ function defaultPaths(args, mode) {
     buildGradlePath:
       args["build-gradle"] ||
       path.join(repoRoot, "mobile/android/app/build.gradle"),
+    localPropertiesPath:
+      args["local-properties"] ||
+      path.join(repoRoot, "mobile/android/local.properties"),
+    sdkRoot: args["android-sdk-root"],
+    aaptPath: args.aapt,
+    apksignerPath: args.apksigner,
     apkDownloadUrl:
       args["download-url"] ||
       (mode === "prepare"
@@ -608,6 +638,7 @@ module.exports = {
   parseAaptPermissions,
   parseGradleVersions,
   parseApkSignerCertificateSha256,
+  resolveAndroidSdkRoot,
   sha256File,
   verifyManifest,
 };

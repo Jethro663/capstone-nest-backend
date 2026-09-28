@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { RefreshCw } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
 import { classService } from "@/services/class-service";
@@ -67,6 +67,8 @@ type LessonPlanDifferentiationKey =
 type LessonPlanEditorMode = "preview" | "edit";
 type LessonPlanFocusSection = "overview" | "flow" | "assessment" | "notes";
 const LESSON_PLAN_STORAGE_PREFIX = "teacher-performance-lesson-plan-job";
+const PERFORMANCE_ANALYSIS_POLL_INTERVAL_MS = 10_000;
+const PERFORMANCE_ANALYSIS_POLL_TIMEOUT_MS = 2 * 60_000;
 const LESSON_PLAN_PROCEDURE_FIELDS: Array<{
   key: LessonPlanProcedureKey;
   label: string;
@@ -333,6 +335,8 @@ export default function TeacherPerformancePage() {
   );
   const [analysisResult, setAnalysisResult] =
     useState<PerformanceAnalysisStructuredOutput | null>(null);
+  const [analysisTimedOut, setAnalysisTimedOut] = useState(false);
+  const analysisStartedAtRef = useRef<number | null>(null);
   const [analysisTargetStudentId, setAnalysisTargetStudentId] = useState<
     string | null
   >(null);
@@ -807,6 +811,22 @@ export default function TeacherPerformancePage() {
     }
 
     const interval = window.setInterval(async () => {
+      if (
+        analysisStartedAtRef.current !== null &&
+        Date.now() - analysisStartedAtRef.current >=
+          PERFORMANCE_ANALYSIS_POLL_TIMEOUT_MS
+      ) {
+        analysisStartedAtRef.current = null;
+        setAnalysisJob(null);
+        setAnalyzing(false);
+        setAnalysisTimedOut(true);
+        toast.error(
+          "Performance analysis is taking longer than expected. Please try again.",
+        );
+        window.clearInterval(interval);
+        return;
+      }
+
       try {
         const statusRes = await performanceService.getAnalysisJobStatus(
           analysisJob.jobId,
@@ -817,10 +837,12 @@ export default function TeacherPerformancePage() {
             statusRes.data.jobId,
           );
           setAnalysisResult(resultRes.data.result.structuredOutput);
+          analysisStartedAtRef.current = null;
           setAnalyzing(false);
           window.clearInterval(interval);
         }
         if (statusRes.data.status === "failed") {
+          analysisStartedAtRef.current = null;
           setAnalyzing(false);
           toast.error(
             statusRes.data.errorMessage || "Performance analysis failed.",
@@ -828,11 +850,12 @@ export default function TeacherPerformancePage() {
           window.clearInterval(interval);
         }
       } catch {
+        analysisStartedAtRef.current = null;
         setAnalyzing(false);
         toast.error("Failed to refresh analysis job status.");
         window.clearInterval(interval);
       }
-    }, 10_000);
+    }, PERFORMANCE_ANALYSIS_POLL_INTERVAL_MS);
 
     return () => window.clearInterval(interval);
   }, [analysisJob]);
@@ -883,6 +906,8 @@ export default function TeacherPerformancePage() {
     try {
       setAnalyzing(true);
       setAnalysisResult(null);
+      setAnalysisTimedOut(false);
+      analysisStartedAtRef.current = Date.now();
       setAnalysisTargetStudentId(studentId ?? null);
       const jobRes = await performanceService.createAnalysisJob(
         selectedClassId,
@@ -896,9 +921,11 @@ export default function TeacherPerformancePage() {
           jobRes.data.jobId,
         );
         setAnalysisResult(resultRes.data.result.structuredOutput);
+        analysisStartedAtRef.current = null;
         setAnalyzing(false);
       }
     } catch {
+      analysisStartedAtRef.current = null;
       setAnalyzing(false);
       toast.error("Failed to start performance analysis.");
     }
@@ -1465,7 +1492,12 @@ export default function TeacherPerformancePage() {
                   ) : null}
                 </div>
 
-                {!analysisResult ? (
+                {analysisTimedOut ? (
+                  <TeacherEmptyState
+                    title="Analysis is taking longer than expected"
+                    description="The job did not finish within two minutes. Start the analysis again; the previous request will not block this page."
+                  />
+                ) : !analysisResult ? (
                   <TeacherEmptyState
                     title="No AI teaching insight yet"
                     description="Run analysis to get focus concepts and teacher-ready support actions."

@@ -7,6 +7,7 @@ import { PerformanceService } from './performance.service';
 import { eq } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { assessments, classes, users } from '../../drizzle/schema';
+import type { PerformanceAnalysisJobData } from './performance-analysis-queue.service';
 
 interface RecomputeAssessmentJobData {
   assessmentId: string;
@@ -32,13 +33,21 @@ export class PerformanceRecomputeProcessor extends WorkerHost {
   }
 
   async process(
-    job: Job<RecomputeAssessmentJobData | RecomputeClassScoresJobData>,
+    job: Job<
+      | RecomputeAssessmentJobData
+      | RecomputeClassScoresJobData
+      | PerformanceAnalysisJobData
+    >,
   ): Promise<void> {
     return runSystemResetWork(this.modules, () => this.processAdmitted(job));
   }
 
   private async processAdmitted(
-    job: Job<RecomputeAssessmentJobData | RecomputeClassScoresJobData>,
+    job: Job<
+      | RecomputeAssessmentJobData
+      | RecomputeClassScoresJobData
+      | PerformanceAnalysisJobData
+    >,
   ): Promise<void> {
     if (job.name === 'recompute-assessment') {
       const data = job.data as RecomputeAssessmentJobData;
@@ -61,6 +70,16 @@ export class PerformanceRecomputeProcessor extends WorkerHost {
       await this.performanceService.recomputeFromAssessmentSubmission(
         data.assessmentId,
         data.studentId,
+      );
+    } else if (job.name === 'performance-analysis') {
+      const data = job.data as PerformanceAnalysisJobData;
+      this.logger.debug(`Processing performance analysis job ${data.jobId}`);
+      await this.performanceService.processPerformanceAnalysisJob(
+        data.jobId,
+        data.classId,
+        data.teacherId,
+        data.studentId,
+        data.note,
       );
     } else if (job.name === 'recompute-class-scores') {
       const data = job.data as RecomputeClassScoresJobData;

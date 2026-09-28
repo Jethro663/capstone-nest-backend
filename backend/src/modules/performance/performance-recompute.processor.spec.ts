@@ -10,6 +10,7 @@ describe('PerformanceRecomputeProcessor', () => {
   const performanceService = {
     recomputeFromAssessmentSubmission: jest.fn(),
     recomputeStudentsForClass: jest.fn(),
+    processPerformanceAnalysisJob: jest.fn(),
   };
   const processor = new PerformanceRecomputeProcessor(
     performanceService as any,
@@ -27,12 +28,39 @@ describe('PerformanceRecomputeProcessor', () => {
       performanceService.recomputeFromAssessmentSubmission,
     ).not.toHaveBeenCalled();
     expect(performanceService.recomputeStudentsForClass).not.toHaveBeenCalled();
+    expect(
+      performanceService.processPerformanceAnalysisJob,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('dispatches durable performance analysis jobs to the service runner', async () => {
+    await processor.process({
+      name: 'performance-analysis',
+      data: {
+        jobId: 'job-1',
+        classId: 'class-1',
+        teacherId: 'teacher-1',
+        studentId: 'student-1',
+        note: 'Focus on fractions',
+      },
+    } as never);
+
+    expect(
+      performanceService.processPerformanceAnalysisJob,
+    ).toHaveBeenCalledWith(
+      'job-1',
+      'class-1',
+      'teacher-1',
+      'student-1',
+      'Focus on fractions',
+    );
   });
 
   it('completes as a no-op when a class was permanently erased', async () => {
     const localService = {
       recomputeFromAssessmentSubmission: jest.fn(),
       recomputeStudentsForClass: jest.fn(),
+      processPerformanceAnalysisJob: jest.fn(),
     };
     const localProcessor = new PerformanceRecomputeProcessor(
       localService as never,

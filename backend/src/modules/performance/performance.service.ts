@@ -5,10 +5,8 @@ import {
   Injectable,
   Logger,
   NotFoundException,
-  Optional,
+  ServiceUnavailableException,
 } from '@nestjs/common';
-import { ModuleRef } from '@nestjs/core';
-import { runSystemResetWork } from '../system-reset/system-reset.work';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
@@ -38,6 +36,7 @@ import { PerformanceSnapshotReadService } from './performance-snapshot-read.serv
 import { ClassRecordService } from '../class-record/class-record.service';
 import { boundPercentage } from '../academic-state/academic-score';
 import { calculateJaReplayScore } from '../ja/ja-review-state';
+import { PerformanceAnalysisQueueService } from './performance-analysis-queue.service';
 
 const PERFORMANCE_RISK_THRESHOLD = 74;
 export const PERFORMANCE_ANALYSIS_PUBLIC_ERROR =
@@ -150,7 +149,7 @@ export class PerformanceService {
     private readonly auditService: AuditService,
     private readonly snapshotReadService: PerformanceSnapshotReadService,
     private readonly classRecordService: ClassRecordService,
-    @Optional() private readonly modules?: ModuleRef,
+    private readonly analysisQueue: PerformanceAnalysisQueueService,
   ) {}
 
   private get db() {
@@ -1658,7 +1657,7 @@ export class PerformanceService {
     };
   }
 
-  private async runPerformanceAnalysisJob(
+  async processPerformanceAnalysisJob(
     jobId: string,
     classId: string,
     teacherId: string,
@@ -1670,12 +1669,33 @@ export class PerformanceService {
         where: eq(aiGenerationJobs.id, jobId),
         columns: { status: true },
       });
+      if (!existing) {
+        return;
+      }
       if (
-        existing &&
         ['completed', 'approved', 'failed', 'cancelled'].includes(
           existing.status,
         )
       ) {
+        return;
+      }
+
+      const existingOutput = await this.db.query.aiGenerationOutputs.findFirst({
+        where: and(
+          eq(aiGenerationOutputs.jobId, jobId),
+          eq(aiGenerationOutputs.outputType, 'performance_diagnostic'),
+        ),
+        columns: { id: true },
+      });
+      if (existingOutput) {
+        await this.db
+          .update(aiGenerationJobs)
+          .set({
+            status: 'completed',
+            updatedAt: new Date(),
+            errorMessage: null,
+          })
+          .where(eq(aiGenerationJobs.id, jobId));
         return;
       }
 
@@ -1770,17 +1790,32 @@ export class PerformanceService {
         id: aiGenerationJobs.id,
       });
 
-    setTimeout(() => {
-      void runSystemResetWork(this.modules, () =>
-        this.runPerformanceAnalysisJob(
-          job.id,
-          classId,
-          userId,
-          dto.studentId,
-          dto.note,
-        ),
-      ).catch(() => {});
-    }, 0);
+    try {
+      await this.analysisQueue.enqueue({
+        jobId: job.id,
+        classId,
+        teacherId: userId,
+        ...(dto.studentId ? { studentId: dto.studentId } : {}),
+        ...(dto.note ? { note: dto.note } : {}),
+      });
+    } catch (error) {
+      const errorDetail =
+        error instanceof Error ? error.message : String(error);
+      this.logger.error(
+        `Performance analysis enqueue failed job=${job.id} class=${classId}: ${errorDetail.slice(0, 1000)}`,
+      );
+      await this.db
+        .update(aiGenerationJobs)
+        .set({
+          status: 'failed',
+          errorMessage: PERFORMANCE_ANALYSIS_PUBLIC_ERROR,
+          updatedAt: new Date(),
+        })
+        .where(eq(aiGenerationJobs.id, job.id));
+      throw new ServiceUnavailableException(
+        'Performance analysis is temporarily unavailable. Please try again.',
+      );
+    }
 
     await this.auditService.log({
       actorId: userId,

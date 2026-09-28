@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import TeacherPerformancePage from './page';
 import { classService } from '@/services/class-service';
 import { healthService } from '@/services/health-service';
@@ -410,5 +410,64 @@ describe('TeacherPerformancePage', () => {
     expect(screen.getAllByText('Dropdown Time').length).toBeGreaterThan(0);
     expect(screen.queryByText(/^P Dropdown Time P$/i)).not.toBeInTheDocument();
     expect(screen.getAllByText('Unlabeled concept').length).toBeGreaterThan(0);
+  });
+
+  it('stops polling and offers retry when analysis remains nonterminal', async () => {
+    mockedPerformanceService.createAnalysisJob.mockResolvedValueOnce({
+      data: {
+        jobId: 'job-pending',
+        status: 'pending',
+        progressPercent: 5,
+        statusMessage: 'Queued',
+        outputId: null,
+      },
+    } as Awaited<ReturnType<typeof performanceService.createAnalysisJob>>);
+    mockedPerformanceService.getAnalysisJobStatus.mockResolvedValue({
+      data: {
+        jobId: 'job-pending',
+        jobType: 'performance_diagnostics',
+        status: 'pending',
+        progressPercent: 5,
+        statusMessage: 'Queued',
+        errorMessage: null,
+        outputId: null,
+        updatedAt: '2026-09-28T00:00:00.000Z',
+      },
+    } as Awaited<ReturnType<typeof performanceService.getAnalysisJobStatus>>);
+
+    render(<TeacherPerformancePage />);
+    const analyze = await screen.findByRole('button', {
+      name: /Analyze Whole Class/i,
+    });
+    jest.useFakeTimers();
+    fireEvent.click(analyze);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    for (let step = 0; step < 13; step += 1) {
+      await act(async () => {
+        jest.advanceTimersByTime(10_000);
+        await Promise.resolve();
+      });
+    }
+
+    expect(
+      screen.getByText('Analysis is taking longer than expected'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Analyze Whole Class/i }),
+    ).toBeEnabled();
+    const callsAtTimeout =
+      mockedPerformanceService.getAnalysisJobStatus.mock.calls.length;
+
+    await act(async () => {
+      jest.advanceTimersByTime(30_000);
+      await Promise.resolve();
+    });
+    expect(mockedPerformanceService.getAnalysisJobStatus).toHaveBeenCalledTimes(
+      callsAtTimeout,
+    );
+    jest.useRealTimers();
   });
 });

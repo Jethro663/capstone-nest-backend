@@ -12,6 +12,7 @@ import { sectionsApi } from "../api/services/sections";
 import { toAppError } from "../api/http";
 import { useAdminMaintenance } from "../hooks/useAdminMaintenance";
 import { useAdminNetworkStatus } from "../hooks/useAdminNetworkStatus";
+import { useCurrentAcademicState } from "../hooks/useCurrentAcademicState";
 import { AdminPaginatedList } from "../components/admin/AdminPaginatedList";
 import {
   mergeAdminPages,
@@ -37,6 +38,7 @@ export function AdminSectionsScreen({ navigation }: Props) {
   const queryClient = useQueryClient();
   const network = useAdminNetworkStatus();
   const maintenance = useAdminMaintenance();
+  const academicState = useCurrentAcademicState();
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [status, setStatus] = useState<Status>("all");
@@ -45,9 +47,7 @@ export function AdminSectionsScreen({ navigation }: Props) {
   const [editing, setEditing] = useState<TeacherSection | null>(null);
   const [name, setName] = useState("");
   const [gradeLevel, setGradeLevel] = useState<"7" | "8" | "9" | "10">("7");
-  const [schoolYear, setSchoolYear] = useState(
-    `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`,
-  );
+  const [schoolYear, setSchoolYear] = useState("");
   const [capacity, setCapacity] = useState("50");
   const [roomNumber, setRoomNumber] = useState("");
   const [adviserId, setAdviserId] = useState("");
@@ -57,6 +57,10 @@ export function AdminSectionsScreen({ navigation }: Props) {
     const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
     return () => clearTimeout(timer);
   }, [search]);
+  useEffect(() => {
+    const officialYear = academicState.data?.schoolYear;
+    if (!editing && !schoolYear && officialYear) setSchoolYear(officialYear);
+  }, [academicState.data?.schoolYear, editing, schoolYear]);
   const query = useInfiniteQuery({
     queryKey: ["admin-sections", status, debouncedSearch],
     initialPageParam: 1,
@@ -149,9 +153,7 @@ export function AdminSectionsScreen({ navigation }: Props) {
     setEditing(null);
     setName("");
     setGradeLevel("7");
-    setSchoolYear(
-      `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`,
-    );
+    setSchoolYear(academicState.data?.schoolYear ?? "");
     setCapacity("50");
     setRoomNumber("");
     setAdviserId("");
@@ -321,6 +323,19 @@ export function AdminSectionsScreen({ navigation }: Props) {
           tone="amber"
           icon="cloud-off-outline"
         />
+      ) : null}
+      {academicState.isError ? (
+        <View style={{ gap: 8 }}>
+          <AdminNotice
+            title="Academic state unavailable"
+            description="The official school year could not be loaded. Retry before creating a section, or enter an explicit planning year."
+            tone="red"
+          />
+          <AdminButton
+            label="Retry academic state"
+            onPress={() => void academicState.refetch()}
+          />
+        </View>
       ) : null}
       {showForm ? (
         <View

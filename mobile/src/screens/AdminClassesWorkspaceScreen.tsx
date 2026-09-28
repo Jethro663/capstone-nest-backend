@@ -13,6 +13,7 @@ import { sectionsApi } from "../api/services/sections";
 import { toAppError } from "../api/http";
 import { useAdminMaintenance } from "../hooks/useAdminMaintenance";
 import { useAdminNetworkStatus } from "../hooks/useAdminNetworkStatus";
+import { useCurrentAcademicState } from "../hooks/useCurrentAcademicState";
 import { AdminPaginatedList } from "../components/admin/AdminPaginatedList";
 import {
   mergeAdminPages,
@@ -52,6 +53,7 @@ export function AdminClassesWorkspaceScreen({ navigation }: Props) {
   const queryClient = useQueryClient();
   const network = useAdminNetworkStatus();
   const maintenance = useAdminMaintenance();
+  const academicState = useCurrentAcademicState();
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [status, setStatus] = useState<Status>("all");
@@ -63,9 +65,7 @@ export function AdminClassesWorkspaceScreen({ navigation }: Props) {
   const [gradeLevel, setGradeLevel] = useState<"7" | "8" | "9" | "10">("7");
   const [sectionId, setSectionId] = useState("");
   const [teacherId, setTeacherId] = useState("");
-  const [schoolYear, setSchoolYear] = useState(
-    `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`,
-  );
+  const [schoolYear, setSchoolYear] = useState("");
   const [room, setRoom] = useState("");
   const [selectedDays, setSelectedDays] = useState<ScheduleDay[]>(["M"]);
   const [startTime, setStartTime] = useState("08:00");
@@ -84,6 +84,10 @@ export function AdminClassesWorkspaceScreen({ navigation }: Props) {
     const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
     return () => clearTimeout(timer);
   }, [search]);
+  useEffect(() => {
+    const officialYear = academicState.data?.schoolYear;
+    if (!editing && !schoolYear && officialYear) setSchoolYear(officialYear);
+  }, [academicState.data?.schoolYear, editing, schoolYear]);
   const query = useInfiniteQuery({
     queryKey: ["admin-classes", status, debouncedSearch],
     initialPageParam: 1,
@@ -199,6 +203,7 @@ export function AdminClassesWorkspaceScreen({ navigation }: Props) {
     setGradeLevel("7");
     setSectionId("");
     setTeacherId("");
+    setSchoolYear(academicState.data?.schoolYear ?? "");
     setRoom("");
     setSelectedDays(["M"]);
     setStartTime("08:00");
@@ -451,6 +456,19 @@ export function AdminClassesWorkspaceScreen({ navigation }: Props) {
           tone="amber"
           icon="cloud-off-outline"
         />
+      ) : null}
+      {academicState.isError ? (
+        <View style={{ gap: 8 }}>
+          <AdminNotice
+            title="Academic state unavailable"
+            description="The official school year could not be loaded. Retry before creating a class, or enter an explicit planning year."
+            tone="red"
+          />
+          <AdminButton
+            label="Retry academic state"
+            onPress={() => void academicState.refetch()}
+          />
+        </View>
       ) : null}
       {showForm ? (
         <View

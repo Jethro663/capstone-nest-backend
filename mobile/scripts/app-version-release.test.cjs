@@ -14,6 +14,7 @@ const {
   bumpMobileReleaseIdentity,
   buildReleasePayload,
   defaultPaths,
+  resolveAndroidSdkRoot,
   verifyManifest,
 } = require("./app-version-release.cjs");
 
@@ -111,6 +112,64 @@ test("verify mode preserves the immutable URL stored in the manifest", () => {
   assert.match(
     defaultPaths({}, "prepare").apkDownloadUrl,
     /nexora-student-mobile-release\.apk$/,
+  );
+});
+
+test("discovers the Android SDK from Gradle local.properties", async () => {
+  const localPropertiesPath = path.join(fixtureRoot, "local.properties");
+  await writeFile(localPropertiesPath, "sdk.dir=/opt/android-sdk\n");
+
+  assert.equal(
+    await resolveAndroidSdkRoot({
+      env: {},
+      localPropertiesPath,
+    }),
+    "/opt/android-sdk",
+  );
+});
+
+test("decodes an escaped Windows SDK path from Gradle local.properties", async () => {
+  const localPropertiesPath = path.join(fixtureRoot, "local.properties");
+  await writeFile(
+    localPropertiesPath,
+    "sdk.dir=C\\:\\\\Users\\\\Teacher\\\\AppData\\\\Local\\\\Android\\\\Sdk\n",
+  );
+
+  assert.equal(
+    await resolveAndroidSdkRoot({ env: {}, localPropertiesPath }),
+    "C:\\Users\\Teacher\\AppData\\Local\\Android\\Sdk",
+  );
+});
+
+test("reports the inspected local.properties path when no SDK root exists", async () => {
+  const localPropertiesPath = path.join(fixtureRoot, "local.properties");
+  await writeFile(localPropertiesPath, "unrelated.property=true\n");
+
+  await assert.rejects(
+    resolveAndroidSdkRoot({ env: {}, localPropertiesPath }),
+    (error) =>
+      error instanceof Error && error.message.includes(localPropertiesPath),
+  );
+});
+
+test("explicit and environment SDK roots take precedence over local.properties", async () => {
+  const localPropertiesPath = path.join(fixtureRoot, "local.properties");
+  await writeFile(localPropertiesPath, "sdk.dir=/local/sdk\n");
+
+  assert.equal(
+    await resolveAndroidSdkRoot({
+      sdkRoot: "/explicit/sdk",
+      env: { ANDROID_HOME: "/environment/sdk" },
+      localPropertiesPath,
+    }),
+    "/explicit/sdk",
+  );
+  assert.equal(
+    await resolveAndroidSdkRoot({
+      env: { ANDROID_SDK_ROOT: "/environment/sdk" },
+      localPropertiesPath,
+    }),
+    "/environment/sdk",
   );
 });
 
@@ -217,10 +276,10 @@ test("mobile release identity keeps iOS build number aligned with Android versio
     "utf8",
   );
 
-  assert.equal(appJson.expo.version, "0.1.53");
-  assert.equal(appJson.expo.android.versionCode, 54);
-  assert.match(buildGradle, /\bversionCode\s+54\b/);
-  assert.match(buildGradle, /\bversionName\s+["']0\.1\.53["']/);
+  assert.equal(appJson.expo.version, "0.1.54");
+  assert.equal(appJson.expo.android.versionCode, 55);
+  assert.match(buildGradle, /\bversionCode\s+55\b/);
+  assert.match(buildGradle, /\bversionName\s+["']0\.1\.54["']/);
   assert.equal(
     appJson.expo.ios.buildNumber,
     String(appJson.expo.android.versionCode),

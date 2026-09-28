@@ -87,6 +87,38 @@ describe("administrator School Setup workspaces", () => {
     expect(calendar).not.toContain("End ISO timestamp");
   });
 
+  it("uses the backend academic state as the create default without overwriting edited years", () => {
+    const screens = [
+      "AdminCalendarScreen.tsx",
+      "AdminClassesWorkspaceScreen.tsx",
+      "AdminSectionsScreen.tsx",
+    ].map(read);
+    const hook = fs.readFileSync(
+      path.resolve(__dirname, "../../hooks/useCurrentAcademicState.ts"),
+      "utf8",
+    );
+
+    expect(hook).toContain("academicStateService.getCurrent");
+    expect(hook).toMatch(/"academic",\s*"current"/);
+    screens.forEach((source) => {
+      expect(source).toContain("useCurrentAcademicState");
+      expect(source).not.toContain("new Date().getFullYear()");
+    });
+    expect(screens[0]).toContain("setSchoolYear(event.schoolYear)");
+    expect(screens[1]).toContain("setSchoolYear(entry.schoolYear)");
+    expect(screens[2]).toContain("setSchoolYear(section.schoolYear)");
+  });
+
+  it("shows a retryable calendar read error instead of reporting zero records", () => {
+    const calendar = read("AdminCalendarScreen.tsx");
+    expect(calendar).toContain("events.isError");
+    expect(calendar).toContain("Calendar entries unavailable");
+    expect(calendar).toContain("Retry calendar entries");
+    expect(calendar).not.toContain(
+      'subtitle={`${events.data?.length ?? 0} scheduled records`}',
+    );
+  });
+
   it("exposes roster preview categories, commit receipt, and pending resolution", () => {
     const roster = read("AdminRosterScreen.tsx");
     expect(roster).toContain("preview.registered");

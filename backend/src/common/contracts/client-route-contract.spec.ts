@@ -20,11 +20,13 @@ const CONTROLLER_METHODS = new Map([
 
 const repoRoot = path.resolve(__dirname, '../../../..');
 
-function sourceFiles(root: string, suffix: string): string[] {
+function sourceFiles(root: string, suffixes: string[]): string[] {
   return fs.readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
     const target = path.join(root, entry.name);
-    if (entry.isDirectory()) return sourceFiles(target, suffix);
-    return entry.name.endsWith(suffix) ? [target] : [];
+    if (entry.isDirectory()) return sourceFiles(target, suffixes);
+    return suffixes.some((suffix) => entry.name.endsWith(suffix))
+      ? [target]
+      : [];
   });
 }
 
@@ -44,7 +46,8 @@ function decoratorCall(
 }
 
 function literalText(node: ts.Expression | undefined): string {
-  return node && (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
+  return node &&
+    (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
     ? node.text
     : '';
 }
@@ -57,7 +60,8 @@ function normalizePath(value: string): string {
     .map((segment) =>
       segment.startsWith(':') || segment === '*' ? ':param' : segment,
     );
-  const withoutGlobalPrefix = segments[0] === 'api' ? segments.slice(1) : segments;
+  const withoutGlobalPrefix =
+    segments[0] === 'api' ? segments.slice(1) : segments;
   return `/${withoutGlobalPrefix.join('/')}`;
 }
 
@@ -67,7 +71,7 @@ function joinPath(base: string, child: string): string {
 
 function backendRoutes(): Route[] {
   const root = path.join(repoRoot, 'backend/src');
-  return sourceFiles(root, '.controller.ts').flatMap((file) => {
+  return sourceFiles(root, ['.controller.ts']).flatMap((file) => {
     const source = ts.createSourceFile(
       file,
       fs.readFileSync(file, 'utf8'),
@@ -88,7 +92,9 @@ function backendRoutes(): Route[] {
           const decorator = decoratorCall(member, decoratorName);
           if (!decorator) continue;
           const child = literalText(decorator.arguments[0]);
-          const position = source.getLineAndCharacterOfPosition(member.getStart(source));
+          const position = source.getLineAndCharacterOfPosition(
+            member.getStart(source),
+          );
           routes.push({
             method,
             path: joinPath(base, child),
@@ -126,46 +132,112 @@ function templatePath(node: ts.Expression): string | undefined {
   return value;
 }
 
+function fetchMethod(node: ts.CallExpression): string {
+  const options = node.arguments[1];
+  if (!options || !ts.isObjectLiteralExpression(options)) return 'get';
+  const methodProperty = options.properties.find(
+    (property): property is ts.PropertyAssignment =>
+      ts.isPropertyAssignment(property) &&
+      ((ts.isIdentifier(property.name) && property.name.text === 'method') ||
+        (ts.isStringLiteral(property.name) && property.name.text === 'method')),
+  );
+  return literalText(methodProperty?.initializer).toLowerCase() || 'get';
+}
+
+function clientRoutesFromSource(
+  sourceText: string,
+  file: string,
+  includeHttpClientCalls = true,
+): Route[] {
+  const source = ts.createSourceFile(
+    file,
+    sourceText,
+    ts.ScriptTarget.Latest,
+    true,
+    file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+  const routes: Route[] = [];
+
+  const addRoute = (
+    node: ts.CallExpression,
+    method: string,
+    rawPath: string,
+  ) => {
+    const position = source.getLineAndCharacterOfPosition(
+      node.getStart(source),
+    );
+    routes.push({
+      method,
+      path: normalizePath(rawPath),
+      file,
+      line: position.line + 1,
+    });
+  };
+
+  const visit = (node: ts.Node) => {
+    if (!ts.isCallExpression(node)) {
+      ts.forEachChild(node, visit);
+      return;
+    }
+
+    const rawPath = node.arguments[0] && templatePath(node.arguments[0]);
+    if (
+      rawPath?.startsWith('/api') &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === 'fetch'
+    ) {
+      addRoute(node, fetchMethod(node), rawPath);
+    } else if (
+      rawPath &&
+      includeHttpClientCalls &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      HTTP_METHODS.has(node.expression.name.text)
+    ) {
+      addRoute(node, node.expression.name.text, rawPath);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return routes;
+}
+
 function clientRoutes(): Route[] {
   const roots = [
-    path.join(repoRoot, 'mobile/src/api'),
-    path.join(repoRoot, 'next-frontend/src/services'),
-    path.join(repoRoot, 'next-frontend/src/lib'),
+    {
+      root: path.join(repoRoot, 'mobile/src/api'),
+      suffixes: ['.ts', '.tsx'],
+      includeHttpClientCalls: true,
+    },
+    {
+      root: path.join(repoRoot, 'next-frontend/src/services'),
+      suffixes: ['.ts', '.tsx'],
+      includeHttpClientCalls: true,
+    },
+    {
+      root: path.join(repoRoot, 'next-frontend/src/lib'),
+      suffixes: ['.ts', '.tsx'],
+      includeHttpClientCalls: true,
+    },
+    {
+      root: path.join(repoRoot, 'mobile/src/screens'),
+      suffixes: ['.tsx'],
+      includeHttpClientCalls: false,
+    },
+    {
+      root: path.join(repoRoot, 'next-frontend/app'),
+      suffixes: ['.tsx'],
+      includeHttpClientCalls: false,
+    },
   ];
 
-  return roots.flatMap((root) =>
-    sourceFiles(root, '.ts').flatMap((file) => {
-      if (/\.(?:test|spec)\.ts$/.test(file)) return [];
-      const source = ts.createSourceFile(
-        file,
+  return roots.flatMap(({ root, suffixes, includeHttpClientCalls }) =>
+    sourceFiles(root, suffixes).flatMap((file) => {
+      if (/\.(?:test|spec)\.tsx?$/.test(file)) return [];
+      return clientRoutesFromSource(
         fs.readFileSync(file, 'utf8'),
-        ts.ScriptTarget.Latest,
-        true,
-        ts.ScriptKind.TS,
+        path.relative(repoRoot, file),
+        includeHttpClientCalls,
       );
-      const routes: Route[] = [];
-
-      const visit = (node: ts.Node) => {
-        if (
-          ts.isCallExpression(node) &&
-          ts.isPropertyAccessExpression(node.expression) &&
-          HTTP_METHODS.has(node.expression.name.text)
-        ) {
-          const rawPath = node.arguments[0] && templatePath(node.arguments[0]);
-          if (rawPath) {
-            const position = source.getLineAndCharacterOfPosition(node.getStart(source));
-            routes.push({
-              method: node.expression.name.text,
-              path: normalizePath(rawPath),
-              file: path.relative(repoRoot, file),
-              line: position.line + 1,
-            });
-          }
-        }
-        ts.forEachChild(node, visit);
-      };
-      visit(source);
-      return routes;
     }),
   );
 }
@@ -183,6 +255,22 @@ function pathsMatch(clientPath: string, backendPath: string): boolean {
 }
 
 describe('public client route contracts', () => {
+  it('discovers native backend fetch calls in TSX application sources', () => {
+    expect(
+      clientRoutesFromSource(
+        "export const Screen = () => fetch('/api/academic-state/current')",
+        'mobile/src/screens/fixture.tsx',
+      ),
+    ).toEqual([
+      {
+        method: 'get',
+        path: '/academic-state/current',
+        file: 'mobile/src/screens/fixture.tsx',
+        line: 1,
+      },
+    ]);
+  });
+
   it('maps every literal mobile and web HTTP route to a Nest controller', () => {
     const backend = backendRoutes();
     const unmatched = clientRoutes().filter(

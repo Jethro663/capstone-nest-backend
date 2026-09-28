@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { PerformanceRecomputeQueueService } from './performance-recompute-queue.service';
+import { PerformanceAnalysisQueueService } from './performance-analysis-queue.service';
 import { PerformanceService } from './performance.service';
 import { ClassRecordSyncService } from '../class-record/class-record-sync.service';
 import { LxpPerformanceListener } from '../lxp/listeners/lxp-performance.listener';
@@ -118,7 +119,7 @@ type Kind =
   | 'class score queue'
   | 'class record listener'
   | 'LXP listener'
-  | 'diagnostic timer';
+  | 'diagnostic queue';
 function fixture(
   kind: Kind,
   g: ReturnType<typeof gate>,
@@ -182,38 +183,21 @@ function fixture(
         service.handleAssessmentSubmitted({ assessmentId: 'assessment' }),
     };
   }
-  const db = {
-    query: {
-      classes: {
-        findFirst: () => Promise.resolve({ id: 'class', isActive: true }),
-      },
-      aiGenerationJobs: {
-        findFirst: async () => {
-          await effect();
-          return { status: 'completed' };
-        },
-      },
-    },
-    insert: () => ({
-      values: () => ({ returning: () => Promise.resolve([{ id: 'job' }]) }),
-    }),
-  };
-  const service = Reflect.construct(PerformanceService, [
-    { db },
-    {},
-    { log: async () => {} },
-    {},
+  const service = Reflect.construct(PerformanceAnalysisQueueService, [
+    { add: effect },
     {},
     modules,
   ]);
   return {
     effect,
-    invoke: async () => {
-      await service.createPerformanceAnalysisJob('class', {}, 'admin', [
-        'admin',
-      ]);
-      await new Promise<void>((resolve) => setTimeout(resolve, 10));
-    },
+    invoke: () =>
+      service
+        .enqueue({
+          jobId: 'job',
+          classId: 'class',
+          teacherId: 'admin',
+        })
+        .catch(() => undefined),
   };
 }
 
@@ -222,7 +206,7 @@ describe.each<Kind>([
   'class score queue',
   'class record listener',
   'LXP listener',
-  'diagnostic timer',
+  'diagnostic queue',
 ])('%s reset ownership', (kind) => {
   beforeEach(() => {
     jest.spyOn(Logger.prototype, 'error').mockImplementation(() => {});

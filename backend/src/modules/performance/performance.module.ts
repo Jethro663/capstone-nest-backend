@@ -10,6 +10,7 @@ import { PerformanceRecomputeProcessor } from './performance-recompute.processor
 import { AuditModule } from '../audit/audit.module';
 import { PerformanceSnapshotReadService } from './performance-snapshot-read.service';
 import { ClassRecordModule } from '../class-record/class-record.module';
+import { PerformanceAnalysisQueueService } from './performance-analysis-queue.service';
 
 @Module({
   imports: [
@@ -26,12 +27,14 @@ import { ClassRecordModule } from '../class-record/class-record.module';
     PerformanceService,
     PerformanceSnapshotReadService,
     PerformanceEventsListener,
+    PerformanceAnalysisQueueService,
     PerformanceRecomputeQueueService,
     PerformanceRecomputeProcessor,
   ],
   exports: [
     PerformanceService,
     PerformanceSnapshotReadService,
+    PerformanceAnalysisQueueService,
     PerformanceRecomputeQueueService,
   ],
 })
