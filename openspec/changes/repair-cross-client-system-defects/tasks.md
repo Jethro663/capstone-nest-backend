@@ -36,6 +36,8 @@
 - [x] 5.3 Add failing release-script tests for Gradle local SDK discovery and precedence
 - [x] 5.4 Implement shared Android SDK-root resolution for `aapt` and `apksigner`
 - [x] 5.5 Run the contract gate, release-script tests, and plain `release:verify`
+- [x] 5.6 Reproduce the exact-SHA Railway frontend HTTP 413 and isolate historical APK upload growth
+- [x] 5.7 Add a release-managed Railway allowlist for the current immutable APK and guard it with release tests/verification
 
 ## 6. Full Verification and Android Packaging
 

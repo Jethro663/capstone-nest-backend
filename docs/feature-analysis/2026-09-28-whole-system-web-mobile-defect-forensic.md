@@ -7,7 +7,7 @@ Scope: current backend contracts and durable jobs, Next.js web consumers, Expo m
 
 ## 1. Executive verdict
 
-The inspected system is not broadly broken: backend, web, and mobile builds and static checks completed, and the full backend, web, and mobile test suites passed. However, **four current defects are supported by direct source and command evidence**. They are not cosmetic findings or hypothetical refactors.
+The inspected system is not broadly broken: backend, web, and mobile builds and static checks completed, and the full backend, web, and mobile test suites passed. The initial forensic pass found **four current defects supported by direct source and command evidence**. During the separately authorized release, exact-SHA Railway observation exposed a fifth operational defect. None are cosmetic findings or hypothetical refactors.
 
 | ID | Severity | Status | Defect | Primary impact |
 |---|---:|---|---|---|
@@ -15,6 +15,7 @@ The inspected system is not broadly broken: backend, web, and mobile builds and 
 | F-02 | High data-integrity risk | Confirmed implementation defect; existing bad records unverified | Web Admin Calendar calls a nonexistent, unauthenticated academic-state path, while three mobile admin creation flows derive the school year from the device date instead of backend academic state. | Users can see or create records under the wrong official school year when the backend state differs from the device/calendar assumption. |
 | F-03 | Medium | Confirmed | Several web and mobile reads convert request failure into truthful-looking empty data. | An authorization, network, or server failure is presented as “no records,” hiding the real problem from an admin. |
 | F-04 | Low operational | Confirmed by reproduction | Android release verification ignores the valid Gradle `android/local.properties` SDK path. | The release gate fails on a correctly configured Android checkout unless an extra environment variable is exported. |
+| F-05 | Medium operational | Confirmed by exact-SHA deployment failure | Railway's frontend upload includes every historical APK in `public/downloads/android`, producing a 219,397,737-byte upload that Cloudflare rejects with HTTP 413. | Backend and AI can deploy while the matching frontend and current APK fail to publish, leaving the release partially deployed. |
 
 ### Ownership and coupling
 
@@ -22,6 +23,7 @@ The inspected system is not broadly broken: backend, web, and mobile builds and 
 - F-02 is owned jointly by backend academic-state authority and web/mobile admin setup consumers. It crosses official academic state and persisted class, section, and school-event records.
 - F-03 is owned by the affected presentation/query-state adapters. It does not require a backend contract change.
 - F-04 is owned by the mobile release script and tests. It affects release operations, not the installed app runtime.
+- F-05 is jointly owned by the frontend Railway upload scope and mobile release preparation. Git remains the artifact-history owner; the deploy context should contain only the current immutable APK and stable alias.
 
 The whole system is not a removal candidate. Each defect is individually isolatable without replacing the public API. The recommended order is F-01, F-02, F-03, then F-04. No product code, configuration, schema, data, git history, or external system was changed during this audit.
 
@@ -33,6 +35,7 @@ The whole system is not a removal candidate. Each defect is individually isolata
 | Web | Typecheck and lint passed; production build passed and generated 75 static pages; Jest passed **208/208 suites and 951/951 tests**. |
 | Mobile | Typecheck and design audit passed; Jest passed **150/150 suites and 849/849 tests**; production Android Expo export passed with 1965 modules. Android release tests passed 16/16, iOS SideStore tests 7/7, and iOS TestFlight tests 6/6. |
 | Release verifier | Plain `npm run release:verify` failed with “aapt was not found.” The same command passed when `ANDROID_SDK_ROOT=/home/jethro/Android/Sdk` was supplied, although `mobile/android/local.properties` already declares that exact path and both `aapt` and `apksigner` exist there. |
+| Railway release observation | CI run `36427130885` passed all eight jobs for `65b1ab56e1e88a653840290b50801d1e8ea6f5e0`. Railway run `36427652729` checked out that exact SHA, but frontend upload failed with HTTP 413 at 219,397,737 bytes; the checkout held about 360 MB of historical/current APK copies. |
 | AI service | Python source compilation passed. The Python test runner could not provide a valid suite result because the local interpreter lacks required packages including FastAPI, Pydantic, HTTPX, PyMuPDF, and SQLAlchemy. This is a coverage limitation, not proof of an AI product defect. |
 
 Passing suites do not invalidate the findings: the inspected tests do not simulate the failure boundaries above.
@@ -76,6 +79,10 @@ The affected UIs therefore cannot distinguish “the server says there are zero 
 
 Gradle recognizes `mobile/android/local.properties` as the local Android SDK configuration. The release verifier recognizes only explicit function options and `AAPT_PATH` / `ANDROID_HOME` / `ANDROID_SDK_ROOT`. Consequently, Gradle can build with the local checkout configuration while the repository release gate fails before inspecting the APK.
 
+### Flow E: frontend deployment artifact scope
+
+The release repository intentionally retains immutable APK history, and the frontend also exposes a stable APK alias. Railway uploads the entire frontend context. Before F-05 was repaired, `.railwayignore` excluded caches and dependencies but not historical APK directories, so nine immutable APKs plus the stable alias entered the upload. The correct separation is to keep history in Git while allowing only the current immutable release directory and stable alias into the deploy archive.
+
 ## 3. Cascade map
 
 This table is the relationship source of truth. “Direct” means an immediate caller/state effect; “transitive” means an effect through another component; “operational” means build, release, or runtime operations.
@@ -96,6 +103,8 @@ This table is the relationship source of truth. “Direct” means an immediate 
 | E-12 | Mobile Admin Calendar | React Query error state is ignored | `0 scheduled records` and empty list | Direct: rejected read is presented as a zero count. | Medium | Confirmed | `mobile/src/screens/AdminCalendarScreen.tsx:27-32,136-157,239-243` | Branch on `events.isError`, show `AdminNotice`, and expose retry. |
 | E-13 | Mobile release verifier | `resolveAapt()` / `resolveApksigner()` | `npm run release:verify` | Operational: ignores the SDK path already used by Gradle. | Low | Confirmed | `mobile/scripts/app-version-release.cjs:201-268`; `mobile/package.json:24` | Add `android/local.properties` fallback after explicit options/env and before failure. |
 | E-14 | Android checkout | `android/local.properties` → `/home/jethro/Android/Sdk` | Gradle and installed build-tools | Operational: valid path contains `aapt` and `apksigner`, but E-13 does not read it. | Low | Confirmed | Reproduced: plain verifier exit `1`; same verifier with `ANDROID_SDK_ROOT` exit `0`; executables exist in build-tools 35.0.0 and 36.0.0. | Add resolver tests for Gradle properties, escaped paths, absent paths, and env precedence. |
+| E-15 | Frontend deploy context | Historical immutable APK directories plus stable alias | Railway CLI upload | Operational: about 360 MB of APK content compressed to a 219,397,737-byte request and was rejected with HTTP 413. | Medium | Confirmed | GitHub Actions run `36427652729`, frontend job `108945482607`; `next-frontend/public/downloads/android` contained builds 47–55. | Ignore historical Android release directories in the deploy archive without deleting them from Git. |
+| E-16 | Mobile release preparation | Current build/version/source revision | Frontend `.railwayignore` | Transitive: a static manual allowlist would become stale on the next build and reintroduce a missing immutable artifact or oversized archive. | Medium | Confirmed | Release metadata already owns `versionCode` and `sourceRevision`; `.railwayignore` previously had no managed release block. | Make `release:prepare` update the managed allowlist and make `release:verify` reject stale scope. |
 
 ### Consumer-search saturation
 
@@ -160,8 +169,9 @@ Rollback: components can revert independently without changing persisted data or
 1. Expand E-09 to cover relevant `.tsx` request sites and native `fetch`, or enforce all backend requests through typed services.
 2. For E-13, resolve tools in this order: explicit option, explicit environment, Gradle `local.properties`, then documented failure. Parse escaped Windows paths as well as POSIX paths.
 3. Keep environment variables authoritative so CI behavior does not change unexpectedly.
+4. Scope the Railway frontend archive to the current immutable APK plus stable alias, and make release preparation/verification own that allowlist so it advances with every build.
 
-Validation: the contract test must catch the current bad route fixture; plain `npm run release:verify` must pass with only the valid checkout `local.properties`; invalid/missing SDK paths must still fail clearly.
+Validation: the contract test must catch the current bad route fixture; plain `npm run release:verify` must pass with only the valid checkout `local.properties`; invalid/missing SDK paths must still fail clearly; Git-ignore semantics must exclude a prior immutable APK and include the current immutable APK plus stable alias.
 Rollback: retain env-only resolution behind a small resolver seam if a platform-specific parser regression appears.
 
 ## 5. Improvements
@@ -173,6 +183,7 @@ Rollback: retain env-only resolution behind a small resolver seam if a platform-
 3. **Query-state seam:** business empty states must require a successful response. Errors need their own state and retry path.
 4. **Contract-coverage seam:** route validation must inspect the places requests can actually be made, including page-level TSX/native fetch, or structurally prevent those calls.
 5. **Android SDK discovery seam:** release tooling should share the checkout's standard Gradle SDK resolution with deterministic precedence.
+6. **Deployment artifact seam:** immutable release history stays in Git, while release tooling advances a single current-build allowlist for the Railway frontend context.
 
 ### Optional evidence-backed enhancements
 
@@ -186,6 +197,6 @@ Rollback: retain env-only resolution behind a small resolver seam if a platform-
 - Only PostgreSQL and Redis were running in the local Compose state. Backend, web, mobile, and AI runtime flows were not exercised through authenticated live sessions. Source, tests, builds, exports, and read-only commands provide the evidence above.
 - No physical Android or iOS device was attached. Touch behavior, OS permissions, backgrounding, deep links, notifications, and real-device rendering remain unverified.
 - The current production academic-state value and existing production rows were not queried. F-02 confirms incorrect authority sourcing; it does not assert that deployed records are already misfiled.
-- AI-provider, Expo push-provider, object-storage, and Railway behavior were not invoked. The missing local Python dependencies prevented full AI-service tests.
+- AI-provider, Expo push-provider, and object-storage behavior were not invoked. Railway was observed only through the authorized exact-SHA release; its frontend upload failure is captured as F-05. The initial local Python environment lacked AI-service packages, while exact-SHA CI later passed the provisioned AI-service suite.
 - The expanded route scan covered statically discoverable TypeScript/TSX request literals. Dynamically constructed paths, runtime plugin behavior, and external consumers may require separate runtime instrumentation.
 - This report is a bounded full-forensic pass over cross-client contracts and high-risk state/async boundaries, not proof that the repository contains no other defects.

@@ -9,3 +9,9 @@ artifacts
 .env
 .env.*
 !.env.local.example
+
+# BEGIN NEXORA ANDROID RELEASE
+public/downloads/android/**
+!public/downloads/android/55-953a8c6f/
+!public/downloads/android/55-953a8c6f/**
+# END NEXORA ANDROID RELEASE

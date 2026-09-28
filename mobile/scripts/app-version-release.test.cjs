@@ -14,6 +14,7 @@ const {
   bumpMobileReleaseIdentity,
   buildReleasePayload,
   defaultPaths,
+  managedRailwayIgnoreSource,
   resolveAndroidSdkRoot,
   verifyManifest,
 } = require("./app-version-release.cjs");
@@ -112,6 +113,35 @@ test("verify mode preserves the immutable URL stored in the manifest", () => {
   assert.match(
     defaultPaths({}, "prepare").apkDownloadUrl,
     /nexora-student-mobile-release\.apk$/,
+  );
+});
+
+test("Railway deploy scope keeps only the current immutable Android release", () => {
+  const previousSource = [
+    ".git",
+    "node_modules",
+    "# BEGIN NEXORA ANDROID RELEASE",
+    "public/downloads/android/**",
+    "!public/downloads/android/54-853594ab/",
+    "!public/downloads/android/54-853594ab/**",
+    "# END NEXORA ANDROID RELEASE",
+    "",
+  ].join("\n");
+
+  const nextSource = managedRailwayIgnoreSource(previousSource, {
+    versionCode: 55,
+    sourceRevision: "a".repeat(40),
+  });
+
+  assert.match(nextSource, /public\/downloads\/android\/\*\*/);
+  assert.match(nextSource, /!public\/downloads\/android\/55-aaaaaaaa\/\*\*/);
+  assert.doesNotMatch(nextSource, /54-853594ab/);
+  assert.equal(
+    managedRailwayIgnoreSource(nextSource, {
+      versionCode: 55,
+      sourceRevision: "a".repeat(40),
+    }),
+    nextSource,
   );
 });
 

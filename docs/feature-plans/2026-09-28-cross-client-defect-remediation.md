@@ -2,7 +2,7 @@
 
 > **For agentic workers:** Execute inline in the current checkout through the authorized `finish-and-ship` workflow. Use test-driven development for every behavior change and preserve unrelated work.
 
-**Goal:** Repair the four confirmed defects in the 2026-09-28 forensic report without changing public response envelopes, erasing academic history, or replacing established web/mobile procedures.
+**Goal:** Repair the four initial confirmed defects in the 2026-09-28 forensic report plus any directly evidenced release blocker exposed while shipping, without changing public response envelopes, erasing academic history, or replacing established web/mobile procedures.
 
 **Architecture:** Use the existing `performance-recompute` BullMQ queue for a new, explicitly typed performance-analysis job and a dedicated producer/reconciler service. Keep backend academic state authoritative through the existing authenticated `/academic-state/current` clients, retain deliberate planning-year input, and model load failures separately from successful empty data. Extend existing contract/release gates so these regressions cannot silently return.
 
@@ -18,6 +18,7 @@ Implement all four findings from `docs/feature-analysis/2026-09-28-whole-system-
 2. F-02: make backend academic state the initial source for web Calendar and mobile Calendar/Class/Section creation.
 3. F-03: distinguish rejected reads from successful empty results on the affected web/mobile admin surfaces.
 4. F-04: let Android release verification discover the standard Gradle `android/local.properties` SDK path.
+5. F-05 (found during exact-SHA rollout): keep historical APKs in Git but exclude them from Railway's frontend upload, with release tooling advancing the current immutable-build allowlist.
 
 ### Selected decisions
 
@@ -38,6 +39,7 @@ Implement all four findings from `docs/feature-analysis/2026-09-28-whole-system-
 - Mobile Admin Calendar, Classes, and Sections official-year initialization plus Calendar read error state.
 - Route-contract test coverage for page-level TypeScript/TSX request sites and native `fetch`.
 - Android SDK discovery and release-script tests.
+- Railway frontend deploy-context scoping tied to current Android release metadata.
 - Required builds, tests, APK packaging because mobile bundle inputs change, commit/push, CI/deployment and delivered-artifact verification.
 
 ### Non-goals
@@ -68,6 +70,7 @@ Implement all four findings from `docs/feature-analysis/2026-09-28-whole-system-
 | Web Calendar and Announcements, plus mobile Calendar, collapse rejected reads into zero/empty UI. | Confirmed | Admins cannot distinguish outage/auth failure from no data. |
 | Contract test scans only `.ts` under API/service/lib roots, not app/screen TSX or native fetch. | Confirmed | The wrong web route is not guarded by CI. |
 | Plain `npm run release:verify` fails while `android/local.properties` points to an installed SDK containing `aapt` and `apksigner`; setting `ANDROID_SDK_ROOT` makes the same verification pass. | Confirmed | Release tooling diverges from Gradle checkout configuration. |
+| Exact-SHA Railway frontend upload failed at 219,397,737 bytes because historical APKs were included in the deployment archive. | Confirmed during rollout | Preserve Git history but make release preparation own a current-build deploy allowlist. |
 | Existing production rows match their intended academic year. | Unverified | Only a read-only audit could establish this; do not mutate data in this change. |
 | Physical Android/iOS flows and live authenticated web pages pass after the change. | Unverified until execution | Report device/browser limits honestly in handoff. |
 
@@ -121,6 +124,7 @@ Add a focused producer/reconciler to the already registered performance queue an
 - Automatically overwriting an admin's chosen planning year when academic state refreshes could corrupt intent. Initialize only when the field is blank or reset from an existing record.
 - Extending route scanning too broadly could flag test fixtures or non-backend URLs. Restrict to backend-looking absolute paths and exclude tests/generated output.
 - Local properties can contain escaped Windows separators. Parse Gradle property escaping and preserve explicit environment precedence.
+- A manually edited Railway allowlist can become stale at the next Android build. Generate it from `versionCode` and `sourceRevision`, and reject stale scope in `release:verify`.
 
 ## 6. Recommended architecture, data flow, security, and error behavior
 
@@ -264,6 +268,21 @@ Add a focused producer/reconciler to the already registered performance queue an
 - [ ] Implement a shared SDK-root resolver used by both `resolveAapt()` and `resolveApksigner()`.
 - [ ] Run release-script tests and plain `npm run release:verify` green without SDK environment variables.
 
+### Task 6A — Bound Railway's frontend release archive
+
+**Files:**
+
+- Modify `next-frontend/.railwayignore`
+- Modify `mobile/scripts/app-version-release.cjs`
+- Modify `mobile/scripts/app-version-release.test.cjs`
+
+**TDD steps:**
+
+- [ ] Add a failing test proving release preparation replaces the prior build allowlist with the current `versionCode` and source-SHA tag.
+- [ ] Implement a managed `.railwayignore` block that excludes historical immutable APK directories while re-including the current directory; retain the stable APK alias.
+- [ ] Make `release:prepare` update the block and `release:verify` fail when it is stale.
+- [ ] Verify Git-ignore semantics exclude build 54 and include build 55 plus the stable alias; rerun all mobile gates.
+
 ### Task 7 — Verification, packaging, and release
 
 - [ ] Run focused tests after each task, then backend lint/build/full tests, web typecheck/lint/build/full tests, and mobile typecheck/design audit/full tests.
@@ -286,6 +305,7 @@ Add a focused producer/reconciler to the already registered performance queue an
 | Failed reads are not empty business data | Web Calendar/Announcements and mobile Calendar tests | Web/mobile full suites | Error/retry displayed; successful empty response still renders empty copy; last good rows preserved on refresh failure. |
 | Route drift is guarded | `client-route-contract.spec.ts` | Backend full suite | App/screen native fetch sites are scanned and current unmatched routes are zero. |
 | Release verifier uses Gradle SDK config | Release-script unit tests + plain `release:verify` | APK release verification | No SDK env required when valid `local.properties` exists; explicit env still wins. |
+| Frontend deploy archive is bounded | Release-script test + Git-ignore semantics + Railway retry | Exact-SHA frontend deployment | Historical APKs remain versioned but are excluded from upload; current immutable APK and stable alias are live. |
 | Ship is attributable | Git/CI/Railway/artifact evidence | Live health/download verification | Remote and deployed/tested revisions match final SHA; manifest and served APK match packaged checksum. |
 
 ## 10. Rollout, rollback, observability, cleanup, and unverified boundaries

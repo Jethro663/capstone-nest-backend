@@ -37,6 +37,9 @@ const RELEASE_FIELDS = [
   "sourceRevision",
   "distributionChannel",
 ];
+const RAILWAY_ANDROID_RELEASE_BLOCK_START =
+  "# BEGIN NEXORA ANDROID RELEASE";
+const RAILWAY_ANDROID_RELEASE_BLOCK_END = "# END NEXORA ANDROID RELEASE";
 
 function sha256File(apkPath) {
   return new Promise((resolve, reject) => {
@@ -339,6 +342,51 @@ function assertImmutableAndroidArtifactUrl(
   }
 }
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function managedRailwayIgnoreSource(source, release) {
+  if (!Number.isInteger(release.versionCode) || release.versionCode < 1) {
+    throw new Error("Railway release scope requires a positive versionCode.");
+  }
+  if (!/^[a-f0-9]{40}$/i.test(release.sourceRevision ?? "")) {
+    throw new Error(
+      "Railway release scope requires a 40-character sourceRevision.",
+    );
+  }
+
+  const releaseTag = `${release.versionCode}-${release.sourceRevision
+    .slice(0, 8)
+    .toLowerCase()}`;
+  const managedBlock = [
+    RAILWAY_ANDROID_RELEASE_BLOCK_START,
+    "public/downloads/android/**",
+    `!public/downloads/android/${releaseTag}/`,
+    `!public/downloads/android/${releaseTag}/**`,
+    RAILWAY_ANDROID_RELEASE_BLOCK_END,
+  ].join("\n");
+  const normalizedSource = source.replaceAll("\r\n", "\n");
+  const managedBlockPattern = new RegExp(
+    `(?:^|\\n)${escapeRegExp(RAILWAY_ANDROID_RELEASE_BLOCK_START)}[\\s\\S]*?${escapeRegExp(RAILWAY_ANDROID_RELEASE_BLOCK_END)}(?:\\n|$)`,
+  );
+  const unmanagedSource = normalizedSource
+    .replace(managedBlockPattern, "\n")
+    .trimEnd();
+
+  return `${unmanagedSource}\n\n${managedBlock}\n`.replace(/^\n+/, "");
+}
+
+async function assertRailwayReleaseScope(railwayIgnorePath, release) {
+  const currentSource = await readFile(railwayIgnorePath, "utf8");
+  const expectedSource = managedRailwayIgnoreSource(currentSource, release);
+  if (currentSource.replaceAll("\r\n", "\n") !== expectedSource) {
+    throw new Error(
+      `${railwayIgnorePath} does not allowlist Android build ${release.versionCode} at source revision ${release.sourceRevision.slice(0, 8)}. Run release:prepare for this build before deployment.`,
+    );
+  }
+}
+
 async function readJson(filePath) {
   return JSON.parse(await readFile(filePath, "utf8"));
 }
@@ -547,6 +595,9 @@ function defaultPaths(args, mode) {
         repoRoot,
         "next-frontend/public/downloads/nexora-student-mobile-release.json",
       ),
+    railwayIgnorePath:
+      args["railway-ignore"] ||
+      path.join(repoRoot, "next-frontend/.railwayignore"),
     appJsonPath: args["app-json"] || path.join(repoRoot, "mobile/app.json"),
     allowSupportedOlderBuilds: args["allow-supported-older-builds"] === "true",
     buildGradlePath:
@@ -606,17 +657,26 @@ async function main() {
           ? undefined
           : Number(args["min-supported-version-code"]),
     });
-    await writeFile(
-      paths.manifestPath,
-      `${JSON.stringify(payload, null, 2)}\n`,
-    );
+    const railwayIgnoreSource = await readFile(paths.railwayIgnorePath, "utf8");
+    await Promise.all([
+      writeFile(
+        paths.manifestPath,
+        `${JSON.stringify(payload, null, 2)}\n`,
+      ),
+      writeFile(
+        paths.railwayIgnorePath,
+        managedRailwayIgnoreSource(railwayIgnoreSource, payload),
+      ),
+    ]);
     await verifyManifest(payload, paths);
+    await assertRailwayReleaseScope(paths.railwayIgnorePath, payload);
     process.stdout.write(`Prepared and verified ${paths.manifestPath}\n`);
     return;
   }
 
   const manifest = await readJson(paths.manifestPath);
   await verifyManifest(manifest, paths);
+  await assertRailwayReleaseScope(paths.railwayIgnorePath, manifest);
   process.stdout.write(`Verified ${paths.manifestPath}\n`);
 }
 
@@ -631,9 +691,11 @@ if (require.main === module) {
 
 module.exports = {
   assertProductionSigner,
+  assertRailwayReleaseScope,
   bumpMobileReleaseIdentity,
   buildReleasePayload,
   defaultPaths,
+  managedRailwayIgnoreSource,
   parseAaptBadging,
   parseAaptPermissions,
   parseGradleVersions,
