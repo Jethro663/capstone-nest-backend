@@ -42,9 +42,9 @@
 - [x] 6.1 Run backend lint, build, migration integrity, and full tests
 - [x] 6.2 Run web typecheck, lint, build, and full tests
 - [x] 6.3 Run mobile typecheck, design audit, full tests, and production export
-- [ ] 6.4 Prepare and build the next Android release through existing scripts
-- [ ] 6.5 Verify APK identity, version, ABI, signature, alignment, API URL, size, SHA-256, embedded download artifact, and manifest
-- [ ] 6.6 Review the final diff against F-01 through F-04 and run whitespace/status checks
+- [x] 6.4 Prepare and build the next Android release through existing scripts
+- [x] 6.5 Verify APK identity, version, ABI, signature, alignment, API URL, size, SHA-256, embedded download artifact, and manifest
+- [x] 6.6 Review the final diff against F-01 through F-04 and run whitespace/status checks
 
 ## 7. Ship and Observe
 
