@@ -50,8 +50,8 @@
 
 ## 7. Ship and Observe
 
-- [ ] 7.1 Fetch upstream and verify divergence plus all outgoing history
-- [ ] 7.2 Stage only task-owned changes, preserve the pre-existing user-edited report, commit, and push `developement`
-- [ ] 7.3 Verify the remote branch contains the final SHA
-- [ ] 7.4 Observe exact-SHA GitHub CI and downstream Railway deployments to terminal status
-- [ ] 7.5 Verify live health plus served APK/manifest bytes and checksum, then record before/after evidence
+- [x] 7.1 Fetch upstream and verify divergence plus all outgoing history
+- [x] 7.2 Stage only task-owned changes, preserve the pre-existing user-edited report, commit, and push `developement`
+- [x] 7.3 Verify the remote branch contains the final SHA
+- [x] 7.4 Observe exact-SHA GitHub CI and downstream Railway deployments to terminal status
+- [x] 7.5 Verify live health plus served APK/manifest bytes and checksum, then record before/after evidence
