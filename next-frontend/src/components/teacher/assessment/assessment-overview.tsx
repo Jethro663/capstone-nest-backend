@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { ArrowRight, BarChart3, CheckCircle2, Clock3, UsersRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { TableFilterSelect } from '@/components/ui/table-filter-select';
 import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
 import type { Assessment, AssessmentStats, QuestionAnalyticsResponse, StudentSubmission, SubmissionStatus, SubmissionsResponse } from '@/types/assessment';
 
@@ -177,19 +178,20 @@ export function AssessmentOverview({ assessment, submissions, stats, analytics, 
               onChange={(event) => setRosterQuery(event.target.value)}
               className="min-h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-slate-500"
             />
-            <select
-              aria-label="Filter assessment roster"
+            <TableFilterSelect
+              ariaLabel="Filter assessment roster"
               value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value as 'all' | SubmissionStatus)}
-              className="min-h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-slate-500"
-            >
-              <option value="all">All statuses</option>
-              {Object.entries(STATUS_COPY).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
+              onValueChange={(value) => setStatusFilter(value as 'all' | SubmissionStatus)}
+              options={[
+                { value: 'all', label: 'All statuses' },
+                ...Object.entries(STATUS_COPY).map(([value, label]) => ({
+                  value,
+                  label,
+                })),
+              ]}
+              role="teacher"
+              className="w-full text-sm"
+            />
             <p className="text-sm text-slate-500 md:col-span-2" aria-live="polite">
               Showing {visibleStudents.length} of {students.length} learners
             </p>

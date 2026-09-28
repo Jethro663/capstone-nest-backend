@@ -11,6 +11,7 @@ import { aiService } from "@/services/ai-service";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { TableFilterSelect } from "@/components/ui/table-filter-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -1289,20 +1290,17 @@ export default function TeacherPerformancePage() {
                     <div className="grid gap-3 lg:grid-cols-3">
                       <label className="block text-sm font-semibold text-[var(--teacher-text-strong)]">
                         Assessment focus
-                        <select
-                          aria-label="Assessment focus"
+                        <TableFilterSelect
+                          ariaLabel="Assessment focus"
                           value={selectedComparisonFilterId}
-                          onChange={(event) =>
-                            setSelectedComparisonFilterId(event.target.value)
-                          }
-                          className="mt-2 w-full rounded-xl border border-[var(--teacher-border)] bg-white px-3 py-2.5 text-sm text-slate-900"
-                        >
-                          {comparisonFilterOptions.map((filter) => (
-                            <option key={filter.id} value={filter.id}>
-                              {formatComparisonFilterLabel(filter)}
-                            </option>
-                          ))}
-                        </select>
+                          onValueChange={setSelectedComparisonFilterId}
+                          options={comparisonFilterOptions.map((filter) => ({
+                            value: filter.id,
+                            label: formatComparisonFilterLabel(filter),
+                          }))}
+                          role="teacher"
+                          className="mt-2 w-full text-sm"
+                        />
                       </label>
                       <label className="block text-sm font-semibold text-[var(--teacher-text-strong)]">
                         Search records
@@ -1318,22 +1316,20 @@ export default function TeacherPerformancePage() {
                       </label>
                       <label className="block text-sm font-semibold text-[var(--teacher-text-strong)]">
                         Trend
-                        <select
-                          aria-label="Filter performance records"
+                        <TableFilterSelect
+                          ariaLabel="Filter performance records"
                           value={comparisonTrendFilter}
-                          onChange={(event) =>
-                            setComparisonTrendFilter(event.target.value)
-                          }
-                          className="mt-2 w-full rounded-xl border border-[var(--teacher-border)] bg-white px-3 py-2.5 text-sm text-slate-900"
-                        >
-                          <option value="all">All trends</option>
-                          <option value="improved">Improved</option>
-                          <option value="declined">Declined</option>
-                          <option value="unchanged">Unchanged</option>
-                          <option value="awaiting_retry">
-                            Awaiting follow-up
-                          </option>
-                        </select>
+                          onValueChange={setComparisonTrendFilter}
+                          options={[
+                            { value: "all", label: "All trends" },
+                            { value: "improved", label: "Improved" },
+                            { value: "declined", label: "Declined" },
+                            { value: "unchanged", label: "Unchanged" },
+                            { value: "awaiting_retry", label: "Awaiting follow-up" },
+                          ]}
+                          role="teacher"
+                          className="mt-2 w-full text-sm"
+                        />
                       </label>
                     </div>
                     <div className="flex flex-wrap gap-2 text-xs">
@@ -1546,20 +1542,20 @@ export default function TeacherPerformancePage() {
                       onChange={(event) => setConceptQuery(event.target.value)}
                       placeholder="Search concept or mastery band"
                     />
-                    <select
-                      aria-label="Filter concept records"
+                    <TableFilterSelect
+                      ariaLabel="Filter concept records"
                       value={conceptBandFilter}
-                      onChange={(event) =>
-                        setConceptBandFilter(event.target.value)
-                      }
-                      className="h-10 rounded-xl border border-[var(--teacher-border)] bg-white px-3 text-sm text-slate-900"
-                    >
-                      <option value="all">All mastery bands</option>
-                      <option value="critical">Critical</option>
-                      <option value="needs-reteach">Needs reteach</option>
-                      <option value="watch">Watch</option>
-                      <option value="high-mastery">High mastery</option>
-                    </select>
+                      onValueChange={setConceptBandFilter}
+                      options={[
+                        { value: "all", label: "All mastery bands" },
+                        { value: "critical", label: "Critical" },
+                        { value: "needs-reteach", label: "Needs reteach" },
+                        { value: "watch", label: "Watch" },
+                        { value: "high-mastery", label: "High mastery" },
+                      ]}
+                      role="teacher"
+                      className="w-full text-sm"
+                    />
                   </div>
                   <div className="rounded-xl border border-[var(--teacher-border)] bg-white p-4 text-sm text-slate-700">
                     <strong className="text-slate-900">
@@ -2599,18 +2595,18 @@ export default function TeacherPerformancePage() {
                         onChange={(event) => setLogQuery(event.target.value)}
                         placeholder="Search learner, trigger, or standing"
                       />
-                      <select
-                        aria-label="Filter recent changes"
+                      <TableFilterSelect
+                        ariaLabel="Filter recent changes"
                         value={logStatusFilter}
-                        onChange={(event) =>
-                          setLogStatusFilter(event.target.value)
-                        }
-                        className="h-10 rounded-xl border border-[var(--teacher-border)] bg-white px-3 text-sm text-slate-900"
-                      >
-                        <option value="all">All current standings</option>
-                        <option value="support">Needs support</option>
-                        <option value="stable">Stable</option>
-                      </select>
+                        onValueChange={setLogStatusFilter}
+                        options={[
+                          { value: "all", label: "All current standings" },
+                          { value: "support", label: "Needs support" },
+                          { value: "stable", label: "Stable" },
+                        ]}
+                        role="teacher"
+                        className="w-full text-sm"
+                      />
                       <p
                         className="text-sm text-[var(--teacher-text-muted)]"
                         aria-live="polite"

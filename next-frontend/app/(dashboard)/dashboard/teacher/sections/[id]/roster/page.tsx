@@ -8,6 +8,7 @@ import { useAuth } from '@/providers/AuthProvider';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { TableFilterSelect } from '@/components/ui/table-filter-select';
 import { SectionScheduleViewer } from '@/components/shared/SectionScheduleViewer';
 import { toast } from 'sonner';
 import { getApiErrorMessage } from '@/lib/api-error';
@@ -265,14 +266,20 @@ export default function SectionRosterPage() {
               onChange={(event) => setRosterQuery(event.target.value)}
               className="teacher-input"
             />
-            <select aria-label="Filter roster by grade" value={gradeFilter} onChange={(event) => setGradeFilter(event.target.value)} className="teacher-select">
-              <option value="all">All grade levels</option>
-              {gradeOptions.map((grade) => (
-                <option key={grade} value={grade}>
-                  Grade {grade}
-                </option>
-              ))}
-            </select>
+            <TableFilterSelect
+              ariaLabel="Filter roster by grade"
+              value={gradeFilter}
+              onValueChange={setGradeFilter}
+              options={[
+                { value: 'all', label: 'All grade levels' },
+                ...gradeOptions.map((grade) => ({
+                  value: grade,
+                  label: `Grade ${grade}`,
+                })),
+              ]}
+              role="teacher"
+              className="w-full md:w-[13rem]"
+            />
           </div>
           <p className="px-4 py-2 text-sm text-[var(--teacher-text-muted)]" aria-live="polite">
             Showing {visibleRoster.length} of {dedupedRoster.length} students

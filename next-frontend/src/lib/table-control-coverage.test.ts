@@ -100,6 +100,50 @@ const COVERAGE_CASES = [
   ],
 ] as const;
 
+const THEMED_FILTER_CASES = [
+  [
+    "app/(dashboard)/dashboard/admin/roster-import/page.tsx",
+    ["Filter import rows", "Filter import history"],
+  ],
+  [
+    "app/(dashboard)/dashboard/admin/sections/[id]/edit/page.tsx",
+    ["Filter roster by grade"],
+  ],
+  [
+    "app/(dashboard)/dashboard/admin/sections/[id]/roster/page.tsx",
+    ["Filter roster by grade"],
+  ],
+  [
+    "app/(dashboard)/dashboard/student/classes/[id]/page.tsx",
+    ["Filter classmates", "Filter gradebook records"],
+  ],
+  [
+    "app/(dashboard)/dashboard/teacher/classes/[id]/page.tsx",
+    ["Filter students by grade availability"],
+  ],
+  [
+    "app/(dashboard)/dashboard/teacher/performance/page.tsx",
+    [
+      "Assessment focus",
+      "Filter performance records",
+      "Filter concept records",
+      "Filter recent changes",
+    ],
+  ],
+  [
+    "app/(dashboard)/dashboard/teacher/sections/[id]/roster/page.tsx",
+    ["Filter roster by grade"],
+  ],
+  [
+    "src/components/admin/AcademicBackSubjectsPanel.tsx",
+    ["Filter back subjects"],
+  ],
+  [
+    "src/components/teacher/assessment/assessment-overview.tsx",
+    ["Filter assessment roster"],
+  ],
+] as const;
+
 describe("page-level table controls", () => {
   it.each(COVERAGE_CASES)(
     "%s has paired search and filter controls",
@@ -108,6 +152,21 @@ describe("page-level table controls", () => {
 
       expect(source).toContain(searchLabel);
       expect(source).toContain(filterLabel);
+    },
+  );
+
+  it.each(THEMED_FILTER_CASES)(
+    "%s uses themed controls for the filters added by the table audit",
+    (path, filterLabels) => {
+      const source = readFileSync(resolve(process.cwd(), path), "utf8");
+      const missingThemedFilters = filterLabels.filter(
+        (filterLabel) =>
+          !new RegExp(
+            `<TableFilterSelect\\s+ariaLabel=["']${filterLabel}["']`,
+          ).test(source),
+      );
+
+      expect(missingThemedFilters).toEqual([]);
     },
   );
 });

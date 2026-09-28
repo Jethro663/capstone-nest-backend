@@ -287,11 +287,11 @@ git commit -m "refactor: theme admin and student table filters"
 - Consumes: `TableFilterSelect` and current teacher state setters.
 - Produces: seven teacher controls and a green fourteen-control regression.
 
-- [ ] **Step 1: Replace the seven approved teacher filters**
+- [x] **Step 1: Replace the seven approved teacher filters**
 
 Use `role="teacher"`, preserve every option value/label and width class, and leave class, extraction, and lesson-source selectors unchanged.
 
-- [ ] **Step 2: Run focused tests and verify GREEN**
+- [x] **Step 2: Run focused tests and verify GREEN**
 
 ```bash
 cd next-frontend && npm test -- --runInBand src/components/ui/table-filter-select.test.tsx src/lib/table-control-coverage.test.ts
@@ -299,7 +299,7 @@ cd next-frontend && npm test -- --runInBand src/components/ui/table-filter-selec
 
 Expected: both suites pass and cover all fourteen controls.
 
-- [ ] **Step 3: Commit the teacher conversion**
+- [x] **Step 3: Commit the teacher conversion**
 
 ```bash
 git add next-frontend/app/\(dashboard\)/dashboard/teacher next-frontend/src/components/teacher/assessment/assessment-overview.tsx next-frontend/src/lib/table-control-coverage.test.ts

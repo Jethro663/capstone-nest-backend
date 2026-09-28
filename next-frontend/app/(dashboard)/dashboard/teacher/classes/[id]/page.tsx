@@ -75,6 +75,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { TableFilterSelect } from "@/components/ui/table-filter-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ClassWorkspaceShell } from "@/components/class/workspace/ClassWorkspaceShell";
 import {
@@ -4339,16 +4340,18 @@ export default function TeacherClassDetailPage() {
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6c7f99]" aria-hidden="true" />
                 <Input type="search" value={studentSearch} onChange={(event) => setStudentSearch(event.target.value)} placeholder="Search students by name, LRN, or email" aria-label="Search students by name, LRN, or email" className="pl-10" />
               </div>
-              <select
-                aria-label="Filter students by grade availability"
+              <TableFilterSelect
+                ariaLabel="Filter students by grade availability"
                 value={studentGradeFilter}
-                onChange={(event) => setStudentGradeFilter(event.target.value as "all" | "graded" | "ungraded")}
-                className="teacher-select w-full text-sm"
-              >
-                <option value="all">All grade states</option>
-                <option value="graded">With grade</option>
-                <option value="ungraded">Without grade</option>
-              </select>
+                onValueChange={(value) => setStudentGradeFilter(value as "all" | "graded" | "ungraded")}
+                options={[
+                  { value: "all", label: "All grade states" },
+                  { value: "graded", label: "With grade" },
+                  { value: "ungraded", label: "Without grade" },
+                ]}
+                role="teacher"
+                className="w-full text-sm"
+              />
               <p className="text-sm text-[#5f728e] md:col-span-2" aria-live="polite">
                 {visibleStudentRows.length} of {studentRows.length} students shown
               </p>
