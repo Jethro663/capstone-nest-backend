@@ -30,7 +30,7 @@
 - Consumes: the existing `Select`, `SelectContent`, `SelectItem`, `SelectTrigger`, and `SelectValue` exports.
 - Produces: `TableFilterOption`, `TableFilterRole`, and `TableFilterSelect({ ariaLabel, value, onValueChange, options, role, className?, disabled? })`.
 
-- [ ] **Step 1: Write the failing component tests**
+- [x] **Step 1: Write the failing component tests**
 
 ```tsx
 import { fireEvent, render, screen } from '@testing-library/react';
@@ -88,7 +88,7 @@ it('reports option selection and forwards disabled state', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test and verify RED**
+- [x] **Step 2: Run the test and verify RED**
 
 ```bash
 cd next-frontend && npm test -- --runInBand src/components/ui/table-filter-select.test.tsx
@@ -96,7 +96,7 @@ cd next-frontend && npm test -- --runInBand src/components/ui/table-filter-selec
 
 Expected: FAIL because `./table-filter-select` does not exist.
 
-- [ ] **Step 3: Implement the typed component**
+- [x] **Step 3: Implement the typed component**
 
 ```tsx
 'use client';
@@ -168,11 +168,11 @@ export function TableFilterSelect({
 
 Extend `SelectTrigger`'s variant union with `admin` and map it to `admin-input`. Add shared geometry, icon, truncation, role border/background/focus, portal-content, selected-item, disabled, and narrow-width CSS using current tokens.
 
-- [ ] **Step 4: Run the component test and verify GREEN**
+- [x] **Step 4: Run the component test and verify GREEN**
 
 Run the same focused Jest command. Expected: all tests pass without console errors.
 
-- [ ] **Step 5: Commit the primitive**
+- [x] **Step 5: Commit the primitive**
 
 ```bash
 git add next-frontend/src/components/ui/table-filter-select.tsx next-frontend/src/components/ui/table-filter-select.test.tsx next-frontend/src/components/ui/select.tsx next-frontend/app/globals.css

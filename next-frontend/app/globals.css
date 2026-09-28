@@ -519,6 +519,101 @@ body {
     inset 0 1px 0 color-mix(in srgb, var(--student-white) 72%, transparent);
 }
 
+.table-filter-select {
+  min-height: 2.625rem;
+  min-width: 0;
+  gap: 0.65rem;
+  border-radius: 0.8rem;
+  padding: 0.6rem 0.75rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.table-filter-select__value {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.table-filter-select__value > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table-filter-select__icon {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+}
+
+.table-filter-select[data-filter-role='student'] .table-filter-select__icon {
+  color: var(--student-red, #dc2626);
+}
+
+.table-filter-select[data-filter-role='teacher'] .table-filter-select__icon {
+  color: var(--teacher-accent, #dc2626);
+}
+
+.table-filter-select[data-filter-role='admin'] .table-filter-select__icon {
+  color: var(--admin-accent, #f70a10);
+}
+
+.table-filter-select[data-filter-role='admin']:focus-visible {
+  border-color: var(--admin-outline-strong, #c9d5e4);
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(247, 10, 16, 0.08);
+}
+
+.table-filter-select__content {
+  border-radius: 0.85rem;
+  padding: 0.25rem;
+  box-shadow: 0 20px 45px -24px rgba(15, 23, 42, 0.38);
+}
+
+.table-filter-select__content [role='option'] {
+  min-height: 2.35rem;
+  border-radius: 0.6rem;
+  font-weight: 650;
+}
+
+.table-filter-select__content--student {
+  border-color: color-mix(in srgb, var(--student-navy, #172554) 18%, white);
+  background: var(--student-white, #ffffff);
+  color: var(--student-text-strong, #172554);
+}
+
+.table-filter-select__content--student [role='option'][data-highlighted],
+.table-filter-select__content--student [role='option'][data-state='checked'] {
+  background: color-mix(in srgb, var(--student-red, #dc2626) 10%, white);
+  color: var(--student-navy, #172554);
+}
+
+.table-filter-select__content--teacher {
+  border-color: var(--teacher-outline, #d8e0eb);
+  background: var(--teacher-surface, #ffffff);
+  color: var(--teacher-text-strong, #17345c);
+}
+
+.table-filter-select__content--teacher [role='option'][data-highlighted],
+.table-filter-select__content--teacher [role='option'][data-state='checked'] {
+  background: color-mix(in srgb, var(--teacher-accent, #dc2626) 9%, white);
+  color: var(--teacher-text-strong, #17345c);
+}
+
+.table-filter-select__content--admin {
+  border-color: var(--admin-outline, #dce5f0);
+  background: #ffffff;
+  color: var(--admin-text-strong, #17345c);
+}
+
+.table-filter-select__content--admin [role='option'][data-highlighted],
+.table-filter-select__content--admin [role='option'][data-state='checked'] {
+  background: rgba(247, 10, 16, 0.07);
+  color: var(--admin-text-strong, #17345c);
+}
+
 .student-button-solid {
   border-color: transparent;
   background: var(--student-red);
