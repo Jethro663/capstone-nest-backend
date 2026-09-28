@@ -6,6 +6,7 @@ import { ArrowLeft, School, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
+import { TableFilterSelect } from "@/components/ui/table-filter-select";
 import {
   Table,
   TableBody,
@@ -375,19 +376,20 @@ export default function EditSectionPage() {
                 onChange={(event) => setRosterQuery(event.target.value)}
                 className="admin-input"
               />
-              <select
-                aria-label="Filter roster by grade"
+              <TableFilterSelect
+                ariaLabel="Filter roster by grade"
                 value={gradeFilter}
-                onChange={(event) => setGradeFilter(event.target.value)}
-                className="admin-select"
-              >
-                <option value="all">All grade levels</option>
-                {gradeOptions.map((grade) => (
-                  <option key={grade} value={grade}>
-                    Grade {grade}
-                  </option>
-                ))}
-              </select>
+                onValueChange={setGradeFilter}
+                options={[
+                  { value: "all", label: "All grade levels" },
+                  ...gradeOptions.map((grade) => ({
+                    value: String(grade),
+                    label: `Grade ${grade}`,
+                  })),
+                ]}
+                role="admin"
+                className="w-full md:w-[13rem]"
+              />
             </div>
             <p
               className="text-sm text-[var(--admin-text-muted)]"

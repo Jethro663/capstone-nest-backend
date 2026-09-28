@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { TableFilterSelect } from '@/components/ui/table-filter-select';
 
 type PreviewRowFilter = 'all' | 'registered' | 'pending' | 'error';
 type HistoryRowFilter = 'all' | 'resolved' | 'unresolved';
@@ -594,17 +595,19 @@ export default function RosterImportPage() {
               onChange={(event) => setPreviewQuery(event.target.value)}
               placeholder="Search name, email, LRN, or issue"
             />
-            <select
-              aria-label="Filter import rows"
+            <TableFilterSelect
+              ariaLabel="Filter import rows"
               value={previewRowFilter}
-              onChange={(event) => setPreviewRowFilter(event.target.value as PreviewRowFilter)}
-              className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900"
-            >
-              <option value="all">All preview rows</option>
-              <option value="registered">Registered</option>
-              <option value="pending">Pending</option>
-              <option value="error">Errors</option>
-            </select>
+              onValueChange={(value) => setPreviewRowFilter(value as PreviewRowFilter)}
+              options={[
+                { value: 'all', label: 'All preview rows' },
+                { value: 'registered', label: 'Registered' },
+                { value: 'pending', label: 'Pending' },
+                { value: 'error', label: 'Errors' },
+              ]}
+              role="admin"
+              className="w-full sm:w-[13rem]"
+            />
             <p className="text-sm text-slate-600" aria-live="polite">
               {visiblePreviewCount} of {preview.summary.totalDataRows} rows
             </p>
@@ -687,16 +690,18 @@ export default function RosterImportPage() {
                   onChange={(event) => setHistoryQuery(event.target.value)}
                   placeholder="Search name, email, LRN, or status"
                 />
-                <select
-                  aria-label="Filter import history"
+                <TableFilterSelect
+                  ariaLabel="Filter import history"
                   value={historyRowFilter}
-                  onChange={(event) => setHistoryRowFilter(event.target.value as HistoryRowFilter)}
-                  className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900"
-                >
-                  <option value="all">All history</option>
-                  <option value="resolved">Resolved</option>
-                  <option value="unresolved">Unresolved</option>
-                </select>
+                  onValueChange={(value) => setHistoryRowFilter(value as HistoryRowFilter)}
+                  options={[
+                    { value: 'all', label: 'All history' },
+                    { value: 'resolved', label: 'Resolved' },
+                    { value: 'unresolved', label: 'Unresolved' },
+                  ]}
+                  role="admin"
+                  className="w-full sm:w-[13rem]"
+                />
                 <p className="text-sm text-slate-600" aria-live="polite">
                   {visibleImportHistory.length} of {pending.length} records
                 </p>

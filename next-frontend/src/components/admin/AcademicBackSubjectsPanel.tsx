@@ -6,6 +6,7 @@ import { AdminSectionCard } from "./AdminPageShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TableFilterSelect } from "@/components/ui/table-filter-select";
 import { academicGradingService as grading } from "@/services/academic-grading-service";
 import { academicStateService } from "@/services/academic-state-service";
 import { getApiErrorMessage } from "@/lib/api-error";
@@ -171,19 +172,20 @@ export function AcademicBackSubjectsPanel({
         </div>
         <label className="text-sm font-medium text-slate-700">
           Status
-          <select
-            aria-label="Filter back subjects"
+          <TableFilterSelect
+            ariaLabel="Filter back subjects"
             value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value)}
-            className="mt-2 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
-          >
-            <option value="all">All statuses</option>
-            {statusOptions.map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
-          </select>
+            onValueChange={setStatusFilter}
+            options={[
+              { value: "all", label: "All statuses" },
+              ...statusOptions.map((status) => ({
+                value: status,
+                label: status,
+              })),
+            ]}
+            role="admin"
+            className="mt-2 w-full"
+          />
         </label>
       </div>
       <div className="max-h-80 overflow-auto rounded-md border">

@@ -53,6 +53,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { DashboardStatePanel } from "@/components/layout/DashboardStatePanel";
 import { Input } from "@/components/ui/input";
+import { TableFilterSelect } from "@/components/ui/table-filter-select";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AuthenticatedDiscussionImageLink } from "@/components/discussion/AuthenticatedDiscussionImageLink";
@@ -2810,16 +2811,18 @@ export default function StudentClassDetailPage() {
                 onChange={(event) => setClassmateSearch(event.target.value)}
                 placeholder="Search classmate name or email"
               />
-              <select
-                aria-label="Filter classmates"
+              <TableFilterSelect
+                ariaLabel="Filter classmates"
                 value={classmateFilter}
-                onChange={(event) => setClassmateFilter(event.target.value as "all" | "with_photo" | "without_photo")}
-                className="student-input"
-              >
-                <option value="all">All classmates</option>
-                <option value="with_photo">With profile photo</option>
-                <option value="without_photo">Without profile photo</option>
-              </select>
+                onValueChange={(value) => setClassmateFilter(value as "all" | "with_photo" | "without_photo")}
+                options={[
+                  { value: "all", label: "All classmates" },
+                  { value: "with_photo", label: "With profile photo" },
+                  { value: "without_photo", label: "Without profile photo" },
+                ]}
+                role="student"
+                className="w-full sm:w-[15rem]"
+              />
             </div>
             <div className="student-class-table-wrap">
               <table className="student-class-table">
@@ -2902,17 +2905,19 @@ export default function StudentClassDetailPage() {
                 onChange={(event) => setGradeSearch(event.target.value)}
                 placeholder="Search item, category, or status"
               />
-              <select
-                aria-label="Filter gradebook records"
+              <TableFilterSelect
+                ariaLabel="Filter gradebook records"
                 value={gradeStatusFilter}
-                onChange={(event) => setGradeStatusFilter(event.target.value as "all" | GradeRow["statusTone"])}
-                className="student-input"
-              >
-                <option value="all">All grade states</option>
-                <option value="graded">Graded</option>
-                <option value="submitted">Submitted</option>
-                <option value="pending">Pending</option>
-              </select>
+                onValueChange={(value) => setGradeStatusFilter(value as "all" | GradeRow["statusTone"])}
+                options={[
+                  { value: "all", label: "All grade states" },
+                  { value: "graded", label: "Graded" },
+                  { value: "submitted", label: "Submitted" },
+                  { value: "pending", label: "Pending" },
+                ]}
+                role="student"
+                className="w-full sm:w-[15rem]"
+              />
             </div>
             <div className="student-gradebook">
               <div className="student-gradebook__rule" aria-hidden="true" />

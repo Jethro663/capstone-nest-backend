@@ -188,7 +188,7 @@ git commit -m "feat: add themed table filter select"
 - Consumes: the test file's existing source-reading helper.
 - Produces: a regression requiring `TableFilterSelect` at every approved label.
 
-- [ ] **Step 1: Add the failing source-coverage matrix**
+- [x] **Step 1: Add the failing source-coverage matrix**
 
 ```ts
 const THEMED_FILTERS = [
@@ -215,7 +215,7 @@ it('uses the shared themed control for every filter added by the table audit', (
 });
 ```
 
-- [ ] **Step 2: Run coverage and verify RED**
+- [x] **Step 2: Run coverage and verify RED**
 
 ```bash
 cd next-frontend && npm test -- --runInBand src/lib/table-control-coverage.test.ts
@@ -236,7 +236,7 @@ Expected: FAIL because the owners still render native selects.
 - Consumes: `TableFilterSelect` and existing state setters.
 - Produces: five admin and two student themed controls with unchanged option values.
 
-- [ ] **Step 1: Replace only the approved filters**
+- [x] **Step 1: Replace only the approved filters**
 
 Use this classmates conversion shape and equivalent inline option arrays:
 
@@ -259,7 +259,7 @@ Use this classmates conversion shape and equivalent inline option arrays:
 
 Use `role="admin"` for admin routes and retain layout widths. Do not convert target/destination section, support year, or support period selectors.
 
-- [ ] **Step 2: Run coverage and affected page tests**
+- [x] **Step 2: Run coverage and affected page tests**
 
 ```bash
 cd next-frontend && npm test -- --runInBand src/lib/table-control-coverage.test.ts app/\(dashboard\)/dashboard/admin/sections/\[id\]/roster/page.test.tsx
@@ -267,7 +267,7 @@ cd next-frontend && npm test -- --runInBand src/lib/table-control-coverage.test.
 
 Expected: admin page tests pass; coverage fails only for remaining teacher owners.
 
-- [ ] **Step 3: Commit admin/student conversion**
+- [x] **Step 3: Commit admin/student conversion**
 
 ```bash
 git add next-frontend/app/\(dashboard\)/dashboard/admin next-frontend/app/\(dashboard\)/dashboard/student/classes/\[id\]/page.tsx next-frontend/src/components/admin/AcademicBackSubjectsPanel.tsx

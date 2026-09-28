@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
+import { TableFilterSelect } from '@/components/ui/table-filter-select';
 import { toast } from 'sonner';
 import { getApiErrorMessage } from '@/lib/api-error';
 import { SectionScheduleViewer } from '@/components/shared/SectionScheduleViewer';
@@ -227,19 +228,20 @@ export default function AdminSectionRosterPage() {
                       onChange={(event) => setRosterQuery(event.target.value)}
                       className="admin-input"
                     />
-                    <select
-                      aria-label="Filter roster by grade"
+                    <TableFilterSelect
+                      ariaLabel="Filter roster by grade"
                       value={gradeFilter}
-                      onChange={(event) => setGradeFilter(event.target.value)}
-                      className="admin-select"
-                    >
-                      <option value="all">All grade levels</option>
-                      {gradeOptions.map((grade) => (
-                        <option key={grade} value={grade}>
-                          Grade {grade}
-                        </option>
-                      ))}
-                    </select>
+                      onValueChange={setGradeFilter}
+                      options={[
+                        { value: 'all', label: 'All grade levels' },
+                        ...gradeOptions.map((grade) => ({
+                          value: String(grade),
+                          label: `Grade ${grade}`,
+                        })),
+                      ]}
+                      role="admin"
+                      className="w-full md:w-[13rem]"
+                    />
                   </div>
 
                   {visibleRoster.length === 0 ? (
