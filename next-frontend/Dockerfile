@@ -17,6 +17,7 @@ ARG NEXT_PUBLIC_APP_ORIGIN
 ARG NEXT_PUBLIC_SITE_URL
 ARG BACKEND_INTERNAL_URL
 ARG API_INTERNAL_URL
+ARG RAILWAY_GIT_COMMIT_SHA
 
 # Copy dependencies from deps stage
 COPY --from=deps /app/node_modules ./node_modules

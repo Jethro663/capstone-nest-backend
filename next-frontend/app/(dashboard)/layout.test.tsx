@@ -58,6 +58,14 @@ jest.mock('@/providers/NotificationProvider', () => ({
   },
 }));
 
+jest.mock('@/providers/AdminMaintenanceProvider', () => ({
+  AdminMaintenanceProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
+jest.mock('@/components/admin/AdminMaintenanceBanner', () => ({
+  AdminMaintenanceBanner: () => null,
+}));
+
 describe('DashboardLayout loading behavior', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -198,5 +206,23 @@ describe('DashboardLayout role-path enforcement', () => {
     expect(logoutActionMock).not.toHaveBeenCalled();
     expect(screen.getByTestId('sidebar')).toBeInTheDocument();
     expect(screen.getByText('content')).toBeInTheDocument();
+  });
+
+  it('removes the top content gap for admin diagnostics while preserving shell padding elsewhere', () => {
+    useAuthMock.mockReturnValue({
+      loading: false,
+      isAuthenticated: true,
+      isProfileIncomplete: false,
+      role: 'admin',
+    });
+    usePathnameMock.mockReturnValue('/dashboard/admin/diagnostics');
+
+    render(
+      <DashboardLayout>
+        <div data-testid="diagnostics-content" />
+      </DashboardLayout>,
+    );
+
+    expect(screen.getByTestId('diagnostics-content').closest('main')).toHaveClass('pt-0', 'md:pt-0', 'lg:pt-0');
   });
 });

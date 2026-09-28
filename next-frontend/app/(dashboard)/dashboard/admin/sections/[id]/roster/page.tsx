@@ -8,26 +8,15 @@ import { academicStateService } from '@/services/academic-state-service';
 import { adminLifecycleService } from '@/services/admin-lifecycle-service';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { getApiErrorMessage } from '@/lib/api-error';
 import { SectionScheduleViewer } from '@/components/shared/SectionScheduleViewer';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { Section } from '@/types/section';
-import {
-  AdminActionCard,
-  AdminEmptyState,
-  AdminPageShell,
-  AdminSectionCard,
-} from '@/components/admin/AdminPageShell';
+import { AdminActionCard, AdminEmptyState, AdminPageShell, AdminSectionCard } from '@/components/admin/AdminPageShell';
 import { AdminLifecycleDialog } from '@/components/admin/AdminLifecycleDialog';
 import type { AcademicPeriodKey } from '@/types/admin-lifecycle';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -54,6 +43,8 @@ export default function AdminSectionRosterPage() {
   const [destinationSections, setDestinationSections] = useState<Section[]>([]);
   const [activePeriod, setActivePeriod] = useState<AcademicPeriodKey>('Q1');
   const [activeSection, setActiveSection] = useState<RosterSection>('overview');
+  const [rosterQuery, setRosterQuery] = useState('');
+  const [gradeFilter, setGradeFilter] = useState('all');
 
   const fetchData = useCallback(async () => {
     try {
@@ -93,10 +84,27 @@ export default function AdminSectionRosterPage() {
     }
     return Array.from(unique.values());
   }, [roster]);
+  const gradeOptions = useMemo(
+    () =>
+      Array.from(new Set(dedupedRoster.map((student) => String(student.gradeLevel || '')).filter(Boolean))).sort((left, right) =>
+        left.localeCompare(right, undefined, { numeric: true }),
+      ),
+    [dedupedRoster],
+  );
+  const visibleRoster = useMemo(() => {
+    const query = rosterQuery.trim().toLocaleLowerCase();
+    return dedupedRoster.filter((student) => {
+      const matchesQuery =
+        !query ||
+        [`${student.firstName || ''} ${student.lastName || ''}`, student.email || '', student.lrn || ''].some((value) =>
+          value.toLocaleLowerCase().includes(query),
+        );
+      const matchesGrade = gradeFilter === 'all' || String(student.gradeLevel || '') === gradeFilter;
+      return matchesQuery && matchesGrade;
+    });
+  }, [dedupedRoster, gradeFilter, rosterQuery]);
 
-  const adviserName = section?.adviser
-    ? `${section.adviser.firstName || ''} ${section.adviser.lastName || ''}`.trim() || 'Assigned'
-    : 'Unassigned';
+  const adviserName = section?.adviser ? `${section.adviser.firstName || ''} ${section.adviser.lastName || ''}`.trim() || 'Assigned' : 'Unassigned';
 
   if (loading) {
     return (
@@ -115,13 +123,13 @@ export default function AdminSectionRosterPage() {
       description="Review the section timetable and student roster in one calmer admin workspace."
       icon={School}
       variant="compact-form"
-      actions={(
+      actions={
         <Button variant="outline" className="admin-button-outline rounded-xl font-black" onClick={() => router.push('/dashboard/admin/sections')}>
           <ArrowLeft className="h-4 w-4" />
           Back to Sections
         </Button>
-      )}
-      meta={(
+      }
+      meta={
         <>
           <div className="admin-compact-meta__item">
             <span className="admin-compact-meta__label">Grade Level</span>
@@ -140,31 +148,30 @@ export default function AdminSectionRosterPage() {
             {adviserName}
           </div>
         </>
-      )}
+      }
     >
-      <Tabs
-        value={activeSection}
-        onValueChange={(value) => setActiveSection(value as RosterSection)}
-        className="admin-workspace-tabs"
-        orientation="vertical"
-      >
+      <Tabs value={activeSection} onValueChange={(value) => setActiveSection(value as RosterSection)} className="admin-workspace-tabs" orientation="vertical">
         <aside className="admin-workspace-rail" aria-label="Roster sections">
           <p className="admin-workspace-rail__label">Roster sections</p>
           <TabsList className="admin-workspace-tab-list">
-            <TabsTrigger value="overview" className="admin-workspace-tab">Overview</TabsTrigger>
-            <TabsTrigger value="schedule" className="admin-workspace-tab">Schedule</TabsTrigger>
-            <TabsTrigger value="students" className="admin-workspace-tab">Students</TabsTrigger>
-            <TabsTrigger value="actions" className="admin-workspace-tab">Actions</TabsTrigger>
+            <TabsTrigger value="overview" className="admin-workspace-tab">
+              Overview
+            </TabsTrigger>
+            <TabsTrigger value="schedule" className="admin-workspace-tab">
+              Schedule
+            </TabsTrigger>
+            <TabsTrigger value="students" className="admin-workspace-tab">
+              Students
+            </TabsTrigger>
+            <TabsTrigger value="actions" className="admin-workspace-tab">
+              Actions
+            </TabsTrigger>
           </TabsList>
         </aside>
 
         <div className="admin-workspace-content">
           <TabsContent value="overview" className="m-0">
-            <AdminSectionCard
-              title="Section Overview"
-              description="The current academic placement and roster ownership for this section."
-              density="compact"
-            >
+            <AdminSectionCard title="Section Overview" description="The current academic placement and roster ownership for this section." density="compact">
               <dl className="admin-detail-list">
                 <InfoRow label="Section" value={section?.name} />
                 <InfoRow label="Grade Level" value={section?.gradeLevel ? `Grade ${section.gradeLevel}` : undefined} />
@@ -176,11 +183,7 @@ export default function AdminSectionRosterPage() {
           </TabsContent>
 
           <TabsContent value="schedule" className="m-0">
-            <AdminSectionCard
-              title="Weekly Schedule"
-              description="See how this section is distributed across the school week."
-              density="compact"
-            >
+            <AdminSectionCard title="Weekly Schedule" description="See how this section is distributed across the school week." density="compact">
               <SectionScheduleViewer sectionId={sectionId} chrome="flat" />
             </AdminSectionCard>
           </TabsContent>
@@ -195,73 +198,108 @@ export default function AdminSectionRosterPage() {
                 <AdminEmptyState
                   title="No students in this section yet"
                   description="This section is ready, but no roster entries have been assigned yet."
-                  action={(
-                    <Button className="admin-button-solid rounded-xl font-black" onClick={() => router.push(`/dashboard/admin/sections/${sectionId}/students/add`)}>
+                  action={
+                    <Button
+                      className="admin-button-solid rounded-xl font-black"
+                      onClick={() => router.push(`/dashboard/admin/sections/${sectionId}/students/add`)}
+                    >
                       <UserPlus className="h-4 w-4" />
                       Add Students
                     </Button>
-                  )}
+                  }
                 />
               ) : (
                 <div className="space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--admin-outline)] bg-[#fbfcfe] px-4 py-3">
                     <p className="text-sm font-semibold text-[var(--admin-text-strong)]">
-                      {dedupedRoster.length} student{dedupedRoster.length === 1 ? '' : 's'} enrolled
+                      {visibleRoster.length} of {dedupedRoster.length} student
+                      {dedupedRoster.length === 1 ? '' : 's'} shown
                     </p>
-                    <p className="text-xs uppercase tracking-[0.14em] text-[var(--admin-text-muted)]">
-                      Select a student name to open the full profile
-                    </p>
+                    <p className="text-xs uppercase tracking-[0.14em] text-[var(--admin-text-muted)]">Select a student name to open the full profile</p>
                   </div>
 
-                  <div className="admin-table-shell">
-                    <Table>
-                      <TableHeader className="admin-table-head">
-                        <TableRow className="hover:bg-transparent">
-                          <TableHead>#</TableHead>
-                          <TableHead>Student</TableHead>
-                          <TableHead>Email</TableHead>
-                          <TableHead>LRN</TableHead>
-                          <TableHead>Grade</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody className="[&_tr:last-child]:border-0">
-                        {dedupedRoster.map((student, index) => (
-                          <TableRow key={student.id} className="admin-table-row">
-                            <TableCell>{index + 1}</TableCell>
-                            <TableCell>
-                              <button
-                                type="button"
-                                onClick={() => router.push(`/dashboard/admin/users/${student.id}`)}
-                                className="flex items-center gap-3 rounded-xl px-1 py-1 text-left transition-colors hover:bg-red-50/70"
-                              >
-                                <Avatar className="h-9 w-9 border border-[var(--admin-outline)]">
-                                  {student.profilePicture ? (
-                                    <AvatarImage src={student.profilePicture} alt={`${student.firstName || ''} ${student.lastName || ''}`.trim()} />
-                                  ) : null}
-                                  <AvatarFallback>{getInitials(student.firstName, student.lastName)}</AvatarFallback>
-                                </Avatar>
-                                <span className="font-semibold text-[var(--admin-text-strong)]">
-                                  {student.firstName} {student.lastName}
-                                </span>
-                              </button>
-                            </TableCell>
-                            <TableCell className="text-[var(--admin-text-muted)]">{student.email || 'N/A'}</TableCell>
-                            <TableCell className="text-[var(--admin-text-muted)]">{student.lrn || 'N/A'}</TableCell>
-                            <TableCell className="text-[var(--admin-text-muted)]">{student.gradeLevel || 'N/A'}</TableCell>
-                            <TableCell className="space-x-1 text-right">
-                              <Button variant="ghost" size="sm" className="rounded-xl" onClick={() => setSelectedStudent(student)}>
-                                View
-                              </Button>
-                              <Button variant="ghost" size="sm" className="rounded-xl text-rose-600 hover:bg-rose-50 hover:text-rose-700" onClick={() => openLifecycle(student)}>
-                                Resolve membership
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                  <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_14rem]">
+                    <Input
+                      type="search"
+                      aria-label="Search section roster"
+                      placeholder="Search name, email, or LRN"
+                      value={rosterQuery}
+                      onChange={(event) => setRosterQuery(event.target.value)}
+                      className="admin-input"
+                    />
+                    <select
+                      aria-label="Filter roster by grade"
+                      value={gradeFilter}
+                      onChange={(event) => setGradeFilter(event.target.value)}
+                      className="admin-select"
+                    >
+                      <option value="all">All grade levels</option>
+                      {gradeOptions.map((grade) => (
+                        <option key={grade} value={grade}>
+                          Grade {grade}
+                        </option>
+                      ))}
+                    </select>
                   </div>
+
+                  {visibleRoster.length === 0 ? (
+                    <AdminEmptyState title="No students match these controls" description="Clear the search or choose another grade level." />
+                  ) : (
+                    <div className="admin-table-shell">
+                      <Table>
+                        <TableHeader className="admin-table-head">
+                          <TableRow className="hover:bg-transparent">
+                            <TableHead>#</TableHead>
+                            <TableHead>Student</TableHead>
+                            <TableHead>Email</TableHead>
+                            <TableHead>LRN</TableHead>
+                            <TableHead>Grade</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody className="[&_tr:last-child]:border-0">
+                          {visibleRoster.map((student, index) => (
+                            <TableRow key={student.id} className="admin-table-row">
+                              <TableCell>{index + 1}</TableCell>
+                              <TableCell>
+                                <button
+                                  type="button"
+                                  onClick={() => router.push(`/dashboard/admin/users/${student.id}`)}
+                                  className="flex items-center gap-3 rounded-xl px-1 py-1 text-left transition-colors hover:bg-red-50/70"
+                                >
+                                  <Avatar className="h-9 w-9 border border-[var(--admin-outline)]">
+                                    {student.profilePicture ? (
+                                      <AvatarImage src={student.profilePicture} alt={`${student.firstName || ''} ${student.lastName || ''}`.trim()} />
+                                    ) : null}
+                                    <AvatarFallback>{getInitials(student.firstName, student.lastName)}</AvatarFallback>
+                                  </Avatar>
+                                  <span className="font-semibold text-[var(--admin-text-strong)]">
+                                    {student.firstName} {student.lastName}
+                                  </span>
+                                </button>
+                              </TableCell>
+                              <TableCell className="text-[var(--admin-text-muted)]">{student.email || 'N/A'}</TableCell>
+                              <TableCell className="text-[var(--admin-text-muted)]">{student.lrn || 'N/A'}</TableCell>
+                              <TableCell className="text-[var(--admin-text-muted)]">{student.gradeLevel || 'N/A'}</TableCell>
+                              <TableCell className="space-x-1 text-right">
+                                <Button variant="ghost" size="sm" className="rounded-xl" onClick={() => setSelectedStudent(student)}>
+                                  View
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="rounded-xl text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                                  onClick={() => openLifecycle(student)}
+                                >
+                                  Resolve membership
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
                 </div>
               )}
             </AdminSectionCard>
@@ -369,11 +407,7 @@ export default function AdminSectionRosterPage() {
                 <option value="">Choose destination section</option>
                 {destinationSections
                   .filter(
-                    (entry) =>
-                      entry.id !== sectionId &&
-                      entry.isActive &&
-                      entry.schoolYear === section?.schoolYear &&
-                      entry.gradeLevel === section?.gradeLevel,
+                    (entry) => entry.id !== sectionId && entry.isActive && entry.schoolYear === section?.schoolYear && entry.gradeLevel === section?.gradeLevel,
                   )
                   .map((entry) => (
                     <option key={entry.id} value={entry.id}>
@@ -383,17 +417,14 @@ export default function AdminSectionRosterPage() {
               </select>
             ) : null
           }
-          canPreview={(intent) =>
-            intent !== 'TRANSFER_SECTION' || Boolean(destinationSectionId)
-          }
+          canPreview={(intent) => intent !== 'TRANSFER_SECTION' || Boolean(destinationSectionId)}
           preview={async (intent) =>
             (
               await adminLifecycleService.previewStudent({
                 studentId: lifecycleStudent.id,
                 sectionId,
                 resolution: intent as 'CORRECT_ENROLLMENT' | 'WITHDRAW' | 'TRANSFER_SECTION',
-                destinationSectionId:
-                  intent === 'TRANSFER_SECTION' ? destinationSectionId : undefined,
+                destinationSectionId: intent === 'TRANSFER_SECTION' ? destinationSectionId : undefined,
                 effectivePeriod: activePeriod,
               })
             ).data
@@ -404,17 +435,14 @@ export default function AdminSectionRosterPage() {
                 studentId: lifecycleStudent.id,
                 sectionId,
                 resolution: intent as 'CORRECT_ENROLLMENT' | 'WITHDRAW' | 'TRANSFER_SECTION',
-                destinationSectionId:
-                  intent === 'TRANSFER_SECTION' ? destinationSectionId : undefined,
+                destinationSectionId: intent === 'TRANSFER_SECTION' ? destinationSectionId : undefined,
                 effectivePeriod: activePeriod,
                 ...evidence,
               })
             ).data
           }
           onCompleted={() => {
-            setRoster((current) =>
-              current.filter((student) => student.id !== lifecycleStudent.id),
-            );
+            setRoster((current) => current.filter((student) => student.id !== lifecycleStudent.id));
             if (selectedStudent?.id === lifecycleStudent.id) {
               setSelectedStudent(null);
             }
@@ -425,18 +453,10 @@ export default function AdminSectionRosterPage() {
   );
 }
 
-function InfoRow({
-  label,
-  value,
-}: {
-  label: string;
-  value?: string;
-}) {
+function InfoRow({ label, value }: { label: string; value?: string }) {
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">
-        {label}
-      </p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">{label}</p>
       <p className="text-[var(--admin-text-strong)]">{value || 'N/A'}</p>
     </div>
   );

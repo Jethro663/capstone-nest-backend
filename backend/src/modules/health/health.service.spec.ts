@@ -11,6 +11,8 @@ jest.mock('ioredis', () =>
 );
 
 describe('HealthService', () => {
+  const originalAppVersion = process.env.APP_VERSION;
+  const originalNpmVersion = process.env.npm_package_version;
   const mockDatabaseService = {
     ping: jest.fn().mockResolvedValue(undefined),
   } as unknown as DatabaseService;
@@ -29,10 +31,46 @@ describe('HealthService', () => {
       ok: true,
       json: jest.fn().mockResolvedValue({ data: { ollamaAvailable: true } }),
     });
+    delete process.env.APP_VERSION;
+    delete process.env.npm_package_version;
   });
 
   afterEach(() => {
     jest.useRealTimers();
+    if (originalAppVersion === undefined) delete process.env.APP_VERSION;
+    else process.env.APP_VERSION = originalAppVersion;
+    if (originalNpmVersion === undefined)
+      delete process.env.npm_package_version;
+    else process.env.npm_package_version = originalNpmVersion;
+  });
+
+  it('uses packaged backend metadata when npm and Railway variables are unavailable', () => {
+    const service = new HealthService(mockDatabaseService, mockConfigService);
+
+    expect(service.getServiceMetadata()).toEqual({
+      name: 'backend',
+      version: '0.0.1',
+      gitCommit: 'development',
+    });
+  });
+
+  it('prefers explicit deployment metadata and ignores blank values', () => {
+    process.env.APP_VERSION = ' 0.0.2-release ';
+    const configService = {
+      get: jest.fn((key: string) => {
+        if (key === 'APP_VERSION') return process.env.APP_VERSION;
+        if (key === 'RAILWAY_GIT_COMMIT_SHA') return ' abcdef1234567890 ';
+        return undefined;
+      }),
+    } as unknown as ConfigService;
+
+    const service = new HealthService(mockDatabaseService, configService);
+
+    expect(service.getServiceMetadata()).toEqual({
+      name: 'backend',
+      version: '0.0.2-release',
+      gitCommit: 'abcdef1234567890',
+    });
   });
 
   it('reuses the cached readiness result inside the TTL window', async () => {
@@ -48,7 +86,6 @@ describe('HealthService', () => {
   });
 
   it('includes backend and ai service version metadata in readiness status', async () => {
-    const previousVersion = process.env.npm_package_version;
     process.env.npm_package_version = '0.0.1-test';
     (global as any).fetch = jest.fn().mockResolvedValue({
       ok: true,
@@ -69,8 +106,6 @@ describe('HealthService', () => {
       gitCommit: 'development',
     });
     expect(readiness.dependencies.aiService.version).toBe('1.0.0-test');
-
-    process.env.npm_package_version = previousVersion;
   });
 
   it('marks ai service degraded when embedding runtime is unavailable', async () => {

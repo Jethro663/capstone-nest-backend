@@ -2,17 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import {
-  ArrowLeft,
-  ChevronDown,
-  ChevronUp,
-  Trash2,
-  UserPlus,
-} from 'lucide-react';
-import {
-  sectionService,
-  type RosterStudent,
-} from '@/services/section-service';
+import { ArrowLeft, ChevronDown, ChevronUp, Trash2, UserPlus } from 'lucide-react';
+import { sectionService, type RosterStudent } from '@/services/section-service';
 import { useAuth } from '@/providers/AuthProvider';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -52,15 +43,14 @@ export default function SectionRosterPage() {
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [removingSelected, setRemovingSelected] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(true);
+  const [rosterQuery, setRosterQuery] = useState('');
+  const [gradeFilter, setGradeFilter] = useState('all');
 
   const fetchData = useCallback(async () => {
     if (!isAuthenticated) return;
     try {
       setLoading(true);
-      const [sectionRes, rosterRes] = await Promise.all([
-        sectionService.getById(sectionId),
-        sectionService.getRoster(sectionId),
-      ]);
+      const [sectionRes, rosterRes] = await Promise.all([sectionService.getById(sectionId), sectionService.getRoster(sectionId)]);
 
       setSection(sectionRes.data);
       setRoster(rosterRes.data || []);
@@ -85,15 +75,32 @@ export default function SectionRosterPage() {
       return true;
     });
   }, [roster]);
+  const gradeOptions = useMemo(
+    () =>
+      Array.from(new Set(dedupedRoster.map((student) => String(student.gradeLevel || '')).filter(Boolean))).sort((left, right) =>
+        left.localeCompare(right, undefined, { numeric: true }),
+      ),
+    [dedupedRoster],
+  );
+  const visibleRoster = useMemo(() => {
+    const query = rosterQuery.trim().toLocaleLowerCase();
+    return dedupedRoster.filter((student) => {
+      const matchesQuery =
+        !query ||
+        [`${student.firstName || ''} ${student.lastName || ''}`, student.email || '', student.lrn || ''].some((value) =>
+          value.toLocaleLowerCase().includes(query),
+        );
+      const matchesGrade = gradeFilter === 'all' || String(student.gradeLevel || '') === gradeFilter;
+      return matchesQuery && matchesGrade;
+    });
+  }, [dedupedRoster, gradeFilter, rosterQuery]);
 
   useEffect(() => {
     const visibleIds = new Set(dedupedRoster.map((student) => student.id));
     setSelectedStudentIds((current) => current.filter((id) => visibleIds.has(id)));
   }, [dedupedRoster]);
 
-  const allVisibleSelected =
-    dedupedRoster.length > 0 &&
-    dedupedRoster.every((student) => selectedStudentIds.includes(student.id));
+  const allVisibleSelected = visibleRoster.length > 0 && visibleRoster.every((student) => selectedStudentIds.includes(student.id));
 
   const adviserName = formatAdviserName(section);
 
@@ -103,18 +110,15 @@ export default function SectionRosterPage() {
 
   const handleSelectAllVisible = () => {
     if (allVisibleSelected) {
-      setSelectedStudentIds([]);
+      const visibleIds = new Set(visibleRoster.map((student) => student.id));
+      setSelectedStudentIds((current) => current.filter((id) => !visibleIds.has(id)));
       return;
     }
-    setSelectedStudentIds(dedupedRoster.map((student) => student.id));
+    setSelectedStudentIds((current) => Array.from(new Set([...current, ...visibleRoster.map((student) => student.id)])));
   };
 
   const handleSelectStudent = (studentId: string) => {
-    setSelectedStudentIds((current) =>
-      current.includes(studentId)
-        ? current.filter((id) => id !== studentId)
-        : [...current, studentId],
-    );
+    setSelectedStudentIds((current) => (current.includes(studentId) ? current.filter((id) => id !== studentId) : [...current, studentId]));
   };
 
   const handleRemoveStudent = async (studentId: string) => {
@@ -133,18 +137,12 @@ export default function SectionRosterPage() {
 
   const handleRemoveSelected = async () => {
     if (selectedStudentIds.length === 0) return;
-    const selectedRows = dedupedRoster.filter((student) =>
-      selectedStudentIds.includes(student.id),
-    );
+    const selectedRows = dedupedRoster.filter((student) => selectedStudentIds.includes(student.id));
     if (selectedRows.length === 0) return;
 
     setRemovingSelected(true);
     try {
-      const results = await Promise.allSettled(
-        selectedRows.map((student) =>
-          sectionService.removeStudent(sectionId, student.id),
-        ),
-      );
+      const results = await Promise.allSettled(selectedRows.map((student) => sectionService.removeStudent(sectionId, student.id)));
 
       const successfulIds: string[] = [];
       const failedIds: string[] = [];
@@ -157,9 +155,7 @@ export default function SectionRosterPage() {
       });
 
       if (successfulIds.length > 0) {
-        setRoster((current) =>
-          current.filter((student) => !successfulIds.includes(student.id)),
-        );
+        setRoster((current) => current.filter((student) => !successfulIds.includes(student.id)));
       }
 
       setSelectedStudentIds(failedIds);
@@ -169,9 +165,7 @@ export default function SectionRosterPage() {
       } else if (successfulIds.length === 0) {
         toast.error(`Unable to remove ${failedIds.length} selected student(s).`);
       } else {
-        toast.success(
-          `Removed ${successfulIds.length} student(s). ${failedIds.length} could not be removed.`,
-        );
+        toast.success(`Removed ${successfulIds.length} student(s). ${failedIds.length} could not be removed.`);
       }
     } finally {
       setRemovingSelected(false);
@@ -192,15 +186,8 @@ export default function SectionRosterPage() {
   return (
     <div className="teacher-section-roster">
       <section className="teacher-section-roster__workspace">
-        <header
-          className="teacher-section-roster__hero teacher-section-roster__soft-enter"
-          style={getEnterStyle(0)}
-        >
-          <button
-            type="button"
-            className="teacher-section-roster__back"
-            onClick={() => router.push('/dashboard/teacher/sections')}
-          >
+        <header className="teacher-section-roster__hero teacher-section-roster__soft-enter" style={getEnterStyle(0)}>
+          <button type="button" className="teacher-section-roster__back" onClick={() => router.push('/dashboard/teacher/sections')}>
             <ArrowLeft className="h-4 w-4" />
             My Sections
           </button>
@@ -213,23 +200,14 @@ export default function SectionRosterPage() {
               </p>
             </div>
 
-            <Button
-              type="button"
-              className="teacher-section-roster__add"
-              onClick={() =>
-                router.push(`/dashboard/teacher/sections/${sectionId}/students/add`)
-              }
-            >
+            <Button type="button" className="teacher-section-roster__add" onClick={() => router.push(`/dashboard/teacher/sections/${sectionId}/students/add`)}>
               <UserPlus className="h-4 w-4" />
               Add Students
             </Button>
           </div>
         </header>
 
-        <section
-          className="teacher-section-roster__panel teacher-section-roster__soft-enter"
-          style={getEnterStyle(55)}
-        >
+        <section className="teacher-section-roster__panel teacher-section-roster__soft-enter" style={getEnterStyle(55)}>
           <div className="teacher-section-roster__panel-head teacher-section-roster__panel-head--schedule">
             <h2>Section Schedule</h2>
             <button
@@ -248,16 +226,11 @@ export default function SectionRosterPage() {
               <SectionScheduleViewer sectionId={sectionId} theme="teacher" chrome="flat" />
             </div>
           ) : (
-            <p className="teacher-section-roster__schedule-collapsed">
-              Schedule hidden. Click Show to expand.
-            </p>
+            <p className="teacher-section-roster__schedule-collapsed">Schedule hidden. Click Show to expand.</p>
           )}
         </section>
 
-        <section
-          className="teacher-section-roster__stats teacher-section-roster__soft-enter"
-          style={getEnterStyle(95)}
-        >
+        <section className="teacher-section-roster__stats teacher-section-roster__soft-enter" style={getEnterStyle(95)}>
           <article className="teacher-section-roster__stat-chip">
             <small>Students</small>
             <strong>{dedupedRoster.length}</strong>
@@ -276,15 +249,34 @@ export default function SectionRosterPage() {
           </article>
         </section>
 
-        <section
-          className="teacher-section-roster__panel teacher-section-roster__soft-enter"
-          style={getEnterStyle(130)}
-        >
+        <section className="teacher-section-roster__panel teacher-section-roster__soft-enter" style={getEnterStyle(130)}>
           <div className="teacher-section-roster__panel-head">
             <h2>
               Student Roster <span>({dedupedRoster.length})</span>
             </h2>
           </div>
+
+          <div className="grid gap-3 border-y border-white/10 bg-white/5 p-4 md:grid-cols-[minmax(0,1fr)_14rem]">
+            <input
+              type="search"
+              aria-label="Search section roster"
+              placeholder="Search name, email, or LRN"
+              value={rosterQuery}
+              onChange={(event) => setRosterQuery(event.target.value)}
+              className="teacher-input"
+            />
+            <select aria-label="Filter roster by grade" value={gradeFilter} onChange={(event) => setGradeFilter(event.target.value)} className="teacher-select">
+              <option value="all">All grade levels</option>
+              {gradeOptions.map((grade) => (
+                <option key={grade} value={grade}>
+                  Grade {grade}
+                </option>
+              ))}
+            </select>
+          </div>
+          <p className="px-4 py-2 text-sm text-[var(--teacher-text-muted)]" aria-live="polite">
+            Showing {visibleRoster.length} of {dedupedRoster.length} students
+          </p>
 
           {selectedStudentIds.length > 0 ? (
             <div className="teacher-section-roster__selection-bar">
@@ -303,21 +295,16 @@ export default function SectionRosterPage() {
           ) : null}
 
           {dedupedRoster.length === 0 ? (
-            <div className="teacher-section-roster__empty">
-              No students enrolled in this section yet.
-            </div>
+            <div className="teacher-section-roster__empty">No students enrolled in this section yet.</div>
+          ) : visibleRoster.length === 0 ? (
+            <div className="teacher-section-roster__empty">No students match the current search and grade filter.</div>
           ) : (
             <div className="teacher-section-roster__table-wrap">
               <table className="teacher-section-roster__table">
                 <thead>
                   <tr>
                     <th className="teacher-section-roster__checkbox-cell">
-                      <input
-                        type="checkbox"
-                        checked={allVisibleSelected}
-                        onChange={handleSelectAllVisible}
-                        aria-label="Select all students"
-                      />
+                      <input type="checkbox" checked={allVisibleSelected} onChange={handleSelectAllVisible} aria-label="Select all students" />
                     </th>
                     <th>Student</th>
                     <th>Email</th>
@@ -327,40 +314,21 @@ export default function SectionRosterPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {dedupedRoster.map((student) => {
-                    const studentName =
-                      `${student.firstName || ''} ${student.lastName || ''}`.trim() ||
-                      'Unnamed Student';
+                  {visibleRoster.map((student) => {
+                    const studentName = `${student.firstName || ''} ${student.lastName || ''}`.trim() || 'Unnamed Student';
                     const isBusy = busyStudentIds.includes(student.id);
                     const isSelected = selectedStudentIds.includes(student.id);
 
                     return (
-                      <tr
-                        key={student.id}
-                        className="teacher-section-roster__row"
-                        data-selected={isSelected}
-                        onClick={() => handleRowOpen(student.id)}
-                      >
-                        <td
-                          className="teacher-section-roster__checkbox-cell"
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => handleSelectStudent(student.id)}
-                            aria-label={`Select ${studentName}`}
-                          />
+                      <tr key={student.id} className="teacher-section-roster__row" data-selected={isSelected} onClick={() => handleRowOpen(student.id)}>
+                        <td className="teacher-section-roster__checkbox-cell" onClick={(event) => event.stopPropagation()}>
+                          <input type="checkbox" checked={isSelected} onChange={() => handleSelectStudent(student.id)} aria-label={`Select ${studentName}`} />
                         </td>
                         <td>
                           <div className="teacher-section-roster__student">
                             <Avatar className="h-8 w-8 border border-[var(--teacher-outline)]">
-                              {student.profilePicture ? (
-                                <AvatarImage src={student.profilePicture} alt={studentName} />
-                              ) : null}
-                              <AvatarFallback>
-                                {getInitials(student.firstName, student.lastName)}
-                              </AvatarFallback>
+                              {student.profilePicture ? <AvatarImage src={student.profilePicture} alt={studentName} /> : null}
+                              <AvatarFallback>{getInitials(student.firstName, student.lastName)}</AvatarFallback>
                             </Avatar>
                             <div>
                               <strong>{studentName}</strong>
@@ -371,10 +339,7 @@ export default function SectionRosterPage() {
                         <td>{student.email || 'N/A'}</td>
                         <td>{student.lrn || 'N/A'}</td>
                         <td>{student.gradeLevel || 'N/A'}</td>
-                        <td
-                          className="teacher-section-roster__actions-cell"
-                          onClick={(event) => event.stopPropagation()}
-                        >
+                        <td className="teacher-section-roster__actions-cell" onClick={(event) => event.stopPropagation()}>
                           <button
                             type="button"
                             className="teacher-section-roster__remove-icon"

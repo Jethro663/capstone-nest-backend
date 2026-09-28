@@ -197,4 +197,23 @@ describe('Sidebar route warmup', () => {
 
     expect(pushMock).toHaveBeenCalledWith('/dashboard/student/calendar');
   });
+
+  it.each(['admin', 'teacher', 'student'] as const)('uses the shared bright navigation-item treatment for the %s drawer', (shellRole) => {
+    usePathnameMock.mockReturnValue(
+      shellRole === 'admin' ? '/dashboard/admin' : shellRole === 'teacher' ? '/dashboard/teacher/classes' : '/dashboard/student/courses',
+    );
+    useAuthMock.mockReturnValue({
+      role: shellRole,
+      user: {
+        firstName: 'Role',
+        lastName: 'User',
+        email: `${shellRole}@lms.local`,
+      },
+    });
+
+    render(<Sidebar shellRole={shellRole} />);
+
+    const firstNavigationItem = screen.getAllByRole('button').find((button) => button.classList.contains('role-sidebar__item'));
+    expect(firstNavigationItem).toBeDefined();
+  });
 });

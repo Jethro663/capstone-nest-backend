@@ -14,6 +14,7 @@ jest.mock("react-native", () => {
     Pressable: component("Pressable"),
     ScrollView: component("ScrollView"),
     Text: component("Text"),
+    TextInput: component("TextInput"),
     View: component("View"),
   };
 });
@@ -107,6 +108,24 @@ describe("MobileClassRecordWorkbook learner visibility", () => {
     });
     expect(text(renderer!.toJSON())).toContain("Santos");
     expect(text(renderer!.toJSON())).toContain("History");
+  });
+
+  it("searches visible workbook learners by name", () => {
+    let renderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        <MobileClassRecordWorkbook workbook={workbook("finalized")} />,
+      );
+    });
+
+    act(() =>
+      renderer!.root
+        .findByProps({ accessibilityLabel: "Search class record learners" })
+        .props.onChangeText("Hanna"),
+    );
+
+    expect(text(renderer!.toJSON())).toContain("History, Hanna");
+    expect(text(renderer!.toJSON())).not.toContain("Santos, Ana");
   });
 
   it("marks an archived account while keeping its enrolled row current", () => {

@@ -1297,7 +1297,7 @@ body {
   --admin-sidebar-border: rgba(255, 255, 255, 0.08);
   --admin-sidebar-hover: rgba(255, 255, 255, 0.06);
   --admin-sidebar-active: #f70a10;
-  --admin-sidebar-text: #8ea0bc;
+  --admin-sidebar-text: #b8c7db;
   --admin-sidebar-text-strong: #ffffff;
   --admin-shadow: 0 20px 36px -30px rgba(19, 34, 58, 0.22);
 }
@@ -1491,7 +1491,7 @@ body {
 
 .admin-sidebar__item {
   border-radius: 0.88rem;
-  color: var(--admin-sidebar-text);
+  color: #b8c7db;
   gap: 0.72rem;
   padding: 0.7rem 0.88rem;
   border: 1px solid transparent;
@@ -1510,7 +1510,7 @@ body {
 
 .admin-sidebar__item:hover {
   background: var(--admin-sidebar-hover);
-  color: var(--admin-sidebar-text-strong);
+  color: #f4f7fb;
 }
 
 .admin-sidebar__item--active {
@@ -8173,7 +8173,7 @@ body {
 
 .student-sidebar__item {
   border-radius: 0.78rem;
-  color: var(--student-text-muted);
+  color: #b8c7db;
   gap: 0.64rem;
   padding: 0.64rem 0.72rem;
   border: 1px solid transparent;
@@ -8186,7 +8186,7 @@ body {
 
 .student-sidebar__item:hover {
   background: color-mix(in srgb, var(--student-white) 6%, transparent);
-  color: var(--student-surface-soft);
+  color: #f4f7fb;
 }
 
 .student-sidebar__item--active {
@@ -8469,7 +8469,7 @@ body {
 
 .teacher-sidebar__item {
   border-radius: 0.78rem;
-  color: #8ea0bc;
+  color: #b8c7db;
   gap: 0.64rem;
   padding: 0.64rem 0.72rem;
   border: 1px solid transparent;
@@ -8482,7 +8482,7 @@ body {
 
 .teacher-sidebar__item:hover {
   background: rgba(255, 255, 255, 0.06);
-  color: #d8e4f6;
+  color: #f4f7fb;
 }
 
 .teacher-sidebar__item--active {

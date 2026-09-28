@@ -1311,6 +1311,14 @@ export default function StudentClassDetailPage() {
   >({});
   const [assignmentFilter, setAssignmentFilter] =
     useState<AssignmentCategory>("upcoming");
+  const [classmateSearch, setClassmateSearch] = useState("");
+  const [classmateFilter, setClassmateFilter] = useState<
+    "all" | "with_photo" | "without_photo"
+  >("all");
+  const [gradeSearch, setGradeSearch] = useState("");
+  const [gradeStatusFilter, setGradeStatusFilter] = useState<
+    "all" | GradeRow["statusTone"]
+  >("all");
   const [moduleCardView, setModuleCardView] = useState<ModuleCardView>("wide");
   const [helpOpen, setHelpOpen] = useState(false);
   const [helpPage, setHelpPage] = useState(0);
@@ -1965,6 +1973,21 @@ export default function StudentClassDetailPage() {
     () => getEnrollmentRows(classItem),
     [classItem],
   );
+  const visibleClassmateRows = useMemo(() => {
+    const query = classmateSearch.trim().toLowerCase();
+    return classmateRows.filter((row) => {
+      if (classmateFilter === "with_photo" && !row.profilePicture) return false;
+      if (classmateFilter === "without_photo" && row.profilePicture) return false;
+      return !query || [row.fullName, row.email, row.section].some((value) => value.toLowerCase().includes(query));
+    });
+  }, [classmateFilter, classmateRows, classmateSearch]);
+  const visibleGradeRows = useMemo(() => {
+    const query = gradeSearch.trim().toLowerCase();
+    return gradeRows.filter((row) => {
+      if (gradeStatusFilter !== "all" && row.statusTone !== gradeStatusFilter) return false;
+      return !query || [row.title, row.categoryLabel, row.statusLabel, row.detailText].some((value) => value.toLowerCase().includes(query));
+    });
+  }, [gradeRows, gradeSearch, gradeStatusFilter]);
   const discussionLimitState = useMemo(
     () => getDiscussionLimitState(selectedDiscussionThread, user?.id, role),
     [role, selectedDiscussionThread, user?.id],
@@ -2779,6 +2802,25 @@ export default function StudentClassDetailPage() {
               </p>
             </header>
 
+            <div className="student-class-filters">
+              <Input
+                type="search"
+                aria-label="Search classmates"
+                value={classmateSearch}
+                onChange={(event) => setClassmateSearch(event.target.value)}
+                placeholder="Search classmate name or email"
+              />
+              <select
+                aria-label="Filter classmates"
+                value={classmateFilter}
+                onChange={(event) => setClassmateFilter(event.target.value as "all" | "with_photo" | "without_photo")}
+                className="student-input"
+              >
+                <option value="all">All classmates</option>
+                <option value="with_photo">With profile photo</option>
+                <option value="without_photo">Without profile photo</option>
+              </select>
+            </div>
             <div className="student-class-table-wrap">
               <table className="student-class-table">
                 <thead>
@@ -2789,7 +2831,7 @@ export default function StudentClassDetailPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {classmateRows.map((row) => (
+                  {visibleClassmateRows.map((row) => (
                     <tr key={row.id}>
                       <td>
                         <div className="student-class-student-cell">
@@ -2816,6 +2858,10 @@ export default function StudentClassDetailPage() {
               {classmateRows.length === 0 ? (
                 <div className="teacher-class-workspace__empty">
                   No classmates found.
+                </div>
+              ) : visibleClassmateRows.length === 0 ? (
+                <div className="teacher-class-workspace__empty">
+                  No classmates match this search and filter.
                 </div>
               ) : null}
             </div>
@@ -2848,6 +2894,26 @@ export default function StudentClassDetailPage() {
               </div>
             </header>
 
+            <div className="student-class-filters">
+              <Input
+                type="search"
+                aria-label="Search gradebook records"
+                value={gradeSearch}
+                onChange={(event) => setGradeSearch(event.target.value)}
+                placeholder="Search item, category, or status"
+              />
+              <select
+                aria-label="Filter gradebook records"
+                value={gradeStatusFilter}
+                onChange={(event) => setGradeStatusFilter(event.target.value as "all" | GradeRow["statusTone"])}
+                className="student-input"
+              >
+                <option value="all">All grade states</option>
+                <option value="graded">Graded</option>
+                <option value="submitted">Submitted</option>
+                <option value="pending">Pending</option>
+              </select>
+            </div>
             <div className="student-gradebook">
               <div className="student-gradebook__rule" aria-hidden="true" />
               <div className="student-class-table-wrap student-class-table-wrap--gradebook">
@@ -2858,6 +2924,10 @@ export default function StudentClassDetailPage() {
                 ) : gradeRows.length === 0 ? (
                   <div className="teacher-class-workspace__empty">
                     No grade records yet.
+                  </div>
+                ) : visibleGradeRows.length === 0 ? (
+                  <div className="teacher-class-workspace__empty">
+                    No grade records match this search and filter.
                   </div>
                 ) : (
                   <table className="student-class-table student-class-table--gradebook">
@@ -2871,7 +2941,7 @@ export default function StudentClassDetailPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {gradeRows.map((row) => (
+                      {visibleGradeRows.map((row) => (
                         <tr key={row.id} data-pending={row.isPending}>
                           <td>
                             <div className="student-gradebook__item">

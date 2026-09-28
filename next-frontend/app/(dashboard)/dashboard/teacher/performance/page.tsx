@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  useEffect,
-  useMemo,
-  useState,
-  useCallback,
-} from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { RefreshCw } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
 import { classService } from "@/services/class-service";
@@ -60,7 +55,10 @@ import type {
 } from "@/types/performance";
 
 type PerformanceWorkspaceView =
-  "performance" | "heatmap" | "lesson-plan" | "data";
+  | "performance"
+  | "heatmap"
+  | "lesson-plan"
+  | "data";
 type DiagnosticsStatus = "idle" | "loading" | "ready" | "error";
 type LessonPlanProcedureKey = keyof LessonPlanStructuredOutput["procedures"];
 type LessonPlanDifferentiationKey =
@@ -318,6 +316,12 @@ export default function TeacherPerformancePage() {
     useState<ClassInterventionQuizComparisonResponse | null>(null);
   const [selectedComparisonFilterId, setSelectedComparisonFilterId] =
     useState("all");
+  const [comparisonQuery, setComparisonQuery] = useState("");
+  const [comparisonTrendFilter, setComparisonTrendFilter] = useState("all");
+  const [conceptQuery, setConceptQuery] = useState("");
+  const [conceptBandFilter, setConceptBandFilter] = useState("all");
+  const [logQuery, setLogQuery] = useState("");
+  const [logStatusFilter, setLogStatusFilter] = useState("all");
   const [logs, setLogs] = useState<ClassPerformanceLogsResponse | null>(null);
   const [diagnostics, setDiagnostics] =
     useState<ClassDiagnosticsResponse | null>(null);
@@ -409,14 +413,67 @@ export default function TeacherPerformancePage() {
           ],
     [interventionComparisons?.filterOptions],
   );
-  const filteredInterventionComparisons = useMemo(
-    () =>
-      (interventionComparisons?.comparisons ?? []).filter(
-        (row) =>
-          (row.filterId ?? row.assessmentId) === selectedComparisonFilterId,
-      ),
-    [interventionComparisons?.comparisons, selectedComparisonFilterId],
-  );
+  const filteredInterventionComparisons = useMemo(() => {
+    const query = comparisonQuery.trim().toLowerCase();
+    return (interventionComparisons?.comparisons ?? []).filter((row) => {
+      if ((row.filterId ?? row.assessmentId) !== selectedComparisonFilterId)
+        return false;
+      if (
+        comparisonTrendFilter !== "all" &&
+        row.trend !== comparisonTrendFilter
+      )
+        return false;
+      if (!query) return true;
+      const studentName = row.student
+        ? [row.student.lastName, row.student.firstName, row.student.email]
+            .filter(Boolean)
+            .join(" ")
+        : row.studentId;
+      return [studentName, row.assessmentTitle, trendLabel(row.trend)].some(
+        (value) =>
+          String(value ?? "")
+            .toLowerCase()
+            .includes(query),
+      );
+    });
+  }, [
+    comparisonQuery,
+    comparisonTrendFilter,
+    interventionComparisons?.comparisons,
+    selectedComparisonFilterId,
+  ]);
+  const visibleConceptHeatmapRows = useMemo(() => {
+    const query = conceptQuery.trim().toLowerCase();
+    return conceptHeatmapRows.filter((concept) => {
+      const normalizedBand = concept.band.label
+        .toLowerCase()
+        .replace(/\s+/g, "-");
+      if (conceptBandFilter !== "all" && normalizedBand !== conceptBandFilter)
+        return false;
+      return (
+        !query ||
+        [concept.label, concept.band.label].some((value) =>
+          value.toLowerCase().includes(query),
+        )
+      );
+    });
+  }, [conceptBandFilter, conceptHeatmapRows, conceptQuery]);
+  const visibleLogs = useMemo(() => {
+    const query = logQuery.trim().toLowerCase();
+    return (logs?.logs ?? []).filter((entry) => {
+      if (logStatusFilter === "support" && !entry.currentIsAtRisk) return false;
+      if (logStatusFilter === "stable" && entry.currentIsAtRisk) return false;
+      return (
+        !query ||
+        [
+          formatLogStudent(entry),
+          formatTriggerSource(entry.triggerSource),
+          entry.currentIsAtRisk ? "needs support" : "stable",
+          entry.previousIsAtRisk ? "needs support" : "stable",
+        ].some((value) => value.toLowerCase().includes(query))
+      );
+    });
+  }, [logQuery, logStatusFilter, logs?.logs]);
   const filteredComparisonCounts = useMemo(
     () => ({
       improved: filteredInterventionComparisons.filter(
@@ -1176,17 +1233,31 @@ export default function TeacherPerformancePage() {
                 ) : (
                   <div className="divide-y divide-[var(--teacher-border)] rounded-xl border border-[var(--teacher-border)] bg-white">
                     {(atRisk?.students ?? []).map((student) => (
-                      <article key={student.studentId} className="flex flex-wrap items-center gap-x-6 gap-y-3 p-4">
+                      <article
+                        key={student.studentId}
+                        className="flex flex-wrap items-center gap-x-6 gap-y-3 p-4"
+                      >
                         <div className="min-w-[180px] flex-1">
-                          <p className="font-semibold text-slate-900">{formatStudentName(student)}</p>
-                          <p className="mt-1 text-xs text-slate-600">Assessment {toPercent(student.assessmentAverage)} · Class record {toPercent(student.classRecordAverage)}</p>
+                          <p className="font-semibold text-slate-900">
+                            {formatStudentName(student)}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-600">
+                            Assessment {toPercent(student.assessmentAverage)} ·
+                            Class record {toPercent(student.classRecordAverage)}
+                          </p>
                         </div>
                         <div className="flex items-center gap-3">
                           <div>
-                            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Current standing</p>
-                            <p className="font-semibold text-slate-900">{toPercent(student.blendedScore)}</p>
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                              Current standing
+                            </p>
+                            <p className="font-semibold text-slate-900">
+                              {toPercent(student.blendedScore)}
+                            </p>
                           </div>
-                          <Badge className="teacher-badge-danger border-0">Needs Support</Badge>
+                          <Badge className="teacher-badge-danger border-0">
+                            Needs Support
+                          </Badge>
                         </div>
                         <Button
                           size="sm"
@@ -1215,19 +1286,56 @@ export default function TeacherPerformancePage() {
                   />
                 ) : (
                   <div className="space-y-3">
-                    <label className="block max-w-md text-sm font-semibold text-[var(--teacher-text-strong)]">
-                      Assessment focus
-                      <select
-                        aria-label="Assessment focus"
-                        value={selectedComparisonFilterId}
-                        onChange={(event) => setSelectedComparisonFilterId(event.target.value)}
-                        className="mt-2 w-full rounded-xl border border-[var(--teacher-border)] bg-white px-3 py-2.5 text-sm text-slate-900"
-                      >
-                        {comparisonFilterOptions.map((filter) => (
-                          <option key={filter.id} value={filter.id}>{formatComparisonFilterLabel(filter)}</option>
-                        ))}
-                      </select>
-                    </label>
+                    <div className="grid gap-3 lg:grid-cols-3">
+                      <label className="block text-sm font-semibold text-[var(--teacher-text-strong)]">
+                        Assessment focus
+                        <select
+                          aria-label="Assessment focus"
+                          value={selectedComparisonFilterId}
+                          onChange={(event) =>
+                            setSelectedComparisonFilterId(event.target.value)
+                          }
+                          className="mt-2 w-full rounded-xl border border-[var(--teacher-border)] bg-white px-3 py-2.5 text-sm text-slate-900"
+                        >
+                          {comparisonFilterOptions.map((filter) => (
+                            <option key={filter.id} value={filter.id}>
+                              {formatComparisonFilterLabel(filter)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="block text-sm font-semibold text-[var(--teacher-text-strong)]">
+                        Search records
+                        <Input
+                          aria-label="Search performance records"
+                          value={comparisonQuery}
+                          onChange={(event) =>
+                            setComparisonQuery(event.target.value)
+                          }
+                          placeholder="Search student, assessment, or trend"
+                          className="mt-2"
+                        />
+                      </label>
+                      <label className="block text-sm font-semibold text-[var(--teacher-text-strong)]">
+                        Trend
+                        <select
+                          aria-label="Filter performance records"
+                          value={comparisonTrendFilter}
+                          onChange={(event) =>
+                            setComparisonTrendFilter(event.target.value)
+                          }
+                          className="mt-2 w-full rounded-xl border border-[var(--teacher-border)] bg-white px-3 py-2.5 text-sm text-slate-900"
+                        >
+                          <option value="all">All trends</option>
+                          <option value="improved">Improved</option>
+                          <option value="declined">Declined</option>
+                          <option value="unchanged">Unchanged</option>
+                          <option value="awaiting_retry">
+                            Awaiting follow-up
+                          </option>
+                        </select>
+                      </label>
+                    </div>
                     <div className="flex flex-wrap gap-2 text-xs">
                       <Badge variant="secondary">
                         Improved: {filteredComparisonCounts.improved}
@@ -1284,7 +1392,12 @@ export default function TeacherPerformancePage() {
                                     {entry.beforeSampleSize} assessment
                                     {entry.beforeSampleSize === 1 ? "" : "s"}
                                   </div>
-                                  {entry.beforeSubmittedAt ? <div className="text-[10px] text-[var(--teacher-text-muted)]">Latest: {formatDateTime(entry.beforeSubmittedAt)}</div> : null}
+                                  {entry.beforeSubmittedAt ? (
+                                    <div className="text-[10px] text-[var(--teacher-text-muted)]">
+                                      Latest:{" "}
+                                      {formatDateTime(entry.beforeSubmittedAt)}
+                                    </div>
+                                  ) : null}
                                 </TableCell>
                                 <TableCell className="text-[var(--teacher-text-strong)]">
                                   {toPercent(entry.afterScorePercent)}
@@ -1292,7 +1405,12 @@ export default function TeacherPerformancePage() {
                                     {entry.afterSampleSize} AI-plan assessment
                                     {entry.afterSampleSize === 1 ? "" : "s"}
                                   </div>
-                                  {entry.afterSubmittedAt ? <div className="text-[10px] text-[var(--teacher-text-muted)]">Latest: {formatDateTime(entry.afterSubmittedAt)}</div> : null}
+                                  {entry.afterSubmittedAt ? (
+                                    <div className="text-[10px] text-[var(--teacher-text-muted)]">
+                                      Latest:{" "}
+                                      {formatDateTime(entry.afterSubmittedAt)}
+                                    </div>
+                                  ) : null}
                                 </TableCell>
                                 <TableCell className="text-[var(--teacher-text-strong)]">
                                   {formatSignedDelta(entry.deltaScorePercent)}
@@ -1312,8 +1430,8 @@ export default function TeacherPerformancePage() {
                                 colSpan={6}
                                 className="py-8 text-center text-sm text-[var(--teacher-text-muted)]"
                               >
-                                No comparison rows for this filter yet. Try All
-                                assessments or another quiz/performance task.
+                                No comparison rows match the selected search and
+                                filters.
                               </TableCell>
                             </TableRow>
                           )}
@@ -1410,14 +1528,47 @@ export default function TeacherPerformancePage() {
               {diagnosticsStatus === "loading" ? (
                 <Skeleton className="h-64 rounded-xl" />
               ) : diagnosticsStatus === "error" ? (
-                <TeacherEmptyState title="Concept evidence unavailable" description="Refresh the class diagnostics to review concept signals." />
+                <TeacherEmptyState
+                  title="Concept evidence unavailable"
+                  description="Refresh the class diagnostics to review concept signals."
+                />
               ) : conceptHeatmapRows.length === 0 ? (
-                <TeacherEmptyState title="No concept evidence yet" description="Run assessments and recompute this class to surface concept-level signals." />
+                <TeacherEmptyState
+                  title="No concept evidence yet"
+                  description="Run assessments and recompute this class to surface concept-level signals."
+                />
               ) : (
                 <div className="space-y-4">
+                  <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_240px]">
+                    <Input
+                      aria-label="Search concept records"
+                      value={conceptQuery}
+                      onChange={(event) => setConceptQuery(event.target.value)}
+                      placeholder="Search concept or mastery band"
+                    />
+                    <select
+                      aria-label="Filter concept records"
+                      value={conceptBandFilter}
+                      onChange={(event) =>
+                        setConceptBandFilter(event.target.value)
+                      }
+                      className="h-10 rounded-xl border border-[var(--teacher-border)] bg-white px-3 text-sm text-slate-900"
+                    >
+                      <option value="all">All mastery bands</option>
+                      <option value="critical">Critical</option>
+                      <option value="needs-reteach">Needs reteach</option>
+                      <option value="watch">Watch</option>
+                      <option value="high-mastery">High mastery</option>
+                    </select>
+                  </div>
                   <div className="rounded-xl border border-[var(--teacher-border)] bg-white p-4 text-sm text-slate-700">
-                    <strong className="text-slate-900">{conceptHeatmapRows.length} concepts</strong>{" "}ordered from lowest to highest mastery.
-                    Use misses and evidence count alongside the score; a small sample needs review before changing instruction.
+                    <strong className="text-slate-900">
+                      {visibleConceptHeatmapRows.length} of{" "}
+                      {conceptHeatmapRows.length} concepts
+                    </strong>{" "}
+                    shown from lowest to highest mastery. Use misses and
+                    evidence count alongside the score; a small sample needs
+                    review before changing instruction.
                   </div>
                   <div className="teacher-table-shell">
                     <Table>
@@ -1430,18 +1581,37 @@ export default function TeacherPerformancePage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody className="[&_tr:last-child]:border-0">
-                        {conceptHeatmapRows.map((concept) => (
-                          <TableRow key={concept.concept} className="teacher-table-row border-slate-200">
-                            <TableCell className="font-semibold text-slate-900">{concept.label}</TableCell>
+                        {visibleConceptHeatmapRows.map((concept) => (
+                          <TableRow
+                            key={concept.concept}
+                            className="teacher-table-row border-slate-200"
+                          >
+                            <TableCell className="font-semibold text-slate-900">
+                              {concept.label}
+                            </TableCell>
                             <TableCell>
                               <div className="min-w-36 space-y-1">
-                                <span className="font-semibold text-slate-900">{toPercent(concept.masteryScore)} · {concept.band.label}</span>
-                                <div className="h-2 overflow-hidden rounded-full bg-slate-200" aria-hidden="true">
-                                  <div className="h-full rounded-full bg-[#0C1D3A]" style={{ width: `${Math.max(0, Math.min(100, concept.masteryScore))}%` }} />
+                                <span className="font-semibold text-slate-900">
+                                  {toPercent(concept.masteryScore)} ·{" "}
+                                  {concept.band.label}
+                                </span>
+                                <div
+                                  className="h-2 overflow-hidden rounded-full bg-slate-200"
+                                  aria-hidden="true"
+                                >
+                                  <div
+                                    className="h-full rounded-full bg-[#0C1D3A]"
+                                    style={{
+                                      width: `${Math.max(0, Math.min(100, concept.masteryScore))}%`,
+                                    }}
+                                  />
                                 </div>
                               </div>
                             </TableCell>
-                            <TableCell className="text-slate-800">{concept.wrongCount} misses · {concept.evidenceCount} observations</TableCell>
+                            <TableCell className="text-slate-800">
+                              {concept.wrongCount} misses ·{" "}
+                              {concept.evidenceCount} observations
+                            </TableCell>
                             <TableCell className="text-slate-700">
                               {concept.evidenceCount < 3
                                 ? "Review more work before deciding"
@@ -1453,6 +1623,16 @@ export default function TeacherPerformancePage() {
                             </TableCell>
                           </TableRow>
                         ))}
+                        {visibleConceptHeatmapRows.length === 0 ? (
+                          <TableRow className="teacher-table-row border-slate-200">
+                            <TableCell
+                              colSpan={4}
+                              className="py-8 text-center text-sm text-slate-600"
+                            >
+                              No concept records match this search and filter.
+                            </TableCell>
+                          </TableRow>
+                        ) : null}
                       </TableBody>
                     </Table>
                   </div>
@@ -2369,7 +2549,8 @@ export default function TeacherPerformancePage() {
                             Concept focus snapshot
                           </p>
                           <p className="mt-1 text-xs text-[var(--teacher-text-muted)]">
-                            Open Concepts to review the evidence and suggested next steps.
+                            Open Concepts to review the evidence and suggested
+                            next steps.
                           </p>
                         </div>
                         <Badge className="border border-white/12 bg-white/8 text-[var(--teacher-text-strong)]">
@@ -2410,68 +2591,106 @@ export default function TeacherPerformancePage() {
                     description="Status transitions will appear once changes are detected."
                   />
                 ) : (
-                  <div className="teacher-table-shell">
-                    <Table>
-                      <TableHeader className="teacher-table-head [&_tr]:border-white/15">
-                        <TableRow className="border-white/10 hover:bg-transparent">
-                          <TableHead>When</TableHead>
-                          <TableHead>Student</TableHead>
-                          <TableHead>Transition</TableHead>
-                          <TableHead>Current Standing</TableHead>
-                          <TableHead>Trigger</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody className="[&_tr:last-child]:border-0">
-                        {(logs?.logs ?? []).map((entry) => (
-                          <TableRow
-                            key={entry.id}
-                            className="teacher-table-row border-white/10"
-                          >
-                            <TableCell className="text-[var(--teacher-text-strong)]">
-                              {formatDateTime(entry.createdAt)}
-                            </TableCell>
-                            <TableCell className="text-[var(--teacher-text-strong)]">
-                              {formatLogStudent(entry)}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex flex-wrap items-center gap-2">
-                                <Badge
-                                  className={
-                                    entry.previousIsAtRisk
-                                      ? "teacher-badge-danger border-0"
-                                      : "teacher-badge-success border-0"
-                                  }
-                                >
-                                  {entry.previousIsAtRisk
-                                    ? "Needs Support"
-                                    : "Stable"}
-                                </Badge>
-                                <span className="text-xs uppercase tracking-[0.12em] text-[var(--teacher-text-muted)]">
-                                  to
-                                </span>
-                                <Badge
-                                  className={
-                                    entry.currentIsAtRisk
-                                      ? "teacher-badge-danger border-0"
-                                      : "teacher-badge-success border-0"
-                                  }
-                                >
-                                  {entry.currentIsAtRisk
-                                    ? "Needs Support"
-                                    : "Stable"}
-                                </Badge>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-[var(--teacher-text-strong)]">
-                              {toPercent(entry.blendedScore)}
-                            </TableCell>
-                            <TableCell className="text-[var(--teacher-text-strong)]">
-                              {formatTriggerSource(entry.triggerSource)}
-                            </TableCell>
+                  <div className="space-y-4">
+                    <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_240px_auto] md:items-center">
+                      <Input
+                        aria-label="Search recent changes"
+                        value={logQuery}
+                        onChange={(event) => setLogQuery(event.target.value)}
+                        placeholder="Search learner, trigger, or standing"
+                      />
+                      <select
+                        aria-label="Filter recent changes"
+                        value={logStatusFilter}
+                        onChange={(event) =>
+                          setLogStatusFilter(event.target.value)
+                        }
+                        className="h-10 rounded-xl border border-[var(--teacher-border)] bg-white px-3 text-sm text-slate-900"
+                      >
+                        <option value="all">All current standings</option>
+                        <option value="support">Needs support</option>
+                        <option value="stable">Stable</option>
+                      </select>
+                      <p
+                        className="text-sm text-[var(--teacher-text-muted)]"
+                        aria-live="polite"
+                      >
+                        {visibleLogs.length} of {logs?.logs.length ?? 0} changes
+                      </p>
+                    </div>
+                    <div className="teacher-table-shell">
+                      <Table>
+                        <TableHeader className="teacher-table-head [&_tr]:border-white/15">
+                          <TableRow className="border-white/10 hover:bg-transparent">
+                            <TableHead>When</TableHead>
+                            <TableHead>Student</TableHead>
+                            <TableHead>Transition</TableHead>
+                            <TableHead>Current Standing</TableHead>
+                            <TableHead>Trigger</TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                        </TableHeader>
+                        <TableBody className="[&_tr:last-child]:border-0">
+                          {visibleLogs.map((entry) => (
+                            <TableRow
+                              key={entry.id}
+                              className="teacher-table-row border-white/10"
+                            >
+                              <TableCell className="text-[var(--teacher-text-strong)]">
+                                {formatDateTime(entry.createdAt)}
+                              </TableCell>
+                              <TableCell className="text-[var(--teacher-text-strong)]">
+                                {formatLogStudent(entry)}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Badge
+                                    className={
+                                      entry.previousIsAtRisk
+                                        ? "teacher-badge-danger border-0"
+                                        : "teacher-badge-success border-0"
+                                    }
+                                  >
+                                    {entry.previousIsAtRisk
+                                      ? "Needs Support"
+                                      : "Stable"}
+                                  </Badge>
+                                  <span className="text-xs uppercase tracking-[0.12em] text-[var(--teacher-text-muted)]">
+                                    to
+                                  </span>
+                                  <Badge
+                                    className={
+                                      entry.currentIsAtRisk
+                                        ? "teacher-badge-danger border-0"
+                                        : "teacher-badge-success border-0"
+                                    }
+                                  >
+                                    {entry.currentIsAtRisk
+                                      ? "Needs Support"
+                                      : "Stable"}
+                                  </Badge>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-[var(--teacher-text-strong)]">
+                                {toPercent(entry.blendedScore)}
+                              </TableCell>
+                              <TableCell className="text-[var(--teacher-text-strong)]">
+                                {formatTriggerSource(entry.triggerSource)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          {visibleLogs.length === 0 ? (
+                            <TableRow className="border-white/10 hover:bg-transparent">
+                              <TableCell
+                                colSpan={5}
+                                className="py-8 text-center text-sm text-[var(--teacher-text-muted)]"
+                              >
+                                No recent changes match this search and filter.
+                              </TableCell>
+                            </TableRow>
+                          ) : null}
+                        </TableBody>
+                      </Table>
+                    </div>
                   </div>
                 )}
               </TeacherSectionCard>

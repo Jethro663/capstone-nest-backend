@@ -45,6 +45,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const isStudentShell = normalizedRole === "student";
   const isTeacherShell = normalizedRole === "teacher";
   const isAdminShell = normalizedRole === "admin";
+  const isAdminDiagnostics =
+    isAdminShell && pathname === "/dashboard/admin/diagnostics";
   const shellClass = isStudentShell
     ? "student-shell"
     : isTeacherShell
@@ -218,7 +220,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           {isAdminShell ? (
             <AdminMaintenanceProvider>
               <main
-                className={`min-h-0 flex-1 overflow-y-auto p-4 md:p-6 admin-main p-5 lg:p-8`}
+                className={`min-h-0 flex-1 overflow-y-auto p-4 md:p-6 admin-main p-5 lg:p-8 ${isAdminDiagnostics ? "pt-0 md:pt-0 lg:pt-0" : ""}`}
               >
                 <AdminMaintenanceBanner />
                 {children}

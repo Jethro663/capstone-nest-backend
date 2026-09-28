@@ -21,6 +21,7 @@ import type {
   SystemEvaluationTargetModule,
 } from "@/types/lxp";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -89,6 +90,7 @@ export function SystemEvaluationsPage({
     "" | SystemEvaluationTargetModule
   >("");
   const [rows, setRows] = useState<SystemEvaluationRow[]>([]);
+  const [responseQuery, setResponseQuery] = useState("");
   const [campaigns, setCampaigns] = useState<SystemEvaluationCampaign[]>([]);
   const [campaignPage, setCampaignPage] = useState(1);
   const [campaignTotal, setCampaignTotal] = useState(0);
@@ -123,6 +125,17 @@ export function SystemEvaluationsPage({
     startsAt: "",
     endsAt: "",
   });
+  const visibleRows = useMemo(() => {
+    const query = responseQuery.trim().toLocaleLowerCase();
+    if (!query) return rows;
+    return rows.filter((row) =>
+      [
+        formatSubmitter(row),
+        formatModuleName(row.targetModule),
+        row.feedback ?? "",
+      ].some((value) => value.toLocaleLowerCase().includes(query)),
+    );
+  }, [responseQuery, rows]);
 
   const fetchEvaluations = useCallback(async () => {
     try {
@@ -583,6 +596,7 @@ export function SystemEvaluationsPage({
         >
           <div className="flex flex-wrap items-center gap-3">
             <select
+              aria-label="Filter evaluations by module"
               value={targetModule}
               onChange={(event) =>
                 setTargetModule(
@@ -597,8 +611,16 @@ export function SystemEvaluationsPage({
                 </option>
               ))}
             </select>
+            <Input
+              type="search"
+              aria-label="Search evaluation responses"
+              placeholder="Search submitter or feedback"
+              value={responseQuery}
+              onChange={(event) => setResponseQuery(event.target.value)}
+              className="admin-input min-w-[260px] flex-1"
+            />
             <div className="admin-pill px-4 py-2 text-sm font-semibold">
-              {count} evaluation{count === 1 ? "" : "s"}
+              {visibleRows.length} of {count} evaluation{count === 1 ? "" : "s"}
             </div>
           </div>
         </AdminSectionCard>
@@ -609,6 +631,7 @@ export function SystemEvaluationsPage({
         >
           <div className="flex flex-wrap items-center gap-3">
             <select
+              aria-label="Filter evaluations by module"
               value={targetModule}
               onChange={(event) =>
                 setTargetModule(
@@ -623,8 +646,16 @@ export function SystemEvaluationsPage({
                 </option>
               ))}
             </select>
+            <Input
+              type="search"
+              aria-label="Search evaluation responses"
+              placeholder="Search submitter or feedback"
+              value={responseQuery}
+              onChange={(event) => setResponseQuery(event.target.value)}
+              className="teacher-input min-w-[260px] flex-1"
+            />
             <div className="teacher-soft-panel rounded-full px-4 py-2 text-sm font-semibold text-[var(--teacher-text-strong)]">
-              {count} evaluation{count === 1 ? "" : "s"}
+              {visibleRows.length} of {count} evaluation{count === 1 ? "" : "s"}
             </div>
           </div>
         </TeacherSectionCard>
@@ -635,7 +666,7 @@ export function SystemEvaluationsPage({
           title="Evaluation Results"
           description="A richer view of what learners and staff are saying about each platform area."
         >
-          {rows.length === 0 ? (
+          {visibleRows.length === 0 ? (
             <AdminEmptyState
               title="No evaluation responses found"
               description="Try another module filter or wait for new responses to come in."
@@ -672,7 +703,7 @@ export function SystemEvaluationsPage({
                   </TableRow>
                 </TableHeader>
                 <TableBody className="[&_tr:last-child]:border-0">
-                  {rows.map((row) => (
+                  {visibleRows.map((row) => (
                     <TableRow key={row.id} className="admin-table-row">
                       <TableCell className="text-[13px] font-semibold text-[var(--admin-text-strong)]">
                         {formatModuleName(row.targetModule)}
@@ -712,7 +743,7 @@ export function SystemEvaluationsPage({
           title="Evaluation Results"
           description="A richer view of what learners and staff are saying about each platform area."
         >
-          {rows.length === 0 ? (
+          {visibleRows.length === 0 ? (
             <TeacherEmptyState
               title="No evaluation responses found"
               description="Try another module filter or wait for new responses to come in."
@@ -749,7 +780,7 @@ export function SystemEvaluationsPage({
                   </TableRow>
                 </TableHeader>
                 <TableBody className="[&_tr:last-child]:border-0">
-                  {rows.map((row) => (
+                  {visibleRows.map((row) => (
                     <TableRow
                       key={row.id}
                       className="teacher-table-row border-white/10"

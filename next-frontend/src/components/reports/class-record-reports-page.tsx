@@ -938,12 +938,37 @@ function SimpleTableCard({
   empty,
   adminMode,
 }: SimpleTableCardProps) {
+  const [rowSearch, setRowSearch] = useState("");
+  const normalizedSearch = rowSearch.trim().toLowerCase();
+  const visibleRows = normalizedSearch
+    ? rows.filter((row) =>
+        row.some((cell) =>
+          String(cell ?? "")
+            .toLowerCase()
+            .includes(normalizedSearch),
+        ),
+      )
+    : rows;
+
   return (
     <SharedSectionCard
       adminMode={adminMode}
       title={title}
       description={description}
     >
+      <div className="mb-4 max-w-xl">
+        <Input
+          type="search"
+          aria-label={`Search ${title}`}
+          value={rowSearch}
+          onChange={(event) => setRowSearch(event.target.value)}
+          placeholder={`Search ${title.toLowerCase()}`}
+          className={adminMode ? "admin-input" : "teacher-input"}
+        />
+        <p className="mt-2 text-xs text-slate-500" aria-live="polite">
+          {visibleRows.length} of {rows.length} rows shown
+        </p>
+      </div>
       {rows.length === 0 ? (
         adminMode ? (
           <AdminEmptyState
@@ -991,7 +1016,7 @@ function SimpleTableCard({
               </TableRow>
             </TableHeader>
             <TableBody className="[&_tr:last-child]:border-0">
-              {rows.map((row, rowIndex) => (
+              {visibleRows.map((row, rowIndex) => (
                 <TableRow
                   key={`${title}-${rowIndex}`}
                   className={
@@ -1015,6 +1040,13 @@ function SimpleTableCard({
                   ))}
                 </TableRow>
               ))}
+              {visibleRows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={headers.length} className="py-8 text-center text-sm text-slate-500">
+                    No rows match this search. Adjust the search or the report filters.
+                  </TableCell>
+                </TableRow>
+              ) : null}
             </TableBody>
           </Table>
         </div>

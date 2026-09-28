@@ -6,6 +6,10 @@ const getReadinessMock = jest.fn();
 const getAiHealthMock = jest.fn();
 
 jest.mock('@/services/health-service', () => ({
+  FRONTEND_BUILD_INFO: {
+    version: '0.1.0-test',
+    gitCommit: 'fedcba9876543210fedcba9876543210fedcba98',
+  },
   FRONTEND_APP_VERSION: '0.1.0-test',
   healthService: {
     getLiveness: () => getLivenessMock(),
@@ -23,6 +27,7 @@ describe('SystemInfoButton', () => {
       service: {
         name: 'backend',
         version: '0.0.1-test',
+        gitCommit: 'abcdef1234567890abcdef1234567890abcdef12',
       },
     });
     getReadinessMock.mockResolvedValue({
@@ -31,6 +36,7 @@ describe('SystemInfoButton', () => {
       service: {
         name: 'backend',
         version: '0.0.1-test',
+        gitCommit: 'abcdef1234567890abcdef1234567890abcdef12',
       },
       dependencies: {
         database: { ok: true },
@@ -73,7 +79,9 @@ describe('SystemInfoButton', () => {
     });
 
     expect(screen.getByText('0.1.0-test')).toBeInTheDocument();
-    expect(await screen.findByText('0.0.1-test (dev)')).toBeInTheDocument();
+    expect(screen.getByText('fedcba9876543210fedcba9876543210fedcba98')).toBeInTheDocument();
+    expect(await screen.findByText('0.0.1-test')).toBeInTheDocument();
+    expect(await screen.findByText('abcdef1234567890abcdef1234567890abcdef12')).toBeInTheDocument();
     expect(await screen.findByText('1.0.0-test')).toBeInTheDocument();
     expect(await screen.findByText(/Model: llama3/i)).toBeInTheDocument();
     expect(await screen.findAllByText('Operational')).toHaveLength(2);

@@ -89,6 +89,7 @@ export function TeacherReportsFigmaPage() {
   const [selectedRecordId, setSelectedRecordId] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [reportSearch, setReportSearch] = useState("");
   const [studentMasterList, setStudentMasterList] = useState<
     StudentMasterListRow[]
   >([]);
@@ -125,6 +126,37 @@ export function TeacherReportsFigmaPage() {
       limit: 200,
     }),
     [dateFrom, dateTo, selectedClassId],
+  );
+  const normalizedReportSearch = reportSearch.trim().toLowerCase();
+  const visibleStudentMasterList = useMemo(
+    () =>
+      studentMasterList.filter((row) =>
+        !normalizedReportSearch ||
+        [row.firstName, row.lastName, row.email, row.lrn, row.subjectCode, row.sectionName].some((value) =>
+          String(value ?? "").toLowerCase().includes(normalizedReportSearch),
+        ),
+      ),
+    [normalizedReportSearch, studentMasterList],
+  );
+  const visibleStudentPerformance = useMemo(
+    () =>
+      studentPerformance.filter((row) =>
+        !normalizedReportSearch ||
+        [row.firstName, row.lastName, row.subjectCode, row.isAtRisk ? "at risk" : "stable"].some((value) =>
+          String(value ?? "").toLowerCase().includes(normalizedReportSearch),
+        ),
+      ),
+    [normalizedReportSearch, studentPerformance],
+  );
+  const visibleInterventions = useMemo(
+    () =>
+      interventions.filter((row) =>
+        !normalizedReportSearch ||
+        [formatStudentName(row), row.remarks].some((value) =>
+          String(value ?? "").toLowerCase().includes(normalizedReportSearch),
+        ),
+      ),
+    [interventions, normalizedReportSearch],
   );
 
   const fetchClasses = useCallback(async () => {
@@ -407,6 +439,14 @@ export function TeacherReportsFigmaPage() {
           </div>
           <div className="teacher-figma-toolbar__right">
             <Input
+              type="search"
+              aria-label="Search teacher report rows"
+              value={reportSearch}
+              onChange={(event) => setReportSearch(event.target.value)}
+              placeholder="Search current report"
+              className="teacher-input h-10 w-[220px]"
+            />
+            <Input
               type="date"
               value={dateFrom}
               onChange={(event) => setDateFrom(event.target.value)}
@@ -456,7 +496,7 @@ export function TeacherReportsFigmaPage() {
           description="Comprehensive class roster for the selected class and date range."
           className="teacher-figma-stagger"
         >
-          {studentMasterList.length === 0 ? (
+          {visibleStudentMasterList.length === 0 ? (
             <TeacherEmptyState
               title="No students found"
               description="No enrollment rows matched the current class and date filters."
@@ -474,7 +514,7 @@ export function TeacherReportsFigmaPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody className="[&_tr:last-child]:border-0">
-                  {studentMasterList.map((row) => (
+                  {visibleStudentMasterList.map((row) => (
                     <TableRow
                       key={row.enrollmentId}
                       className="teacher-table-row border-white/10"
@@ -509,7 +549,7 @@ export function TeacherReportsFigmaPage() {
           description="Canonical class standing and risk-aware performance snapshot."
           className="teacher-figma-stagger"
         >
-          {studentPerformance.length === 0 ? (
+          {visibleStudentPerformance.length === 0 ? (
             <TeacherEmptyState
               title="No performance rows found"
               description="No performance rows matched the selected filters."
@@ -528,7 +568,7 @@ export function TeacherReportsFigmaPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody className="[&_tr:last-child]:border-0">
-                  {studentPerformance.map((row) => (
+                  {visibleStudentPerformance.map((row) => (
                     <TableRow
                       key={`${row.classId}-${row.studentId}`}
                       className="teacher-table-row border-white/10"
@@ -617,7 +657,7 @@ export function TeacherReportsFigmaPage() {
             title="At-Risk Students"
             description="Students currently flagged by the selected class record window."
           >
-            {interventions.length === 0 ? (
+            {visibleInterventions.length === 0 ? (
               <TeacherEmptyState
                 title="No students marked at risk"
                 description="At-risk rows appear here when learners fall below intervention threshold."
@@ -634,7 +674,7 @@ export function TeacherReportsFigmaPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody className="[&_tr:last-child]:border-0">
-                    {interventions.map((row) => (
+                    {visibleInterventions.map((row) => (
                       <TableRow
                         key={row.id}
                         className="teacher-table-row border-white/10"

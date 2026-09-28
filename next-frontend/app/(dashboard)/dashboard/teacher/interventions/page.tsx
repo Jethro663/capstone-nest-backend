@@ -27,6 +27,7 @@ import type {
 } from "@/types/lxp";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -447,6 +448,7 @@ export default function TeacherInterventionsPage() {
   const aiAvailability = useAiAvailability();
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [selectedClassId, setSelectedClassId] = useState("");
+  const [recordSearch, setRecordSearch] = useState("");
   const [loadingClasses, setLoadingClasses] = useState(true);
   const [loadingData, setLoadingData] = useState(false);
   const [queue, setQueue] = useState<TeacherInterventionQueueResponse | null>(
@@ -483,6 +485,27 @@ export default function TeacherInterventionsPage() {
   const thresholdLabel = report?.threshold ?? queue?.threshold ?? null;
   const queueEntries = useMemo(() => queue?.queue ?? [], [queue]);
   const historyRows = useMemo(() => history?.history ?? [], [history]);
+  const normalizedRecordSearch = recordSearch.trim().toLowerCase();
+  const matchesRecordSearch = useCallback(
+    (student: { firstName?: string | null; lastName?: string | null; email?: string | null } | null | undefined, values: unknown[]) =>
+      !normalizedRecordSearch ||
+      [studentName(student ?? {}), student?.email, ...values].some((value) =>
+        String(value ?? "").toLowerCase().includes(normalizedRecordSearch),
+      ),
+    [normalizedRecordSearch],
+  );
+  const visibleQueueEntries = useMemo(
+    () => queueEntries.filter((entry) => matchesRecordSearch(entry.student, [entry.status, entry.isCurrentlyAtRisk ? "at risk" : "recovered"])),
+    [matchesRecordSearch, queueEntries],
+  );
+  const visibleHistoryRows = useMemo(
+    () => historyRows.filter((row) => matchesRecordSearch(row.student, [row.status, row.triggerSource, row.note])),
+    [historyRows, matchesRecordSearch],
+  );
+  const visibleReportRows = useMemo(
+    () => (report?.rows ?? []).filter((row) => matchesRecordSearch(row.student, [row.status])),
+    [matchesRecordSearch, report?.rows],
+  );
   const historyScoreThreshold = history?.scoreThreshold ?? 60;
   const leaderboardRows = useMemo(() => report?.leaderboard ?? [], [report]);
   const leaderboardRowsByScope = useMemo(() => {
@@ -785,6 +808,7 @@ export default function TeacherInterventionsPage() {
             </div>
           </dl>
           <select
+            aria-label="Filter interventions by class"
             value={selectedClassId}
             onChange={(event) => setSelectedClassId(event.target.value)}
             className="teacher-select teacher-interventions-page__class-select min-w-[260px] text-sm"
@@ -797,6 +821,14 @@ export default function TeacherInterventionsPage() {
               </option>
             ))}
           </select>
+          <Input
+            type="search"
+            aria-label="Search intervention records"
+            value={recordSearch}
+            onChange={(event) => setRecordSearch(event.target.value)}
+            placeholder="Search learner or status"
+            className="teacher-input min-w-[240px]"
+          />
           <button
             type="button"
             className="teacher-intervention-workspace__help"
@@ -925,7 +957,7 @@ export default function TeacherInterventionsPage() {
               }
             >
               {workspaceView === "queue" ? (
-                queueEntries.length === 0 ? (
+                visibleQueueEntries.length === 0 ? (
                   <TeacherEmptyState
                     title="No active intervention cases"
                     description="New at-risk learners will appear here when trigger thresholds are crossed."
@@ -945,7 +977,7 @@ export default function TeacherInterventionsPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {queueEntries.map((entry) => {
+                        {visibleQueueEntries.map((entry) => {
                           const severity = getCaseSeverity(
                             entry.triggerScore,
                             thresholdLabel,
@@ -1099,7 +1131,7 @@ export default function TeacherInterventionsPage() {
                   </div>
                 )
               ) : workspaceView === "history" ? (
-                historyRows.length === 0 ? (
+                visibleHistoryRows.length === 0 ? (
                   <TeacherEmptyState
                     title="No intervention history yet"
                     description="Completed intervention cycles will appear here with their Learners Path contents and score."
@@ -1118,7 +1150,7 @@ export default function TeacherInterventionsPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {historyRows.map((row) => (
+                        {visibleHistoryRows.map((row) => (
                           <TableRow key={row.id}>
                             <TableCell>
                               <div className="teacher-interventions-student">
@@ -1453,7 +1485,7 @@ export default function TeacherInterventionsPage() {
                 description="Archived and ongoing outcomes across intervention cycles."
                 className="teacher-interventions-page__archive-card"
               >
-                {(report?.rows.length ?? 0) === 0 ? (
+                {visibleReportRows.length === 0 ? (
                   <TeacherEmptyState
                     title="No intervention outcomes yet"
                     description="Outcome rows will appear once intervention progress has been recorded."
@@ -1471,7 +1503,7 @@ export default function TeacherInterventionsPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody className="[&_tr:last-child]:border-0">
-                        {(report?.rows ?? []).map((row) => (
+                        {visibleReportRows.map((row) => (
                           <TableRow
                             key={row.id}
                             className="teacher-table-row border-white/10"

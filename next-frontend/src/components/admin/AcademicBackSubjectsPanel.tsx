@@ -38,6 +38,7 @@ export function AcademicBackSubjectsPanel({
   const [reason, setReason] = useState("");
   const [reference, setReference] = useState("");
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const load = useCallback(async () => {
@@ -134,11 +135,15 @@ export function AcademicBackSubjectsPanel({
   };
   const start = Number(current.schoolYear.slice(0, 4));
   const years = [current.schoolYear, `${start + 1}-${start + 2}`];
-  const visible = obligations.filter((row) =>
-    `${learner(row)} ${row.subjectCode} ${row.sourceSchoolYear}`
+  const statusOptions = Array.from(
+    new Set(obligations.map((row) => row.status).filter(Boolean)),
+  ).sort();
+  const visible = obligations.filter((row) => {
+    if (statusFilter !== "all" && row.status !== statusFilter) return false;
+    return `${learner(row)} ${row.subjectCode} ${row.sourceSchoolYear}`
       .toLowerCase()
-      .includes(search.toLowerCase()),
-  );
+      .includes(search.toLowerCase());
+  });
   return (
     <AdminSectionCard
       title="Back subjects and Grade 10 completion"
@@ -154,13 +159,32 @@ export function AcademicBackSubjectsPanel({
           {error}
         </p>
       )}
-      <div className="mb-3 max-w-md">
-        <Label htmlFor="back-subject-search">Find learner or subject</Label>
-        <Input
-          id="back-subject-search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      <div className="mb-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
+        <div>
+          <Label htmlFor="back-subject-search">Find learner or subject</Label>
+          <Input
+            id="back-subject-search"
+            aria-label="Search back subjects"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <label className="text-sm font-medium text-slate-700">
+          Status
+          <select
+            aria-label="Filter back subjects"
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+            className="mt-2 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
+          >
+            <option value="all">All statuses</option>
+            {statusOptions.map((status) => (
+              <option key={status} value={status}>
+                {status}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
       <div className="max-h-80 overflow-auto rounded-md border">
         <table className="w-full text-left text-sm">

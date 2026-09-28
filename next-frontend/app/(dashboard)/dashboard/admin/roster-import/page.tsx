@@ -1,14 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Download, FileSpreadsheet, FileUp, Loader2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
-import {
-  rosterImportService,
-  type PendingImportRow,
-  type RosterImportPreview,
-  type RosterParsedName,
-} from '@/services/roster-import-service';
+import { rosterImportService, type PendingImportRow, type RosterImportPreview, type RosterParsedName } from '@/services/roster-import-service';
 import { sectionService } from '@/services/section-service';
 import type { Section } from '@/types/section';
 import { downloadRosterImportTemplate } from '@/lib/roster-import-template';
@@ -22,9 +17,13 @@ import {
 import { AdminEmptyState, AdminPageShell, AdminSectionCard } from '@/components/admin/AdminPageShell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+
+type PreviewRowFilter = 'all' | 'registered' | 'pending' | 'error';
+type HistoryRowFilter = 'all' | 'resolved' | 'unresolved';
 
 function formatFileSize(bytes: number): string {
   return `${Math.max(bytes / 1_048_576, 0.01).toFixed(2)} MB`;
@@ -78,11 +77,66 @@ export default function RosterImportPage() {
   const [activationAcknowledged, setActivationAcknowledged] = useState(false);
   const [pending, setPending] = useState<PendingImportRow[]>([]);
   const [loadingPending, setLoadingPending] = useState(false);
+  const [previewQuery, setPreviewQuery] = useState('');
+  const [previewRowFilter, setPreviewRowFilter] = useState<PreviewRowFilter>('all');
+  const [historyQuery, setHistoryQuery] = useState('');
+  const [historyRowFilter, setHistoryRowFilter] = useState<HistoryRowFilter>('all');
   const [uploading, setUploading] = useState(false);
   const [committing, setCommitting] = useState(false);
   const [downloadingTemplate, setDownloadingTemplate] = useState(false);
   const selectedSection = sections.find((section) => section.id === sectionId) ?? null;
   const activeFilePreviewSheet = filePreview?.sheets[activePreviewSheetIndex] ?? filePreview?.sheets[0] ?? null;
+  const filteredPreview = useMemo(() => {
+    const query = previewQuery.trim().toLowerCase();
+    const matches = (values: Array<string | number | null | undefined>) =>
+      !query ||
+      values.some((value) =>
+        String(value ?? '')
+          .toLowerCase()
+          .includes(query),
+      );
+
+    return {
+      registered:
+        previewRowFilter === 'all' || previewRowFilter === 'registered'
+          ? (preview?.registered ?? []).filter((row) =>
+              matches([
+                row.rowNumber,
+                formatRosterName(row.name),
+                row.email,
+                row.lrn,
+                row.status,
+                row.alreadyEnrolled ? 'already enrolled' : 'matched existing user',
+              ]),
+            )
+          : [],
+      pending:
+        previewRowFilter === 'all' || previewRowFilter === 'pending'
+          ? (preview?.pending ?? []).filter((row) =>
+              matches([row.rowNumber, formatRosterName(row.name), row.email, row.lrn, row.reason, 'pending verification']),
+            )
+          : [],
+      errors:
+        previewRowFilter === 'all' || previewRowFilter === 'error'
+          ? (preview?.errors ?? []).filter((row) => matches([row.rowNumber, row.email, row.rawData?.join(' '), row.issues.join(' '), 'error']))
+          : [],
+    };
+  }, [preview, previewQuery, previewRowFilter]);
+  const visiblePreviewCount = filteredPreview.registered.length + filteredPreview.pending.length + filteredPreview.errors.length;
+  const visibleImportHistory = useMemo(() => {
+    const query = historyQuery.trim().toLowerCase();
+    return pending.filter((row) => {
+      const resolved = Boolean(row.resolvedAt) || row.status === 'resolved';
+      if (historyRowFilter === 'resolved' && !resolved) return false;
+      if (historyRowFilter === 'unresolved' && resolved) return false;
+      if (!query) return true;
+      return [importHistoryRowName(row), row.email, row.rosterEmail, row.lrn, row.status, resolved ? 'resolved imported' : 'unresolved pending'].some((value) =>
+        String(value ?? '')
+          .toLowerCase()
+          .includes(query),
+      );
+    });
+  }, [historyQuery, historyRowFilter, pending]);
 
   useEffect(() => {
     sectionService
@@ -126,70 +180,51 @@ export default function RosterImportPage() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   }, []);
 
-  const handleFileAttached = useCallback(async (file: File | null) => {
-    if (
-      file &&
-      filePreviewDirty &&
-      !window.confirm('Discard your roster edits and attach a different file?')
-    ) {
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      return;
-    }
-    previewRequestRef.current += 1;
-    validationRequestRef.current += 1;
-    const requestId = previewRequestRef.current;
-    setSelectedFile(file);
-    setPreview(null);
-    setActivateNewAccounts(false);
-    setActivationAcknowledged(false);
-    setFilePreview(null);
-    setFilePreviewDirty(false);
-    setFilePreviewError(null);
-    setActivePreviewSheetIndex(0);
-    if (!file) return;
-    try {
-      setFilePreviewLoading(true);
-      const parsedPreview = await createSpreadsheetFilePreview(file);
-      if (previewRequestRef.current !== requestId) return;
-      setFilePreview(parsedPreview);
-      toast.success(`${file.name} is attached and ready for preview.`);
-    } catch (error) {
-      if (previewRequestRef.current !== requestId) return;
-      const message = error instanceof Error ? error.message : 'Unable to preview the attached spreadsheet.';
-      setFilePreviewError(message);
-      toast.error(message);
-    } finally {
-      if (previewRequestRef.current === requestId) setFilePreviewLoading(false);
-    }
-  }, [filePreviewDirty]);
+  const handleFileAttached = useCallback(
+    async (file: File | null) => {
+      if (file && filePreviewDirty && !window.confirm('Discard your roster edits and attach a different file?')) {
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
+      previewRequestRef.current += 1;
+      validationRequestRef.current += 1;
+      const requestId = previewRequestRef.current;
+      setSelectedFile(file);
+      setPreview(null);
+      setActivateNewAccounts(false);
+      setActivationAcknowledged(false);
+      setFilePreview(null);
+      setFilePreviewDirty(false);
+      setFilePreviewError(null);
+      setActivePreviewSheetIndex(0);
+      if (!file) return;
+      try {
+        setFilePreviewLoading(true);
+        const parsedPreview = await createSpreadsheetFilePreview(file);
+        if (previewRequestRef.current !== requestId) return;
+        setFilePreview(parsedPreview);
+        toast.success(`${file.name} is attached and ready for preview.`);
+      } catch (error) {
+        if (previewRequestRef.current !== requestId) return;
+        const message = error instanceof Error ? error.message : 'Unable to preview the attached spreadsheet.';
+        setFilePreviewError(message);
+        toast.error(message);
+      } finally {
+        if (previewRequestRef.current === requestId) setFilePreviewLoading(false);
+      }
+    },
+    [filePreviewDirty],
+  );
 
-  const handlePreviewCellChange = useCallback((
-    sheetIndex: number,
-    rowNumber: number,
-    columnIndex: number,
-    value: string,
-  ) => {
+  const handlePreviewCellChange = useCallback((sheetIndex: number, rowNumber: number, columnIndex: number, value: string) => {
     validationRequestRef.current += 1;
-    setFilePreview((current) =>
-      current
-        ? updateSpreadsheetPreviewCell(
-          current,
-          sheetIndex,
-          rowNumber,
-          columnIndex,
-          value,
-        )
-        : current,
-    );
+    setFilePreview((current) => (current ? updateSpreadsheetPreviewCell(current, sheetIndex, rowNumber, columnIndex, value) : current));
     setFilePreviewDirty(true);
     setPreview(null);
   }, []);
 
   const handleDiscardFile = useCallback(() => {
-    if (
-      filePreviewDirty &&
-      !window.confirm('Discard your roster edits and remove this file?')
-    ) {
+    if (filePreviewDirty && !window.confirm('Discard your roster edits and remove this file?')) {
       return;
     }
     clearSelectedFile();
@@ -212,9 +247,7 @@ export default function RosterImportPage() {
       const previewData = response.data;
       setPreview(previewData);
 
-      const validRows =
-        (previewData?.summary?.registeredCount ?? 0) +
-        (previewData?.summary?.pendingCount ?? 0);
+      const validRows = (previewData?.summary?.registeredCount ?? 0) + (previewData?.summary?.pendingCount ?? 0);
       if (validRows <= 0) {
         toast.error('No valid rows found in the file. Please check the template and try again.');
         return;
@@ -294,12 +327,7 @@ export default function RosterImportPage() {
   };
 
   return (
-    <AdminPageShell
-      badge="Admin Roster Import"
-      title="Roster Import"
-      description="Bulk import students from CSV/Excel files"
-      icon={FileUp}
-    >
+    <AdminPageShell badge="Admin Roster Import" title="Roster Import" description="Bulk import students from CSV/Excel files" icon={FileUp}>
       <AdminSectionCard title="Upload Roster File" description="Upload and preview a roster before committing section enrollment updates.">
         <div className="space-y-4">
           <div className="space-y-2">
@@ -366,16 +394,17 @@ export default function RosterImportPage() {
           </div>
 
           {filePreviewLoading ? (
-            <div className="flex items-center gap-3 rounded-2xl border border-dashed border-[#9fb5d6] bg-[#f4f8ff] px-4 py-3 text-sm font-semibold text-[#4c6388]" role="status">
+            <div
+              className="flex items-center gap-3 rounded-2xl border border-dashed border-[#9fb5d6] bg-[#f4f8ff] px-4 py-3 text-sm font-semibold text-[#4c6388]"
+              role="status"
+            >
               <Loader2 className="h-4 w-4 animate-spin" />
               Reading the attached file for preview...
             </div>
           ) : null}
 
           {filePreviewError ? (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
-              {filePreviewError}
-            </div>
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">{filePreviewError}</div>
           ) : null}
 
           {filePreview && activeFilePreviewSheet ? (
@@ -387,12 +416,17 @@ export default function RosterImportPage() {
                   </div>
                   <div>
                     <p className="text-sm font-black text-[#24364f]">Attached file preview</p>
-                    <p className="text-xs font-semibold text-[#6f83a3]">{filePreview.fileName} - {filePreview.fileSizeLabel}</p>
+                    <p className="text-xs font-semibold text-[#6f83a3]">
+                      {filePreview.fileName} - {filePreview.fileSizeLabel}
+                    </p>
                     <p className="mt-1 text-xs text-[#8ba0bf]">Edit the import-source cells, then validate the draft before committing it.</p>
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="secondary">{filePreview.sheets.length} sheet{filePreview.sheets.length === 1 ? '' : 's'}</Badge>
+                  <Badge variant="secondary">
+                    {filePreview.sheets.length} sheet
+                    {filePreview.sheets.length === 1 ? '' : 's'}
+                  </Badge>
                   <Button type="button" size="sm" variant="outline" onClick={handleDiscardFile} disabled={uploading || committing}>
                     Remove file
                   </Button>
@@ -401,7 +435,14 @@ export default function RosterImportPage() {
               {filePreview.sheets.length > 1 ? (
                 <div className="mt-4 flex flex-wrap gap-2">
                   {filePreview.sheets.map((sheet, index) => (
-                    <Button key={sheet.name} type="button" size="sm" variant={index === activePreviewSheetIndex ? 'default' : 'outline'} onClick={() => setActivePreviewSheetIndex(index)} disabled={uploading || committing}>
+                    <Button
+                      key={sheet.name}
+                      type="button"
+                      size="sm"
+                      variant={index === activePreviewSheetIndex ? 'default' : 'outline'}
+                      onClick={() => setActivePreviewSheetIndex(index)}
+                      disabled={uploading || committing}
+                    >
                       {sheet.name} · {index === 0 ? 'Import source' : 'Reference only'}
                     </Button>
                   ))}
@@ -409,9 +450,7 @@ export default function RosterImportPage() {
               ) : null}
               <div className="mt-4 flex flex-wrap gap-2 text-xs font-bold text-[#6f83a3]">
                 <span className="rounded-full bg-[#f1f6ff] px-3 py-1">Sheet: {activeFilePreviewSheet.name}</span>
-                <span className="rounded-full bg-[#f1f6ff] px-3 py-1">
-                  {activePreviewSheetIndex === 0 ? 'Import source' : 'Reference only'}
-                </span>
+                <span className="rounded-full bg-[#f1f6ff] px-3 py-1">{activePreviewSheetIndex === 0 ? 'Import source' : 'Reference only'}</span>
                 <span className="rounded-full bg-[#f1f6ff] px-3 py-1">Rows: {activeFilePreviewSheet.rowCount}</span>
                 <span className="rounded-full bg-[#f1f6ff] px-3 py-1">Columns: {activeFilePreviewSheet.columnCount}</span>
               </div>
@@ -443,12 +482,7 @@ export default function RosterImportPage() {
                                   className="h-9 w-full rounded-lg border border-[#cbd8eb] bg-white px-2 text-xs text-[#24364f] outline-none focus:border-[#1f5fbf] focus:ring-2 focus:ring-[#dbeafe]"
                                   value={cell}
                                   disabled={uploading || committing}
-                                  onChange={(event) => handlePreviewCellChange(
-                                    activePreviewSheetIndex,
-                                    row.rowNumber,
-                                    index,
-                                    event.target.value,
-                                  )}
+                                  onChange={(event) => handlePreviewCellChange(activePreviewSheetIndex, row.rowNumber, index, event.target.value)}
                                 />
                               ) : (
                                 <span className="whitespace-pre-wrap">{cell || '-'}</span>
@@ -461,16 +495,15 @@ export default function RosterImportPage() {
                   </Table>
                 </div>
               ) : (
-                <AdminEmptyState title="No visible spreadsheet rows" description="The attached file was read, but no non-empty rows were detected for preview." />
+                <AdminEmptyState
+                  title="No visible spreadsheet rows"
+                  description="The attached file was read, but no non-empty rows were detected for preview."
+                />
               )}
             </div>
           ) : null}
 
-          <Button
-            className="admin-roster-upload-button"
-            onClick={handleValidatePreview}
-            disabled={!sectionId || !filePreview || uploading || committing}
-          >
+          <Button className="admin-roster-upload-button" onClick={handleValidatePreview} disabled={!sectionId || !filePreview || uploading || committing}>
             <Upload className="h-4 w-4" />
             {uploading ? 'Validating...' : 'Validate roster'}
           </Button>
@@ -492,7 +525,7 @@ export default function RosterImportPage() {
         <AdminSectionCard
           title={`Preview - ${preview.sectionMatch.foundSection.name} (Grade ${preview.sectionMatch.foundSection.gradeLevel})`}
           description="Review file parsing results before final commit."
-          action={(
+          action={
             <div className="admin-controls">
               <Badge variant="default">{preview.summary.registeredCount} registered</Badge>
               <Badge variant="secondary">{preview.summary.pendingCount} to create</Badge>
@@ -501,12 +534,17 @@ export default function RosterImportPage() {
                 size="sm"
                 className="admin-button-solid rounded-xl font-black"
                 onClick={handleCommit}
-                disabled={uploading || committing || (activateNewAccounts && !activationAcknowledged) || preview.summary.registeredCount + preview.summary.pendingCount === 0}
+                disabled={
+                  uploading ||
+                  committing ||
+                  (activateNewAccounts && !activationAcknowledged) ||
+                  preview.summary.registeredCount + preview.summary.pendingCount === 0
+                }
               >
                 {committing ? 'Committing...' : 'Commit Import'}
               </Button>
             </div>
-          )}
+          }
         >
           {preview.summary.pendingCount > 0 ? (
             <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -514,7 +552,9 @@ export default function RosterImportPage() {
                 <div>
                   <p className="font-semibold text-slate-900">New account activation</p>
                   <p className="mt-1 text-sm text-slate-600">
-                    Standard: {preview.summary.pendingCount} new account{preview.summary.pendingCount === 1 ? '' : 's'} {preview.summary.pendingCount === 1 ? 'receives' : 'receive'} an OTP and {preview.summary.pendingCount === 1 ? 'stays' : 'stay'} pending until verification.
+                    Standard: {preview.summary.pendingCount} new account
+                    {preview.summary.pendingCount === 1 ? '' : 's'} {preview.summary.pendingCount === 1 ? 'receives' : 'receive'} an OTP and{' '}
+                    {preview.summary.pendingCount === 1 ? 'stays' : 'stay'} pending until verification.
                   </p>
                 </div>
                 <Button
@@ -527,9 +567,7 @@ export default function RosterImportPage() {
                   }}
                   disabled={committing}
                 >
-                  {activateNewAccounts
-                    ? 'Immediate activation: On'
-                    : 'Activate new accounts now (skip OTP)'}
+                  {activateNewAccounts ? 'Immediate activation: On' : 'Activate new accounts now (skip OTP)'}
                 </Button>
               </div>
               {activateNewAccounts ? (
@@ -541,12 +579,36 @@ export default function RosterImportPage() {
                     className="mt-0.5 h-4 w-4 accent-red-600"
                   />
                   <span>
-                    I confirm {preview.summary.pendingCount === 1 ? 'this new account' : `these ${preview.summary.pendingCount} new accounts`} should be active immediately. Nexora will not verify mailbox ownership by OTP; it will attempt to email temporary passwords to the listed addresses. Existing accounts will not be reactivated.
+                    I confirm {preview.summary.pendingCount === 1 ? 'this new account' : `these ${preview.summary.pendingCount} new accounts`} should be active
+                    immediately. Nexora will not verify mailbox ownership by OTP; it will attempt to email temporary passwords to the listed addresses. Existing
+                    accounts will not be reactivated.
                   </span>
                 </label>
               ) : null}
             </div>
           ) : null}
+          <div className="mb-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_220px_auto] md:items-center">
+            <Input
+              aria-label="Search import rows"
+              value={previewQuery}
+              onChange={(event) => setPreviewQuery(event.target.value)}
+              placeholder="Search name, email, LRN, or issue"
+            />
+            <select
+              aria-label="Filter import rows"
+              value={previewRowFilter}
+              onChange={(event) => setPreviewRowFilter(event.target.value as PreviewRowFilter)}
+              className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900"
+            >
+              <option value="all">All preview rows</option>
+              <option value="registered">Registered</option>
+              <option value="pending">Pending</option>
+              <option value="error">Errors</option>
+            </select>
+            <p className="text-sm text-slate-600" aria-live="polite">
+              {visiblePreviewCount} of {preview.summary.totalDataRows} rows
+            </p>
+          </div>
           <div className="admin-table-shell max-h-[32rem] overflow-auto">
             <Table>
               <TableHeader className="admin-table-head">
@@ -560,37 +622,50 @@ export default function RosterImportPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {preview.registered.map((row) => (
+                {filteredPreview.registered.map((row) => (
                   <TableRow key={`registered-${row.rowNumber}`}>
                     <TableCell>{row.rowNumber}</TableCell>
                     <TableCell>{formatRosterName(row.name)}</TableCell>
                     <TableCell>{row.email}</TableCell>
                     <TableCell>{row.lrn || '-'}</TableCell>
-                    <TableCell><Badge variant="default">Registered</Badge></TableCell>
+                    <TableCell>
+                      <Badge variant="default">Registered</Badge>
+                    </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {row.status || (row.alreadyEnrolled ? 'Already enrolled' : 'Matched existing user')}
                     </TableCell>
                   </TableRow>
                 ))}
-                {preview.pending.map((row) => (
+                {filteredPreview.pending.map((row) => (
                   <TableRow key={`pending-${row.rowNumber}`}>
                     <TableCell>{row.rowNumber}</TableCell>
                     <TableCell>{formatRosterName(row.name)}</TableCell>
                     <TableCell>{row.email}</TableCell>
                     <TableCell>{row.lrn || '-'}</TableCell>
-                    <TableCell><Badge variant="secondary">{activateNewAccounts ? 'Active after import' : 'Pending verification'}</Badge></TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{activateNewAccounts ? 'Active after import' : 'Pending verification'}</Badge>
+                    </TableCell>
                     <TableCell className="text-xs text-muted-foreground">{row.reason || 'New student account'}</TableCell>
                   </TableRow>
                 ))}
-                {preview.errors.map((row) => (
+                {filteredPreview.errors.map((row) => (
                   <TableRow key={`error-${row.rowNumber}`} className="bg-rose-50/60">
                     <TableCell>{row.rowNumber}</TableCell>
                     <TableCell colSpan={2}>{row.email || row.rawData?.join(' | ') || '-'}</TableCell>
                     <TableCell>-</TableCell>
-                    <TableCell><Badge variant="destructive">Error</Badge></TableCell>
+                    <TableCell>
+                      <Badge variant="destructive">Error</Badge>
+                    </TableCell>
                     <TableCell className="text-xs text-rose-600">{row.issues.join(', ')}</TableCell>
                   </TableRow>
                 ))}
+                {visiblePreviewCount === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="py-8 text-center text-sm text-slate-600">
+                      No preview rows match this search and filter.
+                    </TableCell>
+                  </TableRow>
+                ) : null}
               </TableBody>
             </Table>
           </div>
@@ -602,47 +677,71 @@ export default function RosterImportPage() {
           {loadingPending ? (
             <Skeleton className="h-24 rounded-xl" />
           ) : pending.length === 0 ? (
-            <AdminEmptyState
-              title="No import history yet"
-              description="Imported students will appear here after a successful roster commit."
-            />
+            <AdminEmptyState title="No import history yet" description="Imported students will appear here after a successful roster commit." />
           ) : (
-            <div className="admin-table-shell">
-              <Table>
-                <TableHeader className="admin-table-head">
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>LRN</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Created</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {pending.map((row) => (
-                    <TableRow key={row.id}>
-                      <TableCell>{importHistoryRowName(row)}</TableCell>
-                      <TableCell>{row.email || row.rosterEmail || '-'}</TableCell>
-                      <TableCell>{row.lrn || '-'}</TableCell>
-                      <TableCell>
-                        <Badge variant={row.resolvedAt || row.status === 'resolved' ? 'default' : 'secondary'}>
-                          {row.status || (row.resolvedAt ? 'imported' : 'unresolved')}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{new Date(row.createdAt || row.importedAt || Date.now()).toLocaleDateString()}</TableCell>
+            <div className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px_auto] md:items-center">
+                <Input
+                  aria-label="Search import history"
+                  value={historyQuery}
+                  onChange={(event) => setHistoryQuery(event.target.value)}
+                  placeholder="Search name, email, LRN, or status"
+                />
+                <select
+                  aria-label="Filter import history"
+                  value={historyRowFilter}
+                  onChange={(event) => setHistoryRowFilter(event.target.value as HistoryRowFilter)}
+                  className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900"
+                >
+                  <option value="all">All history</option>
+                  <option value="resolved">Resolved</option>
+                  <option value="unresolved">Unresolved</option>
+                </select>
+                <p className="text-sm text-slate-600" aria-live="polite">
+                  {visibleImportHistory.length} of {pending.length} records
+                </p>
+              </div>
+              <div className="admin-table-shell">
+                <Table>
+                  <TableHeader className="admin-table-head">
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>LRN</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Created</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {visibleImportHistory.map((row) => (
+                      <TableRow key={row.id}>
+                        <TableCell>{importHistoryRowName(row)}</TableCell>
+                        <TableCell>{row.email || row.rosterEmail || '-'}</TableCell>
+                        <TableCell>{row.lrn || '-'}</TableCell>
+                        <TableCell>
+                          <Badge variant={row.resolvedAt || row.status === 'resolved' ? 'default' : 'secondary'}>
+                            {row.status || (row.resolvedAt ? 'imported' : 'unresolved')}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{new Date(row.createdAt || row.importedAt || Date.now()).toLocaleDateString()}</TableCell>
+                      </TableRow>
+                    ))}
+                    {visibleImportHistory.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="py-8 text-center text-sm text-slate-600">
+                          No import history matches this search and filter.
+                        </TableCell>
+                      </TableRow>
+                    ) : null}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           )}
         </AdminSectionCard>
       ) : (
         <AdminSectionCard title="Import History" description="Select a section to load recent roster imports.">
-          <AdminEmptyState
-            title="Select a section to view import history"
-            description="Recent roster import records will appear after selecting a section."
-          />
+          <AdminEmptyState title="Select a section to view import history" description="Recent roster import records will appear after selecting a section." />
         </AdminSectionCard>
       )}
     </AdminPageShell>

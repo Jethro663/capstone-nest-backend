@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, School, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -58,6 +59,8 @@ export default function EditSectionPage() {
     useState<RosterStudent | null>(null);
   const [destinationSectionId, setDestinationSectionId] = useState("");
   const [activePeriod, setActivePeriod] = useState<AcademicPeriodKey>("Q1");
+  const [rosterQuery, setRosterQuery] = useState("");
+  const [gradeFilter, setGradeFilter] = useState("all");
 
   const schoolYears = useMemo(() => getCurrentToFutureSchoolYears(4), []);
   const availableSchoolYears = useMemo(() => {
@@ -142,6 +145,35 @@ export default function EditSectionPage() {
 
     return byRoom;
   }, [allSections, sectionId]);
+  const gradeOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          roster
+            .map((student) => String(student.gradeLevel || ""))
+            .filter(Boolean),
+        ),
+      ).sort((left, right) =>
+        left.localeCompare(right, undefined, { numeric: true }),
+      ),
+    [roster],
+  );
+  const visibleRoster = useMemo(() => {
+    const query = rosterQuery.trim().toLocaleLowerCase();
+    return roster.filter((student) => {
+      const matchesQuery =
+        !query ||
+        [
+          `${student.firstName || ""} ${student.lastName || ""}`,
+          student.email || "",
+          student.lrn || "",
+        ].some((value) => value.toLocaleLowerCase().includes(query));
+      const matchesGrade =
+        gradeFilter === "all" ||
+        String(student.gradeLevel || "") === gradeFilter;
+      return matchesQuery && matchesGrade;
+    });
+  }, [gradeFilter, roster, rosterQuery]);
 
   const handleSave = async (values: SectionFormValues) => {
     if (!sectionId) return;
@@ -167,12 +199,20 @@ export default function EditSectionPage() {
   };
 
   const handleToggleAll = () => {
-    if (selectedStudentIds.length === roster.length) {
-      setSelectedStudentIds([]);
+    const visibleIds = visibleRoster.map((student) => student.id);
+    const allVisibleSelected =
+      visibleIds.length > 0 &&
+      visibleIds.every((id) => selectedStudentIds.includes(id));
+    if (allVisibleSelected) {
+      setSelectedStudentIds((current) =>
+        current.filter((id) => !visibleIds.includes(id)),
+      );
       return;
     }
 
-    setSelectedStudentIds(roster.map((student) => student.id));
+    setSelectedStudentIds((current) =>
+      Array.from(new Set([...current, ...visibleIds])),
+    );
   };
 
   const handleToggleOne = (studentId: string) => {
@@ -287,7 +327,10 @@ export default function EditSectionPage() {
               className="admin-button-outline rounded-xl font-black"
               onClick={handleToggleAll}
             >
-              {selectedStudentIds.length === roster.length
+              {visibleRoster.length > 0 &&
+              visibleRoster.every((student) =>
+                selectedStudentIds.includes(student.id),
+              )
                 ? "Clear Selection"
                 : "Select All"}
             </Button>
@@ -322,70 +365,113 @@ export default function EditSectionPage() {
             }
           />
         ) : (
-          <div className="admin-table-shell">
-            <Table>
-              <TableHeader className="admin-table-head">
-                <TableRow>
-                  <TableHead className="w-14">Select</TableHead>
-                  <TableHead>Student</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Grade</TableHead>
-                  <TableHead>LRN</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {roster.map((student) => (
-                  <TableRow
-                    key={student.id}
-                    className="transition-colors duration-200 hover:bg-emerald-50/45"
-                  >
-                    <TableCell>
-                      <input
-                        type="checkbox"
-                        checked={selectedStudentIds.includes(student.id)}
-                        onChange={() => handleToggleOne(student.id)}
-                        className="h-4 w-4 rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          router.push(`/dashboard/admin/users/${student.id}`)
-                        }
-                        className="flex items-center gap-3 rounded-xl px-1 py-1 text-left transition-colors hover:bg-emerald-50/70"
-                      >
-                        <Avatar className="h-9 w-9 border border-white/70 shadow-sm">
-                          <AvatarImage
-                            src={
-                              (student as User).profilePicture as
-                                | string
-                                | undefined
-                            }
-                            alt={`${student.firstName || ""} ${student.lastName || ""}`.trim()}
-                          />
-                          <AvatarFallback>
-                            {getInitials(student.firstName, student.lastName)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span className="font-semibold text-[var(--admin-text-strong)]">
-                          {student.firstName} {student.lastName}
-                        </span>
-                      </button>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {student.email || "N/A"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {student.gradeLevel || "N/A"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {student.lrn || "N/A"}
-                    </TableCell>
-                  </TableRow>
+          <div className="space-y-3">
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_14rem]">
+              <Input
+                type="search"
+                aria-label="Search section roster"
+                placeholder="Search name, email, or LRN"
+                value={rosterQuery}
+                onChange={(event) => setRosterQuery(event.target.value)}
+                className="admin-input"
+              />
+              <select
+                aria-label="Filter roster by grade"
+                value={gradeFilter}
+                onChange={(event) => setGradeFilter(event.target.value)}
+                className="admin-select"
+              >
+                <option value="all">All grade levels</option>
+                {gradeOptions.map((grade) => (
+                  <option key={grade} value={grade}>
+                    Grade {grade}
+                  </option>
                 ))}
-              </TableBody>
-            </Table>
+              </select>
+            </div>
+            <p
+              className="text-sm text-[var(--admin-text-muted)]"
+              aria-live="polite"
+            >
+              Showing {visibleRoster.length} of {roster.length} students
+            </p>
+            {visibleRoster.length === 0 ? (
+              <AdminEmptyState
+                title="No students match these controls"
+                description="Clear the search or choose another grade level."
+              />
+            ) : (
+              <div className="admin-table-shell">
+                <Table>
+                  <TableHeader className="admin-table-head">
+                    <TableRow>
+                      <TableHead className="w-14">Select</TableHead>
+                      <TableHead>Student</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Grade</TableHead>
+                      <TableHead>LRN</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {visibleRoster.map((student) => (
+                      <TableRow
+                        key={student.id}
+                        className="transition-colors duration-200 hover:bg-emerald-50/45"
+                      >
+                        <TableCell>
+                          <input
+                            type="checkbox"
+                            checked={selectedStudentIds.includes(student.id)}
+                            onChange={() => handleToggleOne(student.id)}
+                            className="h-4 w-4 rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              router.push(
+                                `/dashboard/admin/users/${student.id}`,
+                              )
+                            }
+                            className="flex items-center gap-3 rounded-xl px-1 py-1 text-left transition-colors hover:bg-emerald-50/70"
+                          >
+                            <Avatar className="h-9 w-9 border border-white/70 shadow-sm">
+                              <AvatarImage
+                                src={
+                                  (student as User).profilePicture as
+                                    | string
+                                    | undefined
+                                }
+                                alt={`${student.firstName || ""} ${student.lastName || ""}`.trim()}
+                              />
+                              <AvatarFallback>
+                                {getInitials(
+                                  student.firstName,
+                                  student.lastName,
+                                )}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="font-semibold text-[var(--admin-text-strong)]">
+                              {student.firstName} {student.lastName}
+                            </span>
+                          </button>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {student.email || "N/A"}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {student.gradeLevel || "N/A"}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {student.lrn || "N/A"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </div>
         )}
       </AdminSectionCard>

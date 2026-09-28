@@ -1573,6 +1573,9 @@ export default function TeacherClassDetailPage() {
 
   const [busyEnrollmentId, setBusyEnrollmentId] = useState<string | null>(null);
   const [studentSearch, setStudentSearch] = useState("");
+  const [studentGradeFilter, setStudentGradeFilter] = useState<
+    "all" | "graded" | "ungraded"
+  >("all");
   const [confirmation, setConfirmation] =
     useState<ConfirmationDialogConfig | null>(null);
   const classRecordState = useTeacherClassRecord(
@@ -1843,8 +1846,13 @@ export default function TeacherClassDetailPage() {
   }, [classItem?.enrollments, finalGradeByStudentId]);
 
   const visibleStudentRows = useMemo(
-    () => filterStudentRoster(studentRows, studentSearch),
-    [studentRows, studentSearch],
+    () =>
+      filterStudentRoster(studentRows, studentSearch).filter((student) => {
+        if (studentGradeFilter === "graded") return student.gradePercent !== null;
+        if (studentGradeFilter === "ungraded") return student.gradePercent === null;
+        return true;
+      }),
+    [studentGradeFilter, studentRows, studentSearch],
   );
 
   const filteredAssignments = useMemo(() => {
@@ -4326,14 +4334,24 @@ export default function TeacherClassDetailPage() {
                 Add Student
               </Link>
             </div>
-            <div className="relative max-w-xl">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6c7f99]" aria-hidden="true" />
-              <Input type="search" value={studentSearch} onChange={(event) => setStudentSearch(event.target.value)} placeholder="Search students by name, LRN, or email" aria-label="Search students by name, LRN, or email" className="pl-10" />
-              {studentSearch.trim() ? (
-                <p className="mt-2 text-sm text-[#5f728e]" aria-live="polite">
-                  {visibleStudentRows.length} of {studentRows.length} students shown
-                </p>
-              ) : null}
+            <div className="grid max-w-3xl gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6c7f99]" aria-hidden="true" />
+                <Input type="search" value={studentSearch} onChange={(event) => setStudentSearch(event.target.value)} placeholder="Search students by name, LRN, or email" aria-label="Search students by name, LRN, or email" className="pl-10" />
+              </div>
+              <select
+                aria-label="Filter students by grade availability"
+                value={studentGradeFilter}
+                onChange={(event) => setStudentGradeFilter(event.target.value as "all" | "graded" | "ungraded")}
+                className="teacher-select w-full text-sm"
+              >
+                <option value="all">All grade states</option>
+                <option value="graded">With grade</option>
+                <option value="ungraded">Without grade</option>
+              </select>
+              <p className="text-sm text-[#5f728e] md:col-span-2" aria-live="polite">
+                {visibleStudentRows.length} of {studentRows.length} students shown
+              </p>
             </div>
             <div className="teacher-class-workspace__table-wrap">
               <table className="teacher-class-workspace__table">

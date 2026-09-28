@@ -1,5 +1,5 @@
 import { mobileBrand } from "../../theme/mobileBrand";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { AppAlert as Alert } from "../ui/AppAlert";
 import { useEffect, useState } from "react";
 import type {
@@ -175,19 +175,29 @@ export function MobileClassRecordWorkbook({
   const [learnerFilter, setLearnerFilter] = useState<LearnerFilter>(() =>
     workbook?.classRecord.status === "draft" ? "current" : "all",
   );
+  const [learnerQuery, setLearnerQuery] = useState("");
   useEffect(() => {
     setLearnerFilter(
       workbook?.classRecord.status === "draft" ? "current" : "all",
     );
+    setLearnerQuery("");
   }, [workbook?.classRecord.id, workbook?.classRecord.status]);
 
   const allRows = students ?? workbook?.students ?? [];
   const rows = allRows.filter((student) => {
     const historical =
       student.isRemoved === true || student.enrollmentState === "removed";
-    if (learnerFilter === "current") return !historical;
-    if (learnerFilter === "historical") return historical;
-    return true;
+    if (learnerFilter === "current" && historical) return false;
+    if (learnerFilter === "historical" && !historical) return false;
+
+    const query = learnerQuery.trim().toLowerCase();
+    if (!query) return true;
+    return [getStudentName(student), student.lrn, student.studentId].some(
+      (value) =>
+        String(value ?? "")
+          .toLowerCase()
+          .includes(query),
+    );
   });
 
   if (!workbook) {
@@ -289,6 +299,29 @@ export function MobileClassRecordWorkbook({
         </View>
       </View>
 
+      <View style={{ paddingHorizontal: 14, paddingBottom: 10 }}>
+        <TextInput
+          accessibilityLabel="Search class record learners"
+          value={learnerQuery}
+          onChangeText={setLearnerQuery}
+          placeholder="Search learner name or LRN"
+          placeholderTextColor={theme.subtext}
+          autoCapitalize="none"
+          autoCorrect={false}
+          style={{
+            minHeight: 44,
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: theme.border,
+            backgroundColor: mobileBrand.white,
+            paddingHorizontal: 14,
+            color: theme.text,
+            fontSize: 14,
+            fontWeight: "600",
+          }}
+        />
+      </View>
+
       <View
         style={{
           flexDirection: "row",
@@ -315,7 +348,10 @@ export function MobileClassRecordWorkbook({
               borderRadius: 999,
               borderWidth: 1,
               borderColor: learnerFilter === value ? theme.red : theme.border,
-              backgroundColor: learnerFilter === value ? mobileBrand.redSoft : mobileBrand.white,
+              backgroundColor:
+                learnerFilter === value
+                  ? mobileBrand.redSoft
+                  : mobileBrand.white,
               paddingHorizontal: 12,
               paddingVertical: 7,
             }}
@@ -348,7 +384,12 @@ export function MobileClassRecordWorkbook({
               overflow: "hidden",
             }}
           >
-            <View style={{ flexDirection: "row", backgroundColor: mobileBrand.navy }}>
+            <View
+              style={{
+                flexDirection: "row",
+                backgroundColor: mobileBrand.navy,
+              }}
+            >
               {columns.map((column) => (
                 <View
                   key={column.key}
@@ -381,7 +422,10 @@ export function MobileClassRecordWorkbook({
                 key={student.studentId}
                 style={{
                   flexDirection: "row",
-                  backgroundColor: rowIndex % 2 === 0 ? mobileBrand.white : mobileBrand.infoSoft,
+                  backgroundColor:
+                    rowIndex % 2 === 0
+                      ? mobileBrand.white
+                      : mobileBrand.infoSoft,
                   borderTopWidth: 1,
                   borderTopColor: mobileBrand.infoSoft,
                 }}
@@ -457,8 +501,16 @@ export function MobileClassRecordWorkbook({
         </ScrollView>
       ) : (
         <TeacherEmpty
-          title="No learners in this workbook"
-          subtitle="Students and computed grades will appear here after scores are synced."
+          title={
+            learnerQuery.trim()
+              ? "No matching learners"
+              : "No learners in this workbook"
+          }
+          subtitle={
+            learnerQuery.trim()
+              ? "Try another name or LRN, or change the learner filter."
+              : "Students and computed grades will appear here after scores are synced."
+          }
           icon="account-school-outline"
         />
       )}

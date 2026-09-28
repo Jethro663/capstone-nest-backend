@@ -1,8 +1,25 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { DatabaseService } from '../../database/database.service';
 import { StorageService } from '../file-upload/storage/storage.service';
+
+const BACKEND_PACKAGE_VERSION = (() => {
+  try {
+    const packageJson = JSON.parse(
+      readFileSync(resolve(process.cwd(), 'package.json'), 'utf8'),
+    ) as { version?: unknown };
+    return typeof packageJson.version === 'string' && packageJson.version.trim()
+      ? packageJson.version.trim()
+      : '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+})();
+
+const nonBlank = (value?: string | null) => value?.trim() || undefined;
 
 type DependencyStatus = {
   ok: boolean;
@@ -49,9 +66,12 @@ export class HealthService {
   getServiceMetadata(): ServiceMetadata {
     return {
       name: 'backend',
-      version: process.env.npm_package_version ?? '0.0.0',
+      version:
+        nonBlank(this.configService.get<string>('APP_VERSION')) ??
+        nonBlank(process.env.npm_package_version) ??
+        BACKEND_PACKAGE_VERSION,
       gitCommit:
-        this.configService.get<string>('RAILWAY_GIT_COMMIT_SHA') ??
+        nonBlank(this.configService.get<string>('RAILWAY_GIT_COMMIT_SHA')) ??
         'development',
     };
   }

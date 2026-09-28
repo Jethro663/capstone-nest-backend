@@ -6,6 +6,7 @@ import { assessmentService } from "@/services/assessment-service";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -124,6 +125,7 @@ export function PostScoresTab({
   const [previewAttemptId, setPreviewAttemptId] = useState<string | null>(null);
   const [selectedAttemptIds, setSelectedAttemptIds] = useState<string[]>([]);
   const [activeFilter, setActiveFilter] = useState<ScoreFilter>("all");
+  const [query, setQuery] = useState("");
 
   const rows = useMemo<SubmissionRow[]>(
     () =>
@@ -164,10 +166,18 @@ export function PostScoresTab({
 
   const visibleRows = useMemo(
     () =>
-      rows.filter(
-        (row) => activeFilter === "all" || row.bucket === activeFilter,
-      ),
-    [activeFilter, rows],
+      rows.filter((row) => {
+        const matchesFilter =
+          activeFilter === "all" || row.bucket === activeFilter;
+        const normalizedQuery = query.trim().toLocaleLowerCase();
+        const matchesQuery =
+          !normalizedQuery ||
+          [row.fullName, row.email ?? "", STATUS_CONFIG[row.status].label].some(
+            (value) => value.toLocaleLowerCase().includes(normalizedQuery),
+          );
+        return matchesFilter && matchesQuery;
+      }),
+    [activeFilter, query, rows],
   );
 
   const selectableVisibleAttemptIds = visibleRows
@@ -328,7 +338,10 @@ export function PostScoresTab({
                   student{visibleRows.length === 1 ? "" : "s"} in this view.
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div
+                className="flex flex-wrap gap-2"
+                aria-label="Score release filters"
+              >
                 <Button
                   variant="outline"
                   onClick={handleExportExcel}
@@ -381,6 +394,15 @@ export function PostScoresTab({
                   </button>
                 ))}
               </div>
+
+              <Input
+                type="search"
+                aria-label="Search score roster"
+                placeholder="Search learner, email, or status"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                className="min-h-10 max-w-sm border-slate-300 bg-white"
+              />
 
               {selectableVisibleAttemptIds.length > 0 ? (
                 <label className="inline-flex min-h-10 items-center gap-2 text-sm font-medium text-slate-600">

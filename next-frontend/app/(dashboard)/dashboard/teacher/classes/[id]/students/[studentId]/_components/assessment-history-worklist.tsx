@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import Link from "next/link";
 import { ArrowUpRight, ChevronLeft, ChevronRight } from "lucide-react";
 import type {
@@ -118,6 +118,7 @@ export function AssessmentHistoryWorklist({
   onViewChange,
   onPageChange,
 }: AssessmentHistoryWorklistProps) {
+  const [query, setQuery] = useState("");
   const collections = useMemo(() => {
     const finished = history.finished.map((item) => ({
       item,
@@ -131,7 +132,17 @@ export function AssessmentHistoryWorklist({
     return { attention, finished: finished.sort(sortNewest), all };
   }, [history]);
 
-  const rows = collections[activeView];
+  const rows = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase();
+    if (!normalizedQuery) return collections[activeView];
+    return collections[activeView].filter(({ item, tone }) =>
+      [item.title, item.type, item.statusLabel, tone].some((value) =>
+        String(value ?? "")
+          .toLocaleLowerCase()
+          .includes(normalizedQuery),
+      ),
+    );
+  }, [activeView, collections, query]);
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const safePage = Math.min(Math.max(requestedPage, 1), totalPages);
   const startIndex = (safePage - 1) * PAGE_SIZE;
@@ -221,6 +232,20 @@ export function AssessmentHistoryWorklist({
         ))}
       </div>
 
+      <div className="border-b border-white/10 px-4 py-3">
+        <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--teacher-text-muted)]">
+          Search assessments
+          <input
+            type="search"
+            aria-label="Search assessment history"
+            placeholder="Title, type, or status"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            className="teacher-input normal-case tracking-normal"
+          />
+        </label>
+      </div>
+
       <div
         id="assessment-history-panel"
         className="teacher-student-overview__history-content"
@@ -229,7 +254,11 @@ export function AssessmentHistoryWorklist({
       >
         {rows.length === 0 ? (
           <div className="teacher-student-overview__empty-state">
-            <p>{EMPTY_MESSAGES[activeView]}</p>
+            <p>
+              {query.trim()
+                ? "No assessments match this search."
+                : EMPTY_MESSAGES[activeView]}
+            </p>
             <span>
               Choose another history view to review this student&apos;s work.
             </span>

@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
-  FRONTEND_APP_VERSION,
+  FRONTEND_BUILD_INFO,
   healthService,
   type AiHealthStatus,
   type LivenessStatus,
@@ -44,6 +44,11 @@ function getDependencyLabel(
 function getBackendLabel(liveness: LivenessStatus | null) {
   if (!liveness) return 'Unavailable';
   return liveness.status === 'ok' ? 'Operational' : liveness.status;
+}
+
+function formatCommit(value?: string | null) {
+  if (!value) return 'Unavailable';
+  return value === 'development' ? 'Local development' : value;
 }
 
 export function SystemInfoButton({
@@ -94,10 +99,6 @@ export function SystemInfoButton({
     liveness?.service?.version ?? readiness?.service?.version ?? 'Unavailable';
   const backendGit =
     liveness?.service?.gitCommit ?? readiness?.service?.gitCommit;
-  const backendVersion =
-    rawBackendVersion === 'Unavailable'
-      ? rawBackendVersion
-      : `${rawBackendVersion} (${backendGit ? (backendGit === 'development' ? 'dev' : `build ${backendGit.substring(0, 7)}`) : 'dev'})`;
   const aiVersion =
     aiHealth?.service?.version ??
     readiness?.dependencies.aiService.version ??
@@ -154,16 +155,22 @@ export function SystemInfoButton({
                   Frontend
                 </p>
                 <p className="mt-2 text-lg font-black text-slate-900">
-                  {FRONTEND_APP_VERSION}
+                  {FRONTEND_BUILD_INFO.version}
                 </p>
-                <p className="mt-1 text-sm text-slate-500">Build version bundled in this web app.</p>
+                <p className="mt-1 break-all font-mono text-xs text-slate-600">
+                  {formatCommit(FRONTEND_BUILD_INFO.gitCommit)}
+                </p>
+                <p className="mt-1 text-sm text-slate-500">Version and commit bundled in this web app.</p>
               </section>
 
               <section className="rounded-2xl border border-slate-200 bg-slate-50/90 p-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
                   Backend
                 </p>
-                <p className="mt-2 text-lg font-black text-slate-900">{backendVersion}</p>
+                <p className="mt-2 text-lg font-black text-slate-900">{rawBackendVersion}</p>
+                <p className="mt-1 break-all font-mono text-xs text-slate-600">
+                  {formatCommit(backendGit)}
+                </p>
                 <p className="mt-1 text-sm text-slate-500">
                   {getBackendLabel(liveness)} • checked {formatTimestamp(liveness?.timestamp ?? readiness?.timestamp)}
                 </p>

@@ -1,12 +1,16 @@
 import { isAxiosError } from 'axios';
 import { api } from '@/lib/api-client';
 
-const gitHash = process.env.NEXT_PUBLIC_RAILWAY_GIT_COMMIT_SHA
-  ? ` (build ${process.env.NEXT_PUBLIC_RAILWAY_GIT_COMMIT_SHA.substring(0, 7)})`
-  : ' (dev)';
+const frontendVersion = process.env.NEXT_PUBLIC_APP_VERSION?.trim() || '0.1.0';
+const frontendGitCommit =
+  process.env.NEXT_PUBLIC_RAILWAY_GIT_COMMIT_SHA?.trim() || 'development';
 
-export const FRONTEND_APP_VERSION =
-  `${process.env.NEXT_PUBLIC_APP_VERSION ?? '0.1.0'}${gitHash}`;
+export const FRONTEND_BUILD_INFO = Object.freeze({
+  version: frontendVersion,
+  gitCommit: frontendGitCommit,
+});
+
+export const FRONTEND_APP_VERSION = `${frontendVersion} (${frontendGitCommit === 'development' ? 'dev' : `build ${frontendGitCommit.substring(0, 7)}`})`;
 
 type ServiceMetadata = {
   name: string;

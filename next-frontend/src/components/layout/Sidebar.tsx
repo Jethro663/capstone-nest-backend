@@ -483,7 +483,7 @@ export function Sidebar({
           onClose?.();
         }}
         className={cn(
-          "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+          "role-sidebar__item flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
           active
             ? isStudentShell
               ? "student-sidebar__item student-sidebar__item--active"
@@ -539,13 +539,13 @@ export function Sidebar({
             isAdminShell &&
               'text-[var(--admin-sidebar-text)] hover:border-white/10 hover:bg-white/5 hover:text-[var(--admin-sidebar-text-strong)]',
             !isAdminShell &&
-              'text-[#8ea0bc] hover:border-white/10 hover:bg-white/5 hover:text-[#d8e4f6]',
+              'text-[#b8c7db] hover:border-white/10 hover:bg-white/5 hover:text-[#f4f7fb]',
             isOpen &&
               'admin-sidebar__category-trigger--open border-white/10 bg-white/5',
             isOpen &&
               (isAdminShell
                 ? 'text-[var(--admin-sidebar-text-strong)]'
-                : 'text-[#d8e4f6]'),
+                : 'text-[#f4f7fb]'),
             isCategoryActive &&
               'admin-sidebar__category-trigger--active',
             isCategoryActive &&
@@ -828,7 +828,7 @@ export function Sidebar({
                 <p className="truncate text-sm font-black text-white">
                   {displayName}
                 </p>
-                <p className="truncate text-xs text-[#8ea0bc]">Teacher</p>
+                <p className="truncate text-xs text-[#b8c7db]">Teacher</p>
               </div>
             </div>
             <Button
@@ -854,7 +854,7 @@ export function Sidebar({
                 <p className="truncate text-sm font-black text-white">
                   {displayName}
                 </p>
-                <p className="truncate text-xs text-[#8ea0bc]">Student</p>
+                <p className="truncate text-xs text-[#b8c7db]">Student</p>
               </div>
             </div>
             <Button
