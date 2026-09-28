@@ -54,12 +54,13 @@ describe('HealthService', () => {
     });
   });
 
-  it('prefers explicit deployment metadata and ignores blank values', () => {
+  it('prefers the CI-pinned deployment revision and ignores blank values', () => {
     process.env.APP_VERSION = ' 0.0.2-release ';
     const configService = {
       get: jest.fn((key: string) => {
         if (key === 'APP_VERSION') return process.env.APP_VERSION;
-        if (key === 'RAILWAY_GIT_COMMIT_SHA') return ' abcdef1234567890 ';
+        if (key === 'APP_GIT_COMMIT_SHA') return ' ci-tested-sha ';
+        if (key === 'RAILWAY_GIT_COMMIT_SHA') return ' railway-source-sha ';
         return undefined;
       }),
     } as unknown as ConfigService;
@@ -69,7 +70,7 @@ describe('HealthService', () => {
     expect(service.getServiceMetadata()).toEqual({
       name: 'backend',
       version: '0.0.2-release',
-      gitCommit: 'abcdef1234567890',
+      gitCommit: 'ci-tested-sha',
     });
   });
 

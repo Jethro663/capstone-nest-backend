@@ -42,6 +42,9 @@ jobs:
       - name: Install Railway CLI
         run: npm install --global @railway/cli
 
+      - name: Pin CI-tested backend revision metadata
+        run: railway variable set "APP_GIT_COMMIT_SHA=$TESTED_SHA" --skip-deploys --json --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT_NAME" --service "$RAILWAY_SERVICE_NAME"
+
       - name: Start CI-tested backend deployment
         working-directory: backend
         run: railway up . --path-as-root --detach --json --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT_NAME" --service "$RAILWAY_SERVICE_NAME" > "$RUNNER_TEMP/backend-deployment.json"
@@ -82,6 +85,9 @@ jobs:
 
       - name: Install Railway CLI
         run: npm install --global @railway/cli
+
+      - name: Pin CI-tested frontend revision metadata
+        run: railway variable set "APP_GIT_COMMIT_SHA=$TESTED_SHA" --skip-deploys --json --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT_NAME" --service "$RAILWAY_SERVICE_NAME"
 
       - name: Start CI-tested frontend deployment
         working-directory: next-frontend

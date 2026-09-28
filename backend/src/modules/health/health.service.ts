@@ -71,6 +71,7 @@ export class HealthService {
         nonBlank(process.env.npm_package_version) ??
         BACKEND_PACKAGE_VERSION,
       gitCommit:
+        nonBlank(this.configService.get<string>('APP_GIT_COMMIT_SHA')) ??
         nonBlank(this.configService.get<string>('RAILWAY_GIT_COMMIT_SHA')) ??
         'development',
     };

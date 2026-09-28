@@ -16,6 +16,11 @@ const DEFAULT_SERVER_API_ORIGIN =
     ? RAILWAY_BACKEND_PUBLIC_ORIGIN ?? 'http://127.0.0.1:3000'
     : 'http://127.0.0.1:3000';
 
+const DEPLOYMENT_GIT_COMMIT =
+  process.env.APP_GIT_COMMIT_SHA ??
+  process.env.RAILWAY_GIT_COMMIT_SHA ??
+  '';
+
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   async headers() {
@@ -31,7 +36,7 @@ const nextConfig: NextConfig = {
   },
   env: {
     NEXT_PUBLIC_APP_VERSION: process.env.npm_package_version ?? '0.1.0',
-    NEXT_PUBLIC_RAILWAY_GIT_COMMIT_SHA: process.env.RAILWAY_GIT_COMMIT_SHA ?? '',
+    NEXT_PUBLIC_RAILWAY_GIT_COMMIT_SHA: DEPLOYMENT_GIT_COMMIT,
   },
   allowedDevOrigins: [
     '127.0.0.1',
