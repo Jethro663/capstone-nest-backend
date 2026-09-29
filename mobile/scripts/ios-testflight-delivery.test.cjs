@@ -147,3 +147,23 @@ test("the dedicated App Store icon is an opaque 1024px RGB PNG", async () => {
     hasTransparencyChunk: false,
   });
 });
+
+test("EAS ignore rules keep nested iOS assets in the remote build archive", async () => {
+  for (const ignorePath of [
+    path.join(mobileRoot, ".easignore"),
+    path.join(mobileRoot, "..", ".easignore"),
+  ]) {
+    const rules = (await readFile(ignorePath, "utf8"))
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    assert.ok(rules.includes("/ios/"), `${ignorePath} must anchor /ios/`);
+    assert.ok(
+      rules.includes("/android/"),
+      `${ignorePath} must anchor /android/`,
+    );
+    assert.ok(!rules.includes("ios/"), `${ignorePath} must retain assets/ios/`);
+    assert.ok(!rules.includes("android/"), `${ignorePath} must retain nested Android assets`);
+  }
+});
