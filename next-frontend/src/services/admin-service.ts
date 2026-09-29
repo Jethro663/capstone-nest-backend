@@ -1,5 +1,6 @@
 import { api } from '@/lib/api-client';
 import type { AuditLogsResponse, UsageSummary } from '@/types/audit';
+import type { WorkflowDiagnosticsSnapshot } from '@/types/system-capabilities';
 
 const OVERVIEW_CACHE_TTL_MS = 15_000;
 
@@ -123,6 +124,11 @@ export const adminService = {
   }> {
     const { data } = await api.get('/health/ready');
     return data;
+  },
+
+  async getWorkflowDiagnostics(): Promise<WorkflowDiagnosticsSnapshot> {
+    const response = await api.get('/health/workflows');
+    return response.data.data;
   },
 
   getActivityExportUrl(query?: { dateFrom?: string; dateTo?: string }) {

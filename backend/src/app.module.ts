@@ -53,6 +53,7 @@ import { AdminDemoModeModule } from './modules/admin-demo-mode/admin-demo-mode.m
 import { AdminMaintenanceModule } from './modules/admin-maintenance/admin-maintenance.module';
 import { SystemResetModule } from './modules/system-reset/system-reset.module';
 import { MobileWorkspaceModule } from './modules/mobile-workspace/mobile-workspace.module';
+import { SystemCapabilitiesModule } from './modules/system-capabilities/system-capabilities.module';
 import {
   SystemResetGuard,
   SystemResetInterceptor,
@@ -132,6 +133,7 @@ import {
     AdminMaintenanceModule,
     SystemResetModule,
     MobileWorkspaceModule,
+    SystemCapabilitiesModule,
   ],
   providers: [
     {

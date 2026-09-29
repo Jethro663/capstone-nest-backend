@@ -779,6 +779,91 @@
       }
     },
     {
+      "id": "system.capabilities",
+      "fields": [
+        "version",
+        "observedAt",
+        "roleScope",
+        "capabilities",
+        "academicOperations",
+        "maintenanceAccess",
+        "systemReadiness",
+        "workflowDiagnostics",
+        "available",
+        "allowed",
+        "state",
+        "reasonCode",
+        "source"
+      ],
+      "layers": {
+        "backend": {
+          "sources": [
+            "backend/src/modules/system-capabilities/system-capabilities.types.ts",
+            "backend/src/modules/system-capabilities/system-capabilities.controller.ts",
+            "backend/src/modules/system-capabilities/system-capabilities.service.ts"
+          ],
+          "endpoint": "system/capabilities"
+        },
+        "web": {
+          "sources": [
+            "next-frontend/src/types/system-capabilities.ts",
+            "next-frontend/src/services/system-capabilities-service.ts",
+            "next-frontend/app/(dashboard)/dashboard/admin/system-settings/page.tsx"
+          ],
+          "endpoint": "/system/capabilities"
+        },
+        "mobile": {
+          "sources": [
+            "mobile/src/types/system-capabilities.ts",
+            "mobile/src/api/services/system-capabilities.ts",
+            "mobile/src/screens/AdminSettingsOverviewScreen.tsx"
+          ],
+          "endpoint": "/system/capabilities"
+        }
+      }
+    },
+    {
+      "id": "health.workflow-diagnostics",
+      "fields": [
+        "observedAt",
+        "healthy",
+        "staleAfterSeconds",
+        "totals",
+        "alerts",
+        "status",
+        "count",
+        "oldestAgeSeconds",
+        "code",
+        "severity",
+        "message"
+      ],
+      "layers": {
+        "backend": {
+          "sources": [
+            "backend/src/modules/health/workflow-diagnostics.service.ts",
+            "backend/src/modules/health/workflow-diagnostics.controller.ts"
+          ],
+          "endpoint": "health/workflows"
+        },
+        "web": {
+          "sources": [
+            "next-frontend/src/types/system-capabilities.ts",
+            "next-frontend/src/services/admin-service.ts",
+            "next-frontend/app/(dashboard)/dashboard/admin/diagnostics/page.tsx"
+          ],
+          "endpoint": "/health/workflows"
+        },
+        "mobile": {
+          "sources": [
+            "mobile/src/types/system-capabilities.ts",
+            "mobile/src/api/services/admin.ts",
+            "mobile/src/screens/AdminDiagnosticsScreen.tsx"
+          ],
+          "endpoint": "/health/workflows"
+        }
+      }
+    },
+    {
       "id": "errors.structured-evidence",
       "fields": ["statusCode", "code", "message", "errors", "fieldErrors"],
       "layers": {

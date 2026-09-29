@@ -22,7 +22,8 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:admin": "playwright test tests/e2e/admin-class-template-editor.spec.ts",
     "contract:admin": "node ../scripts/check-admin-client-contracts.cjs",
-    "typecheck": "npm run contract:admin && tsc --noEmit"
+    "contract:coverage": "node ../scripts/check-cross-client-type-coverage.cjs",
+    "typecheck": "npm run contract:admin && npm run contract:coverage && tsc --noEmit"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

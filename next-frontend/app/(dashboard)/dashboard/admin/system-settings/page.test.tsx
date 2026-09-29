@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import Page from "./page";
 import { academicStateService } from "@/services/academic-state-service";
+import { systemCapabilitiesService } from "@/services/system-capabilities-service";
 
 jest.mock("@/services/academic-state-service", () => ({
   academicStateService: {
@@ -11,6 +12,10 @@ jest.mock("@/services/academic-state-service", () => ({
     transition: jest.fn(),
     notifyTeachers: jest.fn(),
   },
+}));
+
+jest.mock("@/services/system-capabilities-service", () => ({
+  systemCapabilitiesService: { getSnapshot: jest.fn() },
 }));
 
 jest.mock("@/components/admin/AcademicBackSubjectsPanel", () => ({
@@ -50,12 +55,83 @@ const current = {
   transitionConfirmationText: "TRANSITION",
 };
 
+const capabilities = {
+  version: 1 as const,
+  observedAt: "2026-09-29T03:00:00.000Z",
+  roleScope: ["admin"],
+  capabilities: {
+    academicOperations: {
+      available: true,
+      allowed: true,
+      state: "active" as const,
+      reasonCode: null,
+      source: "academic-state" as const,
+      observedAt: "2026-09-29T03:00:00.000Z",
+    },
+    maintenanceAccess: {
+      available: true,
+      allowed: true,
+      state: "inactive" as const,
+      reasonCode: "MAINTENANCE_INACTIVE",
+      source: "admin-maintenance" as const,
+      observedAt: "2026-09-29T03:00:00.000Z",
+    },
+    systemReadiness: {
+      available: true,
+      allowed: true,
+      state: "ready" as const,
+      reasonCode: null,
+      source: "health-readiness" as const,
+      observedAt: "2026-09-29T03:00:00.000Z",
+    },
+    workflowDiagnostics: {
+      available: true,
+      allowed: true,
+      state: "degraded" as const,
+      reasonCode: "WORKFLOW_ALERTS_PRESENT",
+      source: "workflow-diagnostics" as const,
+      observedAt: "2026-09-29T03:00:00.000Z",
+    },
+  },
+};
+
 describe("Admin system settings overview", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (academicStateService.getCurrent as jest.Mock).mockResolvedValue({
       data: current,
     });
+    (systemCapabilitiesService.getSnapshot as jest.Mock).mockResolvedValue(
+      capabilities,
+    );
+  });
+
+  it("shows backend-owned capability states with semantic labels", async () => {
+    render(<Page />);
+
+    expect(screen.getByText("Live system capabilities")).toBeInTheDocument();
+    expect(await screen.findByText("Academic operations")).toBeInTheDocument();
+    expect(screen.getByText("Workflow diagnostics")).toBeInTheDocument();
+    expect(screen.getByText("Degraded")).toBeInTheDocument();
+    expect(screen.getByText("WORKFLOW_ALERTS_PRESENT")).toBeInTheDocument();
+  });
+
+  it("keeps settings destinations usable when capabilities are unavailable", async () => {
+    (systemCapabilitiesService.getSnapshot as jest.Mock).mockRejectedValue(
+      new Error("Capability snapshot unavailable"),
+    );
+
+    render(<Page />);
+
+    expect(
+      await screen.findByText("Capability snapshot unavailable"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /Reset school data/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /Review or change the active period/ }),
+    ).toBeInTheDocument();
   });
 
   it("makes the active state and current-period assessment rule explicit without loading advanced panels", async () => {

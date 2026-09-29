@@ -44,12 +44,37 @@ export const dbPoolWaiting = new client.Gauge({
   help: 'Waiting connection requests in the DB pool',
 });
 
+export const workflowJobsTotal = new client.Gauge({
+  name: 'workflow_jobs_total',
+  help: 'Durable workflow jobs grouped by the fixed persisted status enum',
+  labelNames: ['status'],
+});
+
+export const workflowOldestNonterminalAgeSeconds = new client.Gauge({
+  name: 'workflow_oldest_nonterminal_age_seconds',
+  help: 'Age in seconds of the oldest pending or processing workflow',
+});
+
+export const workflowFailedJobsTotal = new client.Gauge({
+  name: 'workflow_failed_jobs_total',
+  help: 'Durable workflows currently recorded with failed status',
+});
+
+export const workflowDiagnosticsCollectionFailures = new client.Counter({
+  name: 'workflow_diagnostics_collection_failures_total',
+  help: 'Failures while collecting aggregate workflow diagnostics for metrics',
+});
+
 // Export all metrics as an array for registration
-export const allMetrics = [
+export const allMetrics: client.Metric<string>[] = [
   httpRequestDuration,
   httpRequestTotal,
   httpRequestErrors,
   dbPoolTotal,
   dbPoolIdle,
   dbPoolWaiting,
+  workflowJobsTotal,
+  workflowOldestNonterminalAgeSeconds,
+  workflowFailedJobsTotal,
+  workflowDiagnosticsCollectionFailures,
 ];

@@ -1,11 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Activity, RefreshCcw, Database, Bot, HardDrive, Shield } from 'lucide-react';
+import { Activity, RefreshCcw, Database, Bot, HardDrive } from 'lucide-react';
 import { adminService } from '@/services/admin-service';
+import { AdminAsyncState } from '@/components/admin/AdminAsyncState';
 import { AdminPageShell, AdminSectionCard } from '@/components/admin/AdminPageShell';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import type { WorkflowDiagnosticsSnapshot } from '@/types/system-capabilities';
 
 type HealthReadiness = Awaited<ReturnType<typeof adminService.getHealthReadiness>>;
 type DependencyStatus = { ok: boolean; degraded?: boolean; message?: string };
@@ -36,34 +38,61 @@ function healthyTone(ok?: boolean, degraded?: boolean) {
   return ok ? 'admin-status-pill admin-status-pill--active' : 'admin-status-pill admin-status-pill--archived';
 }
 
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
+function formatAge(seconds: number | null) {
+  if (seconds === null) return null;
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3_600) return `${Math.floor(seconds / 60)}m`;
+  return `${Math.floor(seconds / 3_600)}h ${Math.floor((seconds % 3_600) / 60)}m`;
+}
+
 export default function AdminDiagnosticsPage() {
   const [live, setLive] = useState<{ status: string; timestamp: string } | null>(null);
   const [readiness, setReadiness] = useState<HealthReadiness | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [workflow, setWorkflow] = useState<WorkflowDiagnosticsSnapshot | null>(null);
+  const [workflowLoading, setWorkflowLoading] = useState(true);
+  const [workflowError, setWorkflowError] = useState<string | null>(null);
 
   const fetchDiagnostics = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    const [liveResult, readinessResult] = await Promise.allSettled([
+      adminService.getHealthLive(),
+      adminService.getHealthReadiness(),
+    ]);
+    if (liveResult.status === 'fulfilled') setLive(liveResult.value);
+    if (readinessResult.status === 'fulfilled') setReadiness(readinessResult.value);
+    if (liveResult.status === 'rejected' || readinessResult.status === 'rejected') {
+      setError('Failed to refresh one or more health checks');
+    }
+    setLoading(false);
+  }, []);
+
+  const fetchWorkflowDiagnostics = useCallback(async () => {
+    setWorkflowLoading(true);
+    setWorkflowError(null);
     try {
-      setLoading(true);
-      setError(null);
-      const [liveRes, readinessRes] = await Promise.all([
-        adminService.getHealthLive(),
-        adminService.getHealthReadiness().catch((err) => err?.response?.data),
-      ]);
-      setLive(liveRes);
-      setReadiness(readinessRes ?? null);
-    } catch {
-      setError('Failed to load diagnostics');
+      setWorkflow(await adminService.getWorkflowDiagnostics());
+    } catch (nextError) {
+      setWorkflowError(
+        errorMessage(nextError, 'Workflow diagnostics unavailable'),
+      );
     } finally {
-      setLoading(false);
+      setWorkflowLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchDiagnostics();
-  }, [fetchDiagnostics]);
+    void fetchDiagnostics();
+    void fetchWorkflowDiagnostics();
+  }, [fetchDiagnostics, fetchWorkflowDiagnostics]);
 
-  if (loading) {
+  if (loading && !live && !readiness) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-24 rounded-none" />
@@ -119,8 +148,14 @@ export default function AdminDiagnosticsPage() {
     });
   }
 
-  const hasCriticalAlerts = dependencyAlerts.some((item) => item.severity === 'critical');
-  const hasWarningAlerts = dependencyAlerts.some((item) => item.severity === 'warning');
+  const workflowAlerts = workflow?.alerts ?? [];
+  const hasCriticalAlerts =
+    dependencyAlerts.some((item) => item.severity === 'critical') ||
+    workflowAlerts.some((item) => item.severity === 'critical');
+  const hasWarningAlerts =
+    dependencyAlerts.some((item) => item.severity === 'warning') ||
+    workflowAlerts.some((item) => item.severity === 'warning') ||
+    Boolean(workflowError);
   const bannerVariant = hasCriticalAlerts ? 'issue' : hasWarningAlerts ? 'warning' : 'healthy';
 
   const bannerTitle = hasCriticalAlerts
@@ -136,19 +171,14 @@ export default function AdminDiagnosticsPage() {
       : 'admin-status-pill admin-status-pill--active';
 
   const bannerPillLabel = hasCriticalAlerts ? 'Issue' : hasWarningAlerts ? 'Warning' : 'Healthy';
+  const activeAlertCount =
+    dependencyAlerts.length + workflowAlerts.length + (workflowError ? 1 : 0);
   const alertCountCopy =
-    dependencyAlerts.length > 0
-      ? `${dependencyAlerts.length} active ${dependencyAlerts.length === 1 ? 'alert' : 'alerts'}`
-      : 'No active dependency alerts';
+    activeAlertCount > 0
+      ? `${activeAlertCount} active ${activeAlertCount === 1 ? 'alert' : 'alerts'}`
+      : 'No active alerts';
 
   const dependencyRows = [
-    {
-      label: 'Environment Variables',
-      status: 'Operational',
-      tone: 'admin-status-pill admin-status-pill--active',
-      message: 'Required server variables are loaded.',
-      icon: Shield,
-    },
     {
       label: 'Database Connection Pool',
       status: databaseStatus.label,
@@ -177,7 +207,7 @@ export default function AdminDiagnosticsPage() {
       title="Diagnostics"
       description="Platform health and system status"
       actions={(
-        <Button className="rounded-[1rem] border-0 bg-[#364152] px-4 font-bold text-white shadow-none hover:bg-[#465164]" onClick={fetchDiagnostics}>
+        <Button className="rounded-[1rem] border-0 bg-[#364152] px-4 font-bold text-white shadow-none hover:bg-[#465164]" onClick={() => { void fetchDiagnostics(); void fetchWorkflowDiagnostics(); }}>
           <RefreshCcw className="h-4 w-4" />
           Refresh
         </Button>
@@ -232,21 +262,21 @@ export default function AdminDiagnosticsPage() {
             title: 'API Process',
             ok: live?.status === 'ok',
             detail: live?.timestamp ? `Checked ${new Date(live.timestamp).toLocaleTimeString()}` : 'No live timestamp',
-            value: live?.status === 'ok' ? '200 ms' : 'N/A',
+            value: live?.status === 'ok' ? 'Responding' : 'Unavailable',
           },
           {
             icon: Database,
             title: 'Database (PostgreSQL)',
             ok: Boolean(dependencies?.database?.ok),
             detail: dependencies?.database?.message ?? 'Database ready',
-            value: dependencies?.database?.ok ? '99.9% uptime' : 'Unavailable',
+            value: dependencies?.database?.ok ? 'Ready' : 'Unavailable',
           },
           {
             icon: HardDrive,
             title: 'Redis Cache',
             ok: Boolean(dependencies?.redis?.ok),
             detail: dependencies?.redis?.message ?? 'Cache connected',
-            value: dependencies?.redis?.ok ? '12 ms' : 'Unavailable',
+            value: dependencies?.redis?.ok ? 'Connected' : 'Unavailable',
           },
           {
             icon: Bot,
@@ -280,6 +310,59 @@ export default function AdminDiagnosticsPage() {
           </div>
         ))}
       </div>
+
+      <AdminSectionCard
+        title="Workflow queues"
+        description="Aggregate job state only. No learner, teacher, class, or request payload data is shown."
+        contentClassName="space-y-4"
+      >
+        <AdminAsyncState
+          isLoading={workflowLoading}
+          hasData={workflow !== null}
+          error={workflowError}
+          onRetry={() => void fetchWorkflowDiagnostics()}
+          isRetrying={workflowLoading}
+          empty={<p className="text-sm text-[var(--admin-text-muted)]">No workflow evidence was returned.</p>}
+        >
+          {workflow ? (
+            <>
+              {workflow.alerts.length > 0 ? (
+                <div className="space-y-2">
+                  {workflow.alerts.map((alert) => (
+                    <div
+                      key={alert.code}
+                      role="alert"
+                      className={`admin-diagnostics-alert admin-diagnostics-alert--${alert.severity}`}
+                    >
+                      <p className="admin-diagnostics-alert__message">{alert.message}</p>
+                      <span className={alert.severity === 'critical' ? 'admin-status-pill admin-status-pill--archived' : 'admin-status-pill admin-status-pill--pending'}>
+                        {alert.severity === 'critical' ? 'Critical' : 'Warning'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {workflow.totals.map((item) => (
+                  <div key={item.status} className="rounded-lg border border-[var(--admin-outline)] p-4">
+                    <p className="text-sm font-medium text-[var(--admin-text-muted)]">
+                      {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                    </p>
+                    <p className="mt-1 text-xl font-semibold text-[var(--admin-text-strong)]">
+                      {item.count} {item.count === 1 ? 'job' : 'jobs'}
+                    </p>
+                    {item.oldestAgeSeconds !== null ? (
+                      <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
+                        Oldest: {formatAge(item.oldestAgeSeconds)}
+                      </p>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : null}
+        </AdminAsyncState>
+      </AdminSectionCard>
 
       <AdminSectionCard title="Dependency Checks" contentClassName="space-y-0">
         {dependencyRows.map((item) => (

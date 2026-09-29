@@ -16,6 +16,7 @@ import type {
   UserMonitoringReportPage,
 } from "../../types/admin";
 import type { User } from "../../types/user";
+import type { WorkflowDiagnosticsSnapshot } from "../../types/system-capabilities";
 
 export const adminApi = {
   async getOverview() {
@@ -196,6 +197,14 @@ export const adminApi = {
     return (
       await apiClient.get<{ status: string; timestamp: string }>("/health/live")
     ).data;
+  },
+
+  async getWorkflowDiagnostics() {
+    const response =
+      await apiClient.get<ApiEnvelope<WorkflowDiagnosticsSnapshot>>(
+        "/health/workflows",
+      );
+    return unwrapEnvelope(response.data);
   },
 
   async getTemplates() {

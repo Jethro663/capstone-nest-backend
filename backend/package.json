@@ -9,6 +9,7 @@
     "check:src-clean": "node scripts/check-no-js-in-src.js",
     "check:migrations": "node scripts/check-migration-integrity.js",
     "contract:admin": "node ../scripts/check-admin-client-contracts.cjs",
+    "contract:coverage": "node ../scripts/check-cross-client-type-coverage.cjs",
     "build": "npm run check:src-clean && npm run check:migrations && nest build && node scripts/check-build-output.cjs && npm run check:src-clean",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",

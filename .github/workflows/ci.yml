@@ -7,6 +7,8 @@ on:
       - "next-frontend/**"
       - "mobile/**"
       - "ai-service/**"
+      - "contract-fixtures/**"
+      - "scripts/check-*.cjs"
       - ".github/workflows/**"
       - ".github/scripts/**"
   push:
@@ -36,6 +38,8 @@ jobs:
       - run: npm ci
       - name: Verify administrator client contracts
         run: npm run contract:admin
+      - name: Verify cross-client type coverage
+        run: npm run contract:coverage
       - name: Run non-mutating lint baseline
         run: npm run lint
       - run: npm run test -- --ci

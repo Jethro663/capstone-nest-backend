@@ -1,17 +1,31 @@
 import { useQuery } from "@tanstack/react-query";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import { academicStateService } from "../api/services/academic-state";
+import { systemCapabilitiesApi } from "../api/services/system-capabilities";
+import { AdminAsyncState } from "../components/admin/AdminAsyncState";
 import {
   AdminAdaptiveColumns,
   AdminDataRow,
+  AdminEmpty,
   AdminNotice,
   AdminScreen,
   AdminSection,
 } from "../components/admin/AdminMobilePrimitives";
 import type { MainTabParamList, RootStackParamList } from "../navigation/types";
 import { adminSettingsTaskRoutes } from "../navigation/admin-route-manifest";
+import type { SystemCapabilityEntry } from "../types/system-capabilities";
 
 type Props = BottomTabScreenProps<MainTabParamList, "AdminSettings">;
+
+function capabilityLabel(state: SystemCapabilityEntry["state"]) {
+  return `${state.charAt(0).toUpperCase()}${state.slice(1)}`;
+}
+
+function capabilityTone(state: SystemCapabilityEntry["state"]) {
+  if (state === "active" || state === "ready") return "green" as const;
+  if (state === "degraded" || state === "inactive") return "amber" as const;
+  return "red" as const;
+}
 
 export function AdminSettingsOverviewScreen({ navigation }: Props) {
   const current = useQuery({
@@ -21,6 +35,10 @@ export function AdminSettingsOverviewScreen({ navigation }: Props) {
   const readiness = useQuery({
     queryKey: ["academic", "readiness"],
     queryFn: async () => (await academicStateService.getReadiness()).data,
+  });
+  const capabilities = useQuery({
+    queryKey: ["system", "capabilities"],
+    queryFn: () => systemCapabilitiesApi.getSnapshot(),
   });
   const root = navigation.getParent() as unknown as {
     navigate: <Name extends keyof RootStackParamList>(
@@ -44,10 +62,11 @@ export function AdminSettingsOverviewScreen({ navigation }: Props) {
     <AdminScreen
       title="System Settings"
       subtitle="Start with the current academic state, then enter one bounded task"
-      refreshing={current.isRefetching || readiness.isRefetching}
+      refreshing={current.isRefetching || readiness.isRefetching || capabilities.isRefetching}
       onRefresh={() => {
         void current.refetch();
         void readiness.refetch();
+        void capabilities.refetch();
       }}
     >
       {current.isError ? (
@@ -67,6 +86,49 @@ export function AdminSettingsOverviewScreen({ navigation }: Props) {
           tone={blockers ? "amber" : "green"}
         />
       )}
+      <AdminSection
+        title="Live system capabilities"
+        subtitle="Backend-owned availability and health evidence"
+      >
+        <AdminAsyncState
+          isLoading={capabilities.isLoading}
+          hasData={Boolean(capabilities.data)}
+          error={
+            capabilities.isError
+              ? capabilities.error instanceof Error
+                ? capabilities.error.message
+                : "Capability snapshot unavailable"
+              : null
+          }
+          onRetry={() => void capabilities.refetch()}
+          isRetrying={capabilities.isRefetching}
+          empty={
+            <AdminEmpty
+              title="No capability evidence"
+              subtitle="The backend returned no capability snapshot."
+            />
+          }
+        >
+          {capabilities.data
+            ? (
+                [
+                  ["Academic operations", capabilities.data.capabilities.academicOperations],
+                  ["Maintenance access", capabilities.data.capabilities.maintenanceAccess],
+                  ["System readiness", capabilities.data.capabilities.systemReadiness],
+                  ["Workflow diagnostics", capabilities.data.capabilities.workflowDiagnostics],
+                ] as const
+              ).map(([title, entry]) => (
+                <AdminDataRow
+                  key={title}
+                  title={title}
+                  subtitle={entry.reasonCode ?? `Reported by ${entry.source}`}
+                  status={capabilityLabel(entry.state)}
+                  statusTone={capabilityTone(entry.state)}
+                />
+              ))
+            : null}
+        </AdminAsyncState>
+      </AdminSection>
       <AdminAdaptiveColumns
         primary={
           <AdminSection

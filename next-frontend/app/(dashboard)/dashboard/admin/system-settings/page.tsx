@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { markResetEntrySource } from "@/lib/system-reset-navigation";
 import {
@@ -10,16 +11,65 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { AdminSectionCard } from "@/components/admin/AdminPageShell";
+import { AdminAsyncState } from "@/components/admin/AdminAsyncState";
 import { AcademicStateView } from "@/components/admin/system-settings/AcademicStateView";
 import { SettingHelp } from "@/components/admin/system-settings/SettingHelp";
 import { useAcademicStateCurrent } from "@/components/admin/system-settings/useAcademicStateCurrent";
+import { systemCapabilitiesService } from "@/services/system-capabilities-service";
+import type {
+  SystemCapabilitiesSnapshot,
+  SystemCapabilityEntry,
+} from "@/types/system-capabilities";
 
 function displaySchoolYear(schoolYear: string) {
   return schoolYear.replace("-", "–");
 }
 
+function capabilityError(error: unknown) {
+  return error instanceof Error && error.message
+    ? error.message
+    : "Capability snapshot unavailable";
+}
+
+function capabilityTone(entry: SystemCapabilityEntry) {
+  if (entry.state === "active" || entry.state === "ready") {
+    return "admin-status-pill admin-status-pill--active";
+  }
+  if (entry.state === "degraded" || entry.state === "inactive") {
+    return "admin-status-pill admin-status-pill--pending";
+  }
+  return "admin-status-pill admin-status-pill--archived";
+}
+
+function capabilityLabel(state: SystemCapabilityEntry["state"]) {
+  return `${state.charAt(0).toUpperCase()}${state.slice(1)}`;
+}
+
 export default function AdminSystemSettingsPage() {
   const { current, loading, error, refresh } = useAcademicStateCurrent();
+  const [capabilities, setCapabilities] =
+    useState<SystemCapabilitiesSnapshot | null>(null);
+  const [capabilitiesLoading, setCapabilitiesLoading] = useState(true);
+  const [capabilitiesError, setCapabilitiesError] = useState<string | null>(
+    null,
+  );
+
+  const refreshCapabilities = useCallback(async () => {
+    setCapabilitiesLoading(true);
+    setCapabilitiesError(null);
+    try {
+      setCapabilities(await systemCapabilitiesService.getSnapshot());
+    } catch (nextError) {
+      setCapabilitiesError(capabilityError(nextError));
+    } finally {
+      setCapabilitiesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshCapabilities();
+  }, [refreshCapabilities]);
+
   const activePeriod =
     current?.periods.find((period) => period.key === current.quarter)?.label ??
     current?.quarter;
@@ -147,6 +197,47 @@ export default function AdminSystemSettingsPage() {
           </>
         ) : null}
       </AcademicStateView>
+
+      <AdminSectionCard
+        title="Live system capabilities"
+        description="Backend-owned policy and health signals. These explain availability; they do not change policy."
+        density="compact"
+      >
+        <AdminAsyncState
+          isLoading={capabilitiesLoading}
+          hasData={capabilities !== null}
+          error={capabilitiesError}
+          onRetry={() => void refreshCapabilities()}
+          isRetrying={capabilitiesLoading}
+          empty={<p className="text-sm text-[var(--admin-text-muted)]">No capability evidence was returned.</p>}
+        >
+          {capabilities ? (
+            <div className="divide-y divide-[var(--admin-outline)] rounded-md border border-[var(--admin-outline)]">
+              {(
+                [
+                  ["Academic operations", capabilities.capabilities.academicOperations],
+                  ["Maintenance access", capabilities.capabilities.maintenanceAccess],
+                  ["System readiness", capabilities.capabilities.systemReadiness],
+                  ["Workflow diagnostics", capabilities.capabilities.workflowDiagnostics],
+                ] as const
+              ).map(([label, entry]) => (
+                <div key={label} className="flex items-start justify-between gap-4 p-4">
+                  <div>
+                    <p className="font-medium text-[var(--admin-text-strong)]">{label}</p>
+                    <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
+                      {entry.reasonCode ?? `Reported by ${entry.source}`}
+                    </p>
+                  </div>
+                  <span className={capabilityTone(entry)}>
+                    {capabilityLabel(entry.state)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </AdminAsyncState>
+      </AdminSectionCard>
+
       <AdminSectionCard
         title="Choose what you need to do"
         description="Routine setup, year-end work, and recovery now have separate destinations."
