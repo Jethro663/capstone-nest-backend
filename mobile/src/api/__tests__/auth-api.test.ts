@@ -1,4 +1,4 @@
-import { apiClient, publicClient } from "../client";
+import { apiClient, clearAuthSession, publicClient } from "../client";
 import { authApi } from "../services/auth";
 
 jest.mock("react-native", () => ({
@@ -67,5 +67,19 @@ describe("mobile auth api", () => {
 
     await expect(authApi.changePassword(payload)).rejects.toThrow("current password incorrect");
     expect(mockedApiClient.post).toHaveBeenCalledWith("/auth/change-password", payload);
+  });
+
+  it("revokes a captured refresh token while the provider owns local cleanup", async () => {
+    mockedPublicClient.post.mockResolvedValueOnce({
+      data: { success: true, message: "Mobile logout successful" },
+    });
+
+    await authApi.logout("captured-refresh-token");
+
+    expect(mockedPublicClient.post).toHaveBeenCalledWith(
+      "/auth/mobile/logout",
+      { refreshToken: "captured-refresh-token" },
+    );
+    expect(clearAuthSession).not.toHaveBeenCalled();
   });
 });

@@ -58,10 +58,12 @@ export async function syncCurrentPushRegistration() {
   });
 }
 
-export async function revokeCurrentPushInstallation(): Promise<void> {
+export async function revokeCurrentPushInstallation(
+  capturedAccessToken?: string | null,
+): Promise<void> {
   const installationId = await SecureStore.getItemAsync(
     PUSH_INSTALLATION_ID_KEY,
   );
   if (!installationId) return;
-  await notificationsApi.revokeDevice(installationId);
+  await notificationsApi.revokeDevice(installationId, capturedAccessToken);
 }

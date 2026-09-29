@@ -1,6 +1,6 @@
 # Nexora iOS TestFlight Handoff
 
-Use this guide for Nexora Mobile `0.1.52` build `53`.
+Use this guide for Nexora Mobile `0.1.55` build `56`.
 
 ## Fixed identifiers
 
@@ -126,13 +126,13 @@ Stop instead of guessing if any of these appear:
 - The bundle ID differs by even one character.
 - Apple says an agreement must be accepted. The Account Holder must open App Store Connect, accept it, and rerun the command.
 - EAS proposes creating a new App Store Connect application instead of using Apple ID `6816592125`.
-- Apple reports that build `53` already exists for version `0.1.52`. The developer must use Nexora's release bump process before trying again.
+- Apple reports that build `56` already exists for version `0.1.55`. The developer must use Nexora's release bump process before trying again.
 
 Successful result:
 
 - EAS Build status becomes **Finished**.
 - EAS Submit status becomes **Finished**.
-- App Store Connect shows version `0.1.52`, build `53`, under TestFlight after Apple finishes processing it.
+- App Store Connect shows version `0.1.55`, build `56`, under TestFlight after Apple finishes processing it.
 
 Processing is an Apple server step and can continue after the EAS submission finishes. Do not rebuild merely because the build is still processing.
 
@@ -141,11 +141,11 @@ Processing is an Apple server step and can continue after the EAS submission fin
 The Account Holder completes these steps in App Store Connect:
 
 1. Open **Apps → Nexora → TestFlight**.
-2. Wait until build `0.1.52 (53)` no longer says **Processing**.
+2. Wait until build `0.1.55 (56)` no longer says **Processing**.
 3. Answer the export-compliance question if Apple displays it. The app config declares no non-exempt encryption because Nexora uses system HTTPS and system secure storage rather than custom encryption.
 4. Complete any missing **Test Information** fields, including beta description, feedback email, and contact information.
 5. Open **Internal Testing** and create a group such as `Nexora Capstone Testers` if one does not exist.
-6. Add build `0.1.52 (53)` to the group.
+6. Add build `0.1.55 (56)` to the group.
 7. Add the Account Holder or another existing App Store Connect user as an internal tester.
 
 Internal testing is the shortest capstone route. External public-link testing adds Apple's Beta App Review and should be used only when testers cannot be added as App Store Connect users.
@@ -168,7 +168,7 @@ Expected result: Nexora opens as a normal signed iOS application without Develop
 Record one continuous test video where practical and capture separate screenshots for failures.
 
 1. **Installation evidence**
-   - Show TestFlight listing Nexora `0.1.52 (53)`.
+   - Show TestFlight listing Nexora `0.1.55 (56)`.
    - Show Nexora launching from the iPhone Home Screen.
 2. **Authentication and backend**
    - Log in with a designated test account.

@@ -98,10 +98,16 @@ export const notificationsApi = {
     return response.data;
   },
 
-  async revokeDevice(installationId: string) {
-    const response = await apiClient.delete(
-      `/notifications/devices/${installationId}`,
-    );
+  async revokeDevice(
+    installationId: string,
+    capturedAccessToken?: string | null,
+  ) {
+    const route = `/notifications/devices/${installationId}`;
+    const response = capturedAccessToken
+      ? await apiClient.delete(route, {
+          headers: { Authorization: `Bearer ${capturedAccessToken}` },
+        })
+      : await apiClient.delete(route);
     return response.data;
   },
 };

@@ -1,7 +1,17 @@
 import { mobileBrand } from "../../theme/mobileBrand";
 import { useEffect, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { DatePickerModal } from "../ui/DatePickerModal";
 import { teacherTheme as theme } from "./TeacherMobilePrimitives";
 
@@ -40,6 +50,7 @@ export function TeacherAnnouncementEditorModal({
   onSave,
   onClose,
 }: Props) {
+  const insets = useSafeAreaInsets();
   const [title, setTitle] = useState(initialTitle);
   const [content, setContent] = useState(() => normalizeAnnouncementContent(initialContent));
   const [isPinned, setIsPinned] = useState(initialPinned);
@@ -71,18 +82,33 @@ export function TeacherAnnouncementEditorModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: mobileBrand.scrimStrong, justifyContent: "flex-end" }}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+      >
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: mobileBrand.scrimStrong,
+          justifyContent: "center",
+          paddingHorizontal: 12,
+          paddingTop: Math.max(insets.top, 12),
+          paddingBottom: Math.max(insets.bottom, 12),
+        }}
+      >
         <View
           style={{
-            maxHeight: "90%",
+            width: "100%",
+            maxWidth: 560,
+            maxHeight: "100%",
+            alignSelf: "center",
             backgroundColor: theme.surface,
-            borderTopLeftRadius: 20,
-            borderTopRightRadius: 20,
+            borderRadius: 20,
             borderWidth: 1,
             borderColor: theme.border,
             paddingHorizontal: 20,
             paddingTop: 18,
-            paddingBottom: 24,
+            paddingBottom: 16,
           }}
         >
           {/* Header */}
@@ -325,6 +351,7 @@ export function TeacherAnnouncementEditorModal({
           </View>
         </View>
       </View>
+      </KeyboardAvoidingView>
 
       <DatePickerModal
         visible={showDatePicker}

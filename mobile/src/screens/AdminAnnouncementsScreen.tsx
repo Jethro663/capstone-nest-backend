@@ -21,6 +21,7 @@ import {
   AdminFilterBar,
   AdminListHeader,
   AdminNotice,
+  AdminScreen,
   AdminSection,
   adminTheme as theme,
 } from "../components/admin/AdminMobilePrimitives";
@@ -149,6 +150,93 @@ export function AdminAnnouncementsScreen(_props: Props) {
         },
       ],
     );
+
+  if (showComposer) {
+    return (
+      <AdminScreen
+        title={editing ? "Edit announcement" : "Compose announcement"}
+        subtitle="Choose a class, prepare the message, then publish or schedule it."
+        rightAction={
+          <AdminButton label="Close" icon="close" onPress={reset} />
+        }
+      >
+        <AdminSection
+          title={editing ? "Edit in class context" : "Compose in class context"}
+          subtitle="The backend class route remains the canonical mutation contract"
+        >
+          <View style={{ padding: 16, gap: 10 }}>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {(classes.data?.data ?? []).map((entry) => (
+                <AdminChip
+                  key={entry.id}
+                  label={entry.subjectCode}
+                  active={classId === entry.id}
+                  onPress={() => setClassId(entry.id)}
+                />
+              ))}
+            </View>
+            <AdminField label="Title" value={title} onChangeText={setTitle} />
+            <AssessmentRichTextEditor
+              label="Announcement content"
+              value={content}
+              onChange={setContent}
+              disabled={saving}
+              extendedFormatting
+            />
+            <Text style={{ color: theme.text, fontWeight: "800" }}>
+              Schedule: {scheduledAt?.toLocaleString() ?? "Publish immediately"}
+            </Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              <AdminButton
+                label="Schedule date"
+                onPress={() => setSchedulePicker("date")}
+              />
+              <AdminButton
+                label="Schedule time"
+                onPress={() => setSchedulePicker("time")}
+              />
+              <AdminButton
+                label="Publish immediately"
+                disabled={!scheduledAt}
+                onPress={() => setScheduledAt(null)}
+              />
+            </View>
+            {schedulePicker ? (
+              <DateTimePicker
+                value={scheduledAt ?? new Date(Date.now() + 3_600_000)}
+                mode={schedulePicker}
+                onChange={changeSchedule}
+              />
+            ) : null}
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <AdminChip
+                label="Pinned"
+                active={isPinned}
+                onPress={() => setIsPinned((value) => !value)}
+              />
+              <View style={{ flex: 1 }} />
+              <AdminButton
+                label={
+                  saving
+                    ? "Saving…"
+                    : editing
+                      ? "Save"
+                      : scheduledAt
+                        ? "Schedule"
+                        : "Publish"
+                }
+                icon="send"
+                tone="green"
+                disabled={saving}
+                onPress={() => void save()}
+              />
+            </View>
+          </View>
+        </AdminSection>
+      </AdminScreen>
+    );
+  }
+
   return (
     <AdminPaginatedList
       data={rows}
@@ -168,9 +256,9 @@ export function AdminAnnouncementsScreen(_props: Props) {
             subtitle="One bounded cross-class page; editing keeps the class procedure"
             rightAction={
               <AdminButton
-                label={showComposer ? "Close" : "Compose"}
-                icon={showComposer ? "close" : "plus"}
-                onPress={() => (showComposer ? reset() : setShowComposer(true))}
+                label="Compose"
+                icon="plus"
+                onPress={() => setShowComposer(true)}
               />
             }
           />
@@ -194,94 +282,6 @@ export function AdminAnnouncementsScreen(_props: Props) {
               description={toAppError(feed.error).message}
               tone="red"
             />
-          ) : null}
-          {showComposer ? (
-            <AdminSection
-              title={
-                editing ? "Edit in class context" : "Compose in class context"
-              }
-              subtitle="The backend class route remains the canonical mutation contract"
-            >
-              <View style={{ padding: 16, gap: 10 }}>
-                <View
-                  style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}
-                >
-                  {(classes.data?.data ?? []).map((entry) => (
-                    <AdminChip
-                      key={entry.id}
-                      label={entry.subjectCode}
-                      active={classId === entry.id}
-                      onPress={() => setClassId(entry.id)}
-                    />
-                  ))}
-                </View>
-                <AdminField
-                  label="Title"
-                  value={title}
-                  onChangeText={setTitle}
-                />
-                <AssessmentRichTextEditor
-                  label="Announcement content"
-                  value={content}
-                  onChange={setContent}
-                  disabled={saving}
-                  extendedFormatting
-                />
-                <Text style={{ color: theme.text, fontWeight: "800" }}>
-                  Schedule:{" "}
-                  {scheduledAt?.toLocaleString() ?? "Publish immediately"}
-                </Text>
-                <View
-                  style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}
-                >
-                  <AdminButton
-                    label="Schedule date"
-                    onPress={() => setSchedulePicker("date")}
-                  />
-                  <AdminButton
-                    label="Schedule time"
-                    onPress={() => setSchedulePicker("time")}
-                  />
-                  <AdminButton
-                    label="Publish immediately"
-                    disabled={!scheduledAt}
-                    onPress={() => setScheduledAt(null)}
-                  />
-                </View>
-                {schedulePicker ? (
-                  <DateTimePicker
-                    value={scheduledAt ?? new Date(Date.now() + 3_600_000)}
-                    mode={schedulePicker}
-                    onChange={changeSchedule}
-                  />
-                ) : null}
-                <View
-                  style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-                >
-                  <AdminChip
-                    label="Pinned"
-                    active={isPinned}
-                    onPress={() => setIsPinned((value) => !value)}
-                  />
-                  <View style={{ flex: 1 }} />
-                  <AdminButton
-                    label={
-                      saving
-                        ? "Saving…"
-                        : editing
-                          ? "Save"
-                          : scheduledAt
-                            ? "Schedule"
-                            : "Publish"
-                    }
-                    icon="send"
-                    tone="green"
-                    disabled={saving}
-                    onPress={() => void save()}
-                  />
-                </View>
-              </View>
-            </AdminSection>
           ) : null}
         </>
       }

@@ -154,17 +154,24 @@ export function AuthProvider({ children }: PropsWithChildren) {
   );
 
   const logout = useCallback(async () => {
+    const capturedAccessToken = getAccessToken();
+    const capturedRefreshToken = getRefreshToken();
+    setSession(null);
+
+    const remoteCleanup = Promise.allSettled([
+      import("../services/notifications/push-registration.runtime").then(
+        ({ revokeCurrentPushInstallation }) =>
+          revokeCurrentPushInstallation(capturedAccessToken),
+      ),
+      authApi.logout(capturedRefreshToken),
+    ]);
+
     try {
-      await import("../services/notifications/push-registration.runtime")
-        .then(({ revokeCurrentPushInstallation }) =>
-          revokeCurrentPushInstallation(),
-        )
-        .catch(() => undefined);
-      await authApi.logout();
-    } finally {
       await clearAuthSession();
       await persistSession(null);
       await clearAllEditorRecovery();
+    } finally {
+      await remoteCleanup;
     }
   }, [persistSession]);
 

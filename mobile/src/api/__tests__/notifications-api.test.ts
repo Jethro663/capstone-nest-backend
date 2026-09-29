@@ -64,3 +64,21 @@ it("registers and revokes the current installation through user-scoped routes", 
     "/notifications/devices/installation-1",
   );
 });
+
+it("uses a captured bearer token when logout clears global auth concurrently", async () => {
+  (apiClient.delete as jest.Mock).mockResolvedValueOnce({
+    data: { success: true, data: { notificationsEnabled: false } },
+  });
+
+  await notificationsApi.revokeDevice(
+    "installation-1",
+    "captured-access-token",
+  );
+
+  expect(apiClient.delete).toHaveBeenCalledWith(
+    "/notifications/devices/installation-1",
+    {
+      headers: { Authorization: "Bearer captured-access-token" },
+    },
+  );
+});

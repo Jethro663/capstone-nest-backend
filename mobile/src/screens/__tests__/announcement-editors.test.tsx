@@ -34,7 +34,7 @@ jest.mock("react-native", () => {
         "KeyboardAvoidingView",
       ].map((name) => [name, component(name)]),
     ),
-    Platform: { OS: "android" },
+    Platform: { OS: "ios" },
     Linking: { openURL: jest.fn() },
     Alert: { alert: jest.fn() },
   };
@@ -65,6 +65,7 @@ jest.mock("../../components/admin/AdminPaginatedList", () => {
 });
 jest.mock("react-native-safe-area-context", () => ({
   SafeAreaView: ({ children }) => children,
+  useSafeAreaInsets: () => ({ top: 47, right: 0, bottom: 34, left: 0 }),
 }));
 jest.mock("react-native-webview", () => {
   const React = require("react");
@@ -122,12 +123,22 @@ jest.mock("../../components/admin/AdminMobilePrimitives", () => {
       surface: "#fff",
     },
     AdminSection: container,
-    AdminScreen: container,
+    AdminScreen: ({ children, title }) =>
+      React.createElement(
+        "View",
+        { accessibilityLabel: `Admin screen ${title}` },
+        children,
+      ),
     AdminListHeader: ({ rightAction }) =>
       React.createElement("View", {}, rightAction),
     AdminMetricStrip: () => null,
     AdminEmpty: () => null,
-    AdminFilterBar: () => null,
+    AdminFilterBar: () =>
+      React.createElement(
+        "Text",
+        { accessibilityLabel: "Announcement filters" },
+        "Announcement filters",
+      ),
     AdminButton: ({ label, ...props }) =>
       React.createElement(
         "Pressable",
@@ -253,6 +264,59 @@ it("teacher cannot publish an empty HTML paragraph", () => {
   expect(button(renderer.root, "Publish Announcement").props.disabled).toBe(
     true,
   );
+});
+
+it("keeps the teacher composer centered above the iOS keyboard and safe area", () => {
+  let renderer;
+  act(() => {
+    renderer = TestRenderer.create(
+      <TeacherAnnouncementEditorModal
+        visible
+        initialTitle="Notice"
+        initialContent="<p>Read this update.</p>"
+        onSave={jest.fn()}
+        onClose={jest.fn()}
+      />,
+    );
+  });
+
+  expect(renderer.root.findByType("KeyboardAvoidingView").props.behavior).toBe(
+    "padding",
+  );
+  expect(
+    renderer.root
+      .findAllByType("View")
+      .some(
+        (node) =>
+          node.props.style?.justifyContent === "center" &&
+          node.props.style?.paddingBottom === 34,
+      ),
+  ).toBe(true);
+});
+
+it("opens the admin composer as a focused screen above feed filters", () => {
+  let renderer;
+  act(() => {
+    renderer = TestRenderer.create(<AdminAnnouncementsScreen />);
+  });
+  expect(
+    renderer.root.findAllByProps({ accessibilityLabel: "Announcement filters" }),
+  ).toHaveLength(1);
+
+  act(() => button(renderer.root, "Compose").props.onPress());
+
+  expect(
+    renderer.root.findByProps({
+      accessibilityLabel: "Admin screen Compose announcement",
+    }),
+  ).toBeTruthy();
+  expect(
+    renderer.root.findAllByProps({ accessibilityLabel: "Announcement filters" }),
+  ).toHaveLength(0);
+  expect(
+    renderer.root.findByProps({ accessibilityLabel: "Title" }),
+  ).toBeTruthy();
+  act(() => renderer.unmount());
 });
 
 it("admin reads and edits formatted announcements with the same editor", async () => {

@@ -6,8 +6,7 @@ import {
   type PropsWithChildren,
 } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Image, Modal, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
-import { AppAlert as Alert } from "../ui/AppAlert";
+import { Alert, Image, Modal, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { mobileBrand } from "../../theme/mobileBrand";
 import { MobileAction } from "../ui/MobileAction";

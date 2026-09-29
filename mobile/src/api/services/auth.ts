@@ -1,4 +1,4 @@
-import { apiClient, clearAuthSession, getRefreshToken, persistAuthTokens, publicClient } from "../client";
+import { apiClient, getRefreshToken, persistAuthTokens, publicClient } from "../client";
 import { unwrapEnvelope } from "../http";
 import type { ApiEnvelope } from "../../types/api";
 import type {
@@ -38,12 +38,14 @@ export const authApi = {
     };
   },
 
-  async logout() {
-    const refreshToken = getRefreshToken();
+  async logout(capturedRefreshToken?: string | null) {
+    const refreshToken =
+      capturedRefreshToken === undefined
+        ? getRefreshToken()
+        : capturedRefreshToken;
     if (refreshToken) {
       await publicClient.post("/auth/mobile/logout", { refreshToken });
     }
-    await clearAuthSession();
   },
 
   async getCurrentUser() {

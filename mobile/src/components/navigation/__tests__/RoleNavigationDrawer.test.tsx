@@ -179,6 +179,10 @@ describe("role drawer destination contracts", () => {
 });
 
 describe("RoleDrawerProvider", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   it("opens from a 48px hamburger, renders an 84% drawer, navigates, and closes", () => {
     const onNavigate = jest.fn();
     let renderer: TestRenderer.ReactTestRenderer;
@@ -376,5 +380,47 @@ describe("RoleDrawerProvider", () => {
     expect(
       teacherRenderer!.root.findByProps({ accessibilityLabel: "Log out" }),
     ).toBeTruthy();
+  });
+
+  it("uses the platform alert outside test mode so drawer logout does not stack app modals", () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "development";
+    const { Alert } = require("react-native") as {
+      Alert: { alert: jest.Mock };
+    };
+    let renderer: TestRenderer.ReactTestRenderer;
+
+    try {
+      act(() => {
+        renderer = TestRenderer.create(
+          <RoleDrawerProvider
+            role="student"
+            activeRouteName="Dashboard"
+            onNavigate={jest.fn()}
+            onLogout={mockLogout}
+          >
+            <RoleMenuButton />
+          </RoleDrawerProvider>,
+        );
+      });
+      act(() =>
+        renderer!.root
+          .findByProps({ accessibilityLabel: "Open navigation menu" })
+          .props.onPress(),
+      );
+      act(() =>
+        renderer!.root
+          .findByProps({ accessibilityLabel: "Log out" })
+          .props.onPress(),
+      );
+
+      expect(Alert.alert).toHaveBeenCalledWith(
+        "Log out?",
+        "You will need to sign in again to continue learning.",
+        expect.any(Array),
+      );
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv;
+    }
   });
 });

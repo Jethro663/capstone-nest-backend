@@ -5,6 +5,8 @@ import { AuthProvider, useAuth } from "../AuthProvider";
 import { authApi } from "../../api/services/auth";
 import {
   clearAuthSession,
+  getAccessToken,
+  getRefreshToken,
   refreshSession,
   subscribeAuthSessionExpired,
 } from "../../api/client";
@@ -72,6 +74,8 @@ beforeEach(() => {
   jest.resetAllMocks();
   sessionExpiredListener = undefined;
   jest.mocked(refreshSession).mockResolvedValue(null);
+  jest.mocked(getAccessToken).mockReturnValue("access");
+  jest.mocked(getRefreshToken).mockReturnValue("refresh");
   jest.mocked(subscribeAuthSessionExpired).mockImplementation((listener) => {
     sessionExpiredListener = listener;
     return jest.fn();
@@ -102,27 +106,74 @@ it.each(["student", "teacher"])(
   },
 );
 
-it("best-effort revokes the current push installation before logout clears auth", async () => {
+it("ends the local session before captured-token remote logout cleanup settles", async () => {
   const pushRuntime = jest.requireMock(
     "../../services/notifications/push-registration.runtime",
   );
+  let resolvePush!: () => void;
+  let resolveServerLogout!: () => void;
+  const pushCleanup = new Promise<void>((resolve) => {
+    resolvePush = resolve;
+  });
+  const serverCleanup = new Promise<void>((resolve) => {
+    resolveServerLogout = resolve;
+  });
   await mount();
   jest.mocked(authApi.login).mockResolvedValue(session("student", true));
-  jest.mocked(authApi.logout).mockResolvedValue(undefined);
+  pushRuntime.revokeCurrentPushInstallation.mockReturnValue(pushCleanup);
+  jest.mocked(authApi.logout).mockReturnValue(serverCleanup);
   await act(async () => {
     await auth.login("student@example.invalid", "password");
-    await auth.logout();
+  });
+  expect(auth.isAuthenticated).toBe(true);
+
+  let logoutPromise!: Promise<void>;
+  await act(async () => {
+    logoutPromise = auth.logout();
+    await Promise.resolve();
   });
 
-  expect(pushRuntime.revokeCurrentPushInstallation).toHaveBeenCalledTimes(1);
-  expect(authApi.logout).toHaveBeenCalledTimes(1);
+  expect(auth.isAuthenticated).toBe(false);
   expect(clearAuthSession).toHaveBeenCalled();
+  expect(pushRuntime.revokeCurrentPushInstallation).toHaveBeenCalledWith(
+    "access",
+  );
+  expect(authApi.logout).toHaveBeenCalledWith("refresh");
+
+  resolvePush();
+  resolveServerLogout();
+  await act(async () => {
+    await logoutPromise;
+  });
+
   const offlineStore = jest.requireMock(
     "../../services/offline/workspace-snapshot",
   );
   expect(offlineStore.workspaceSnapshotStore.purgeUser).toHaveBeenCalledWith(
     "user-1",
   );
+});
+
+it("keeps the user logged out when remote cleanup rejects", async () => {
+  const pushRuntime = jest.requireMock(
+    "../../services/notifications/push-registration.runtime",
+  );
+  await mount();
+  jest.mocked(authApi.login).mockResolvedValue(session("student", true));
+  pushRuntime.revokeCurrentPushInstallation.mockRejectedValue(
+    new Error("push revoke unavailable"),
+  );
+  jest.mocked(authApi.logout).mockRejectedValue(
+    new Error("server revoke unavailable"),
+  );
+  await act(async () => {
+    await auth.login("student@example.invalid", "password");
+    await auth.logout();
+  });
+
+  expect(auth.isAuthenticated).toBe(false);
+  expect(clearAuthSession).toHaveBeenCalled();
+  expect(writeSessionSnapshot).toHaveBeenLastCalledWith(null);
 });
 
 it("clears the rendered session when refresh credentials expire", async () => {
