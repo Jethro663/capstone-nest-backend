@@ -12,6 +12,6 @@ artifacts
 
 # BEGIN NEXORA ANDROID RELEASE
 public/downloads/android/**
-!public/downloads/android/56-c869b82d/
-!public/downloads/android/56-c869b82d/**
+!public/downloads/android/57-7f6a57e6/
+!public/downloads/android/57-7f6a57e6/**
 # END NEXORA ANDROID RELEASE
