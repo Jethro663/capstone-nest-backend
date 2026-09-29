@@ -149,21 +149,31 @@ test("the dedicated App Store icon is an opaque 1024px RGB PNG", async () => {
 });
 
 test("EAS ignore rules keep nested iOS assets in the remote build archive", async () => {
-  for (const ignorePath of [
-    path.join(mobileRoot, ".easignore"),
-    path.join(mobileRoot, "..", ".easignore"),
+  for (const { ignorePath, nativeDirectories } of [
+    {
+      ignorePath: path.join(mobileRoot, ".easignore"),
+      nativeDirectories: ["/ios/", "/android/"],
+    },
+    {
+      ignorePath: path.join(mobileRoot, "..", ".easignore"),
+      nativeDirectories: ["mobile/ios/", "mobile/android/"],
+    },
   ]) {
     const rules = (await readFile(ignorePath, "utf8"))
       .split(/\r?\n/)
       .map((line) => line.trim())
       .filter(Boolean);
 
-    assert.ok(rules.includes("/ios/"), `${ignorePath} must anchor /ios/`);
-    assert.ok(
-      rules.includes("/android/"),
-      `${ignorePath} must anchor /android/`,
-    );
+    for (const nativeDirectory of nativeDirectories) {
+      assert.ok(
+        rules.includes(nativeDirectory),
+        `${ignorePath} must exclude ${nativeDirectory}`,
+      );
+    }
     assert.ok(!rules.includes("ios/"), `${ignorePath} must retain assets/ios/`);
-    assert.ok(!rules.includes("android/"), `${ignorePath} must retain nested Android assets`);
+    assert.ok(
+      !rules.includes("android/"),
+      `${ignorePath} must use a scoped Android native-directory rule`,
+    );
   }
 });
