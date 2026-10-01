@@ -55,7 +55,7 @@ function counted(items) {
 export function nextRouteFromPagePath(pagePath) {
   const withoutPrefix = toPosix(pagePath).replace(/^next-frontend\/app\/?/, '');
   const routeParts = withoutPrefix
-    .replace(/\/page\.tsx$/, '')
+    .replace(/(^|\/)page\.tsx$/, '')
     .split('/')
     .filter(Boolean)
     .filter((part) => !(part.startsWith('(') && part.endsWith(')')));

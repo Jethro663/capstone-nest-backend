@@ -14,6 +14,7 @@ test('converts Next app page paths to reader-facing routes', () => {
     nextRouteFromPagePath('next-frontend/app/(auth)/login/page.tsx'),
     '/login',
   );
+  assert.equal(nextRouteFromPagePath('next-frontend/app/page.tsx'), '/');
 });
 
 test('inventory includes every required subsystem at the locked snapshot', async () => {

@@ -1,0 +1,3999 @@
+[
+  {
+    "id": "public-home",
+    "routes": [
+      "/"
+    ],
+    "sourceFile": "next-frontend/app/page.tsx",
+    "role": "public",
+    "captureContextRole": "public",
+    "captureMode": "live",
+    "capturePath": "/",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "body",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Nexora landing page rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 50,
+        "yPercent": 21,
+        "label": "Start with the page title and primary account action"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /.",
+    "manualChapter": "Access and account setup",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "complete-profile",
+    "routes": [
+      "/complete-profile"
+    ],
+    "sourceFile": "next-frontend/app/(auth)/complete-profile/page.tsx",
+    "role": "public",
+    "captureContextRole": "public",
+    "captureMode": "live",
+    "capturePath": "/complete-profile",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "body",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Complete Profile rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 50,
+        "yPercent": 21,
+        "label": "Start with the page title and primary account action"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /complete-profile.",
+    "manualChapter": "Access and account setup",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard",
+    "routes": [
+      "/dashboard"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/page.tsx",
+    "role": "shared",
+    "captureContextRole": "shared",
+    "captureMode": "live",
+    "capturePath": "/dashboard",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Dashboard rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard.",
+    "manualChapter": "Shared workspace tools",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin",
+    "routes": [
+      "/dashboard/admin"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Admin rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-academic-records-classid",
+    "routes": [
+      "/dashboard/admin/academic-records/[classId]"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/academic-records/[classId]/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/academic-records/10000000-0000-4000-8000-000000000302",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Record detail rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/academic-records/[classId].",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-access-students",
+    "routes": [
+      "/dashboard/admin/access-students"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/access-students/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/access-students",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Access Students rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/access-students.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-announcements",
+    "routes": [
+      "/dashboard/admin/announcements"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/announcements/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/announcements",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Announcements rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/announcements.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-audit",
+    "routes": [
+      "/dashboard/admin/audit"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/audit/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/audit",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Audit rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/audit.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-calendar",
+    "routes": [
+      "/dashboard/admin/calendar"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/calendar/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/calendar",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Calendar rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/calendar.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-chatbot",
+    "routes": [
+      "/dashboard/admin/chatbot"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/chatbot/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/chatbot",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Chatbot rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/chatbot.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-class-record",
+    "routes": [
+      "/dashboard/admin/class-record"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/class-record/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/class-record",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Class Record rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/class-record.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-class-templates",
+    "routes": [
+      "/dashboard/admin/class-templates"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/class-templates/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/class-templates",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Class Templates rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/class-templates.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-class-templates-id",
+    "routes": [
+      "/dashboard/admin/class-templates/[id]"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/class-templates/[id]/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/class-templates/10000000-0000-4000-8000-000000001401",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [
+      "Loading template..."
+    ],
+    "expectedEvidence": "Record detail rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/class-templates/[id].",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-class-templates-id-announcements-announcementkey-edit",
+    "routes": [
+      "/dashboard/admin/class-templates/[id]/announcements/[announcementKey]/edit"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/class-templates/[id]/announcements/[announcementKey]/edit/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/class-templates/10000000-0000-4000-8000-000000001401/announcements/idx-0/edit",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Edit rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/class-templates/[id]/announcements/[announcementKey]/edit.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-class-templates-id-announcements-new",
+    "routes": [
+      "/dashboard/admin/class-templates/[id]/announcements/new"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/class-templates/[id]/announcements/new/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/class-templates/10000000-0000-4000-8000-000000001401/announcements/new",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "New rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/class-templates/[id]/announcements/new.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-class-templates-id-assessments-assessmentkey-edit",
+    "routes": [
+      "/dashboard/admin/class-templates/[id]/assessments/[assessmentKey]/edit"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/class-templates/[id]/assessments/[assessmentKey]/edit/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/class-templates/10000000-0000-4000-8000-000000001401/assessments/idx-0/edit",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Edit rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/class-templates/[id]/assessments/[assessmentKey]/edit.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-class-templates-id-lessons-lessonkey-edit",
+    "routes": [
+      "/dashboard/admin/class-templates/[id]/lessons/[lessonKey]/edit"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/class-templates/[id]/lessons/[lessonKey]/edit/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/class-templates/10000000-0000-4000-8000-000000001401/lessons/m0-s0-i0/edit",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Edit rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/class-templates/[id]/lessons/[lessonKey]/edit.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-class-templates-id-modules-modulekey",
+    "routes": [
+      "/dashboard/admin/class-templates/[id]/modules/[moduleKey]"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/class-templates/[id]/modules/[moduleKey]/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/class-templates/10000000-0000-4000-8000-000000001401/modules/idx-0",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Record detail rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/class-templates/[id]/modules/[moduleKey].",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-classes",
+    "routes": [
+      "/dashboard/admin/classes"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/classes/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/classes",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Classes rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/classes.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-classes-id",
+    "routes": [
+      "/dashboard/admin/classes/[id]"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/classes/[id]/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/classes/10000000-0000-4000-8000-000000000302",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Record detail rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/classes/[id].",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-classes-id-edit",
+    "routes": [
+      "/dashboard/admin/classes/[id]/edit"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/classes/[id]/edit/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/classes/10000000-0000-4000-8000-000000000302/edit",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Edit rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/classes/[id]/edit.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-classes-id-students-add",
+    "routes": [
+      "/dashboard/admin/classes/[id]/students/add"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/classes/[id]/students/add/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/classes/10000000-0000-4000-8000-000000000302/students/add",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Add rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/classes/[id]/students/add.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-classes-new",
+    "routes": [
+      "/dashboard/admin/classes/new"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/classes/new/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/classes/new",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "New rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/classes/new.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-diagnostics",
+    "routes": [
+      "/dashboard/admin/diagnostics"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/diagnostics/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/diagnostics",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Diagnostics rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/diagnostics.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-evaluations",
+    "routes": [
+      "/dashboard/admin/evaluations"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/evaluations/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/evaluations",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Evaluations rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/evaluations.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-library",
+    "routes": [
+      "/dashboard/admin/library"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/library/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/library",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Library rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/library.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-profile",
+    "routes": [
+      "/dashboard/admin/profile"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/profile/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/profile",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Profile rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/profile.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-reports",
+    "routes": [
+      "/dashboard/admin/reports"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/reports/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/reports",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Reports rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/reports.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-roster-import",
+    "routes": [
+      "/dashboard/admin/roster-import"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/roster-import/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/roster-import",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Roster Import rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/roster-import.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-sections",
+    "routes": [
+      "/dashboard/admin/sections"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/sections/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/sections",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Sections rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/sections.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-sections-id-edit",
+    "routes": [
+      "/dashboard/admin/sections/[id]/edit"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/sections/[id]/edit/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/sections/10000000-0000-4000-8000-000000000301/edit",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Edit rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/sections/[id]/edit.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-sections-id-roster",
+    "routes": [
+      "/dashboard/admin/sections/[id]/roster"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/sections/[id]/roster/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/sections/10000000-0000-4000-8000-000000000301/roster",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Roster rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/sections/[id]/roster.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-sections-id-students",
+    "routes": [
+      "/dashboard/admin/sections/[id]/students"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/sections/[id]/students/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/sections/10000000-0000-4000-8000-000000000301/students/add",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Students rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/sections/[id]/students.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-sections-id-students-add",
+    "routes": [
+      "/dashboard/admin/sections/[id]/students/add"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/sections/[id]/students/add/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/sections/10000000-0000-4000-8000-000000000301/students/add",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Add rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/sections/[id]/students/add.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-sections-new",
+    "routes": [
+      "/dashboard/admin/sections/new"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/sections/new/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/sections/new",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "New rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/sections/new.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-system-settings",
+    "routes": [
+      "/dashboard/admin/system-settings"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/system-settings/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/system-settings",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "System Settings rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/system-settings.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-system-settings-academic-year",
+    "routes": [
+      "/dashboard/admin/system-settings/academic-year"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/system-settings/academic-year/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/system-settings/academic-year",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Academic Year rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/system-settings/academic-year.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-system-settings-assessments-grading",
+    "routes": [
+      "/dashboard/admin/system-settings/assessments-grading"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/system-settings/assessments-grading/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/system-settings/assessments-grading",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Assessments Grading rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/system-settings/assessments-grading.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-system-settings-audit-recovery",
+    "routes": [
+      "/dashboard/admin/system-settings/audit-recovery"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/system-settings/audit-recovery/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/system-settings/audit-recovery",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Audit Recovery rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/system-settings/audit-recovery.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-system-settings-demo-mode",
+    "routes": [
+      "/dashboard/admin/system-settings/demo-mode"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/system-settings/demo-mode/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/system-settings/demo-mode",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Demo Mode rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/system-settings/demo-mode.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-system-settings-learner-completion",
+    "routes": [
+      "/dashboard/admin/system-settings/learner-completion"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/system-settings/learner-completion/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/system-settings/learner-completion",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Learner Completion rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/system-settings/learner-completion.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-system-settings-maintenance-access",
+    "routes": [
+      "/dashboard/admin/system-settings/maintenance-access"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/system-settings/maintenance-access/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/system-settings/maintenance-access",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Maintenance Access rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/system-settings/maintenance-access.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-system-settings-reset-school-data",
+    "routes": [
+      "/dashboard/admin/system-settings/reset-school-data"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/system-settings/reset-school-data/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/system-settings/reset-school-data",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Reset School Data rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/system-settings/reset-school-data.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-system-settings-year-transition",
+    "routes": [
+      "/dashboard/admin/system-settings/year-transition"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/system-settings/year-transition/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/system-settings/year-transition",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Year Transition rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/system-settings/year-transition.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-user-reports",
+    "routes": [
+      "/dashboard/admin/user-reports"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/user-reports/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/user-reports",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "User Reports rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/user-reports.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-users",
+    "routes": [
+      "/dashboard/admin/users"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/users/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/users",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Users rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/users.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-users-id",
+    "routes": [
+      "/dashboard/admin/users/[id]"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/users/[id]/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/users/10000000-0000-4000-8000-000000000103",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Record detail rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/users/[id].",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-admin-users-create",
+    "routes": [
+      "/dashboard/admin/users/create"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/users/create/page.tsx",
+    "role": "admin",
+    "captureContextRole": "admin",
+    "captureMode": "live",
+    "capturePath": "/dashboard/admin/users/create",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Create rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/admin/users/create.",
+    "manualChapter": "Admin workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-library",
+    "routes": [
+      "/dashboard/library"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/library/page.tsx",
+    "role": "shared",
+    "captureContextRole": "shared",
+    "captureMode": "live",
+    "capturePath": "/dashboard/library",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Library rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/library.",
+    "manualChapter": "Shared workspace tools",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-notifications",
+    "routes": [
+      "/dashboard/notifications"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/notifications/page.tsx",
+    "role": "shared",
+    "captureContextRole": "shared",
+    "captureMode": "live",
+    "capturePath": "/dashboard/notifications",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Notifications rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/notifications.",
+    "manualChapter": "Shared workspace tools",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-profile",
+    "routes": [
+      "/dashboard/profile"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/profile/page.tsx",
+    "role": "shared",
+    "captureContextRole": "shared",
+    "captureMode": "live",
+    "capturePath": "/dashboard/profile",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Profile rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/profile.",
+    "manualChapter": "Shared workspace tools",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-student",
+    "routes": [
+      "/dashboard/student"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/page.tsx",
+    "role": "student",
+    "captureContextRole": "student",
+    "captureMode": "live",
+    "capturePath": "/dashboard/student",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Student rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 52,
+        "yPercent": 26,
+        "label": "Read the first-login guide before using the learner dashboard"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/student.",
+    "manualChapter": "Student workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-student-announcements",
+    "routes": [
+      "/dashboard/student/announcements"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/announcements/page.tsx",
+    "role": "student",
+    "captureContextRole": "student",
+    "captureMode": "live",
+    "capturePath": "/dashboard/student/announcements",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Announcements rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/student/announcements.",
+    "manualChapter": "Student workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-student-assessment-history",
+    "routes": [
+      "/dashboard/student/assessment-history"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/assessment-history/page.tsx",
+    "role": "student",
+    "captureContextRole": "student",
+    "captureMode": "live",
+    "capturePath": "/dashboard/student/assessment-history",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Assessment History rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/student/assessment-history.",
+    "manualChapter": "Student workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-student-assessments",
+    "routes": [
+      "/dashboard/student/assessments"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/assessments/page.tsx",
+    "role": "student",
+    "captureContextRole": "student",
+    "captureMode": "live",
+    "capturePath": "/dashboard/student/assessments",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Assessments rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/student/assessments.",
+    "manualChapter": "Student workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-student-assessments-id",
+    "routes": [
+      "/dashboard/student/assessments/[id]"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/assessments/[id]/page.tsx",
+    "role": "student",
+    "captureContextRole": "student",
+    "captureMode": "live",
+    "capturePath": "/dashboard/student/assessments/10000000-0000-4000-8000-000000000501",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Record detail rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/student/assessments/[id].",
+    "manualChapter": "Student workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-student-assessments-id-results-attemptid",
+    "routes": [
+      "/dashboard/student/assessments/[id]/results/[attemptId]"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/assessments/[id]/results/[attemptId]/page.tsx",
+    "role": "student",
+    "captureContextRole": "student",
+    "captureMode": "live",
+    "capturePath": "/dashboard/student/assessments/10000000-0000-4000-8000-000000000501/results/10000000-0000-4000-8000-000000000505",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Record detail rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/student/assessments/[id]/results/[attemptId].",
+    "manualChapter": "Student workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-student-assessments-id-take",
+    "routes": [
+      "/dashboard/student/assessments/[id]/take"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/assessments/[id]/take/page.tsx",
+    "role": "student",
+    "captureContextRole": "student",
+    "captureMode": "live",
+    "capturePath": "/dashboard/student/assessments/10000000-0000-4000-8000-000000000501/take",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Take rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/student/assessments/[id]/take.",
+    "manualChapter": "Student workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-student-calendar",
+    "routes": [
+      "/dashboard/student/calendar"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/calendar/page.tsx",
+    "role": "student",
+    "captureContextRole": "student",
+    "captureMode": "live",
+    "capturePath": "/dashboard/student/calendar",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Calendar rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/student/calendar.",
+    "manualChapter": "Student workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-student-chatbot",
+    "routes": [
+      "/dashboard/student/chatbot"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/chatbot/page.tsx",
+    "role": "student",
+    "captureContextRole": "student",
+    "captureMode": "live",
+    "capturePath": "/dashboard/student/chatbot",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Chatbot rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/student/chatbot.",
+    "manualChapter": "Student workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-student-classes",
+    "routes": [
+      "/dashboard/student/classes"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/classes/page.tsx",
+    "role": "student",
+    "captureContextRole": "student",
+    "captureMode": "live",
+    "capturePath": "/dashboard/student/classes",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Classes rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/student/classes.",
+    "manualChapter": "Student workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-student-classes-id",
+    "routes": [
+      "/dashboard/student/classes/[id]"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/classes/[id]/page.tsx",
+    "role": "student",
+    "captureContextRole": "student",
+    "captureMode": "live",
+    "capturePath": "/dashboard/student/classes/10000000-0000-4000-8000-000000000302",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Record detail rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/student/classes/[id].",
+    "manualChapter": "Student workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-student-classes-id-modules-moduleid",
+    "routes": [
+      "/dashboard/student/classes/[id]/modules/[moduleId]"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/classes/[id]/modules/[moduleId]/page.tsx",
+    "role": "student",
+    "captureContextRole": "student",
+    "captureMode": "live",
+    "capturePath": "/dashboard/student/classes/10000000-0000-4000-8000-000000000302/modules/10000000-0000-4000-8000-000000000402",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Record detail rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/student/classes/[id]/modules/[moduleId].",
+    "manualChapter": "Student workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-student-courses",
+    "routes": [
+      "/dashboard/student/courses"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/courses/page.tsx",
+    "role": "student",
+    "captureContextRole": "student",
+    "captureMode": "live",
+    "capturePath": "/dashboard/student/courses",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Courses rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/student/courses.",
+    "manualChapter": "Student workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-student-evaluations",
+    "routes": [
+      "/dashboard/student/evaluations"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/evaluations/page.tsx",
+    "role": "student",
+    "captureContextRole": "student",
+    "captureMode": "live",
+    "capturePath": "/dashboard/student/evaluations",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Evaluations rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/student/evaluations.",
+    "manualChapter": "Student workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-student-ja",
+    "routes": [
+      "/dashboard/student/ja"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/ja/page.tsx",
+    "role": "student",
+    "captureContextRole": "student",
+    "captureMode": "live",
+    "capturePath": "/dashboard/student/ja",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Ja rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/student/ja.",
+    "manualChapter": "Student workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-student-lessons",
+    "routes": [
+      "/dashboard/student/lessons"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/lessons/page.tsx",
+    "role": "student",
+    "captureContextRole": "student",
+    "captureMode": "live",
+    "capturePath": "/dashboard/student/lessons",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Lessons rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/student/lessons.",
+    "manualChapter": "Student workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-student-lessons-id",
+    "routes": [
+      "/dashboard/student/lessons/[id]"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/lessons/[id]/page.tsx",
+    "role": "student",
+    "captureContextRole": "student",
+    "captureMode": "live",
+    "capturePath": "/dashboard/student/lessons/10000000-0000-4000-8000-000000000401",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Record detail rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/student/lessons/[id].",
+    "manualChapter": "Student workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-student-lxp",
+    "routes": [
+      "/dashboard/student/lxp"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/lxp/page.tsx",
+    "role": "student",
+    "captureContextRole": "student",
+    "captureMode": "live",
+    "capturePath": "/dashboard/student/lxp",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Lxp rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/student/lxp.",
+    "manualChapter": "Student workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-student-lxp-classid",
+    "routes": [
+      "/dashboard/student/lxp/[classId]"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/lxp/[classId]/page.tsx",
+    "role": "student",
+    "captureContextRole": "student",
+    "captureMode": "live",
+    "capturePath": "/dashboard/student/lxp/10000000-0000-4000-8000-000000000302",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Record detail rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/student/lxp/[classId].",
+    "manualChapter": "Student workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-student-lxp-classid-generated-lessons-assignmentid",
+    "routes": [
+      "/dashboard/student/lxp/[classId]/generated-lessons/[assignmentId]"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/lxp/[classId]/generated-lessons/[assignmentId]/page.tsx",
+    "role": "student",
+    "captureContextRole": "student",
+    "captureMode": "live",
+    "capturePath": "/dashboard/student/lxp/10000000-0000-4000-8000-000000000302/generated-lessons/10000000-0000-4000-8000-000000001602",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Record detail rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/student/lxp/[classId]/generated-lessons/[assignmentId].",
+    "manualChapter": "Student workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-student-lxp-classid-guided-assessment-assignmentid",
+    "routes": [
+      "/dashboard/student/lxp/[classId]/guided-assessment/[assignmentId]"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/lxp/[classId]/guided-assessment/[assignmentId]/page.tsx",
+    "role": "student",
+    "captureContextRole": "student",
+    "captureMode": "live",
+    "capturePath": "/dashboard/student/lxp/10000000-0000-4000-8000-000000000302/guided-assessment/10000000-0000-4000-8000-000000001604",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Record detail rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/student/lxp/[classId]/guided-assessment/[assignmentId].",
+    "manualChapter": "Student workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-student-performance",
+    "routes": [
+      "/dashboard/student/performance"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/performance/page.tsx",
+    "role": "student",
+    "captureContextRole": "student",
+    "captureMode": "live",
+    "capturePath": "/dashboard/student/performance",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Performance rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/student/performance.",
+    "manualChapter": "Student workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-student-profile",
+    "routes": [
+      "/dashboard/student/profile"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/profile/page.tsx",
+    "role": "student",
+    "captureContextRole": "student",
+    "captureMode": "live",
+    "capturePath": "/dashboard/student/profile",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Profile rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/student/profile.",
+    "manualChapter": "Student workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-student-transcript",
+    "routes": [
+      "/dashboard/student/transcript"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/transcript/page.tsx",
+    "role": "student",
+    "captureContextRole": "student",
+    "captureMode": "live",
+    "capturePath": "/dashboard/student/transcript",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Transcript rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/student/transcript.",
+    "manualChapter": "Student workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-teacher",
+    "routes": [
+      "/dashboard/teacher"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/page.tsx",
+    "role": "teacher",
+    "captureContextRole": "teacher",
+    "captureMode": "live",
+    "capturePath": "/dashboard/teacher/dashboard",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Teacher rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/teacher.",
+    "manualChapter": "Teacher workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-teacher-announcements",
+    "routes": [
+      "/dashboard/teacher/announcements"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/announcements/page.tsx",
+    "role": "teacher",
+    "captureContextRole": "teacher",
+    "captureMode": "live",
+    "capturePath": "/dashboard/teacher/announcements",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Announcements rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/teacher/announcements.",
+    "manualChapter": "Teacher workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-teacher-assessments",
+    "routes": [
+      "/dashboard/teacher/assessments"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/assessments/page.tsx",
+    "role": "teacher",
+    "captureContextRole": "teacher",
+    "captureMode": "live",
+    "capturePath": "/dashboard/teacher/assessments",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Assessments rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/teacher/assessments.",
+    "manualChapter": "Teacher workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-teacher-assessments-id",
+    "routes": [
+      "/dashboard/teacher/assessments/[id]"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/assessments/[id]/page.tsx",
+    "role": "teacher",
+    "captureContextRole": "teacher",
+    "captureMode": "live",
+    "capturePath": "/dashboard/teacher/assessments/10000000-0000-4000-8000-000000000501",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Record detail rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/teacher/assessments/[id].",
+    "manualChapter": "Teacher workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-teacher-assessments-id-edit",
+    "routes": [
+      "/dashboard/teacher/assessments/[id]/edit"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/assessments/[id]/edit/page.tsx",
+    "role": "teacher",
+    "captureContextRole": "teacher",
+    "captureMode": "live",
+    "capturePath": "/dashboard/teacher/assessments/10000000-0000-4000-8000-000000000501/edit",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Edit rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/teacher/assessments/[id]/edit.",
+    "manualChapter": "Teacher workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-teacher-assessments-id-results-attemptid",
+    "routes": [
+      "/dashboard/teacher/assessments/[id]/results/[attemptId]"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/assessments/[id]/results/[attemptId]/page.tsx",
+    "role": "teacher",
+    "captureContextRole": "teacher",
+    "captureMode": "live",
+    "capturePath": "/dashboard/teacher/assessments/10000000-0000-4000-8000-000000000501/results/10000000-0000-4000-8000-000000000505",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Record detail rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/teacher/assessments/[id]/results/[attemptId].",
+    "manualChapter": "Teacher workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-teacher-calendar",
+    "routes": [
+      "/dashboard/teacher/calendar"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/calendar/page.tsx",
+    "role": "teacher",
+    "captureContextRole": "teacher",
+    "captureMode": "live",
+    "capturePath": "/dashboard/teacher/calendar",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Calendar rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/teacher/calendar.",
+    "manualChapter": "Teacher workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-teacher-class-record",
+    "routes": [
+      "/dashboard/teacher/class-record"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/class-record/page.tsx",
+    "role": "teacher",
+    "captureContextRole": "teacher",
+    "captureMode": "live",
+    "capturePath": "/dashboard/teacher/class-record",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Class Record rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/teacher/class-record.",
+    "manualChapter": "Teacher workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-teacher-classes",
+    "routes": [
+      "/dashboard/teacher/classes"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/classes/page.tsx",
+    "role": "teacher",
+    "captureContextRole": "teacher",
+    "captureMode": "live",
+    "capturePath": "/dashboard/teacher/classes",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Classes rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/teacher/classes.",
+    "manualChapter": "Teacher workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-teacher-classes-id",
+    "routes": [
+      "/dashboard/teacher/classes/[id]"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/classes/[id]/page.tsx",
+    "role": "teacher",
+    "captureContextRole": "teacher",
+    "captureMode": "live",
+    "capturePath": "/dashboard/teacher/classes/10000000-0000-4000-8000-000000000302",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Record detail rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/teacher/classes/[id].",
+    "manualChapter": "Teacher workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-teacher-classes-id-ai-draft",
+    "routes": [
+      "/dashboard/teacher/classes/[id]/ai-draft"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/classes/[id]/ai-draft/page.tsx",
+    "role": "teacher",
+    "captureContextRole": "teacher",
+    "captureMode": "live",
+    "capturePath": "/dashboard/teacher/classes/10000000-0000-4000-8000-000000000302/ai-draft",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Ai Draft rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/teacher/classes/[id]/ai-draft.",
+    "manualChapter": "Teacher workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-teacher-classes-id-modules-moduleid",
+    "routes": [
+      "/dashboard/teacher/classes/[id]/modules/[moduleId]"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/classes/[id]/modules/[moduleId]/page.tsx",
+    "role": "teacher",
+    "captureContextRole": "teacher",
+    "captureMode": "live",
+    "capturePath": "/dashboard/teacher/classes/10000000-0000-4000-8000-000000000302/modules/10000000-0000-4000-8000-000000000402",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Record detail rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/teacher/classes/[id]/modules/[moduleId].",
+    "manualChapter": "Teacher workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-teacher-classes-id-modules-moduleid-files-fileid",
+    "routes": [
+      "/dashboard/teacher/classes/[id]/modules/[moduleId]/files/[fileId]"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/classes/[id]/modules/[moduleId]/files/[fileId]/page.tsx",
+    "role": "teacher",
+    "captureContextRole": "teacher",
+    "captureMode": "live",
+    "capturePath": "/dashboard/teacher/classes/10000000-0000-4000-8000-000000000302/modules/10000000-0000-4000-8000-000000000402/files/10000000-0000-4000-8000-000000001501",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Record detail rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/teacher/classes/[id]/modules/[moduleId]/files/[fileId].",
+    "manualChapter": "Teacher workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-teacher-classes-id-students-studentid",
+    "routes": [
+      "/dashboard/teacher/classes/[id]/students/[studentId]"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/classes/[id]/students/[studentId]/page.tsx",
+    "role": "teacher",
+    "captureContextRole": "teacher",
+    "captureMode": "live",
+    "capturePath": "/dashboard/teacher/classes/10000000-0000-4000-8000-000000000302/students/10000000-0000-4000-8000-000000000103",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Record detail rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/teacher/classes/[id]/students/[studentId].",
+    "manualChapter": "Teacher workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-teacher-classes-id-students-add",
+    "routes": [
+      "/dashboard/teacher/classes/[id]/students/add"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/classes/[id]/students/add/page.tsx",
+    "role": "teacher",
+    "captureContextRole": "teacher",
+    "captureMode": "live",
+    "capturePath": "/dashboard/teacher/classes/10000000-0000-4000-8000-000000000302/students/add",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Add rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/teacher/classes/[id]/students/add.",
+    "manualChapter": "Teacher workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-teacher-dashboard",
+    "routes": [
+      "/dashboard/teacher/dashboard"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/dashboard/page.tsx",
+    "role": "teacher",
+    "captureContextRole": "teacher",
+    "captureMode": "live",
+    "capturePath": "/dashboard/teacher/dashboard",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Dashboard rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/teacher/dashboard.",
+    "manualChapter": "Teacher workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-teacher-evaluations",
+    "routes": [
+      "/dashboard/teacher/evaluations"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/evaluations/page.tsx",
+    "role": "teacher",
+    "captureContextRole": "teacher",
+    "captureMode": "live",
+    "capturePath": "/dashboard/teacher/evaluations",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Evaluations rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/teacher/evaluations.",
+    "manualChapter": "Teacher workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-teacher-extractions-id",
+    "routes": [
+      "/dashboard/teacher/extractions/[id]"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/extractions/[id]/page.tsx",
+    "role": "teacher",
+    "captureContextRole": "teacher",
+    "captureMode": "component-render",
+    "capturePath": "/dashboard/teacher/extractions/10000000-0000-4000-8000-000000001503",
+    "captureSetup": {
+      "type": "extraction-component-state"
+    },
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Record detail rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/teacher/extractions/[id].",
+    "manualChapter": "Teacher workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-teacher-interventions",
+    "routes": [
+      "/dashboard/teacher/interventions"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/interventions/page.tsx",
+    "role": "teacher",
+    "captureContextRole": "teacher",
+    "captureMode": "live",
+    "capturePath": "/dashboard/teacher/interventions",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Interventions rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/teacher/interventions.",
+    "manualChapter": "Teacher workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-teacher-interventions-caseid",
+    "routes": [
+      "/dashboard/teacher/interventions/[caseId]"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/interventions/[caseId]/page.tsx",
+    "role": "teacher",
+    "captureContextRole": "teacher",
+    "captureMode": "live",
+    "capturePath": "/dashboard/teacher/interventions/10000000-0000-4000-8000-000000000801",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Record detail rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/teacher/interventions/[caseId].",
+    "manualChapter": "Teacher workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-teacher-lessons",
+    "routes": [
+      "/dashboard/teacher/lessons"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/lessons/page.tsx",
+    "role": "teacher",
+    "captureContextRole": "teacher",
+    "captureMode": "live",
+    "capturePath": "/dashboard/teacher/lessons",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Lessons rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/teacher/lessons.",
+    "manualChapter": "Teacher workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-teacher-lessons-id-edit",
+    "routes": [
+      "/dashboard/teacher/lessons/[id]/edit"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/lessons/[id]/edit/page.tsx",
+    "role": "teacher",
+    "captureContextRole": "teacher",
+    "captureMode": "live",
+    "capturePath": "/dashboard/teacher/lessons/10000000-0000-4000-8000-000000000401/edit",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Edit rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/teacher/lessons/[id]/edit.",
+    "manualChapter": "Teacher workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-teacher-lessons-id-view",
+    "routes": [
+      "/dashboard/teacher/lessons/[id]/view"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/lessons/[id]/view/page.tsx",
+    "role": "teacher",
+    "captureContextRole": "teacher",
+    "captureMode": "live",
+    "capturePath": "/dashboard/teacher/lessons/10000000-0000-4000-8000-000000000401/view",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "View rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/teacher/lessons/[id]/view.",
+    "manualChapter": "Teacher workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-teacher-library",
+    "routes": [
+      "/dashboard/teacher/library"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/library/page.tsx",
+    "role": "teacher",
+    "captureContextRole": "teacher",
+    "captureMode": "live",
+    "capturePath": "/dashboard/teacher/library",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Library rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/teacher/library.",
+    "manualChapter": "Teacher workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-teacher-modules",
+    "routes": [
+      "/dashboard/teacher/modules"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/modules/page.tsx",
+    "role": "teacher",
+    "captureContextRole": "teacher",
+    "captureMode": "live",
+    "capturePath": "/dashboard/teacher/modules",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Modules rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/teacher/modules.",
+    "manualChapter": "Teacher workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-teacher-performance",
+    "routes": [
+      "/dashboard/teacher/performance"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/performance/page.tsx",
+    "role": "teacher",
+    "captureContextRole": "teacher",
+    "captureMode": "live",
+    "capturePath": "/dashboard/teacher/performance",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Performance rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/teacher/performance.",
+    "manualChapter": "Teacher workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-teacher-profile",
+    "routes": [
+      "/dashboard/teacher/profile"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/profile/page.tsx",
+    "role": "teacher",
+    "captureContextRole": "teacher",
+    "captureMode": "live",
+    "capturePath": "/dashboard/teacher/profile",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Profile rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/teacher/profile.",
+    "manualChapter": "Teacher workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-teacher-reports",
+    "routes": [
+      "/dashboard/teacher/reports"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/reports/page.tsx",
+    "role": "teacher",
+    "captureContextRole": "teacher",
+    "captureMode": "live",
+    "capturePath": "/dashboard/teacher/reports",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Reports rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/teacher/reports.",
+    "manualChapter": "Teacher workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-teacher-sections",
+    "routes": [
+      "/dashboard/teacher/sections"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/sections/page.tsx",
+    "role": "teacher",
+    "captureContextRole": "teacher",
+    "captureMode": "live",
+    "capturePath": "/dashboard/teacher/sections",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Sections rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/teacher/sections.",
+    "manualChapter": "Teacher workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-teacher-sections-id-roster",
+    "routes": [
+      "/dashboard/teacher/sections/[id]/roster"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/sections/[id]/roster/page.tsx",
+    "role": "teacher",
+    "captureContextRole": "teacher",
+    "captureMode": "live",
+    "capturePath": "/dashboard/teacher/sections/10000000-0000-4000-8000-000000000301/roster",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Roster rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/teacher/sections/[id]/roster.",
+    "manualChapter": "Teacher workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-teacher-sections-id-students-studentid",
+    "routes": [
+      "/dashboard/teacher/sections/[id]/students/[studentId]"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/sections/[id]/students/[studentId]/page.tsx",
+    "role": "teacher",
+    "captureContextRole": "teacher",
+    "captureMode": "live",
+    "capturePath": "/dashboard/teacher/sections/10000000-0000-4000-8000-000000000301/students/10000000-0000-4000-8000-000000000103",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Record detail rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/teacher/sections/[id]/students/[studentId].",
+    "manualChapter": "Teacher workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "dashboard-teacher-sections-id-students-add",
+    "routes": [
+      "/dashboard/teacher/sections/[id]/students/add"
+    ],
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/sections/[id]/students/add/page.tsx",
+    "role": "teacher",
+    "captureContextRole": "teacher",
+    "captureMode": "live",
+    "capturePath": "/dashboard/teacher/sections/10000000-0000-4000-8000-000000000301/students/add",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "main",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Add rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /dashboard/teacher/sections/[id]/students/add.",
+    "manualChapter": "Teacher workflows",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "forgot-password",
+    "routes": [
+      "/forgot-password"
+    ],
+    "sourceFile": "next-frontend/app/(auth)/forgot-password/page.tsx",
+    "role": "public",
+    "captureContextRole": "public",
+    "captureMode": "live",
+    "capturePath": "/forgot-password",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "body",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Forgot Password rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 50,
+        "yPercent": 21,
+        "label": "Start with the page title and primary account action"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /forgot-password.",
+    "manualChapter": "Access and account setup",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "lesson-preview-token",
+    "routes": [
+      "/lesson-preview/[token]"
+    ],
+    "sourceFile": "next-frontend/app/lesson-preview/[token]/page.tsx",
+    "role": "public",
+    "captureContextRole": "teacher",
+    "captureMode": "live",
+    "capturePath": "/lesson-preview/__LESSON_PREVIEW_TOKEN__",
+    "captureSetup": {
+      "type": "lesson-preview-session",
+      "lessonId": "10000000-0000-4000-8000-000000000401"
+    },
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "body",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Record detail rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 50,
+        "yPercent": 21,
+        "label": "Start with the page title and primary account action"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /lesson-preview/[token].",
+    "manualChapter": "Access and account setup",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "login",
+    "routes": [
+      "/login"
+    ],
+    "sourceFile": "next-frontend/app/(auth)/login/page.tsx",
+    "role": "public",
+    "captureContextRole": "public",
+    "captureMode": "live",
+    "capturePath": "/login",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "body",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Login rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 50,
+        "yPercent": 21,
+        "label": "Start with the page title and primary account action"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /login.",
+    "manualChapter": "Access and account setup",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "reset-password",
+    "routes": [
+      "/reset-password"
+    ],
+    "sourceFile": "next-frontend/app/(auth)/reset-password/page.tsx",
+    "role": "public",
+    "captureContextRole": "public",
+    "captureMode": "live",
+    "capturePath": "/reset-password",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "body",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Reset Password rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 50,
+        "yPercent": 21,
+        "label": "Start with the page title and primary account action"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /reset-password.",
+    "manualChapter": "Access and account setup",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "set-initial-password",
+    "routes": [
+      "/set-initial-password"
+    ],
+    "sourceFile": "next-frontend/app/(auth)/set-initial-password/page.tsx",
+    "role": "public",
+    "captureContextRole": "public",
+    "captureMode": "live",
+    "capturePath": "/set-initial-password",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "body",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Set Initial Password rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 50,
+        "yPercent": 21,
+        "label": "Start with the page title and primary account action"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /set-initial-password.",
+    "manualChapter": "Access and account setup",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "system-maintenance",
+    "routes": [
+      "/system-maintenance"
+    ],
+    "sourceFile": "next-frontend/app/system-maintenance/page.tsx",
+    "role": "public",
+    "captureContextRole": "public",
+    "captureMode": "live",
+    "capturePath": "/system-maintenance",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "body",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "System Maintenance rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 50,
+        "yPercent": 21,
+        "label": "Start with the page title and primary account action"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /system-maintenance.",
+    "manualChapter": "Access and account setup",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  },
+  {
+    "id": "verify-email",
+    "routes": [
+      "/verify-email"
+    ],
+    "sourceFile": "next-frontend/app/(auth)/verify-email/page.tsx",
+    "role": "public",
+    "captureContextRole": "public",
+    "captureMode": "live",
+    "capturePath": "/verify-email",
+    "captureSetup": null,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "expectedSelector": "body",
+    "waitForTextAbsent": [],
+    "expectedEvidence": "Verify Email rendered from the locked application snapshot",
+    "sensitiveSelectors": [
+      "input[type=\"password\"]",
+      "[data-sensitive=\"true\"]",
+      "[data-testid*=\"token\"]"
+    ],
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 50,
+        "yPercent": 21,
+        "label": "Start with the page title and primary account action"
+      }
+    ],
+    "imagePurpose": "Show a first-year reader where to begin on /verify-email.",
+    "manualChapter": "Access and account setup",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY"
+  }
+]

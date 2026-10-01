@@ -162,6 +162,108 @@ async function upsertFixture(client, fixture, passwordHash) {
     [fixture.content.id, fixture.content.title, fixture.content.description, schoolClass.id],
   );
   await client.query(
+    `INSERT INTO lesson_content_blocks (id, lesson_id, type, "order", content, metadata)
+     VALUES ($1, $2, 'text', 1, $3::json, '{"classification":"synthetic-documentation-only"}'::json)
+     ON CONFLICT (id) DO UPDATE SET content = EXCLUDED.content, "order" = 1,
+       metadata = EXCLUDED.metadata, updated_at = NOW()`,
+    [fixture.content.blockId, fixture.content.id,
+      JSON.stringify({ html: '<h2>Balance both sides</h2><p>Apply the same inverse operation to both sides of an equation, then check the solution.</p>' })],
+  );
+  const contentModule = fixture.content.module;
+  await client.query(
+    `INSERT INTO class_modules (id, class_id, title, description, "order", is_visible, is_locked)
+     VALUES ($1, $2, $3, $4, 1, true, false)
+     ON CONFLICT (id) DO UPDATE SET class_id = EXCLUDED.class_id, title = EXCLUDED.title,
+       description = EXCLUDED.description, is_visible = true, is_locked = false, updated_at = NOW()`,
+    [contentModule.id, schoolClass.id, contentModule.title, contentModule.description],
+  );
+  await client.query(
+    `INSERT INTO module_sections (id, module_id, title, description, "order")
+     VALUES ($1, $2, $3, 'Synthetic module section used only for documentation captures.', 1)
+     ON CONFLICT (id) DO UPDATE SET module_id = EXCLUDED.module_id, title = EXCLUDED.title,
+       description = EXCLUDED.description, "order" = EXCLUDED."order", updated_at = NOW()`,
+    [contentModule.section.id, contentModule.id, contentModule.section.title],
+  );
+  await client.query(
+    `INSERT INTO module_items (id, module_section_id, item_type, lesson_id, "order", is_visible, is_required, is_given)
+     VALUES ($1, $2, 'lesson', $3, 1, true, true, true)
+     ON CONFLICT (id) DO UPDATE SET module_section_id = EXCLUDED.module_section_id,
+       item_type = 'lesson', lesson_id = EXCLUDED.lesson_id, "order" = EXCLUDED."order",
+       is_visible = true, is_required = true, is_given = true, updated_at = NOW()`,
+    [contentModule.section.item.id, contentModule.section.id, contentModule.section.item.lessonId],
+  );
+  const fileArtifact = fixture.fileArtifact;
+  await client.query(
+    `INSERT INTO uploaded_files (id, teacher_id, class_id, scope, ai_enabled, teacher_visible,
+       index_status, file_kind, original_name, stored_name, mime_type, size_bytes, file_path,
+       storage_key, storage_provider)
+     VALUES ($1, $2, $3, 'private', true, true, 'completed', 'pdf', $4, $4, $5, $6,
+       '/synthetic-documentation-only/linear-equations-reference.pdf',
+       'synthetic-documentation-only/linear-equations-reference.pdf', 'local')
+     ON CONFLICT (id) DO UPDATE SET original_name = EXCLUDED.original_name,
+       stored_name = EXCLUDED.stored_name, mime_type = EXCLUDED.mime_type,
+       size_bytes = EXCLUDED.size_bytes, deleted_at = NULL, index_status = 'completed'`,
+    [fileArtifact.file.id, teacher.id, schoolClass.id, fileArtifact.file.name,
+      fileArtifact.file.mimeType, fileArtifact.file.sizeBytes],
+  );
+  await client.query(
+    `INSERT INTO module_items (id, module_section_id, item_type, file_id, "order", is_visible, is_required, is_given, metadata)
+     VALUES ($1, $2, 'file', $3, 2, true, false, true, '{"fileSubtype":"pdf"}'::json)
+     ON CONFLICT (id) DO UPDATE SET module_section_id = EXCLUDED.module_section_id,
+       item_type = 'file', file_id = EXCLUDED.file_id, "order" = EXCLUDED."order",
+       is_visible = true, is_given = true, updated_at = NOW()`,
+    [fileArtifact.moduleItem.id, contentModule.section.id, fileArtifact.file.id],
+  );
+  const extractionContent = {
+    title: fileArtifact.extraction.title,
+    description: `<p>${fileArtifact.extraction.description}</p>`,
+    sections: [{
+      title: 'Worked Examples',
+      description: 'Teacher review section for the synthetic reference.',
+      order: 1,
+      reviewState: 'ready',
+      lessonBlocks: [{
+        type: 'text',
+        content: { html: '<p>Keep both sides balanced by applying the same inverse operation.</p>' },
+        order: 0,
+        metadata: { instructionalRole: 'explanation' },
+      }],
+      assessmentDraft: {
+        title: 'Quick Check',
+        description: 'A one-question formative check.',
+        type: 'quiz',
+        passingScore: 75,
+        feedbackLevel: 'standard',
+        questions: [{ content: 'Solve x + 3 = 7.', type: 'short_answer', points: 1, order: 1 }],
+      },
+    }],
+    mediaAssets: [],
+    audit: {
+      coherenceScore: 0.96,
+      coherenceWarnings: [],
+      repairNotes: [],
+      confidenceBreakdown: { overallConfidence: 0.96, warningCount: 0 },
+      reviewState: 'ready',
+      reviewIssues: [],
+      pipelineStages: ['ingest', 'classify', 'segment', 'structure', 'validate', 'persist'],
+      requestedSectionCount: 3,
+      finalSectionCount: 1,
+      sectionCountAdjustmentReason: 'The short synthetic source is intentionally one section.',
+    },
+  };
+  await client.query(
+    `INSERT INTO extracted_modules (id, file_id, class_id, teacher_id, raw_text, structured_content,
+       extraction_status, model_used, is_applied, progress_percent, total_chunks, processed_chunks)
+     VALUES ($1, $2, $3, $4, 'Synthetic documentation extraction text.', $5::json,
+       'completed', 'documentation-fixture', false, 100, 1, 1)
+     ON CONFLICT (id) DO UPDATE SET structured_content = EXCLUDED.structured_content,
+       extraction_status = 'completed', model_used = EXCLUDED.model_used,
+       is_applied = false, progress_percent = 100, total_chunks = 1, processed_chunks = 1,
+       error_message = NULL, updated_at = NOW()`,
+    [fileArtifact.extraction.id, fileArtifact.file.id, schoolClass.id, teacher.id,
+      JSON.stringify(extractionContent)],
+  );
+  await client.query(
     `INSERT INTO assessments (id, title, description, class_id, type, total_points, passing_score, max_attempts, is_published, class_record_category, quarter)
      VALUES ($1, $2, $3, $4, 'quiz', $5, $6, 2, true, 'quarterly_assessment', $7)
      ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, description = EXCLUDED.description,
@@ -182,6 +284,91 @@ async function upsertFixture(client, fixture, passwordHash) {
       [option.id, fixture.assessment.question.id, option.text, option.isCorrect, option.order],
     );
   }
+  const template = fixture.classTemplate;
+  await client.query(
+    `INSERT INTO class_templates (id, name, subject_code, subject_grade_level, status, created_by)
+     VALUES ($1, $2, $3, $4, 'draft', $5)
+     ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, subject_code = EXCLUDED.subject_code,
+       subject_grade_level = EXCLUDED.subject_grade_level, status = 'draft', updated_at = NOW()`,
+    [template.id, template.name, template.subjectCode, template.gradeLevel, admin.id],
+  );
+  await client.query(
+    `INSERT INTO class_template_modules (id, template_id, title, description, "order", is_visible, is_locked, teacher_notes)
+     VALUES ($1, $2, $3, 'Synthetic template module used only for documentation captures.', 1, true, false,
+       'Review the example before publishing the template.')
+     ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, description = EXCLUDED.description,
+       "order" = 1, is_visible = true, is_locked = false, teacher_notes = EXCLUDED.teacher_notes, updated_at = NOW()`,
+    [template.module.id, template.id, template.module.title],
+  );
+  await client.query(
+    `INSERT INTO class_template_module_sections (id, template_module_id, title, description, "order")
+     VALUES ($1, $2, $3, 'Synthetic reusable content section.', 1)
+     ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, description = EXCLUDED.description,
+       "order" = 1, updated_at = NOW()`,
+    [template.module.section.id, template.module.id, template.module.section.title],
+  );
+  await client.query(
+    `INSERT INTO class_template_lessons (id, template_id, title, summary, "order")
+     VALUES ($1, $2, $3, 'A reusable lesson example for documentation.', 1)
+     ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, summary = EXCLUDED.summary,
+       "order" = 1, updated_at = NOW()`,
+    [template.lesson.id, template.id, template.lesson.title],
+  );
+  await client.query(
+    `INSERT INTO class_template_lesson_blocks (id, template_lesson_id, block_type, block_version, payload, "order")
+     VALUES ($1, $2, 'text', 1, $3::json, 1)
+     ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload, "order" = 1, updated_at = NOW()`,
+    [template.lesson.blockId, template.lesson.id,
+      JSON.stringify({ html: '<p>Solve an equation by using inverse operations and checking the result.</p>' })],
+  );
+  await client.query(
+    `INSERT INTO class_template_assessments (id, template_id, title, description, type, settings, total_points, "order")
+     VALUES ($1, $2, $3, 'Reusable knowledge check for the documentation template.', 'quiz',
+       '{"passingScore":75,"maxAttempts":2}'::json, 10, 1)
+     ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, description = EXCLUDED.description,
+       settings = EXCLUDED.settings, total_points = 10, "order" = 1, updated_at = NOW()`,
+    [template.assessment.id, template.id, template.assessment.title],
+  );
+  await client.query(
+    `INSERT INTO class_template_assessment_questions
+       (id, template_assessment_id, type, content, points, "order", is_required, explanation)
+     VALUES ($1, $2, 'multiple_choice', 'Solve 2x + 6 = 14.', 10, 1, true,
+       'Subtract 6 from both sides, then divide by 2.')
+     ON CONFLICT (id) DO UPDATE SET content = EXCLUDED.content, points = 10,
+       explanation = EXCLUDED.explanation, updated_at = NOW()`,
+    [template.assessment.questionId, template.assessment.id],
+  );
+  for (const [index, option] of template.assessment.options.entries()) {
+    await client.query(
+      `INSERT INTO class_template_assessment_question_options
+         (id, template_assessment_question_id, text, is_correct, "order")
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (id) DO UPDATE SET text = EXCLUDED.text, is_correct = EXCLUDED.is_correct,
+         "order" = EXCLUDED."order", updated_at = NOW()`,
+      [option.id, template.assessment.questionId, option.text, option.isCorrect, index + 1],
+    );
+  }
+  for (const [index, item] of template.module.section.items.entries()) {
+    await client.query(
+      `INSERT INTO class_template_module_items
+         (id, template_section_id, item_type, template_assessment_id, template_lesson_id, "order", is_required, points)
+       VALUES ($1, $2, $3, $4, $5, $6, true, $7)
+       ON CONFLICT (id) DO UPDATE SET item_type = EXCLUDED.item_type,
+         template_assessment_id = EXCLUDED.template_assessment_id,
+         template_lesson_id = EXCLUDED.template_lesson_id, "order" = EXCLUDED."order",
+         is_required = true, points = EXCLUDED.points, updated_at = NOW()`,
+      [item.id, template.module.section.id, item.type,
+        item.assessmentId ?? null, item.lessonId ?? null, index + 1,
+        item.type === 'assessment' ? 10 : null],
+    );
+  }
+  await client.query(
+    `INSERT INTO class_template_announcements (id, template_id, title, content, is_pinned, "order")
+     VALUES ($1, $2, $3, 'Start with the worked examples before answering the knowledge check.', true, 1)
+     ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, content = EXCLUDED.content,
+       is_pinned = true, "order" = 1, updated_at = NOW()`,
+    [template.announcement.id, template.id, template.announcement.title],
+  );
   const correctOption = fixture.assessment.options.find((option) => option.isCorrect);
   const attempt = fixture.returnedAttempt;
   await client.query(
@@ -263,6 +450,77 @@ async function upsertFixture(client, fixture, passwordHash) {
      VALUES ($1, $2, 'lesson_review', $3, 'Review the worked example', 1)
      ON CONFLICT (id) DO UPDATE SET lesson_id = EXCLUDED.lesson_id, checkpoint_label = EXCLUDED.checkpoint_label`,
     [fixture.intervention.assignmentId, fixture.intervention.id, fixture.content.id],
+  );
+  const generatedLesson = fixture.intervention.generatedLesson;
+  await client.query(
+    `INSERT INTO lxp_generated_remedial_lessons
+       (id, case_id, class_id, student_id, approval_status, title, summary, lesson_body,
+        weak_concepts, source_lesson_ids, source_references, approved_by, approved_at)
+     VALUES ($1, $2, $3, $4, 'approved', 'Linear Equations Step-by-Step',
+       'A focused review of inverse operations for the documentation learner.', $5,
+       $6::json, $7::json, $8::json, $9, NOW())
+     ON CONFLICT (id) DO UPDATE SET approval_status = 'approved', title = EXCLUDED.title,
+       summary = EXCLUDED.summary, lesson_body = EXCLUDED.lesson_body,
+       weak_concepts = EXCLUDED.weak_concepts, source_lesson_ids = EXCLUDED.source_lesson_ids,
+       source_references = EXCLUDED.source_references, approved_by = EXCLUDED.approved_by,
+       approved_at = EXCLUDED.approved_at, rejected_at = NULL, updated_at = NOW()`,
+    [generatedLesson.id, fixture.intervention.id, schoolClass.id,
+      fixture.intervention.studentId,
+      '## Balance the equation\n\nSubtract 6 from both sides of `2x + 6 = 14`, then divide both sides by 2.\n\n- Check: `2(4) + 6 = 14`\n- Therefore, `x = 4`.',
+      JSON.stringify(['inverse operations', 'checking solutions']),
+      JSON.stringify([fixture.content.id]),
+      JSON.stringify([{ id: fixture.content.id, title: fixture.content.title }]),
+      teacher.id],
+  );
+  await client.query(
+    `INSERT INTO intervention_assignments
+       (id, case_id, assignment_type, generated_remedial_lesson_id, checkpoint_label, order_index, xp_awarded)
+     VALUES ($1, $2, 'generated_lesson_review', $3, 'Review the step-by-step remedial lesson', 2, 20)
+     ON CONFLICT (id) DO UPDATE SET generated_remedial_lesson_id = EXCLUDED.generated_remedial_lesson_id,
+       checkpoint_label = EXCLUDED.checkpoint_label, order_index = 2, xp_awarded = 20`,
+    [generatedLesson.assignmentId, fixture.intervention.id, generatedLesson.id],
+  );
+  const guidedAssessment = fixture.intervention.guidedAssessment;
+  const guidedQuestions = [{
+    id: 'guided-q1',
+    type: 'multiple_choice',
+    stem: 'What is the first step when solving 2x + 6 = 14?',
+    explanation: 'Subtract 6 from both sides to isolate the term containing x.',
+    hint: 'Undo addition before undoing multiplication.',
+    reviewHint: 'Use the inverse operation for +6.',
+    weakConceptTag: 'inverse operations',
+    options: [
+      { id: 'guided-q1-a', text: 'Subtract 6 from both sides', isCorrect: true },
+      { id: 'guided-q1-b', text: 'Add 6 to both sides', isCorrect: false },
+      { id: 'guided-q1-c', text: 'Divide by 6', isCorrect: false },
+    ],
+  }];
+  await client.query(
+    `INSERT INTO lxp_generated_guided_assessments
+       (id, case_id, class_id, student_id, approval_status, source_assessment_id,
+        title, description, weak_concepts, source_references, questions,
+        formative_summary, approved_by, approved_at)
+     VALUES ($1, $2, $3, $4, 'approved', $5, 'Guided Linear Equations Check',
+       'A supportive one-question check with hints and explanations.', $6::json, $7::json,
+       $8::json, 'This guided check supports remediation and does not directly change the official grade.', $9, NOW())
+     ON CONFLICT (id) DO UPDATE SET approval_status = 'approved', source_assessment_id = EXCLUDED.source_assessment_id,
+       title = EXCLUDED.title, description = EXCLUDED.description, weak_concepts = EXCLUDED.weak_concepts,
+       source_references = EXCLUDED.source_references, questions = EXCLUDED.questions,
+       formative_summary = EXCLUDED.formative_summary, approved_by = EXCLUDED.approved_by,
+       approved_at = EXCLUDED.approved_at, rejected_at = NULL, updated_at = NOW()`,
+    [guidedAssessment.id, fixture.intervention.id, schoolClass.id,
+      fixture.intervention.studentId, fixture.assessment.id,
+      JSON.stringify(['inverse operations']),
+      JSON.stringify([{ id: fixture.assessment.id, title: fixture.assessment.title }]),
+      JSON.stringify(guidedQuestions), teacher.id],
+  );
+  await client.query(
+    `INSERT INTO intervention_assignments
+       (id, case_id, assignment_type, generated_guided_assessment_id, checkpoint_label, order_index, xp_awarded)
+     VALUES ($1, $2, 'guided_assessment', $3, 'Try the guided remedial check', 3, 30)
+     ON CONFLICT (id) DO UPDATE SET generated_guided_assessment_id = EXCLUDED.generated_guided_assessment_id,
+       checkpoint_label = EXCLUDED.checkpoint_label, order_index = 3, xp_awarded = 30`,
+    [guidedAssessment.assignmentId, fixture.intervention.id, guidedAssessment.id],
   );
 
   await client.query(

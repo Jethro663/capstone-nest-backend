@@ -24,7 +24,63 @@
       { "id": "10000000-0000-4000-8000-000000000305", "studentId": "10000000-0000-4000-8000-000000000104" }
     ]
   },
-  "content": { "id": "10000000-0000-4000-8000-000000000401", "title": "Understanding Linear Equations", "description": "Synthetic lesson used only for documentation captures." },
+  "content": {
+    "id": "10000000-0000-4000-8000-000000000401",
+    "blockId": "10000000-0000-4000-8000-000000000405",
+    "title": "Understanding Linear Equations",
+    "description": "Synthetic lesson used only for documentation captures.",
+    "module": {
+      "id": "10000000-0000-4000-8000-000000000402",
+      "title": "Linear Equations",
+      "description": "Synthetic visible module used only for documentation captures.",
+      "section": {
+        "id": "10000000-0000-4000-8000-000000000403",
+        "title": "Core Lesson",
+        "item": {
+          "id": "10000000-0000-4000-8000-000000000404",
+          "lessonId": "10000000-0000-4000-8000-000000000401"
+        }
+      }
+    }
+  },
+  "classTemplate": {
+    "id": "10000000-0000-4000-8000-000000001401",
+    "name": "Grade 7 Linear Equations Starter",
+    "subjectCode": "DOC-MATH-7",
+    "gradeLevel": "7",
+    "module": {
+      "id": "10000000-0000-4000-8000-000000001402",
+      "title": "Linear Equations Template Module",
+      "section": {
+        "id": "10000000-0000-4000-8000-000000001403",
+        "title": "Core Concepts",
+        "items": [
+          { "id": "10000000-0000-4000-8000-000000001410", "type": "lesson", "lessonId": "10000000-0000-4000-8000-000000001404" },
+          { "id": "10000000-0000-4000-8000-000000001411", "type": "assessment", "assessmentId": "10000000-0000-4000-8000-000000001406" }
+        ]
+      }
+    },
+    "lesson": { "id": "10000000-0000-4000-8000-000000001404", "blockId": "10000000-0000-4000-8000-000000001405", "title": "Solving One-Step Equations" },
+    "assessment": {
+      "id": "10000000-0000-4000-8000-000000001406",
+      "questionId": "10000000-0000-4000-8000-000000001407",
+      "title": "Template Knowledge Check",
+      "options": [
+        { "id": "10000000-0000-4000-8000-000000001408", "text": "x = 4", "isCorrect": true },
+        { "id": "10000000-0000-4000-8000-000000001409", "text": "x = 10", "isCorrect": false }
+      ]
+    },
+    "announcement": { "id": "10000000-0000-4000-8000-000000001412", "title": "Welcome to Linear Equations" }
+  },
+  "fileArtifact": {
+    "file": { "id": "10000000-0000-4000-8000-000000001501", "name": "linear-equations-reference.pdf", "mimeType": "application/pdf", "sizeBytes": 245760 },
+    "moduleItem": { "id": "10000000-0000-4000-8000-000000001502", "fileId": "10000000-0000-4000-8000-000000001501" },
+    "extraction": {
+      "id": "10000000-0000-4000-8000-000000001503",
+      "title": "Linear Equations Reference",
+      "description": "A synthetic AI extraction review used only for documentation captures."
+    }
+  },
   "assessment": {
     "id": "10000000-0000-4000-8000-000000000501", "title": "Linear Equations Checkpoint", "description": "Synthetic quiz used only for documentation captures.", "totalPoints": 20, "passingScore": 75,
     "question": { "id": "10000000-0000-4000-8000-000000000502", "content": "Solve 2x + 6 = 14.", "points": 20 },
@@ -58,7 +114,14 @@
     ],
     "log": { "id": "10000000-0000-4000-8000-000000000703", "studentId": "10000000-0000-4000-8000-000000000103" }
   },
-  "intervention": { "id": "10000000-0000-4000-8000-000000000801", "assignmentId": "10000000-0000-4000-8000-000000000802", "studentId": "10000000-0000-4000-8000-000000000103", "status": "active" },
+  "intervention": {
+    "id": "10000000-0000-4000-8000-000000000801",
+    "assignmentId": "10000000-0000-4000-8000-000000000802",
+    "studentId": "10000000-0000-4000-8000-000000000103",
+    "status": "active",
+    "generatedLesson": { "id": "10000000-0000-4000-8000-000000001601", "assignmentId": "10000000-0000-4000-8000-000000001602" },
+    "guidedAssessment": { "id": "10000000-0000-4000-8000-000000001603", "assignmentId": "10000000-0000-4000-8000-000000001604" }
+  },
   "evaluation": { "campaignId": "10000000-0000-4000-8000-000000000901", "id": "10000000-0000-4000-8000-000000000902", "assignmentId": "10000000-0000-4000-8000-000000000903" },
   "announcement": { "id": "10000000-0000-4000-8000-000000001001", "title": "Welcome to the Documentation Class" },
   "calendarEvent": { "id": "10000000-0000-4000-8000-000000001101", "title": "Quarter 1 Parent Orientation" },

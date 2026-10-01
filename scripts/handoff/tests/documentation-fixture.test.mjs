@@ -21,6 +21,8 @@ const requiredCategories = [
   'academicState',
   'classroom',
   'content',
+  'classTemplate',
+  'fileArtifact',
   'assessment',
   'returnedAttempt',
   'classRecord',
@@ -53,6 +55,25 @@ test('fixture covers every manual and capture category', async () => {
     ['admin', 'student', 'teacher'],
   );
   assert.equal(fixture.returnedAttempt.isReturned, true);
+  assert.ok(fixture.content.module?.id, 'Missing documentation class module');
+  assert.ok(fixture.content.blockId, 'Missing documentation lesson content block');
+  assert.ok(fixture.content.module?.section?.id, 'Missing documentation module section');
+  assert.equal(
+    fixture.content.module?.section?.item?.lessonId,
+    fixture.content.id,
+    'Documentation module item must expose the fixture lesson',
+  );
+  assert.ok(fixture.classTemplate?.id, 'Missing documentation class template');
+  assert.ok(fixture.classTemplate?.module?.section?.items?.length >= 2);
+  assert.ok(fixture.fileArtifact?.file?.id, 'Missing synthetic teaching file');
+  assert.ok(fixture.fileArtifact?.extraction?.id, 'Missing synthetic extraction');
+  assert.equal(
+    fixture.fileArtifact?.moduleItem?.fileId,
+    fixture.fileArtifact?.file?.id,
+    'Documentation module file item must expose the synthetic teaching file',
+  );
+  assert.ok(fixture.intervention?.generatedLesson?.assignmentId);
+  assert.ok(fixture.intervention?.guidedAssessment?.assignmentId);
   assert.ok(fixture.classRecord.scores.length >= 2);
   assert.ok(fixture.performance.snapshots.length >= 2);
 });
