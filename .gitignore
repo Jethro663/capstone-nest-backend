@@ -15,6 +15,7 @@
 /.agents/tmp/*.log
 /tmp-*.png
 *.pyc
+/output/NEXORA_HANDOFF_2026-10-01/
 
 # Prevent accidental in-place transpilation artifacts in the TS backend source tree.
 /backend/src/**/*.js

@@ -1,0 +1,44 @@
+{
+  "packageName": "NEXORA_HANDOFF_2026-10-01",
+  "applicationCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+  "buildDate": "2026-10-01",
+  "maxBytes": 34359738368,
+  "directories": [
+    "01-MANUALS/sources",
+    "02-QUICK-START",
+    "03-SOURCE",
+    "04-MOBILE",
+    "05-CONFIG-TEMPLATES",
+    "06-DATABASE-AND-RECOVERY/demo-data",
+    "06-DATABASE-AND-RECOVERY/scripts",
+    "07-DIAGRAMS",
+    "08-VISUALS/web",
+    "08-VISUALS/mobile",
+    "08-VISUALS/components",
+    "08-VISUALS/annotations",
+    "09-DEPLOYMENT-EVIDENCE",
+    "10-LICENSES-AND-NOTICES"
+  ],
+  "manuals": {
+    "userDocx": "01-MANUALS/Nexora-User-Manual.docx",
+    "userPdf": "01-MANUALS/Nexora-User-Manual.pdf",
+    "systemDocx": "01-MANUALS/Nexora-System-Manual.docx",
+    "systemPdf": "01-MANUALS/Nexora-System-Manual.pdf"
+  },
+  "apk": {
+    "source": "next-frontend/public/downloads/android/57-7f6a57e6/nexora-mobile-0.1.56-build57.apk",
+    "destination": "04-MOBILE/nexora-mobile-0.1.56-build57.apk",
+    "version": "0.1.56",
+    "build": 57,
+    "sizeBytes": 37663914,
+    "sha256": "e5d8c1abc1935768dae5b2523bd85adf9ccab50085a7f6a516495304890495d8"
+  },
+  "brand": {
+    "navy": "#0C1D3A",
+    "red": "#DC2626",
+    "redPressed": "#B91C1C",
+    "redSoft": "#FEE2E2",
+    "white": "#FFFFFF",
+    "border": "#D9D9D9"
+  }
+}
