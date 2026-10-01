@@ -2,7 +2,7 @@
 
 - [x] 1.1 Inventory and classify all 23 starting unchecked tasks across the six selected OpenSpec changes.
 - [x] 1.2 Write the reconciliation report with exact evidence classes and unresolved device/authenticated-live boundaries.
-- [ ] 1.3 Update historical task ledgers only where named evidence or a newer release truly satisfies or supersedes the task.
+- [x] 1.3 Update historical task ledgers only where named evidence or a newer release truly satisfies or supersedes the task.
 
 ## 2. Workflow Diagnostics
 
@@ -49,11 +49,15 @@
 
 ## 8. Verification and Release
 
-- [ ] 8.1 Run strict OpenSpec validation, contract checks, diff review, and all required backend gates.
-- [ ] 8.2 Run all required web typecheck, test, lint, and production-build gates.
-- [ ] 8.3 Run all required mobile typecheck, test, design-audit, and production-export gates.
-- [ ] 8.4 Bump, prepare, build, and verify the next production-signed ARM64 APK with production API configuration.
-- [ ] 8.5 Review/stage only task-owned changes, commit, push `developement`, and verify local/remote SHA equality.
-- [ ] 8.6 Observe exact-SHA GitHub CI and Railway deployments to terminal provider state.
-- [ ] 8.7 Verify live readiness, frontend HTTP, route authorization/available authenticated acceptance, served APK/manifest bytes, and app-version policy.
-- [ ] 8.8 Record final evidence, limitations, and quick before/after in the plan/change artifacts.
+- [x] 8.1 Run strict OpenSpec validation, contract checks, diff review, and all required backend gates.
+- [x] 8.2 Run all required web typecheck, test, lint, and production-build gates.
+- [x] 8.3 Run all required mobile typecheck, test, design-audit, and production-export gates.
+- [x] 8.4 Bump, prepare, build, and verify the next production-signed ARM64 APK with production API configuration.
+- [x] 8.5 Review/stage only task-owned changes, commit, push `developement`, and verify local/remote SHA equality.
+- [x] 8.6 Observe exact-SHA GitHub CI and Railway deployments to terminal provider state.
+- [x] 8.7 Verify live readiness, frontend HTTP, route authorization/available authenticated acceptance, served APK/manifest bytes, and app-version policy.
+- [x] 8.8 Record final evidence, limitations, and quick before/after in the plan/change artifacts.
+
+### Release note
+
+The application release is `bea26caab5eacc56ac19d880419d4ff708be9d78`; Android is `0.1.56` build 57. Railway provider deployment succeeded for backend, frontend, and AI. GitHub deploy workflow run `36591445640` was cancelled only after provider success because the legacy default-branch AI CLI process did not exit; this orchestration defect and all authenticated/device boundaries are recorded in the plan and reconciliation report.

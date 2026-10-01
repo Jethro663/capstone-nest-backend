@@ -16,7 +16,12 @@
 - [ ] 3.5 Configure an installable iOS test build as needed and obtain real iPhone login/core role-flow evidence with Android enforcement active.
 
 ## 4. Release and observe
-- [ ] 4.1 Fetch and inspect outgoing history/divergence, commit and push scoped changes to `developement`, record the full SHA.
-- [ ] 4.2 Observe exact-revision CI and configured deployments to terminal success and verify live health.
-- [ ] 4.3 Verify public APK/manifest bytes before registering strict Android policy; verify old/current/newer Android and exempt iOS API decisions.
+- [x] 4.1 Fetch and inspect outgoing history/divergence, commit and push scoped changes to `developement`, record the full SHA.
+- [x] 4.2 Observe exact-revision CI and configured deployments to terminal success and verify live health.
+- [x] 4.3 Verify public APK/manifest bytes before registering strict Android policy; verify old/current/newer Android and exempt iOS API decisions.
 - [ ] 4.4 Audit every requirement against evidence, record release links/limitations and clean repository state, then complete the goal only if all gates are proven.
+
+### 2026-10-01 reconciliation
+
+- Tasks 4.1–4.3 are superseded by release `bea26caab5eacc56ac19d880419d4ff708be9d78` and Android `0.1.56` build 57. Exact-SHA GitHub CI succeeded; Railway backend/frontend/AI provider deployments reached `SUCCESS`; live health returned the exact SHA; local, rolling, and immutable APK bytes matched SHA-256 `e5d8c1abc1935768dae5b2523bd85adf9ccab50085a7f6a516495304890495d8`; and live checks covered old, current, hypothetical newer Android, plus iOS exemption decisions.
+- Tasks 3.4, 3.5, and 4.4 remain open because no emulator/physical-device upgrade matrix or real-iPhone flow was run, and the preserved unrelated user document keeps the working tree intentionally non-clean.

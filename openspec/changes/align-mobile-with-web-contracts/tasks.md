@@ -71,7 +71,7 @@
 ## 11. Cross-surface verification and documentation
 
 - [x] 11.1 Run focused tests after every slice and resolve all new failures before broadening scope.
-- [ ] 11.2 Run backend build/lint/unit/integration/e2e coverage required by touched contracts and distinguish service prerequisites from code failures.
+- [x] 11.2 Run backend build/lint/unit/integration/e2e coverage required by touched contracts and distinguish service prerequisites from code failures.
 - [ ] 11.3 Run web lint/test/build and relevant smoke/e2e coverage for shared contract fixtures and reference behavior.
 - [ ] 11.4 Run mobile typecheck/test/build plus available Expo/device authenticated student, teacher, and admin workflows.
 - [ ] 11.5 Exercise cross-client create/resume/grade/evaluate/AI/pagination/export scenarios and record unavailable provider/device coverage explicitly.
@@ -94,3 +94,8 @@
 - [x] 12.6 Add truthful Mobile/Web teacher preview and inspected confirmation-first version restoration; the later modernization change removes the constrained phone Compare surface.
 - [x] 12.7 Redesign module detail around the outline with visible Settings, accessible labeled overflow management, per-section Add content, Arrange, and centered dialogs.
 - [ ] 12.8 Run affected backend/web/mobile verification, package Android `0.1.45` / `46`, and record exact-SHA CI, deployment, live artifact, and device evidence boundaries.
+
+### 2026-10-01 reconciliation
+
+- Task 11.2 is now satisfied by the current full backend run: build and migration integrity passed, lint completed with zero errors, 184 unit suites / 1,828 tests passed, and 3 disposable-database e2e suites / 9 tests passed.
+- Tasks 11.3–11.5 remain open because the current release did not repeat the authenticated browser/device and cross-client runtime matrix. Task 12.8 remains open because its historical version-specific and device requirements cannot be inferred from Android `0.1.56` build 57.

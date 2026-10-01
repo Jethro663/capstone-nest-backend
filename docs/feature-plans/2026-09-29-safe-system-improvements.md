@@ -192,10 +192,10 @@ No row identifiers or payload details cross this contract.
 
 **Produces:** A per-task classification: `satisfied by named evidence`, `superseded by a newer release`, or `still unverified`.
 
-- [ ] Record current exact repository/release evidence without altering product code.
-- [ ] Keep physical-device, emulator-width, and authenticated-live tasks unchecked unless directly exercised.
-- [ ] Mark obsolete version-specific packaging tasks resolved only when the current release contract fully supersedes them; include the replacing version/SHA.
-- [ ] Run `openspec list --json` and verify counts match the reconciliation report.
+- [x] Record current exact repository/release evidence without altering product code.
+- [x] Keep physical-device, emulator-width, and authenticated-live tasks unchecked unless directly exercised.
+- [x] Mark obsolete version-specific packaging tasks resolved only when the current release contract fully supersedes them; include the replacing version/SHA.
+- [x] Run `openspec list --json` and verify counts match the reconciliation report.
 
 ### Task 2: Add workflow diagnostics using TDD
 
@@ -207,12 +207,12 @@ No row identifiers or payload details cross this contract.
 
 **Produces:** `WorkflowDiagnosticsService.getSnapshot()` and admin-only `GET /health/workflows`.
 
-- [ ] Write tests for empty state, pending/processing age, failed-job alert, bounded cache, and database failure.
-- [ ] Run the targeted spec and verify RED because the service/route is absent.
-- [ ] Implement one grouped Drizzle query (or bounded aggregation of selected columns) over `ai_generation_jobs` with no identifiers in output.
-- [ ] Add five-second result caching and concurrent-request coalescing.
-- [ ] Add controller role protection and response envelope tests without changing the public `HealthController`.
-- [ ] Run targeted specs to GREEN.
+- [x] Write tests for empty state, pending/processing age, failed-job alert, bounded cache, and database failure.
+- [x] Run the targeted spec and verify RED because the service/route is absent.
+- [x] Implement one grouped Drizzle query (or bounded aggregation of selected columns) over `ai_generation_jobs` with no identifiers in output.
+- [x] Add five-second result caching and concurrent-request coalescing.
+- [x] Add controller role protection and response envelope tests without changing the public `HealthController`.
+- [x] Run targeted specs to GREEN.
 
 ### Task 3: Add bounded Prometheus workflow gauges using TDD
 
@@ -227,10 +227,10 @@ No row identifiers or payload details cross this contract.
 - `workflow_failed_jobs_total`
 - `workflow_diagnostics_collection_failures_total`
 
-- [ ] Write a failing controller test proving only fixed status labels and aggregate values are emitted.
-- [ ] Inject `WorkflowDiagnosticsService`; update gauges immediately before registry serialization.
-- [ ] Catch diagnostics collection failure, increment the failure counter, log a bounded message, and still return registry output.
-- [ ] Run targeted metrics tests to GREEN.
+- [x] Write a failing controller test proving only fixed status labels and aggregate values are emitted.
+- [x] Inject `WorkflowDiagnosticsService`; update gauges immediately before registry serialization.
+- [x] Catch diagnostics collection failure, increment the failure counter, log a bounded message, and still return registry output.
+- [x] Run targeted metrics tests to GREEN.
 
 ### Task 4: Add the system capability snapshot using TDD
 
@@ -245,11 +245,11 @@ No row identifiers or payload details cross this contract.
 
 **Produces:** Authenticated `GET /system/capabilities`.
 
-- [ ] Write failing service tests for admin/teacher/student role scopes, owner failure isolation, unknown/degraded behavior, and absence of protected session details.
-- [ ] Verify RED because the module is absent.
-- [ ] Implement parallel settled owner reads and stable reason codes.
-- [ ] Add a controller using `@CurrentUser()` and the standard envelope; rely on global JWT and do not add `@Public()`.
-- [ ] Run service/controller specs to GREEN.
+- [x] Write failing service tests for admin/teacher/student role scopes, owner failure isolation, unknown/degraded behavior, and absence of protected session details.
+- [x] Verify RED because the module is absent.
+- [x] Implement parallel settled owner reads and stable reason codes.
+- [x] Add a controller using `@CurrentUser()` and the standard envelope; rely on global JWT and do not add `@Public()`.
+- [x] Run service/controller specs to GREEN.
 
 ### Task 5: Add contract coverage and drift baseline using TDD
 
@@ -261,12 +261,12 @@ No row identifiers or payload details cross this contract.
 
 **Produces:** A reviewed baseline of common type filenames plus classified `tracked`/`deferred` status; any newly common type file fails until classified.
 
-- [ ] Write failing Node tests for new unclassified shared types, missing baseline files, duplicate entries, and deterministic reports.
-- [ ] Verify RED with a temporary fixture.
-- [ ] Implement AST-free filename/source coverage only; explicitly name the limitation in output.
-- [ ] Seed the baseline from the current 26 common filenames and map manifest-owned files as `tracked`; classify remaining ones as `deferred` with a reason.
-- [ ] Add both new contracts to the existing three-layer manifest.
-- [ ] Run both contract test files to GREEN.
+- [x] Write failing Node tests for new unclassified shared types, missing baseline files, duplicate entries, and deterministic reports.
+- [x] Verify RED with a temporary fixture.
+- [x] Implement AST-free filename/source coverage only; explicitly name the limitation in output.
+- [x] Seed the baseline from the current 26 common filenames and map manifest-owned files as `tracked`; classify remaining ones as `deferred` with a reason.
+- [x] Add both new contracts to the existing three-layer manifest.
+- [x] Run both contract test files to GREEN.
 
 ### Task 6: Add web typed consumers and recoverable UI using TDD
 
@@ -280,12 +280,12 @@ No row identifiers or payload details cross this contract.
 
 **Produces:** System Settings capability panel and Diagnostics workflow section with loading/error/cached/retry separation.
 
-- [ ] Write failing service tests for envelope parsing.
-- [ ] Write failing component tests for initial failure, successful empty, cached refresh failure, and retry.
-- [ ] Implement services and `AdminAsyncState` without hiding existing settings links.
-- [ ] Render capability entries with backend reason text and `Unknown` on fetch failure.
-- [ ] Render aggregate workflow counts/age/alerts without invented uptime or latency numbers.
-- [ ] Run focused web tests to GREEN.
+- [x] Write failing service tests for envelope parsing.
+- [x] Write failing component tests for initial failure, successful empty, cached refresh failure, and retry.
+- [x] Implement services and `AdminAsyncState` without hiding existing settings links.
+- [x] Render capability entries with backend reason text and `Unknown` on fetch failure.
+- [x] Render aggregate workflow counts/age/alerts without invented uptime or latency numbers.
+- [x] Run focused web tests to GREEN.
 
 ### Task 7: Add mobile typed consumers and recoverable UI using TDD
 
@@ -298,11 +298,11 @@ No row identifiers or payload details cross this contract.
 
 **Produces:** Touch-friendly capability/workflow states using existing `AdminNotice`, `AdminSection`, and `AdminDataRow` primitives.
 
-- [ ] Write failing service and component tests before implementation.
-- [ ] Implement typed service calls through authenticated `apiClient`.
-- [ ] Keep settings destinations visible; show semantic status/reason rather than hiding unsupported actions.
-- [ ] Show aggregate workflow health in Diagnostics with pull-to-refresh and explicit partial-failure copy.
-- [ ] Run focused mobile tests and typecheck to GREEN.
+- [x] Write failing service and component tests before implementation.
+- [x] Implement typed service calls through authenticated `apiClient`.
+- [x] Keep settings destinations visible; show semantic status/reason rather than hiding unsupported actions.
+- [x] Show aggregate workflow health in Diagnostics with pull-to-refresh and explicit partial-failure copy.
+- [x] Run focused mobile tests and typecheck to GREEN.
 
 ### Task 8: Review, full verification, packaging, and release
 
@@ -310,17 +310,17 @@ No row identifiers or payload details cross this contract.
 - Update this plan and the OpenSpec task ledger with final evidence.
 - Update Android release artifacts through `mobile/scripts/app-version-release.cjs`; do not hand-edit checksums/manifests.
 
-- [ ] Review every changed file against Tasks 1–7 and confirm no product write path or persistent schema changed.
-- [ ] Run OpenSpec strict validation and contract tests.
-- [ ] Backend: targeted tests, lint, build, full Jest, applicable e2e/production-start checks.
-- [ ] Web: typecheck, focused/full Jest, lint, production build.
-- [ ] Mobile: typecheck, focused/full Jest, design audit, production Expo export.
-- [ ] Bump/prepare/build/verify the next Android release using the production API URL and signing contract; record package, versionCode, ABI, signature, alignment, bytes, and SHA-256.
-- [ ] Run `git diff --check`; inspect staged paths and every outgoing commit; commit only task-owned files.
-- [ ] Push `developement`; verify local/remote SHA equality.
-- [ ] Observe exact-SHA GitHub CI and Railway provider deployment to terminal state.
-- [ ] Verify live readiness, capability snapshot (role-appropriate authenticated acceptance where credentials are available), workflow route authorization, frontend HTTP, APK manifest/bytes, and app-version policy.
-- [ ] Record any physical-device or authenticated-live boundary that remains unverified.
+- [x] Review every changed file against Tasks 1–7 and confirm no product write path or persistent schema changed.
+- [x] Run OpenSpec strict validation and contract tests.
+- [x] Backend: targeted tests, lint, build, full Jest, applicable e2e/production-start checks.
+- [x] Web: typecheck, focused/full Jest, lint, production build.
+- [x] Mobile: typecheck, focused/full Jest, design audit, production Expo export.
+- [x] Bump/prepare/build/verify the next Android release using the production API URL and signing contract; record package, versionCode, ABI, signature, alignment, bytes, and SHA-256.
+- [x] Run `git diff --check`; inspect staged paths and every outgoing commit; commit only task-owned files.
+- [x] Push `developement`; verify local/remote SHA equality.
+- [x] Observe exact-SHA GitHub CI and Railway provider deployment to terminal state.
+- [x] Verify live readiness, capability snapshot (role-appropriate authenticated acceptance where credentials are available), workflow route authorization, frontend HTTP, APK manifest/bytes, and app-version policy.
+- [x] Record any physical-device or authenticated-live boundary that remains unverified.
 
 ## 8. Verification matrix and acceptance criteria
 
@@ -367,3 +367,34 @@ Acceptance requires all automated gates applicable to changed surfaces to pass. 
 - Real-device Android/iOS rendering, notification/background behavior, and install upgrade remain unverified unless exercised during Task 8.
 - Production authenticated capability/workflow responses require a valid role-scoped account; public health cannot prove them.
 - The shared-type coverage baseline detects surface creation, not semantic TypeScript equivalence; the explicit three-layer manifest remains the semantic field gate for listed contracts.
+
+## 10. Final release evidence — 2026-10-01
+
+### Quick before / after
+
+| Before | After |
+|---|---|
+| Web and mobile inferred system availability independently and could turn fetch failure into a misleading disabled state. | Both clients consume one authenticated, role-aware capability snapshot and render explicit loading, error, stale, retry, and semantic reason states without hiding destinations. |
+| Durable AI workflow trouble was visible only through raw storage/queue investigation. | Administrators have bounded aggregate workflow diagnostics and fixed-label metrics; no IDs, payloads, or unbounded labels are exposed. |
+| Shared web/mobile type filenames could grow without an explicit review decision. | A reviewed 27-file baseline tracks 8 contract-owned surfaces and names 19 deferred surfaces; any new unclassified shared filename fails the gate. |
+| Historical verification checkboxes mixed automated, provider, authenticated, and physical-device evidence. | The 23 starting tasks are reconciled by evidence class; unsupported authenticated/device claims remain open. |
+| Settings/diagnostics contained hard-coded latency/uptime-looking values. | Those invented operational values are removed; only backend-observed aggregate state is shown. |
+
+### Confirmed verification
+
+- Source implementation commit: `7f6a57e6d69a4ebe653cac54f14fd01212f855e6`; Android release commit and deployed application revision: `bea26caab5eacc56ac19d880419d4ff708be9d78`.
+- Backend: 5 focused suites / 15 tests; 184 full suites / 1,828 tests; 3 e2e suites / 9 tests; build, migration integrity, and lint passed with 0 errors and 2,294 warnings under the 2,300-warning ceiling.
+- Web: 4 focused suites / 12 tests; 212 full suites / 967 tests; typecheck, lint, and production build passed with 75 static pages.
+- Mobile: 3 focused suites / 8 tests; 155 full suites / 867 tests; typecheck, design audit, and production Expo export passed.
+- Contract governance: 7/7 coverage-script tests passed; 21 administrator contracts / 63 layer checks passed; the 27 shared filenames are fully classified.
+- GitHub CI run `36590851345` completed successfully against exact head SHA `bea26caa...`.
+- Railway provider deployments reached `SUCCESS`: backend `3eafae78-6feb-4c8a-ad11-18a11c4b1ccc`, frontend `50adc042-27ae-486c-ad4e-360c10b59744`, and AI `0d997b6e-ff94-40e4-847d-8a43cbb4e281`. Provenance-only redeploys `4dd15425-e161-4c48-835d-33f69dac3268` and `ad09ba09-20d8-40f0-9d05-1c35285d7d6b` also reached `SUCCESS`.
+- Live backend liveness/readiness returned HTTP 200 and exact `gitCommit=bea26caa...`; PostgreSQL, Redis, AI, and storage reported ready. Railway frontend and `nexora-lms.com` returned HTTP 200. Anonymous capability and workflow-diagnostics requests returned HTTP 401.
+- Android `0.1.56` build/versionCode `57`: package `com.nexora.lms.mobile`, min SDK 24, target SDK 36, ARM64 only, production certificate SHA-256 `46cbcee985a7e0ecfda5a8fddfbdd679d9f0312ee07d96a593817302eb7c0a39`, APK v2 signature and alignment verified, 37,663,914 bytes, artifact SHA-256 `e5d8c1abc1935768dae5b2523bd85adf9ccab50085a7f6a516495304890495d8`.
+- Rolling, immutable, and local APK bytes match. The live policy forces builds 1 and 55, accepts build 57, safely accepts a hypothetical newer Android build, and leaves iOS exempt from Android enforcement.
+
+### Honest limitations and remaining defect
+
+- No production account credentials were available, so authenticated live role payloads for the two new routes were not exercised. Controller/service authorization and role behavior are covered by tests; anonymous rejection is live-verified.
+- No physical Android or iPhone was exercised. The signed package, export, static tests, served bytes, and policy decisions are not physical-device proof.
+- GitHub deploy workflow run `36591445640` was cancelled after six hours because the AI job's old default-branch `railway up --ci` process did not exit. Railway itself had already marked backend, frontend, and AI deployments `SUCCESS/RUNNING`. This is a real remaining orchestration defect: deploy the AI service with a bounded detached/status-wait pattern after the updated workflow reaches the default branch.

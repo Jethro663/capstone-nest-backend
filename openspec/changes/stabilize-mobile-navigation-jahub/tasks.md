@@ -33,3 +33,7 @@
 - [ ] 5.3 Verify student, teacher, and administrator routes plus JAHUB zero/one/multiple lesson states at 320, 360, and 412 pixel Android widths when a usable emulator is available
   - Device-complete: student, teacher, and administrator route sets; both gesture and three-button navigation; 320, 360, and 412 dp widths; resumed JAHUB Ask; sheets; Activity History; Replay; and Learner's Path.
   - Fixture-blocked: the hosted seed did not expose zero- and multiple-visible-lesson JAHUB entry states for device execution; those states remain covered by model, component, and JaScreen integration tests.
+
+### 2026-10-01 reconciliation
+
+- Task 5.3 remains open. Android `0.1.56` build 57 passed automated and package gates, but this run did not exercise the role/JAHUB fixture matrix on an emulator or physical device.

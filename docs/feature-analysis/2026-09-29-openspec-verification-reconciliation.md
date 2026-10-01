@@ -56,4 +56,34 @@ Historical checkboxes are changed only when the final current-run evidence fully
 
 ## Current-run evidence
 
-Pending final exact-SHA verification. This section will record local gates, Android package identity, commit/push equality, GitHub CI, Railway deployments, public health, route authorization, served artifact equality, updater-policy results, and explicit remaining limitations.
+### Automated and package evidence
+
+- Backend build and migration integrity passed; lint completed with zero errors and 2,294 warnings under the 2,300-warning ceiling; 184 unit suites / 1,828 tests and 3 disposable-database e2e suites / 9 tests passed.
+- Web typecheck, lint, and production build passed; 212 suites / 967 tests passed and the build produced 75 static pages.
+- Mobile typecheck, design audit, and production Expo export passed; 155 suites / 867 tests passed.
+- Contract checks passed: 7/7 coverage-script tests, 21 administrator contracts / 63 layer checks, and 27 fully classified common web/mobile type filenames.
+- Android `0.1.56` build/versionCode 57 is a production-signed, aligned, ARM64-only APK for `com.nexora.lms.mobile`, min SDK 24 / target SDK 36, certificate SHA-256 `46cbcee985a7e0ecfda5a8fddfbdd679d9f0312ee07d96a593817302eb7c0a39`, size 37,663,914 bytes, and artifact SHA-256 `e5d8c1abc1935768dae5b2523bd85adf9ccab50085a7f6a516495304890495d8`.
+
+### Source, provider, and live evidence
+
+- Source commit `7f6a57e6d69a4ebe653cac54f14fd01212f855e6` and release commit `bea26caab5eacc56ac19d880419d4ff708be9d78` were reviewed and pushed without force; local and `origin/developement` matched at the release commit before this evidence-only update.
+- GitHub CI run `36590851345` succeeded against exact head SHA `bea26caa...`.
+- Railway deployments reached provider `SUCCESS`: backend `3eafae78-6feb-4c8a-ad11-18a11c4b1ccc`, frontend `50adc042-27ae-486c-ad4e-360c10b59744`, and AI `0d997b6e-ff94-40e4-847d-8a43cbb4e281`. Provenance-only redeploys `4dd15425-e161-4c48-835d-33f69dac3268` and `ad09ba09-20d8-40f0-9d05-1c35285d7d6b` also reached `SUCCESS`.
+- Live liveness/readiness returned HTTP 200 with exact backend `gitCommit=bea26caa...`; database, Redis, AI, and storage were ready. Railway frontend and `nexora-lms.com` returned HTTP 200. Anonymous access to `/api/system/capabilities` and `/api/health/workflows` returned HTTP 401.
+- Local, rolling, and immutable APK bytes matched. Registration succeeded. Live update decisions force builds 1 and 55, accept current build 57, safely accept a hypothetical newer Android build, and keep iOS outside Android enforcement.
+
+### Historical ledger disposition
+
+- Closed from current direct evidence: `align-mobile-with-web-contracts` 11.2; `admin-maintenance-gateway` 8.2, 8.3, 8.4, 8.6, 9.8, and the maintained-release intent of 10.5; `require-android-updates-exempt-ios` 4.1–4.3; `admin-authority-cascade-erasure` 6.3.
+- Still open: every task requiring authenticated production acceptance, physical-device/emulator behavior, historical version-specific device proof, a fresh cross-client runtime matrix, or live AI generation/extraction. Each ledger now states the precise missing evidence.
+- The unrelated modified document `docs/feature-analysis/2026-09-21-mobile-teacher-modernization-and-updater-analysis.md` was preserved and excluded from every task-owned commit.
+
+### Remaining release-system defect
+
+GitHub deploy run `36591445640` was cancelled after six hours because the legacy default-branch AI job's `railway up --ci` process did not exit. Railway had already marked backend, frontend, and AI deployments `SUCCESS/RUNNING`, so application rollout succeeded but workflow orchestration did not. This is a confirmed defect to address by moving the AI job to a bounded detached deployment plus explicit provider-status wait after the updated workflow reaches the default branch.
+
+### Boundaries not inferred
+
+- No production role account was available, so authenticated live response payloads for capabilities, workflow diagnostics, Maintenance Access, System Reset, or destructive preview remain unverified.
+- No physical Android or iPhone and no emulator-width/device-upgrade matrix were exercised.
+- No destructive production reset or erasure was executed.

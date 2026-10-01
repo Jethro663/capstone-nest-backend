@@ -37,5 +37,10 @@
 
 - [x] 6.1 Run strict OpenSpec validation, focused red/green suites, contract checks, lint, type checks, full tests, builds, migration upgrade, System Reset, and destructive disposable-database/storage rehearsal.
 - [x] 6.2 Build and verify the affected Android APK, update the established download manifest/artifact, and verify package/version/API/signature/hash evidence.
-- [ ] 6.3 Review the final diff against every requirement, commit scoped changes, push developement, and verify exact-SHA CI.
+- [x] 6.3 Review the final diff against every requirement, commit scoped changes, push developement, and verify exact-SHA CI.
 - [ ] 6.4 Verify exact-SHA Railway backend/frontend deployment, live health/security, authenticated admin preview behavior, and served APK checksum before summarizing.
+
+### 2026-10-01 reconciliation
+
+- Task 6.3 is superseded by scoped release `bea26caab5eacc56ac19d880419d4ff708be9d78` with successful exact-SHA GitHub CI.
+- Task 6.4 remains open: exact-SHA Railway backend/frontend deployment, public health/security rejection, and served APK checksum were refreshed, but authenticated destructive admin preview was not exercised and no destructive production action was authorized.

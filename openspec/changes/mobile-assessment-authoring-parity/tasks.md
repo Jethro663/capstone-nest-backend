@@ -18,3 +18,7 @@
 - [ ] 4.2 Exercise disposable-service integration and available authenticated/device workflows; record environment limits.
 
 Task 4.2: disposable PostgreSQL integration (53 tests), authenticated web/mobile round trips, Android recovery/publication and fixture-based AI review/apply are recorded in `evidence/verification.md`. Live AI provider/worker generation and extraction remain unverified because no local model/provider is configured. Do not archive or declare the full release gate complete.
+
+### 2026-10-01 reconciliation
+
+- Task 4.2 remains open. Production readiness reported the AI runtime healthy, but this run did not submit authenticated live generation/extraction work and therefore does not replace the missing provider/worker behavior evidence.

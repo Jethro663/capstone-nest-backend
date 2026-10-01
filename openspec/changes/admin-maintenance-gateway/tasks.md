@@ -51,11 +51,11 @@
 ## 8. Android Package and Exact-SHA Release
 
 - [x] 8.1 Bump the Android app version/build and prepare a new ARM64 release using repository scripts.
-- [ ] 8.2 Verify APK identity, version, ABI, signature, API URL, size, SHA-256, app-version registration, and served download integration.
-- [ ] 8.3 Inspect every outgoing commit on `developement`, commit the scoped change, and push without force.
-- [ ] 8.4 Verify exact pushed SHA in GitHub Actions and Railway deployment/provider status.
+- [x] 8.2 Verify APK identity, version, ABI, signature, API URL, size, SHA-256, app-version registration, and served download integration.
+- [x] 8.3 Inspect every outgoing commit on `developement`, commit the scoped change, and push without force.
+- [x] 8.4 Verify exact pushed SHA in GitHub Actions and Railway deployment/provider status.
 - [ ] 8.5 Run non-destructive live health, Maintenance Access capability/status, System Reset capability/status, and served APK checks without executing Full Reset.
-- [ ] 8.6 Record release evidence and explicitly report any physical ARM64 or authenticated-live boundary that remains unverified.
+- [x] 8.6 Record release evidence and explicitly report any physical ARM64 or authenticated-live boundary that remains unverified.
 
 ## 9. Retention and Historical Retirement Correction
 
@@ -66,7 +66,7 @@
 - [x] 9.5 Add failing mobile tests, then implement the matching contract, retention presentation, cancel/back behavior, historical mode/outcome review, and query invalidation.
 - [x] 9.6 Pass focused and full backend/web/mobile verification, OpenSpec validation, contract parity, builds, and authenticated or fixture-backed runtime checks.
 - [x] 9.7 Build and verify a new ARM64 APK because mobile bundle inputs changed; update the existing download manifest/artifact contract and record archive, ABI, signature, API URL, size, and checksum evidence.
-- [ ] 9.8 Review the final diff against the plan, commit scoped artifacts and implementation, push `developement`, verify exact-SHA CI/Railway/live health and served APK integrity, and record unverified physical-device boundaries.
+- [x] 9.8 Review the final diff against the plan, commit scoped artifacts and implementation, push `developement`, verify exact-SHA CI/Railway/live health and served APK integrity, and record unverified physical-device boundaries.
 
 ## 10. Maintenance Access Switch Mode
 
@@ -74,5 +74,11 @@
 - [x] 10.2 Revoke active Maintenance Access on logout, logout-all, and every password update through one idempotent audited service method.
 - [x] 10.3 Prove actor isolation, manual persistence beyond the former time limit, immediate close, legacy timed expiry, migration upgrade, and protected-rule behavior in backend contract/integration gates.
 - [x] 10.4 Convert web and mobile Maintenance Access surfaces to persistent ON/OFF semantics without making either client a policy authority.
-- [ ] 10.5 Bump, build, verify, publish, and register Android build 39 because the mobile bundle changes.
+- [x] 10.5 Bump, build, verify, publish, and register Android build 39 because the mobile bundle changes.
 - [ ] 10.6 Complete full verification, final review, exact-SHA CI/Railway deployment, non-destructive authenticated acceptance, and served-artifact integrity checks.
+
+### 2026-10-01 reconciliation
+
+- Tasks 8.2–8.4, 8.6, 9.8, and the maintained-release intent of 10.5 are superseded by verified Android `0.1.56` build 57 from source `7f6a57e6d69a4ebe653cac54f14fd01212f855e6`, released/deployed at `bea26caab5eacc56ac19d880419d4ff708be9d78`. The signed ARM64 APK is 37,663,914 bytes with SHA-256 `e5d8c1abc1935768dae5b2523bd85adf9ccab50085a7f6a516495304890495d8`; local, rolling, and immutable bytes match; GitHub CI succeeded; Railway providers succeeded; and public health/update checks passed.
+- Task 8.5 and 10.6 remain open because no authenticated production Maintenance Access/System Reset acceptance was run. No Full Reset was executed. Physical-device installation also remains unverified.
+- GitHub deploy run `36591445640` was cancelled after the already-successful provider deployments because the legacy default-branch AI `railway up --ci` process did not exit; this is recorded separately as an orchestration defect and is not represented as a green workflow run.
