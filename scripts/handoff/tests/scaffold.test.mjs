@@ -1,5 +1,12 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -33,6 +40,16 @@ test('creates the approved package scaffold and identity files', async () => {
   };
 
   try {
+    const sourceReadme = path.join(
+      repoRoot,
+      'scripts',
+      'handoff',
+      'demo-data',
+      'README.txt',
+    );
+    await mkdir(path.dirname(sourceReadme), { recursive: true });
+    await writeFile(sourceReadme, 'Synthetic documentation fixture\n', 'utf8');
+
     const outputRoot = await scaffoldHandoff(repoRoot, config);
 
     for (const relativePath of packageDirectories) {
@@ -52,6 +69,17 @@ test('creates the approved package scaffold and identity files', async () => {
     );
     assert.match(readme, /Open START-HERE\.html/);
     assert.match(readme, /production secrets are not included/i);
+
+    const demoReadme = await readFile(
+      path.join(
+        outputRoot,
+        '06-DATABASE-AND-RECOVERY',
+        'demo-data',
+        'README.txt',
+      ),
+      'utf8',
+    );
+    assert.equal(demoReadme, 'Synthetic documentation fixture\n');
   } finally {
     await rm(repoRoot, { recursive: true, force: true });
   }

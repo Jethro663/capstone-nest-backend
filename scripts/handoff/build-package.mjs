@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { mkdir, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -53,6 +53,21 @@ export async function scaffoldHandoff(repoRoot, config) {
     path.join(outputRoot, 'README-FIRST.txt'),
     readmeText(config),
     'utf8',
+  );
+  await copyFile(
+    path.join(
+      path.resolve(repoRoot),
+      'scripts',
+      'handoff',
+      'demo-data',
+      'README.txt',
+    ),
+    path.join(
+      outputRoot,
+      '06-DATABASE-AND-RECOVERY',
+      'demo-data',
+      'README.txt',
+    ),
   );
 
   return outputRoot;

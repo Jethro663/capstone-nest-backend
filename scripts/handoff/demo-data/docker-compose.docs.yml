@@ -1,0 +1,35 @@
+name: nexora-docs-manual
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: nexora_docs_manual
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "${NEXORA_DOC_DB_PASSWORD:?Set NEXORA_DOC_DB_PASSWORD for the disposable documentation database}"
+    ports:
+      - "127.0.0.1:${NEXORA_DOC_DB_PORT:-55432}:5432"
+    volumes:
+      - postgres_docs_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d nexora_docs_manual"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${NEXORA_DOC_REDIS_PORT:-56379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+      start_period: 3s
+
+volumes:
+  postgres_docs_data:

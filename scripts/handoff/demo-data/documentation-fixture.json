@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+  "schoolYear": "2026-2027",
+  "quarter": "Q1",
+  "roles": [
+    { "id": "10000000-0000-4000-8000-000000000001", "name": "admin", "description": "Synthetic documentation administrator" },
+    { "id": "10000000-0000-4000-8000-000000000002", "name": "teacher", "description": "Synthetic documentation teacher" },
+    { "id": "10000000-0000-4000-8000-000000000003", "name": "student", "description": "Synthetic documentation learner" }
+  ],
+  "accounts": [
+    { "id": "10000000-0000-4000-8000-000000000101", "role": "admin", "email": "docs.admin@nexora.local", "firstName": "Alex", "lastName": "Admin" },
+    { "id": "10000000-0000-4000-8000-000000000102", "role": "teacher", "email": "docs.teacher@nexora.local", "firstName": "Tala", "lastName": "Teacher", "department": "Mathematics", "employeeId": "DOC-T-001" },
+    { "id": "10000000-0000-4000-8000-000000000103", "role": "student", "email": "docs.learner@nexora.local", "firstName": "Lia", "lastName": "Learner", "gradeLevel": "7", "lrn": "999999260001" },
+    { "id": "10000000-0000-4000-8000-000000000104", "role": "student", "email": "docs.learner2@nexora.local", "firstName": "Noel", "lastName": "Learner", "gradeLevel": "7", "lrn": "999999260002" }
+  ],
+  "academicState": { "id": "10000000-0000-4000-8000-000000000201", "schoolYear": "2026-2027", "quarter": "Q1", "version": 1 },
+  "classroom": {
+    "section": { "id": "10000000-0000-4000-8000-000000000301", "name": "Grade 7 - Documentation", "gradeLevel": "7", "roomNumber": "DOC-701" },
+    "class": { "id": "10000000-0000-4000-8000-000000000302", "subjectName": "Mathematics 7", "subjectCode": "DOC-MATH-7" },
+    "schedule": { "id": "10000000-0000-4000-8000-000000000303", "days": ["M", "W", "F"], "startTime": "08:00", "endTime": "09:00" },
+    "enrollments": [
+      { "id": "10000000-0000-4000-8000-000000000304", "studentId": "10000000-0000-4000-8000-000000000103" },
+      { "id": "10000000-0000-4000-8000-000000000305", "studentId": "10000000-0000-4000-8000-000000000104" }
+    ]
+  },
+  "content": { "id": "10000000-0000-4000-8000-000000000401", "title": "Understanding Linear Equations", "description": "Synthetic lesson used only for documentation captures." },
+  "assessment": {
+    "id": "10000000-0000-4000-8000-000000000501", "title": "Linear Equations Checkpoint", "description": "Synthetic quiz used only for documentation captures.", "totalPoints": 20, "passingScore": 75,
+    "question": { "id": "10000000-0000-4000-8000-000000000502", "content": "Solve 2x + 6 = 14.", "points": 20 },
+    "options": [
+      { "id": "10000000-0000-4000-8000-000000000503", "text": "x = 4", "isCorrect": true, "order": 1 },
+      { "id": "10000000-0000-4000-8000-000000000504", "text": "x = 10", "isCorrect": false, "order": 2 }
+    ]
+  },
+  "returnedAttempt": { "id": "10000000-0000-4000-8000-000000000505", "responseId": "10000000-0000-4000-8000-000000000506", "studentId": "10000000-0000-4000-8000-000000000103", "score": 65, "isReturned": true, "teacherFeedback": "Review inverse operations, then try the guided practice." },
+  "classRecord": {
+    "id": "10000000-0000-4000-8000-000000000601", "status": "draft",
+    "categories": [
+      { "id": "10000000-0000-4000-8000-000000000602", "name": "Written Works", "weight": "30.00" },
+      { "id": "10000000-0000-4000-8000-000000000603", "name": "Performance Tasks", "weight": "50.00" },
+      { "id": "10000000-0000-4000-8000-000000000604", "name": "Quarterly Assessment", "weight": "20.00" }
+    ],
+    "items": [
+      { "id": "10000000-0000-4000-8000-000000000605", "categoryId": "10000000-0000-4000-8000-000000000602", "title": "Equation Practice", "maxScore": "20.00", "order": 1 },
+      { "id": "10000000-0000-4000-8000-000000000606", "categoryId": "10000000-0000-4000-8000-000000000604", "title": "Q1 Checkpoint", "maxScore": "20.00", "order": 2 }
+    ],
+    "scores": [
+      { "id": "10000000-0000-4000-8000-000000000607", "itemId": "10000000-0000-4000-8000-000000000605", "studentId": "10000000-0000-4000-8000-000000000103", "score": "14.00" },
+      { "id": "10000000-0000-4000-8000-000000000608", "itemId": "10000000-0000-4000-8000-000000000606", "studentId": "10000000-0000-4000-8000-000000000103", "score": "13.00" }
+    ]
+  },
+  "report": { "kind": "derived", "sources": ["class_record_scores", "assessment_attempts", "performance_snapshots"] },
+  "performance": {
+    "snapshots": [
+      { "id": "10000000-0000-4000-8000-000000000701", "studentId": "10000000-0000-4000-8000-000000000103", "assessmentAverage": "65.000", "classRecordAverage": "68.000", "blendedScore": "66.500", "isAtRisk": true },
+      { "id": "10000000-0000-4000-8000-000000000702", "studentId": "10000000-0000-4000-8000-000000000104", "assessmentAverage": "88.000", "classRecordAverage": "91.000", "blendedScore": "89.500", "isAtRisk": false }
+    ],
+    "log": { "id": "10000000-0000-4000-8000-000000000703", "studentId": "10000000-0000-4000-8000-000000000103" }
+  },
+  "intervention": { "id": "10000000-0000-4000-8000-000000000801", "assignmentId": "10000000-0000-4000-8000-000000000802", "studentId": "10000000-0000-4000-8000-000000000103", "status": "active" },
+  "evaluation": { "campaignId": "10000000-0000-4000-8000-000000000901", "id": "10000000-0000-4000-8000-000000000902", "assignmentId": "10000000-0000-4000-8000-000000000903" },
+  "announcement": { "id": "10000000-0000-4000-8000-000000001001", "title": "Welcome to the Documentation Class" },
+  "calendarEvent": { "id": "10000000-0000-4000-8000-000000001101", "title": "Quarter 1 Parent Orientation" },
+  "notification": { "id": "10000000-0000-4000-8000-000000001201", "title": "New class announcement" },
+  "auditRecord": { "id": "10000000-0000-4000-8000-000000001301", "action": "DOCUMENTATION_FIXTURE_CREATED" },
+  "systemSettings": { "id": "00000000-0000-4000-8000-000000000002", "demoModeEnabled": false },
+  "lifecycle": { "state": "OPEN", "source": "academic_system_states" },
+  "maintenance": { "state": "INACTIVE", "source": "admin_maintenance_sessions" }
+}
