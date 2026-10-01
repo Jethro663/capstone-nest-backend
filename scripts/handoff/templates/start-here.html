@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>Nexora Complete Handoff</title>
+    <style>{{CSS}}</style>
+  </head>
+  <body>
+    <header class="hero">
+      <div class="shell">
+        <div class="identity">
+          <div class="mark" aria-hidden="true">N</div>
+          <div>
+            <p class="eyebrow">Gat Andres Bonifacio High School</p>
+            <h1>Nexora Complete Handoff</h1>
+          </div>
+        </div>
+        <p class="hero-copy">Start here to use, install, operate, maintain, recover, or study the complete Nexora learning management system.</p>
+        <div class="metadata" aria-label="Package identity">
+          <span>Package {{PACKAGE_NAME}}</span>
+          <span>Built {{BUILD_DATE}}</span>
+          <span>Application {{COMMIT_SHORT}}</span>
+          <span>Android {{APK_VERSION}} build {{APK_BUILD}}</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="shell">
+      <section class="notice" aria-labelledby="internet-heading">
+        <strong id="internet-heading">Internet is required during first setup</strong>
+        Dependencies and AI model files are downloaded when the system is prepared. The manuals, start page, source archive, APK, and recovery references remain readable from this drive without internet access.
+      </section>
+
+      <h2 class="section-heading">First run in five steps</h2>
+      <ol class="steps">
+        <li><span class="step-number">1</span><strong>Verify the package</strong><p>Check MANIFEST.sha256 before installing or copying files.</p></li>
+        <li><span class="step-number">2</span><strong>Read the System Manual</strong><p>Confirm prerequisites and choose the Windows or Linux setup path.</p></li>
+        <li><span class="step-number">3</span><strong>Create local configuration</strong><p>Copy the safe examples and create new secrets. Never reuse values from screenshots.</p></li>
+        <li><span class="step-number">4</span><strong>Start and verify services</strong><p>Follow the health checks before signing in or installing the mobile app.</p></li>
+        <li><span class="step-number">5</span><strong>Use the role guide</strong><p>Open the User Manual and follow the web and mobile steps for your role.</p></li>
+      </ol>
+
+      <h2 class="section-heading">Manuals and guides</h2>
+      <div class="grid">
+        <section class="card">
+          <h3>User Manual</h3>
+          <p>Role-based instructions for administrators, teachers, and learners, with paired web and mobile visuals.</p>
+          <div class="links">
+            <a href="01-MANUALS/Nexora-User-Manual.pdf">Printable PDF</a>
+            <a href="01-MANUALS/Nexora-User-Manual.docx">Editable Word file</a>
+          </div>
+        </section>
+
+        <section class="card">
+          <h3>System Manual</h3>
+          <p>Architecture, modules, contracts, setup, deployment, maintenance, security, and recovery.</p>
+          <div class="links">
+            <a href="01-MANUALS/Nexora-System-Manual.pdf">Printable PDF</a>
+            <a href="01-MANUALS/Nexora-System-Manual.docx">Editable Word file</a>
+          </div>
+        </section>
+
+        <section class="card">
+          <h3>Quick Start</h3>
+          <p>Short, literal setup paths with expected results and stop conditions.</p>
+          <div class="links">
+            <a href="02-QUICK-START/Windows-Quick-Start.pdf">Windows</a>
+            <a href="02-QUICK-START/Linux-Quick-Start.pdf">Linux</a>
+            <a href="02-QUICK-START/First-Run-Checklist.pdf">First run checklist</a>
+          </div>
+        </section>
+
+        <section class="card">
+          <h3>Android App</h3>
+          <p>The current signed APK, its integrity record, and installation instructions.</p>
+          <div class="links">
+            <a href="04-MOBILE/Android-Install-Guide.pdf">Installation guide</a>
+            <a href="04-MOBILE/nexora-mobile-0.1.56-build57.apk">APK version 0.1.56</a>
+            <a href="04-MOBILE/APK-SHA256.txt">APK checksum</a>
+          </div>
+        </section>
+
+        <section class="card">
+          <h3>Recovery</h3>
+          <p>Back up, restore, verify, and recover the system without guessing.</p>
+          <div class="links">
+            <a href="06-DATABASE-AND-RECOVERY/Backup-and-Restore-Runbook.pdf">Backup and restore</a>
+            <a href="06-DATABASE-AND-RECOVERY/Disaster-Recovery-Checklist.pdf">Disaster recovery</a>
+            <a href="02-QUICK-START/Troubleshooting-Decision-Tree.pdf">Troubleshooting</a>
+          </div>
+        </section>
+
+        <section class="card">
+          <h3>Source and Configuration</h3>
+          <p>The locked source snapshot, safe templates, and explanations for every documented setting.</p>
+          <div class="links">
+            <a href="03-SOURCE/nexora-source-211483f.zip">Source archive</a>
+            <a href="05-CONFIG-TEMPLATES/configuration-reference.pdf">Configuration reference</a>
+            <a href="MANIFEST.sha256">Complete checksums</a>
+          </div>
+        </section>
+      </div>
+
+      <section class="privacy" aria-labelledby="privacy-heading">
+        <h2 id="privacy-heading">Privacy and secrets</h2>
+        <p>This package contains synthetic demonstration material only. Production secrets, access tokens, learner records, grades, messages, email content, and production database backups are not included. Create new secrets during setup and keep local environment files outside source control.</p>
+      </section>
+    </main>
+
+    <footer class="shell">Nexora application snapshot {{COMMIT_SHORT}} | Package date {{BUILD_DATE}}</footer>
+  </body>
+</html>
