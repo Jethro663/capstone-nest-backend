@@ -1,9 +1,9 @@
 # Nexora Complete Handoff Manuals Design
 
-**Date:** October 1, 2026  
-**Source branch:** `developement`  
-**Source commit:** `211483f07b901299b48ae42eda318c7448f1cbfd`  
-**Primary audience:** First year information technology students, information technology faculty, future maintainers, school administrators, teachers, and learners  
+**Date:** October 1, 2026
+**Source branch:** `developement`
+**Source commit:** `211483f07b901299b48ae42eda318c7448f1cbfd`
+**Primary audience:** First year information technology students, information technology faculty, future maintainers, school administrators, teachers, and learners
 **Delivery target:** A portable external drive package smaller than 32 GB with internet assisted first setup
 
 ## Purpose
