@@ -573,6 +573,52 @@ async function upsertFixture(client, fixture, passwordHash) {
      ON CONFLICT (id) DO UPDATE SET enabled = false, reason = EXCLUDED.reason, version = EXCLUDED.version, updated_at = NOW()`,
     [fixture.systemSettings.id],
   );
+
+  const release = fixture.mobileRelease;
+  await client.query(
+    `INSERT INTO app_versions
+       (id, platform, version_code, min_supported_version_code, native_version,
+        ota_runtime_version, artifact_kind, artifact_download_url,
+        artifact_sha256, artifact_size_bytes, source_revision,
+        distribution_channel, apk_download_url, apk_sha256, apk_size_bytes,
+        is_force_update, requires_full_apk, release_notes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+       $8, $9, $10, false, $13, $14)
+     ON CONFLICT (id) DO UPDATE SET platform = EXCLUDED.platform,
+       version_code = EXCLUDED.version_code,
+       min_supported_version_code = EXCLUDED.min_supported_version_code,
+       native_version = EXCLUDED.native_version,
+       ota_runtime_version = EXCLUDED.ota_runtime_version,
+       artifact_kind = EXCLUDED.artifact_kind,
+       artifact_download_url = EXCLUDED.artifact_download_url,
+       artifact_sha256 = EXCLUDED.artifact_sha256,
+       artifact_size_bytes = EXCLUDED.artifact_size_bytes,
+       source_revision = EXCLUDED.source_revision,
+       distribution_channel = EXCLUDED.distribution_channel,
+       apk_download_url = EXCLUDED.apk_download_url,
+       apk_sha256 = EXCLUDED.apk_sha256,
+       apk_size_bytes = EXCLUDED.apk_size_bytes,
+       is_force_update = false,
+       requires_full_apk = EXCLUDED.requires_full_apk,
+       release_notes = EXCLUDED.release_notes,
+       updated_at = NOW()`,
+    [
+      release.id,
+      release.platform,
+      release.versionCode,
+      release.minSupportedVersionCode,
+      release.nativeVersion,
+      release.otaRuntimeVersion,
+      release.artifactKind,
+      release.artifactDownloadUrl,
+      release.artifactSha256,
+      release.artifactSizeBytes,
+      release.sourceRevision,
+      release.distributionChannel,
+      release.requiresFullApk,
+      release.releaseNotes,
+    ],
+  );
 }
 
 export async function seedDocumentationData({ connectionString, password }) {

@@ -128,6 +128,22 @@
   "notification": { "id": "10000000-0000-4000-8000-000000001201", "title": "New class announcement" },
   "auditRecord": { "id": "10000000-0000-4000-8000-000000001301", "action": "DOCUMENTATION_FIXTURE_CREATED" },
   "systemSettings": { "id": "00000000-0000-4000-8000-000000000002", "demoModeEnabled": false },
+  "mobileRelease": {
+    "id": "10000000-0000-4000-8000-000000001701",
+    "platform": "android",
+    "versionCode": 57,
+    "minSupportedVersionCode": 1,
+    "nativeVersion": "0.1.56",
+    "otaRuntimeVersion": "",
+    "artifactKind": "apk",
+    "artifactDownloadUrl": "https://example.invalid/nexora-documentation-only.apk",
+    "artifactSha256": "e5d8c1abc1935768dae5b2523bd85adf9ccab50085a7f6a516495304890495d8",
+    "artifactSizeBytes": 37663914,
+    "sourceRevision": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "distributionChannel": "offline_handoff",
+    "requiresFullApk": false,
+    "releaseNotes": "Synthetic local release policy for documentation capture only."
+  },
   "lifecycle": { "state": "OPEN", "source": "academic_system_states" },
   "maintenance": { "state": "INACTIVE", "source": "admin_maintenance_sessions" }
 }

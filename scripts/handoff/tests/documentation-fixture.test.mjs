@@ -37,6 +37,7 @@ const requiredCategories = [
   'systemSettings',
   'lifecycle',
   'maintenance',
+  'mobileRelease',
 ];
 
 test('fixture covers every manual and capture category', async () => {
@@ -76,6 +77,10 @@ test('fixture covers every manual and capture category', async () => {
   assert.ok(fixture.intervention?.guidedAssessment?.assignmentId);
   assert.ok(fixture.classRecord.scores.length >= 2);
   assert.ok(fixture.performance.snapshots.length >= 2);
+  assert.equal(fixture.mobileRelease.platform, 'android');
+  assert.equal(fixture.mobileRelease.versionCode, 57);
+  assert.equal(fixture.mobileRelease.minSupportedVersionCode, 1);
+  assert.equal(fixture.mobileRelease.requiresFullApk, false);
 });
 
 test('fixture identities remain stable when applied twice', async () => {

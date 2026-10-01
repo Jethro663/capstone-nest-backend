@@ -74,8 +74,8 @@ export async function verifyCaptureSet({
 async function main() {
   const platformIndex = process.argv.indexOf('--platform');
   const platform = platformIndex >= 0 ? process.argv[platformIndex + 1] : null;
-  if (platform !== 'web') {
-    throw new Error('Usage: node scripts/handoff/capture/verify-captures.mjs --platform web');
+  if (!['web', 'mobile'].includes(platform)) {
+    throw new Error('Usage: node scripts/handoff/capture/verify-captures.mjs --platform web|mobile');
   }
   const config = await loadHandoffConfig(repoRoot);
   const outputRoot = assertSafeOutputPath(
@@ -83,9 +83,9 @@ async function main() {
     path.join(repoRoot, 'output', config.packageName),
   );
   const [matrix, metadata] = await Promise.all([
-    readFile(path.join(path.dirname(scriptPath), 'web-capture-matrix.json'), 'utf8').then(JSON.parse),
+    readFile(path.join(path.dirname(scriptPath), `${platform}-capture-matrix.json`), 'utf8').then(JSON.parse),
     readFile(
-      path.join(outputRoot, '08-VISUALS', 'annotations', 'web-capture-metadata.json'),
+      path.join(outputRoot, '08-VISUALS', 'annotations', `${platform}-capture-metadata.json`),
       'utf8',
     ).then(JSON.parse),
   ]);

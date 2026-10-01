@@ -1,0 +1,252 @@
+[
+  {
+    "id": "mobile-auth-entry",
+    "role": "public",
+    "routes": ["Login", "VerifyEmail", "ForgotPassword", "ResetPassword", "SetInitialPassword"],
+    "captureMode": "live_emulator",
+    "title": "Mobile sign-in and account recovery",
+    "caption": "The public mobile entry point groups secure sign-in, verification, first-password setup, and account recovery.",
+    "waitFor": "Welcome to Nexora",
+    "annotations": [{ "x": 58, "y": 947, "width": 964, "height": 800, "label": "Sign-in workspace" }]
+  },
+  {
+    "id": "mobile-student-home",
+    "role": "student",
+    "routes": ["Dashboard"],
+    "captureMode": "live_emulator",
+    "title": "Learner home",
+    "caption": "The learner home page summarizes the next useful actions without requiring the learner to understand the whole system.",
+    "waitFor": "Good",
+    "annotations": [{ "x": 24, "y": 150, "width": 1032, "height": 610, "label": "What to do next" }]
+  },
+  {
+    "id": "mobile-student-classroom",
+    "role": "student",
+    "routes": ["Classes", "ClassWorkspace", "ClassDetail", "ModuleDetail", "Courses", "Lessons", "LessonDetail"],
+    "captureMode": "live_emulator",
+    "title": "Learner classes and lessons",
+    "caption": "Class, module, course, and lesson routes use the same classroom workspace and evidence-backed learning content.",
+    "waitFor": "Classes",
+    "annotations": [{ "x": 24, "y": 170, "width": 1032, "height": 1500, "label": "Class learning workspace" }]
+  },
+  {
+    "id": "mobile-student-assessments",
+    "role": "student",
+    "routes": ["Assessments", "AssessmentDetail", "AssessmentTake", "AssessmentResults", "AssessmentHistory"],
+    "captureMode": "live_emulator",
+    "title": "Learner assessments",
+    "caption": "Assessment routes cover the work list, instructions, answer flow, returned results, and attempt history.",
+    "waitFor": "Assessments",
+    "annotations": [{ "x": 24, "y": 170, "width": 1032, "height": 1500, "label": "Assessment workflow" }]
+  },
+  {
+    "id": "mobile-student-ja",
+    "role": "student",
+    "routes": ["JA", "LXP", "Chatbot", "AiTutor", "StudentGuidedAssessment", "StudentGeneratedLesson", "StudentJaReviewAssessment"],
+    "captureMode": "live_emulator",
+    "title": "Learner JA support hub",
+    "caption": "JA, guided checks, generated support lessons, and review routes remain assistive and do not replace official grades.",
+    "waitFor": "JA",
+    "annotations": [{ "x": 24, "y": 170, "width": 1032, "height": 1500, "label": "Assistive learning support" }]
+  },
+  {
+    "id": "mobile-student-organize",
+    "role": "student",
+    "routes": ["StudentCalendar", "Calendar", "Announcements", "StudentEvaluations"],
+    "captureMode": "live_emulator",
+    "title": "Learner schedule and announcements",
+    "caption": "Calendar, announcements, and evaluation routes help learners organize school activity and respond to school requests.",
+    "waitFor": "Calendar",
+    "annotations": [{ "x": 24, "y": 170, "width": 1032, "height": 1500, "label": "Schedule and notices" }]
+  },
+  {
+    "id": "mobile-student-progress",
+    "role": "student",
+    "routes": ["Performance", "Transcript", "Profile", "Notifications", "CompleteProfile"],
+    "captureMode": "live_emulator",
+    "title": "Learner progress and account",
+    "caption": "Progress, transcript, notification, and profile routes explain current evidence and account information in one family of screens.",
+    "waitFor": "Profile",
+    "annotations": [{ "x": 24, "y": 170, "width": 1032, "height": 1500, "label": "Progress and account tools" }]
+  },
+  {
+    "id": "mobile-teacher-home",
+    "role": "teacher",
+    "routes": ["Home"],
+    "captureMode": "live_emulator",
+    "title": "Teacher home",
+    "caption": "The teacher home page prioritizes classes, submissions, notices, and the next instructional actions.",
+    "waitFor": "Teacher",
+    "annotations": [{ "x": 24, "y": 150, "width": 1032, "height": 700, "label": "Teacher action summary" }]
+  },
+  {
+    "id": "mobile-teacher-classroom",
+    "role": "teacher",
+    "routes": ["Classes", "Sections", "TeacherClassDetail", "TeacherModuleDetail", "TeacherModuleFileDetail", "TeacherLessonDetail", "TeacherLessonEditor", "TeacherCreateModule", "TeacherClassAddStudents", "TeacherClassStudentOverview", "TeacherSectionDetail", "TeacherSectionAddStudents", "TeacherSectionStudentProfile"],
+    "captureMode": "live_emulator",
+    "title": "Teacher classroom workspace",
+    "caption": "Class, section, module, lesson, file, roster, and learner-detail routes share the teacher classroom workspace.",
+    "waitFor": "Classes",
+    "annotations": [{ "x": 24, "y": 170, "width": 1032, "height": 1500, "label": "Teaching workspace" }]
+  },
+  {
+    "id": "mobile-teacher-assessments",
+    "role": "teacher",
+    "routes": ["Assessments", "TeacherAssessmentDetail", "TeacherAssessmentEditor", "TeacherAssessmentReview", "TeacherAssessmentAttemptResult", "TeacherCreateAssessment"],
+    "captureMode": "live_emulator",
+    "title": "Teacher assessment workflow",
+    "caption": "Teachers create, review, edit, release, inspect, and grade assessments through this connected route family.",
+    "waitFor": "Assessments",
+    "annotations": [{ "x": 24, "y": 170, "width": 1032, "height": 1500, "label": "Assessment authoring and review" }]
+  },
+  {
+    "id": "mobile-teacher-content",
+    "role": "teacher",
+    "routes": ["TeacherCalendar", "TeacherLessons", "TeacherLibrary", "TeacherAnnouncements", "TeacherExtractionDetail", "TeacherAiDraft"],
+    "captureMode": "live_emulator",
+    "title": "Teacher content and communication",
+    "caption": "Calendar, lessons, library, announcements, extraction review, and AI draft routes support content preparation and delivery.",
+    "waitFor": "Library",
+    "annotations": [{ "x": 24, "y": 170, "width": 1032, "height": 1500, "label": "Content preparation tools" }]
+  },
+  {
+    "id": "mobile-teacher-records",
+    "role": "teacher",
+    "routes": ["TeacherClassRecord", "TeacherReports", "TeacherInterventions", "TeacherInterventionDetail", "TeacherPerformance", "TeacherEvaluations"],
+    "captureMode": "live_emulator",
+    "title": "Teacher records and intervention",
+    "caption": "Class records, reports, performance, evaluations, and intervention routes preserve academic evidence and follow-up decisions.",
+    "waitFor": "Class Record",
+    "annotations": [{ "x": 24, "y": 170, "width": 1032, "height": 1500, "label": "Academic evidence workspace" }]
+  },
+  {
+    "id": "mobile-teacher-profile",
+    "role": "teacher",
+    "routes": ["Profile", "Notifications", "CompleteProfile", "TeacherMore"],
+    "captureMode": "live_emulator",
+    "title": "Teacher profile and notifications",
+    "caption": "Teacher profile, completion, notifications, and overflow destinations keep account and supporting tools together.",
+    "waitFor": "Profile",
+    "annotations": [{ "x": 24, "y": 170, "width": 1032, "height": 1500, "label": "Account and supporting tools" }]
+  },
+  {
+    "id": "mobile-admin-home",
+    "role": "admin",
+    "routes": ["Home"],
+    "captureMode": "live_emulator",
+    "title": "Administrator home",
+    "caption": "The administrator home page summarizes school operations, academic setup, safety, and the next required actions.",
+    "waitFor": "Admin",
+    "annotations": [{ "x": 24, "y": 150, "width": 1032, "height": 700, "label": "School operations summary" }]
+  },
+  {
+    "id": "mobile-admin-people",
+    "role": "admin",
+    "routes": ["AdminUsers", "AdminSections", "AdminClasses", "AdminRoster", "Classes", "AdminStudentReadiness", "AdminLifecycleReview", "AdminCreateUser", "AdminUserDetail", "AdminSectionDetail", "TeacherClassDetail", "TeacherSectionDetail", "TeacherSectionAddStudents", "TeacherSectionStudentProfile", "TeacherClassAddStudents", "TeacherClassStudentOverview"],
+    "captureMode": "live_emulator",
+    "title": "Administrator people and classes",
+    "caption": "User, roster, section, class, readiness, and lifecycle routes provide governed people and enrollment administration.",
+    "waitFor": "Users",
+    "annotations": [{ "x": 24, "y": 170, "width": 1032, "height": 1500, "label": "People and class administration" }]
+  },
+  {
+    "id": "mobile-admin-academic",
+    "role": "admin",
+    "routes": ["Assessments", "Academic", "AdminTemplates", "AdminAcademic", "AdminSettingsAcademicYear", "AdminSettingsAssessmentsGrading", "AdminSettingsYearTransition", "AdminSettingsLearnerCompletion", "AdminClassRecord", "AdminUserReports", "AdminTemplateDetail", "TeacherAssessmentDetail", "TeacherAssessmentEditor", "TeacherAssessmentReview", "TeacherAssessmentAttemptResult", "TeacherModuleDetail", "TeacherLessonDetail", "TeacherLessonEditor", "TeacherLessons", "TeacherCreateModule", "TeacherCreateAssessment", "TeacherModuleFileDetail", "TeacherClassRecord"],
+    "captureMode": "live_emulator",
+    "title": "Administrator academic governance",
+    "caption": "Academic year, assessment, template, record, module, and lesson routes let administrators review governed academic state.",
+    "waitFor": "Academic",
+    "annotations": [{ "x": 24, "y": 170, "width": 1032, "height": 1500, "label": "Academic governance" }]
+  },
+  {
+    "id": "mobile-admin-content",
+    "role": "admin",
+    "routes": ["AdminCalendar", "AdminLibrary", "AdminAnnouncements", "AdminReports", "AdminEvaluations", "AdminChatbot", "TeacherCalendar", "TeacherExtractionDetail", "TeacherAiDraft", "TeacherInterventionDetail", "TeacherLibrary", "TeacherReports", "TeacherInterventions", "TeacherPerformance", "TeacherEvaluations", "TeacherAnnouncements"],
+    "captureMode": "live_emulator",
+    "title": "Administrator content and reporting",
+    "caption": "Calendar, library, communication, evaluation, reporting, and intervention routes support school-wide oversight.",
+    "waitFor": "Reports",
+    "annotations": [{ "x": 24, "y": 170, "width": 1032, "height": 1500, "label": "Content and reporting oversight" }]
+  },
+  {
+    "id": "mobile-admin-system",
+    "role": "admin",
+    "routes": ["AdminDiagnostics", "AdminAudit", "AdminSettings", "AdminTools", "AdminSettingsAuditRecovery", "AdminSettingsMaintenance", "AdminSettingsResetSchoolData"],
+    "captureMode": "live_emulator",
+    "title": "Administrator safety and system tools",
+    "caption": "Diagnostics, audit, recovery, maintenance, and reset routes require explicit intent and protect school records.",
+    "waitFor": "Settings",
+    "annotations": [{ "x": 24, "y": 170, "width": 1032, "height": 1500, "label": "System safety tools" }]
+  },
+  {
+    "id": "mobile-admin-profile",
+    "role": "admin",
+    "routes": ["Profile", "Notifications", "CompleteProfile"],
+    "captureMode": "live_emulator",
+    "title": "Administrator profile and notifications",
+    "caption": "Administrator profile, completion, and notification routes keep account status and operational notices together.",
+    "waitFor": "Profile",
+    "annotations": [{ "x": 24, "y": 170, "width": 1032, "height": 1500, "label": "Administrator account" }]
+  },
+  {
+    "id": "mobile-component-loading",
+    "role": "shared",
+    "routes": ["ComponentGallery:loading"],
+    "captureMode": "component_state",
+    "title": "Loading state",
+    "caption": "The current mobile loading components show stable placeholders while the requested data is still being prepared.",
+    "waitFor": "Loading",
+    "annotations": [{ "x": 48, "y": 320, "width": 984, "height": 720, "label": "Loading placeholders" }]
+  },
+  {
+    "id": "mobile-component-empty",
+    "role": "shared",
+    "routes": ["ComponentGallery:empty"],
+    "captureMode": "component_state",
+    "title": "Empty state",
+    "caption": "The current mobile empty-state component explains why a list is empty and gives a useful next action.",
+    "waitFor": "Nothing here yet",
+    "annotations": [{ "x": 48, "y": 420, "width": 984, "height": 620, "label": "Empty-state explanation" }]
+  },
+  {
+    "id": "mobile-component-error",
+    "role": "shared",
+    "routes": ["ComponentGallery:error"],
+    "captureMode": "component_state",
+    "title": "Error state",
+    "caption": "The current error banner states what failed and directs the user toward a safe retry instead of a dead end.",
+    "waitFor": "could not be loaded",
+    "annotations": [{ "x": 48, "y": 420, "width": 984, "height": 360, "label": "Plain-language error" }]
+  },
+  {
+    "id": "mobile-component-success",
+    "role": "shared",
+    "routes": ["ComponentGallery:success"],
+    "captureMode": "component_state",
+    "title": "Success state",
+    "caption": "The current success banner confirms that the operation finished and makes the resulting state explicit.",
+    "waitFor": "saved successfully",
+    "annotations": [{ "x": 48, "y": 420, "width": 984, "height": 360, "label": "Completion feedback" }]
+  },
+  {
+    "id": "mobile-component-confirmation",
+    "role": "shared",
+    "routes": ["ComponentGallery:confirmation"],
+    "captureMode": "component_state",
+    "title": "Confirmation state",
+    "caption": "The current confirmation modal names the consequence and separates the cancel and confirm actions clearly.",
+    "waitFor": "Confirm archive",
+    "annotations": [{ "x": 80, "y": 720, "width": 920, "height": 700, "label": "Consequence and explicit choice" }]
+  },
+  {
+    "id": "mobile-component-offline",
+    "role": "shared",
+    "routes": ["ComponentGallery:offline"],
+    "captureMode": "component_state",
+    "title": "Offline state",
+    "caption": "The current offline notice explains that the visible data is a snapshot and that editing requires reconnection.",
+    "waitFor": "Offline snapshot",
+    "annotations": [{ "x": 48, "y": 420, "width": 984, "height": 420, "label": "Offline boundary" }]
+  }
+]

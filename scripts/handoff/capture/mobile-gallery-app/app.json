@@ -1,0 +1,11 @@
+{
+  "expo": {
+    "name": "Nexora Component Reference",
+    "slug": "nexora-component-reference",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}
