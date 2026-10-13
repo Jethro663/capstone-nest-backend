@@ -1,0 +1,4 @@
+Nexora User Manual: 144 A4 pages; 114 web page evidence owners; 25 mobile evidence owners.
+Nexora System Manual: 147 A4 pages; 43 backend modules; 485 backend handlers; 63 AI handlers; 116 tables; 55 enums; 37 migrations; 9 queues; 98 environment keys.
+All 291 manual PDF pages were rendered to PNG contact sheets and visually inspected after the final screenshot-layout repair.
+Support PDFs were rendered and visually inspected; quick-reference guides fit one page each and the complete configuration index spans five pages.

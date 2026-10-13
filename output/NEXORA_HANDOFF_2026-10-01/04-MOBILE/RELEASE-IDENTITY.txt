@@ -1,0 +1,5 @@
+Nexora Mobile
+Version: 0.1.56
+Build: 57
+Size: 37663914 bytes
+SHA-256: e5d8c1abc1935768dae5b2523bd85adf9ccab50085a7f6a516495304890495d8

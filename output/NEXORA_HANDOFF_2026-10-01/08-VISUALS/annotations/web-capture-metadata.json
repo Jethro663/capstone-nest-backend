@@ -1,0 +1,4600 @@
+[
+  {
+    "id": "complete-profile",
+    "route": "/complete-profile",
+    "requestedPath": "/complete-profile",
+    "role": "public",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(auth)/complete-profile/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:43:10.551Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/public/complete-profile.png",
+    "annotatedFile": "08-VISUALS/web/public/complete-profile-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 50,
+        "yPercent": 21,
+        "label": "Start with the page title and primary account action"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/complete-profile",
+    "consoleErrors": [],
+    "expectedConsoleErrors": [],
+    "failedApiRequests": [],
+    "expectedApiFailures": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Start with the page title and primary account action"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard",
+    "route": "/dashboard",
+    "requestedPath": "/dashboard",
+    "role": "shared",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:56:02.354Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/shared/dashboard.png",
+    "annotatedFile": "08-VISUALS/web/shared/dashboard-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin",
+    "route": "/dashboard/admin",
+    "requestedPath": "/dashboard/admin",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:56:04.819Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-academic-records-classid",
+    "route": "/dashboard/admin/academic-records/[classId]",
+    "requestedPath": "/dashboard/admin/academic-records/10000000-0000-4000-8000-000000000302",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/academic-records/[classId]/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:56:06.693Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-academic-records-classid.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-academic-records-classid-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/academic-records/10000000-0000-4000-8000-000000000302",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-access-students",
+    "route": "/dashboard/admin/access-students",
+    "requestedPath": "/dashboard/admin/access-students",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/access-students/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:56:14.945Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-access-students.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-access-students-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/access-students",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-announcements",
+    "route": "/dashboard/admin/announcements",
+    "requestedPath": "/dashboard/admin/announcements",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/announcements/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:56:17.510Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-announcements.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-announcements-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/announcements",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-audit",
+    "route": "/dashboard/admin/audit",
+    "requestedPath": "/dashboard/admin/audit",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/audit/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:56:21.786Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-audit.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-audit-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/audit",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-calendar",
+    "route": "/dashboard/admin/calendar",
+    "requestedPath": "/dashboard/admin/calendar",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/calendar/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:56:24.501Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-calendar.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-calendar-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/calendar",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-chatbot",
+    "route": "/dashboard/admin/chatbot",
+    "requestedPath": "/dashboard/admin/chatbot",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/chatbot/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:56:28.311Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-chatbot.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-chatbot-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/chatbot",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-class-record",
+    "route": "/dashboard/admin/class-record",
+    "requestedPath": "/dashboard/admin/class-record",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/class-record/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:56:34.937Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-class-record.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-class-record-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/class-record",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-class-templates",
+    "route": "/dashboard/admin/class-templates",
+    "requestedPath": "/dashboard/admin/class-templates",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/class-templates/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:56:40.223Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-class-templates.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-class-templates-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/class-templates",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-class-templates-id",
+    "route": "/dashboard/admin/class-templates/[id]",
+    "requestedPath": "/dashboard/admin/class-templates/10000000-0000-4000-8000-000000001401",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/class-templates/[id]/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:51:16.363Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-class-templates-id.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-class-templates-id-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/class-templates/10000000-0000-4000-8000-000000001401",
+    "consoleErrors": [],
+    "expectedConsoleErrors": [],
+    "failedApiRequests": [],
+    "expectedApiFailures": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-class-templates-id-announcements-announcementkey-edit",
+    "route": "/dashboard/admin/class-templates/[id]/announcements/[announcementKey]/edit",
+    "requestedPath": "/dashboard/admin/class-templates/10000000-0000-4000-8000-000000001401/announcements/idx-0/edit",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/class-templates/[id]/announcements/[announcementKey]/edit/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:43:40.773Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-class-templates-id-announcements-announcementkey-edit.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-class-templates-id-announcements-announcementkey-edit-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/class-templates/10000000-0000-4000-8000-000000001401/announcements/idx-0/edit",
+    "consoleErrors": [],
+    "expectedConsoleErrors": [],
+    "failedApiRequests": [],
+    "expectedApiFailures": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-class-templates-id-announcements-new",
+    "route": "/dashboard/admin/class-templates/[id]/announcements/new",
+    "requestedPath": "/dashboard/admin/class-templates/10000000-0000-4000-8000-000000001401/announcements/new",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/class-templates/[id]/announcements/new/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:43:46.828Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-class-templates-id-announcements-new.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-class-templates-id-announcements-new-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/class-templates/10000000-0000-4000-8000-000000001401/announcements/new",
+    "consoleErrors": [],
+    "expectedConsoleErrors": [],
+    "failedApiRequests": [],
+    "expectedApiFailures": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-class-templates-id-assessments-assessmentkey-edit",
+    "route": "/dashboard/admin/class-templates/[id]/assessments/[assessmentKey]/edit",
+    "requestedPath": "/dashboard/admin/class-templates/10000000-0000-4000-8000-000000001401/assessments/idx-0/edit",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/class-templates/[id]/assessments/[assessmentKey]/edit/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:43:50.766Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-class-templates-id-assessments-assessmentkey-edit.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-class-templates-id-assessments-assessmentkey-edit-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/class-templates/10000000-0000-4000-8000-000000001401/assessments/idx-0/edit",
+    "consoleErrors": [],
+    "expectedConsoleErrors": [],
+    "failedApiRequests": [],
+    "expectedApiFailures": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-class-templates-id-lessons-lessonkey-edit",
+    "route": "/dashboard/admin/class-templates/[id]/lessons/[lessonKey]/edit",
+    "requestedPath": "/dashboard/admin/class-templates/10000000-0000-4000-8000-000000001401/lessons/m0-s0-i0/edit",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/class-templates/[id]/lessons/[lessonKey]/edit/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:44:13.261Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-class-templates-id-lessons-lessonkey-edit.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-class-templates-id-lessons-lessonkey-edit-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/class-templates/10000000-0000-4000-8000-000000001401/lessons/m0-s0-i0/edit",
+    "consoleErrors": [],
+    "expectedConsoleErrors": [],
+    "failedApiRequests": [],
+    "expectedApiFailures": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-class-templates-id-modules-modulekey",
+    "route": "/dashboard/admin/class-templates/[id]/modules/[moduleKey]",
+    "requestedPath": "/dashboard/admin/class-templates/10000000-0000-4000-8000-000000001401/modules/idx-0",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/class-templates/[id]/modules/[moduleKey]/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:44:22.058Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-class-templates-id-modules-modulekey.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-class-templates-id-modules-modulekey-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/class-templates/10000000-0000-4000-8000-000000001401/modules/idx-0",
+    "consoleErrors": [],
+    "expectedConsoleErrors": [],
+    "failedApiRequests": [],
+    "expectedApiFailures": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-classes",
+    "route": "/dashboard/admin/classes",
+    "requestedPath": "/dashboard/admin/classes",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/classes/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:56:44.011Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-classes.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-classes-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/classes",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-classes-id",
+    "route": "/dashboard/admin/classes/[id]",
+    "requestedPath": "/dashboard/admin/classes/10000000-0000-4000-8000-000000000302",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/classes/[id]/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:56:48.537Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-classes-id.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-classes-id-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/classes/10000000-0000-4000-8000-000000000302",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-classes-id-edit",
+    "route": "/dashboard/admin/classes/[id]/edit",
+    "requestedPath": "/dashboard/admin/classes/10000000-0000-4000-8000-000000000302/edit",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/classes/[id]/edit/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:56:52.356Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-classes-id-edit.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-classes-id-edit-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/classes/10000000-0000-4000-8000-000000000302/edit",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-classes-id-students-add",
+    "route": "/dashboard/admin/classes/[id]/students/add",
+    "requestedPath": "/dashboard/admin/classes/10000000-0000-4000-8000-000000000302/students/add",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/classes/[id]/students/add/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:56:56.296Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-classes-id-students-add.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-classes-id-students-add-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/classes/10000000-0000-4000-8000-000000000302/students/add",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-classes-new",
+    "route": "/dashboard/admin/classes/new",
+    "requestedPath": "/dashboard/admin/classes/new",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/classes/new/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:57:00.672Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-classes-new.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-classes-new-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/classes/new",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-diagnostics",
+    "route": "/dashboard/admin/diagnostics",
+    "requestedPath": "/dashboard/admin/diagnostics",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/diagnostics/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:57:03.895Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-diagnostics.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-diagnostics-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/diagnostics",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-evaluations",
+    "route": "/dashboard/admin/evaluations",
+    "requestedPath": "/dashboard/admin/evaluations",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/evaluations/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:57:06.820Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-evaluations.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-evaluations-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/evaluations",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-library",
+    "route": "/dashboard/admin/library",
+    "requestedPath": "/dashboard/admin/library",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/library/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:57:10.223Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-library.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-library-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/library",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-profile",
+    "route": "/dashboard/admin/profile",
+    "requestedPath": "/dashboard/admin/profile",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/profile/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:57:13.319Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-profile.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-profile-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/profile",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-reports",
+    "route": "/dashboard/admin/reports",
+    "requestedPath": "/dashboard/admin/reports",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/reports/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:57:17.221Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-reports.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-reports-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/reports",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-roster-import",
+    "route": "/dashboard/admin/roster-import",
+    "requestedPath": "/dashboard/admin/roster-import",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/roster-import/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:57:28.835Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-roster-import.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-roster-import-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/roster-import",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-sections",
+    "route": "/dashboard/admin/sections",
+    "requestedPath": "/dashboard/admin/sections",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/sections/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:57:43.413Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-sections.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-sections-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/sections",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-sections-id-edit",
+    "route": "/dashboard/admin/sections/[id]/edit",
+    "requestedPath": "/dashboard/admin/sections/10000000-0000-4000-8000-000000000301/edit",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/sections/[id]/edit/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:57:48.698Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-sections-id-edit.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-sections-id-edit-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/sections/10000000-0000-4000-8000-000000000301/edit",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-sections-id-roster",
+    "route": "/dashboard/admin/sections/[id]/roster",
+    "requestedPath": "/dashboard/admin/sections/10000000-0000-4000-8000-000000000301/roster",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/sections/[id]/roster/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:57:53.401Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-sections-id-roster.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-sections-id-roster-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/sections/10000000-0000-4000-8000-000000000301/roster",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-sections-id-students",
+    "route": "/dashboard/admin/sections/[id]/students",
+    "requestedPath": "/dashboard/admin/sections/10000000-0000-4000-8000-000000000301/students/add",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/sections/[id]/students/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:26:07.455Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-sections-id-students.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-sections-id-students-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/sections/10000000-0000-4000-8000-000000000301/students/add",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-sections-id-students-add",
+    "route": "/dashboard/admin/sections/[id]/students/add",
+    "requestedPath": "/dashboard/admin/sections/10000000-0000-4000-8000-000000000301/students/add",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/sections/[id]/students/add/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:58:03.988Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-sections-id-students-add.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-sections-id-students-add-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/sections/10000000-0000-4000-8000-000000000301/students/add",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-sections-new",
+    "route": "/dashboard/admin/sections/new",
+    "requestedPath": "/dashboard/admin/sections/new",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/sections/new/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:58:05.885Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-sections-new.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-sections-new-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/sections/new",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-system-settings",
+    "route": "/dashboard/admin/system-settings",
+    "requestedPath": "/dashboard/admin/system-settings",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/system-settings/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:58:09.330Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-system-settings.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-system-settings-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/system-settings",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-system-settings-academic-year",
+    "route": "/dashboard/admin/system-settings/academic-year",
+    "requestedPath": "/dashboard/admin/system-settings/academic-year",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/system-settings/academic-year/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:58:14.215Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-system-settings-academic-year.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-system-settings-academic-year-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/system-settings/academic-year",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-system-settings-assessments-grading",
+    "route": "/dashboard/admin/system-settings/assessments-grading",
+    "requestedPath": "/dashboard/admin/system-settings/assessments-grading",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/system-settings/assessments-grading/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:58:17.133Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-system-settings-assessments-grading.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-system-settings-assessments-grading-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/system-settings/assessments-grading",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-system-settings-audit-recovery",
+    "route": "/dashboard/admin/system-settings/audit-recovery",
+    "requestedPath": "/dashboard/admin/system-settings/audit-recovery",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/system-settings/audit-recovery/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:58:20.424Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-system-settings-audit-recovery.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-system-settings-audit-recovery-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/system-settings/audit-recovery",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-system-settings-demo-mode",
+    "route": "/dashboard/admin/system-settings/demo-mode",
+    "requestedPath": "/dashboard/admin/system-settings/demo-mode",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/system-settings/demo-mode/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:58:23.262Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-system-settings-demo-mode.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-system-settings-demo-mode-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/system-settings/demo-mode",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-system-settings-learner-completion",
+    "route": "/dashboard/admin/system-settings/learner-completion",
+    "requestedPath": "/dashboard/admin/system-settings/learner-completion",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/system-settings/learner-completion/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:58:26.733Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-system-settings-learner-completion.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-system-settings-learner-completion-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/system-settings/learner-completion",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-system-settings-maintenance-access",
+    "route": "/dashboard/admin/system-settings/maintenance-access",
+    "requestedPath": "/dashboard/admin/system-settings/maintenance-access",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/system-settings/maintenance-access/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:58:32.728Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-system-settings-maintenance-access.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-system-settings-maintenance-access-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/system-settings/maintenance-access",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-system-settings-reset-school-data",
+    "route": "/dashboard/admin/system-settings/reset-school-data",
+    "requestedPath": "/dashboard/admin/system-settings/reset-school-data",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/system-settings/reset-school-data/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:58:34.141Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-system-settings-reset-school-data.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-system-settings-reset-school-data-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/system-settings/reset-school-data",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-system-settings-year-transition",
+    "route": "/dashboard/admin/system-settings/year-transition",
+    "requestedPath": "/dashboard/admin/system-settings/year-transition",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/system-settings/year-transition/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:58:37.221Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-system-settings-year-transition.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-system-settings-year-transition-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/system-settings/year-transition",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-user-reports",
+    "route": "/dashboard/admin/user-reports",
+    "requestedPath": "/dashboard/admin/user-reports",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/user-reports/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:58:41.931Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-user-reports.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-user-reports-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/user-reports",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-users",
+    "route": "/dashboard/admin/users",
+    "requestedPath": "/dashboard/admin/users",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/users/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:58:47.161Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-users.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-users-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/users",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-users-create",
+    "route": "/dashboard/admin/users/create",
+    "requestedPath": "/dashboard/admin/users/create",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/users/create/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:58:55.800Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-users-create.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-users-create-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/users/create",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-admin-users-id",
+    "route": "/dashboard/admin/users/[id]",
+    "requestedPath": "/dashboard/admin/users/10000000-0000-4000-8000-000000000103",
+    "role": "admin",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/admin/users/[id]/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:58:51.527Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/admin/dashboard-admin-users-id.png",
+    "annotatedFile": "08-VISUALS/web/admin/dashboard-admin-users-id-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/admin/users/10000000-0000-4000-8000-000000000103",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-library",
+    "route": "/dashboard/library",
+    "requestedPath": "/dashboard/library",
+    "role": "shared",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/library/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:59:00.565Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/shared/dashboard-library.png",
+    "annotatedFile": "08-VISUALS/web/shared/dashboard-library-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/library",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-notifications",
+    "route": "/dashboard/notifications",
+    "requestedPath": "/dashboard/notifications",
+    "role": "shared",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/notifications/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:59:04.194Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/shared/dashboard-notifications.png",
+    "annotatedFile": "08-VISUALS/web/shared/dashboard-notifications-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/notifications",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-profile",
+    "route": "/dashboard/profile",
+    "requestedPath": "/dashboard/profile",
+    "role": "shared",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/profile/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:59:12.079Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/shared/dashboard-profile.png",
+    "annotatedFile": "08-VISUALS/web/shared/dashboard-profile-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/profile",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-student",
+    "route": "/dashboard/student",
+    "requestedPath": "/dashboard/student",
+    "role": "student",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:59:17.787Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/student/dashboard-student.png",
+    "annotatedFile": "08-VISUALS/web/student/dashboard-student-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 52,
+        "yPercent": 26,
+        "label": "Read the first-login guide before using the learner dashboard"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/student",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Read the first-login guide before using the learner dashboard"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-student-announcements",
+    "route": "/dashboard/student/announcements",
+    "requestedPath": "/dashboard/student/announcements",
+    "role": "student",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/announcements/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:59:30.613Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/student/dashboard-student-announcements.png",
+    "annotatedFile": "08-VISUALS/web/student/dashboard-student-announcements-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/student/announcements",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-student-assessment-history",
+    "route": "/dashboard/student/assessment-history",
+    "requestedPath": "/dashboard/student/assessment-history",
+    "role": "student",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/assessment-history/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:59:35.392Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/student/dashboard-student-assessment-history.png",
+    "annotatedFile": "08-VISUALS/web/student/dashboard-student-assessment-history-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/student/assessment-history",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-student-assessments",
+    "route": "/dashboard/student/assessments",
+    "requestedPath": "/dashboard/student/assessments",
+    "role": "student",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/assessments/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:59:40.699Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/student/dashboard-student-assessments.png",
+    "annotatedFile": "08-VISUALS/web/student/dashboard-student-assessments-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/student/assessments",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-student-assessments-id",
+    "route": "/dashboard/student/assessments/[id]",
+    "requestedPath": "/dashboard/student/assessments/10000000-0000-4000-8000-000000000501",
+    "role": "student",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/assessments/[id]/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:59:44.490Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/student/dashboard-student-assessments-id.png",
+    "annotatedFile": "08-VISUALS/web/student/dashboard-student-assessments-id-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/student/assessments/10000000-0000-4000-8000-000000000501",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-student-assessments-id-results-attemptid",
+    "route": "/dashboard/student/assessments/[id]/results/[attemptId]",
+    "requestedPath": "/dashboard/student/assessments/10000000-0000-4000-8000-000000000501/results/10000000-0000-4000-8000-000000000505",
+    "role": "student",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/assessments/[id]/results/[attemptId]/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:59:50.439Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/student/dashboard-student-assessments-id-results-attemptid.png",
+    "annotatedFile": "08-VISUALS/web/student/dashboard-student-assessments-id-results-attemptid-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/student/assessments/10000000-0000-4000-8000-000000000501/results/10000000-0000-4000-8000-000000000505",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-student-assessments-id-take",
+    "route": "/dashboard/student/assessments/[id]/take",
+    "requestedPath": "/dashboard/student/assessments/10000000-0000-4000-8000-000000000501/take",
+    "role": "student",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/assessments/[id]/take/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:59:56.462Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/student/dashboard-student-assessments-id-take.png",
+    "annotatedFile": "08-VISUALS/web/student/dashboard-student-assessments-id-take-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/student/assessments/10000000-0000-4000-8000-000000000501/take",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-student-calendar",
+    "route": "/dashboard/student/calendar",
+    "requestedPath": "/dashboard/student/calendar",
+    "role": "student",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/calendar/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:00:01.708Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/student/dashboard-student-calendar.png",
+    "annotatedFile": "08-VISUALS/web/student/dashboard-student-calendar-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/student/calendar",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-student-chatbot",
+    "route": "/dashboard/student/chatbot",
+    "requestedPath": "/dashboard/student/chatbot",
+    "role": "student",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/chatbot/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:00:06.667Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/student/dashboard-student-chatbot.png",
+    "annotatedFile": "08-VISUALS/web/student/dashboard-student-chatbot-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/student/chatbot",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-student-classes",
+    "route": "/dashboard/student/classes",
+    "requestedPath": "/dashboard/student/classes",
+    "role": "student",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/classes/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:00:10.603Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/student/dashboard-student-classes.png",
+    "annotatedFile": "08-VISUALS/web/student/dashboard-student-classes-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/student/classes",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-student-classes-id",
+    "route": "/dashboard/student/classes/[id]",
+    "requestedPath": "/dashboard/student/classes/10000000-0000-4000-8000-000000000302",
+    "role": "student",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/classes/[id]/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:00:19.554Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/student/dashboard-student-classes-id.png",
+    "annotatedFile": "08-VISUALS/web/student/dashboard-student-classes-id-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/student/classes/10000000-0000-4000-8000-000000000302",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-student-classes-id-modules-moduleid",
+    "route": "/dashboard/student/classes/[id]/modules/[moduleId]",
+    "requestedPath": "/dashboard/student/classes/10000000-0000-4000-8000-000000000302/modules/10000000-0000-4000-8000-000000000402",
+    "role": "student",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/classes/[id]/modules/[moduleId]/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:26:09.086Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/student/dashboard-student-classes-id-modules-moduleid.png",
+    "annotatedFile": "08-VISUALS/web/student/dashboard-student-classes-id-modules-moduleid-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/student/classes/10000000-0000-4000-8000-000000000302/modules/10000000-0000-4000-8000-000000000402",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-student-courses",
+    "route": "/dashboard/student/courses",
+    "requestedPath": "/dashboard/student/courses",
+    "role": "student",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/courses/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:00:42.029Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/student/dashboard-student-courses.png",
+    "annotatedFile": "08-VISUALS/web/student/dashboard-student-courses-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/student/courses",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-student-evaluations",
+    "route": "/dashboard/student/evaluations",
+    "requestedPath": "/dashboard/student/evaluations",
+    "role": "student",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/evaluations/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:00:43.862Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/student/dashboard-student-evaluations.png",
+    "annotatedFile": "08-VISUALS/web/student/dashboard-student-evaluations-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/student/evaluations",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-student-ja",
+    "route": "/dashboard/student/ja",
+    "requestedPath": "/dashboard/student/ja",
+    "role": "student",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/ja/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:00:54.797Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/student/dashboard-student-ja.png",
+    "annotatedFile": "08-VISUALS/web/student/dashboard-student-ja-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/student/ja",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-student-lessons",
+    "route": "/dashboard/student/lessons",
+    "requestedPath": "/dashboard/student/lessons",
+    "role": "student",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/lessons/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:00:56.527Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/student/dashboard-student-lessons.png",
+    "annotatedFile": "08-VISUALS/web/student/dashboard-student-lessons-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/student/lessons",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-student-lessons-id",
+    "route": "/dashboard/student/lessons/[id]",
+    "requestedPath": "/dashboard/student/lessons/10000000-0000-4000-8000-000000000401",
+    "role": "student",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/lessons/[id]/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:24:38.518Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/student/dashboard-student-lessons-id.png",
+    "annotatedFile": "08-VISUALS/web/student/dashboard-student-lessons-id-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/student/lessons/10000000-0000-4000-8000-000000000401",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-student-lxp",
+    "route": "/dashboard/student/lxp",
+    "requestedPath": "/dashboard/student/lxp",
+    "role": "student",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/lxp/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:01:23.016Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/student/dashboard-student-lxp.png",
+    "annotatedFile": "08-VISUALS/web/student/dashboard-student-lxp-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/student/lxp",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-student-lxp-classid",
+    "route": "/dashboard/student/lxp/[classId]",
+    "requestedPath": "/dashboard/student/lxp/10000000-0000-4000-8000-000000000302",
+    "role": "student",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/lxp/[classId]/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:26:54.379Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/student/dashboard-student-lxp-classid.png",
+    "annotatedFile": "08-VISUALS/web/student/dashboard-student-lxp-classid-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/student/lxp/10000000-0000-4000-8000-000000000302",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-student-lxp-classid-generated-lessons-assignmentid",
+    "route": "/dashboard/student/lxp/[classId]/generated-lessons/[assignmentId]",
+    "requestedPath": "/dashboard/student/lxp/10000000-0000-4000-8000-000000000302/generated-lessons/10000000-0000-4000-8000-000000001602",
+    "role": "student",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/lxp/[classId]/generated-lessons/[assignmentId]/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:44:31.422Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/student/dashboard-student-lxp-classid-generated-lessons-assignmentid.png",
+    "annotatedFile": "08-VISUALS/web/student/dashboard-student-lxp-classid-generated-lessons-assignmentid-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/student/lxp/10000000-0000-4000-8000-000000000302/generated-lessons/10000000-0000-4000-8000-000000001602",
+    "consoleErrors": [],
+    "expectedConsoleErrors": [],
+    "failedApiRequests": [],
+    "expectedApiFailures": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-student-lxp-classid-guided-assessment-assignmentid",
+    "route": "/dashboard/student/lxp/[classId]/guided-assessment/[assignmentId]",
+    "requestedPath": "/dashboard/student/lxp/10000000-0000-4000-8000-000000000302/guided-assessment/10000000-0000-4000-8000-000000001604",
+    "role": "student",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/lxp/[classId]/guided-assessment/[assignmentId]/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:48:21.877Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/student/dashboard-student-lxp-classid-guided-assessment-assignmentid.png",
+    "annotatedFile": "08-VISUALS/web/student/dashboard-student-lxp-classid-guided-assessment-assignmentid-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/student/lxp/10000000-0000-4000-8000-000000000302/guided-assessment/10000000-0000-4000-8000-000000001604",
+    "consoleErrors": [],
+    "expectedConsoleErrors": [],
+    "failedApiRequests": [],
+    "expectedApiFailures": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-student-performance",
+    "route": "/dashboard/student/performance",
+    "requestedPath": "/dashboard/student/performance",
+    "role": "student",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/performance/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:01:33.412Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/student/dashboard-student-performance.png",
+    "annotatedFile": "08-VISUALS/web/student/dashboard-student-performance-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/student/performance",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-student-profile",
+    "route": "/dashboard/student/profile",
+    "requestedPath": "/dashboard/student/profile",
+    "role": "student",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/profile/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:01:39.573Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/student/dashboard-student-profile.png",
+    "annotatedFile": "08-VISUALS/web/student/dashboard-student-profile-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/student/profile",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-student-transcript",
+    "route": "/dashboard/student/transcript",
+    "requestedPath": "/dashboard/student/transcript",
+    "role": "student",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/student/transcript/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:01:44.604Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/student/dashboard-student-transcript.png",
+    "annotatedFile": "08-VISUALS/web/student/dashboard-student-transcript-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/student/transcript",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-teacher",
+    "route": "/dashboard/teacher",
+    "requestedPath": "/dashboard/teacher/dashboard",
+    "role": "teacher",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:27:24.443Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/teacher/dashboard-teacher.png",
+    "annotatedFile": "08-VISUALS/web/teacher/dashboard-teacher-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/teacher/dashboard",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-teacher-announcements",
+    "route": "/dashboard/teacher/announcements",
+    "requestedPath": "/dashboard/teacher/announcements",
+    "role": "teacher",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/announcements/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:27:29.570Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/teacher/dashboard-teacher-announcements.png",
+    "annotatedFile": "08-VISUALS/web/teacher/dashboard-teacher-announcements-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/teacher/announcements",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-teacher-assessments",
+    "route": "/dashboard/teacher/assessments",
+    "requestedPath": "/dashboard/teacher/assessments",
+    "role": "teacher",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/assessments/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:27:38.852Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/teacher/dashboard-teacher-assessments.png",
+    "annotatedFile": "08-VISUALS/web/teacher/dashboard-teacher-assessments-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/teacher/assessments",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-teacher-assessments-id",
+    "route": "/dashboard/teacher/assessments/[id]",
+    "requestedPath": "/dashboard/teacher/assessments/10000000-0000-4000-8000-000000000501",
+    "role": "teacher",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/assessments/[id]/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:27:41.940Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/teacher/dashboard-teacher-assessments-id.png",
+    "annotatedFile": "08-VISUALS/web/teacher/dashboard-teacher-assessments-id-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/teacher/assessments/10000000-0000-4000-8000-000000000501",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-teacher-assessments-id-edit",
+    "route": "/dashboard/teacher/assessments/[id]/edit",
+    "requestedPath": "/dashboard/teacher/assessments/10000000-0000-4000-8000-000000000501/edit",
+    "role": "teacher",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/assessments/[id]/edit/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:27:56.421Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/teacher/dashboard-teacher-assessments-id-edit.png",
+    "annotatedFile": "08-VISUALS/web/teacher/dashboard-teacher-assessments-id-edit-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/teacher/assessments/10000000-0000-4000-8000-000000000501/edit",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-teacher-assessments-id-results-attemptid",
+    "route": "/dashboard/teacher/assessments/[id]/results/[attemptId]",
+    "requestedPath": "/dashboard/teacher/assessments/10000000-0000-4000-8000-000000000501/results/10000000-0000-4000-8000-000000000505",
+    "role": "teacher",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/assessments/[id]/results/[attemptId]/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:28:02.465Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/teacher/dashboard-teacher-assessments-id-results-attemptid.png",
+    "annotatedFile": "08-VISUALS/web/teacher/dashboard-teacher-assessments-id-results-attemptid-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/teacher/assessments/10000000-0000-4000-8000-000000000501/results/10000000-0000-4000-8000-000000000505",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-teacher-calendar",
+    "route": "/dashboard/teacher/calendar",
+    "requestedPath": "/dashboard/teacher/calendar",
+    "role": "teacher",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/calendar/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:28:07.933Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/teacher/dashboard-teacher-calendar.png",
+    "annotatedFile": "08-VISUALS/web/teacher/dashboard-teacher-calendar-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/teacher/calendar",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-teacher-class-record",
+    "route": "/dashboard/teacher/class-record",
+    "requestedPath": "/dashboard/teacher/class-record",
+    "role": "teacher",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/class-record/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:28:11.972Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/teacher/dashboard-teacher-class-record.png",
+    "annotatedFile": "08-VISUALS/web/teacher/dashboard-teacher-class-record-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/teacher/class-record",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-teacher-classes",
+    "route": "/dashboard/teacher/classes",
+    "requestedPath": "/dashboard/teacher/classes",
+    "role": "teacher",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/classes/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:28:15.742Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/teacher/dashboard-teacher-classes.png",
+    "annotatedFile": "08-VISUALS/web/teacher/dashboard-teacher-classes-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/teacher/classes",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-teacher-classes-id",
+    "route": "/dashboard/teacher/classes/[id]",
+    "requestedPath": "/dashboard/teacher/classes/10000000-0000-4000-8000-000000000302",
+    "role": "teacher",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/classes/[id]/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:28:18.612Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/teacher/dashboard-teacher-classes-id.png",
+    "annotatedFile": "08-VISUALS/web/teacher/dashboard-teacher-classes-id-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/teacher/classes/10000000-0000-4000-8000-000000000302",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-teacher-classes-id-ai-draft",
+    "route": "/dashboard/teacher/classes/[id]/ai-draft",
+    "requestedPath": "/dashboard/teacher/classes/10000000-0000-4000-8000-000000000302/ai-draft",
+    "role": "teacher",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/classes/[id]/ai-draft/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:31:31.349Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/teacher/dashboard-teacher-classes-id-ai-draft.png",
+    "annotatedFile": "08-VISUALS/web/teacher/dashboard-teacher-classes-id-ai-draft-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/teacher/classes/10000000-0000-4000-8000-000000000302/ai-draft",
+    "consoleErrors": [],
+    "expectedConsoleErrors": [
+      "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+      "Failed to load resource: the server responded with a status of 503 (Service Unavailable)"
+    ],
+    "failedApiRequests": [],
+    "expectedApiFailures": [
+      {
+        "status": 503,
+        "url": "http://127.0.0.1:3001/api/ai/index/classes/10000000-0000-4000-8000-000000000302/status"
+      },
+      {
+        "status": 503,
+        "url": "http://127.0.0.1:3001/api/ai/index/classes/10000000-0000-4000-8000-000000000302/status"
+      }
+    ],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-teacher-classes-id-modules-moduleid",
+    "route": "/dashboard/teacher/classes/[id]/modules/[moduleId]",
+    "requestedPath": "/dashboard/teacher/classes/10000000-0000-4000-8000-000000000302/modules/10000000-0000-4000-8000-000000000402",
+    "role": "teacher",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/classes/[id]/modules/[moduleId]/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:26:11.078Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/teacher/dashboard-teacher-classes-id-modules-moduleid.png",
+    "annotatedFile": "08-VISUALS/web/teacher/dashboard-teacher-classes-id-modules-moduleid-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/teacher/classes/10000000-0000-4000-8000-000000000302/modules/10000000-0000-4000-8000-000000000402",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-teacher-classes-id-modules-moduleid-files-fileid",
+    "route": "/dashboard/teacher/classes/[id]/modules/[moduleId]/files/[fileId]",
+    "requestedPath": "/dashboard/teacher/classes/10000000-0000-4000-8000-000000000302/modules/10000000-0000-4000-8000-000000000402/files/10000000-0000-4000-8000-000000001501",
+    "role": "teacher",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/classes/[id]/modules/[moduleId]/files/[fileId]/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:44:47.185Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/teacher/dashboard-teacher-classes-id-modules-moduleid-files-fileid.png",
+    "annotatedFile": "08-VISUALS/web/teacher/dashboard-teacher-classes-id-modules-moduleid-files-fileid-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/teacher/classes/10000000-0000-4000-8000-000000000302/modules/10000000-0000-4000-8000-000000000402/files/10000000-0000-4000-8000-000000001501",
+    "consoleErrors": [],
+    "expectedConsoleErrors": [],
+    "failedApiRequests": [],
+    "expectedApiFailures": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-teacher-classes-id-students-add",
+    "route": "/dashboard/teacher/classes/[id]/students/add",
+    "requestedPath": "/dashboard/teacher/classes/10000000-0000-4000-8000-000000000302/students/add",
+    "role": "teacher",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/classes/[id]/students/add/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:28:39.291Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/teacher/dashboard-teacher-classes-id-students-add.png",
+    "annotatedFile": "08-VISUALS/web/teacher/dashboard-teacher-classes-id-students-add-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/teacher/classes/10000000-0000-4000-8000-000000000302/students/add",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-teacher-classes-id-students-studentid",
+    "route": "/dashboard/teacher/classes/[id]/students/[studentId]",
+    "requestedPath": "/dashboard/teacher/classes/10000000-0000-4000-8000-000000000302/students/10000000-0000-4000-8000-000000000103",
+    "role": "teacher",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/classes/[id]/students/[studentId]/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:28:33.373Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/teacher/dashboard-teacher-classes-id-students-studentid.png",
+    "annotatedFile": "08-VISUALS/web/teacher/dashboard-teacher-classes-id-students-studentid-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/teacher/classes/10000000-0000-4000-8000-000000000302/students/10000000-0000-4000-8000-000000000103",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-teacher-dashboard",
+    "route": "/dashboard/teacher/dashboard",
+    "requestedPath": "/dashboard/teacher/dashboard",
+    "role": "teacher",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/dashboard/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:23:45.875Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/teacher/dashboard-teacher-dashboard.png",
+    "annotatedFile": "08-VISUALS/web/teacher/dashboard-teacher-dashboard-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/teacher/dashboard",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-teacher-evaluations",
+    "route": "/dashboard/teacher/evaluations",
+    "requestedPath": "/dashboard/teacher/evaluations",
+    "role": "teacher",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/evaluations/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:28:43.004Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/teacher/dashboard-teacher-evaluations.png",
+    "annotatedFile": "08-VISUALS/web/teacher/dashboard-teacher-evaluations-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/teacher/evaluations",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-teacher-extractions-id",
+    "route": "/dashboard/teacher/extractions/[id]",
+    "requestedPath": "/dashboard/teacher/extractions/10000000-0000-4000-8000-000000001503",
+    "role": "teacher",
+    "captureMode": "component-render",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/extractions/[id]/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:48:27.834Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/teacher/dashboard-teacher-extractions-id.png",
+    "annotatedFile": "08-VISUALS/web/teacher/dashboard-teacher-extractions-id-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/teacher/extractions/10000000-0000-4000-8000-000000001503",
+    "consoleErrors": [],
+    "expectedConsoleErrors": [],
+    "failedApiRequests": [],
+    "expectedApiFailures": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-teacher-interventions",
+    "route": "/dashboard/teacher/interventions",
+    "requestedPath": "/dashboard/teacher/interventions",
+    "role": "teacher",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/interventions/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:28:48.832Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/teacher/dashboard-teacher-interventions.png",
+    "annotatedFile": "08-VISUALS/web/teacher/dashboard-teacher-interventions-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/teacher/interventions",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-teacher-interventions-caseid",
+    "route": "/dashboard/teacher/interventions/[caseId]",
+    "requestedPath": "/dashboard/teacher/interventions/10000000-0000-4000-8000-000000000801",
+    "role": "teacher",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/interventions/[caseId]/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:28:52.546Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/teacher/dashboard-teacher-interventions-caseid.png",
+    "annotatedFile": "08-VISUALS/web/teacher/dashboard-teacher-interventions-caseid-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/teacher/interventions/10000000-0000-4000-8000-000000000801",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-teacher-lessons",
+    "route": "/dashboard/teacher/lessons",
+    "requestedPath": "/dashboard/teacher/lessons",
+    "role": "teacher",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/lessons/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:28:57.863Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/teacher/dashboard-teacher-lessons.png",
+    "annotatedFile": "08-VISUALS/web/teacher/dashboard-teacher-lessons-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/teacher/lessons",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-teacher-lessons-id-edit",
+    "route": "/dashboard/teacher/lessons/[id]/edit",
+    "requestedPath": "/dashboard/teacher/lessons/10000000-0000-4000-8000-000000000401/edit",
+    "role": "teacher",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/lessons/[id]/edit/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:29:03.726Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/teacher/dashboard-teacher-lessons-id-edit.png",
+    "annotatedFile": "08-VISUALS/web/teacher/dashboard-teacher-lessons-id-edit-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/teacher/lessons/10000000-0000-4000-8000-000000000401/edit",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-teacher-lessons-id-view",
+    "route": "/dashboard/teacher/lessons/[id]/view",
+    "requestedPath": "/dashboard/teacher/lessons/10000000-0000-4000-8000-000000000401/view",
+    "role": "teacher",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/lessons/[id]/view/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:29:08.143Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/teacher/dashboard-teacher-lessons-id-view.png",
+    "annotatedFile": "08-VISUALS/web/teacher/dashboard-teacher-lessons-id-view-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/teacher/lessons/10000000-0000-4000-8000-000000000401/view",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-teacher-library",
+    "route": "/dashboard/teacher/library",
+    "requestedPath": "/dashboard/teacher/library",
+    "role": "teacher",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/library/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:29:14.095Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/teacher/dashboard-teacher-library.png",
+    "annotatedFile": "08-VISUALS/web/teacher/dashboard-teacher-library-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/teacher/library",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-teacher-modules",
+    "route": "/dashboard/teacher/modules",
+    "requestedPath": "/dashboard/teacher/modules",
+    "role": "teacher",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/modules/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:29:19.886Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/teacher/dashboard-teacher-modules.png",
+    "annotatedFile": "08-VISUALS/web/teacher/dashboard-teacher-modules-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/teacher/modules",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-teacher-performance",
+    "route": "/dashboard/teacher/performance",
+    "requestedPath": "/dashboard/teacher/performance",
+    "role": "teacher",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/performance/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:29:25.417Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/teacher/dashboard-teacher-performance.png",
+    "annotatedFile": "08-VISUALS/web/teacher/dashboard-teacher-performance-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/teacher/performance",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-teacher-profile",
+    "route": "/dashboard/teacher/profile",
+    "requestedPath": "/dashboard/teacher/profile",
+    "role": "teacher",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/profile/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:29:32.013Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/teacher/dashboard-teacher-profile.png",
+    "annotatedFile": "08-VISUALS/web/teacher/dashboard-teacher-profile-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/teacher/profile",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-teacher-reports",
+    "route": "/dashboard/teacher/reports",
+    "requestedPath": "/dashboard/teacher/reports",
+    "role": "teacher",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/reports/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:29:37.584Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/teacher/dashboard-teacher-reports.png",
+    "annotatedFile": "08-VISUALS/web/teacher/dashboard-teacher-reports-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/teacher/reports",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-teacher-sections",
+    "route": "/dashboard/teacher/sections",
+    "requestedPath": "/dashboard/teacher/sections",
+    "role": "teacher",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/sections/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:29:42.972Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/teacher/dashboard-teacher-sections.png",
+    "annotatedFile": "08-VISUALS/web/teacher/dashboard-teacher-sections-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/teacher/sections",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-teacher-sections-id-roster",
+    "route": "/dashboard/teacher/sections/[id]/roster",
+    "requestedPath": "/dashboard/teacher/sections/10000000-0000-4000-8000-000000000301/roster",
+    "role": "teacher",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/sections/[id]/roster/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:29:46.829Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/teacher/dashboard-teacher-sections-id-roster.png",
+    "annotatedFile": "08-VISUALS/web/teacher/dashboard-teacher-sections-id-roster-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/teacher/sections/10000000-0000-4000-8000-000000000301/roster",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-teacher-sections-id-students-add",
+    "route": "/dashboard/teacher/sections/[id]/students/add",
+    "requestedPath": "/dashboard/teacher/sections/10000000-0000-4000-8000-000000000301/students/add",
+    "role": "teacher",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/sections/[id]/students/add/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:29:57.396Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/teacher/dashboard-teacher-sections-id-students-add.png",
+    "annotatedFile": "08-VISUALS/web/teacher/dashboard-teacher-sections-id-students-add-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/teacher/sections/10000000-0000-4000-8000-000000000301/students/add",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dashboard-teacher-sections-id-students-studentid",
+    "route": "/dashboard/teacher/sections/[id]/students/[studentId]",
+    "requestedPath": "/dashboard/teacher/sections/10000000-0000-4000-8000-000000000301/students/10000000-0000-4000-8000-000000000103",
+    "role": "teacher",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(dashboard)/dashboard/teacher/sections/[id]/students/[studentId]/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:29:53.309Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/teacher/dashboard-teacher-sections-id-students-studentid.png",
+    "annotatedFile": "08-VISUALS/web/teacher/dashboard-teacher-sections-id-students-studentid-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 29,
+        "yPercent": 17,
+        "label": "Confirm the page heading before beginning the task"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/dashboard/teacher/sections/10000000-0000-4000-8000-000000000301/students/10000000-0000-4000-8000-000000000103",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Confirm the page heading before beginning the task"
+        }
+      ]
+    }
+  },
+  {
+    "id": "forgot-password",
+    "route": "/forgot-password",
+    "requestedPath": "/forgot-password",
+    "role": "public",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(auth)/forgot-password/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:13:34.415Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/public/forgot-password.png",
+    "annotatedFile": "08-VISUALS/web/public/forgot-password-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 50,
+        "yPercent": 21,
+        "label": "Start with the page title and primary account action"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/forgot-password",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Start with the page title and primary account action"
+        }
+      ]
+    }
+  },
+  {
+    "id": "lesson-preview-token",
+    "route": "/lesson-preview/[token]",
+    "requestedPath": "/lesson-preview/BjSZw54kBbHvQhhvWkk8l3mz1a0L4kTDzljXXl0u69ukAkblmrEkpvJXIyu96oz_wxPW1hPoFi1Ry-WUNV0LFPfzlx35SuZfrPENLuzAkIaHBp8xJhGstvGrhdXBy_UC2iwmQsp_sNpw-j2TDYr9jY1SpeRY7S0IKPBJQCLYpAGAmqviiMvGhlL6b07BNsqRvzdyjQaMb7n3IRq3LDAnzEvSsDSAgZ3xlh7SeNVkplUnAjipi6RpQ9unvGbKfTK570yuA6_3Jvths4-bca649cnO9gM1XxV7odznEopBdFqZ3KB0y6rLDpa8mv7X4p2fDqcsUGJpTa-YMbOQpWFav95AKSA-jcepEf-Q97KX",
+    "role": "public",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/lesson-preview/[token]/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:50:40.863Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/public/lesson-preview-token.png",
+    "annotatedFile": "08-VISUALS/web/public/lesson-preview-token-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 50,
+        "yPercent": 21,
+        "label": "Start with the page title and primary account action"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/lesson-preview/BjSZw54kBbHvQhhvWkk8l3mz1a0L4kTDzljXXl0u69ukAkblmrEkpvJXIyu96oz_wxPW1hPoFi1Ry-WUNV0LFPfzlx35SuZfrPENLuzAkIaHBp8xJhGstvGrhdXBy_UC2iwmQsp_sNpw-j2TDYr9jY1SpeRY7S0IKPBJQCLYpAGAmqviiMvGhlL6b07BNsqRvzdyjQaMb7n3IRq3LDAnzEvSsDSAgZ3xlh7SeNVkplUnAjipi6RpQ9unvGbKfTK570yuA6_3Jvths4-bca649cnO9gM1XxV7odznEopBdFqZ3KB0y6rLDpa8mv7X4p2fDqcsUGJpTa-YMbOQpWFav95AKSA-jcepEf-Q97KX",
+    "consoleErrors": [],
+    "expectedConsoleErrors": [],
+    "failedApiRequests": [],
+    "expectedApiFailures": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Start with the page title and primary account action"
+        }
+      ]
+    }
+  },
+  {
+    "id": "login",
+    "route": "/login",
+    "requestedPath": "/login",
+    "role": "public",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(auth)/login/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:13:39.165Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/public/login.png",
+    "annotatedFile": "08-VISUALS/web/public/login-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 50,
+        "yPercent": 21,
+        "label": "Start with the page title and primary account action"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/login",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Start with the page title and primary account action"
+        }
+      ]
+    }
+  },
+  {
+    "id": "public-home",
+    "route": "/",
+    "requestedPath": "/",
+    "role": "public",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T12:55:55.039Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/public/public-home.png",
+    "annotatedFile": "08-VISUALS/web/public/public-home-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 50,
+        "yPercent": 21,
+        "label": "Start with the page title and primary account action"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 5421,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Start with the page title and primary account action"
+        }
+      ]
+    }
+  },
+  {
+    "id": "reset-password",
+    "route": "/reset-password",
+    "requestedPath": "/reset-password",
+    "role": "public",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(auth)/reset-password/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:13:40.532Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/public/reset-password.png",
+    "annotatedFile": "08-VISUALS/web/public/reset-password-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 50,
+        "yPercent": 21,
+        "label": "Start with the page title and primary account action"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/reset-password",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Start with the page title and primary account action"
+        }
+      ]
+    }
+  },
+  {
+    "id": "set-initial-password",
+    "route": "/set-initial-password",
+    "requestedPath": "/set-initial-password",
+    "role": "public",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(auth)/set-initial-password/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:13:43.484Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/public/set-initial-password.png",
+    "annotatedFile": "08-VISUALS/web/public/set-initial-password-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 50,
+        "yPercent": 21,
+        "label": "Start with the page title and primary account action"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/set-initial-password",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 1029,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Start with the page title and primary account action"
+        }
+      ]
+    }
+  },
+  {
+    "id": "system-maintenance",
+    "route": "/system-maintenance",
+    "requestedPath": "/system-maintenance",
+    "role": "public",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/system-maintenance/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:13:46.459Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/public/system-maintenance.png",
+    "annotatedFile": "08-VISUALS/web/public/system-maintenance-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 50,
+        "yPercent": 21,
+        "label": "Start with the page title and primary account action"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/system-maintenance",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Start with the page title and primary account action"
+        }
+      ]
+    }
+  },
+  {
+    "id": "verify-email",
+    "route": "/verify-email",
+    "requestedPath": "/verify-email",
+    "role": "public",
+    "captureMode": "live",
+    "sourceFile": "next-frontend/app/(auth)/verify-email/page.tsx",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T13:13:50.378Z",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "captureFile": "08-VISUALS/web/public/verify-email.png",
+    "annotatedFile": "08-VISUALS/web/public/verify-email-annotated.png",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "annotations": [
+      {
+        "number": 1,
+        "xPercent": 50,
+        "yPercent": 21,
+        "label": "Start with the page title and primary account action"
+      }
+    ],
+    "status": "captured",
+    "finalPath": "/verify-email",
+    "consoleErrors": [],
+    "failedApiRequests": [],
+    "failure": null,
+    "image": {
+      "width": 1440,
+      "height": 900,
+      "labels": [
+        {
+          "number": 1,
+          "label": "Start with the page title and primary account action"
+        }
+      ]
+    }
+  }
+]

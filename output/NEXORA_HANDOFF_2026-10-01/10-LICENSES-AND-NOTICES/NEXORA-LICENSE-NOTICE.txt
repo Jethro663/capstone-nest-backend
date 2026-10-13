@@ -1,0 +1,6 @@
+NEXORA PROJECT NOTICE
+
+Repository package metadata marks the application UNLICENSED.
+This handoff is a school/project reference copy; possession of the drive does not grant public redistribution rights.
+Third-party dependencies retain their own licenses. See DIRECT-DEPENDENCIES.csv and the exact lockfiles in the source archive.
+Before redistribution or commercial use, obtain repository-owner approval and generate a complete transitive license report from the locked source.

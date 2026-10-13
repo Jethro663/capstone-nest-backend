@@ -1,0 +1,62 @@
+[
+  {
+    "id": "mobile-component-loading",
+    "state": "loading",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "renderedAt": "2026-10-01T14:42:54.335Z",
+    "viewport": "360x800",
+    "deviceScaleFactor": 3,
+    "outputFile": "08-VISUALS/components/mobile-component-loading.png",
+    "componentSource": "scripts/handoff/capture/mobile-component-gallery.tsx"
+  },
+  {
+    "id": "mobile-component-empty",
+    "state": "empty",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "renderedAt": "2026-10-01T14:42:54.986Z",
+    "viewport": "360x800",
+    "deviceScaleFactor": 3,
+    "outputFile": "08-VISUALS/components/mobile-component-empty.png",
+    "componentSource": "scripts/handoff/capture/mobile-component-gallery.tsx"
+  },
+  {
+    "id": "mobile-component-error",
+    "state": "error",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "renderedAt": "2026-10-01T14:42:55.629Z",
+    "viewport": "360x800",
+    "deviceScaleFactor": 3,
+    "outputFile": "08-VISUALS/components/mobile-component-error.png",
+    "componentSource": "scripts/handoff/capture/mobile-component-gallery.tsx"
+  },
+  {
+    "id": "mobile-component-success",
+    "state": "success",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "renderedAt": "2026-10-01T14:42:56.294Z",
+    "viewport": "360x800",
+    "deviceScaleFactor": 3,
+    "outputFile": "08-VISUALS/components/mobile-component-success.png",
+    "componentSource": "scripts/handoff/capture/mobile-component-gallery.tsx"
+  },
+  {
+    "id": "mobile-component-confirmation",
+    "state": "confirmation",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "renderedAt": "2026-10-01T14:42:57.061Z",
+    "viewport": "360x800",
+    "deviceScaleFactor": 3,
+    "outputFile": "08-VISUALS/components/mobile-component-confirmation.png",
+    "componentSource": "scripts/handoff/capture/mobile-component-gallery.tsx"
+  },
+  {
+    "id": "mobile-component-offline",
+    "state": "offline",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "renderedAt": "2026-10-01T14:42:57.815Z",
+    "viewport": "360x800",
+    "deviceScaleFactor": 3,
+    "outputFile": "08-VISUALS/components/mobile-component-offline.png",
+    "componentSource": "scripts/handoff/capture/mobile-component-gallery.tsx"
+  }
+]

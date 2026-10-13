@@ -1,0 +1,919 @@
+[
+  {
+    "id": "mobile-admin-academic",
+    "status": "captured",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "role": "admin",
+    "route": "Assessments",
+    "routes": [
+      "Assessments",
+      "Academic",
+      "AdminTemplates",
+      "AdminAcademic",
+      "AdminSettingsAcademicYear",
+      "AdminSettingsAssessmentsGrading",
+      "AdminSettingsYearTransition",
+      "AdminSettingsLearnerCompletion",
+      "AdminClassRecord",
+      "AdminUserReports",
+      "AdminTemplateDetail",
+      "TeacherAssessmentDetail",
+      "TeacherAssessmentEditor",
+      "TeacherAssessmentReview",
+      "TeacherAssessmentAttemptResult",
+      "TeacherModuleDetail",
+      "TeacherLessonDetail",
+      "TeacherLessonEditor",
+      "TeacherLessons",
+      "TeacherCreateModule",
+      "TeacherCreateAssessment",
+      "TeacherModuleFileDetail",
+      "TeacherClassRecord"
+    ],
+    "title": "Administrator academic governance",
+    "caption": "Academic year, assessment, template, record, module, and lesson routes let administrators review governed academic state.",
+    "captureMode": "live_emulator",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T16:19:17.417Z",
+    "captureFile": "08-VISUALS/mobile/mobile-admin-academic.png",
+    "annotatedFile": "08-VISUALS/annotations/mobile/mobile-admin-academic.png",
+    "annotations": [
+      {
+        "number": 1,
+        "label": "Academic governance"
+      }
+    ],
+    "platform": "Android",
+    "emulator": "sdk_gphone64_x86_64",
+    "androidVersion": "15",
+    "viewport": "1080x2400",
+    "densityDpi": 420,
+    "appVersion": "0.1.56",
+    "appBuild": 57,
+    "packageName": "com.nexora.lms.mobile",
+    "accessibilityEvidence": "contains:Academic"
+  },
+  {
+    "id": "mobile-admin-content",
+    "status": "captured",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "role": "admin",
+    "route": "AdminCalendar",
+    "routes": [
+      "AdminCalendar",
+      "AdminLibrary",
+      "AdminAnnouncements",
+      "AdminReports",
+      "AdminEvaluations",
+      "AdminChatbot",
+      "TeacherCalendar",
+      "TeacherExtractionDetail",
+      "TeacherAiDraft",
+      "TeacherInterventionDetail",
+      "TeacherLibrary",
+      "TeacherReports",
+      "TeacherInterventions",
+      "TeacherPerformance",
+      "TeacherEvaluations",
+      "TeacherAnnouncements"
+    ],
+    "title": "Administrator content and reporting",
+    "caption": "Calendar, library, communication, evaluation, reporting, and intervention routes support school-wide oversight.",
+    "captureMode": "live_emulator",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T16:18:35.840Z",
+    "captureFile": "08-VISUALS/mobile/mobile-admin-content.png",
+    "annotatedFile": "08-VISUALS/annotations/mobile/mobile-admin-content.png",
+    "annotations": [
+      {
+        "number": 1,
+        "label": "Content and reporting oversight"
+      }
+    ],
+    "platform": "Android",
+    "emulator": "sdk_gphone64_x86_64",
+    "androidVersion": "15",
+    "viewport": "1080x2400",
+    "densityDpi": 420,
+    "appVersion": "0.1.56",
+    "appBuild": 57,
+    "packageName": "com.nexora.lms.mobile",
+    "accessibilityEvidence": "contains:Reports"
+  },
+  {
+    "id": "mobile-admin-home",
+    "status": "captured",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "role": "admin",
+    "route": "Home",
+    "routes": [
+      "Home"
+    ],
+    "title": "Administrator home",
+    "caption": "The administrator home page summarizes school operations, academic setup, safety, and the next required actions.",
+    "captureMode": "live_emulator",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T16:18:06.624Z",
+    "captureFile": "08-VISUALS/mobile/mobile-admin-home.png",
+    "annotatedFile": "08-VISUALS/annotations/mobile/mobile-admin-home.png",
+    "annotations": [
+      {
+        "number": 1,
+        "label": "School operations summary"
+      }
+    ],
+    "platform": "Android",
+    "emulator": "sdk_gphone64_x86_64",
+    "androidVersion": "15",
+    "viewport": "1080x2400",
+    "densityDpi": 420,
+    "appVersion": "0.1.56",
+    "appBuild": 57,
+    "packageName": "com.nexora.lms.mobile",
+    "accessibilityEvidence": "contains:Admin"
+  },
+  {
+    "id": "mobile-admin-people",
+    "status": "captured",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "role": "admin",
+    "route": "AdminUsers",
+    "routes": [
+      "AdminUsers",
+      "AdminSections",
+      "AdminClasses",
+      "AdminRoster",
+      "Classes",
+      "AdminStudentReadiness",
+      "AdminLifecycleReview",
+      "AdminCreateUser",
+      "AdminUserDetail",
+      "AdminSectionDetail",
+      "TeacherClassDetail",
+      "TeacherSectionDetail",
+      "TeacherSectionAddStudents",
+      "TeacherSectionStudentProfile",
+      "TeacherClassAddStudents",
+      "TeacherClassStudentOverview"
+    ],
+    "title": "Administrator people and classes",
+    "caption": "User, roster, section, class, readiness, and lifecycle routes provide governed people and enrollment administration.",
+    "captureMode": "live_emulator",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T16:18:28.382Z",
+    "captureFile": "08-VISUALS/mobile/mobile-admin-people.png",
+    "annotatedFile": "08-VISUALS/annotations/mobile/mobile-admin-people.png",
+    "annotations": [
+      {
+        "number": 1,
+        "label": "People and class administration"
+      }
+    ],
+    "platform": "Android",
+    "emulator": "sdk_gphone64_x86_64",
+    "androidVersion": "15",
+    "viewport": "1080x2400",
+    "densityDpi": 420,
+    "appVersion": "0.1.56",
+    "appBuild": 57,
+    "packageName": "com.nexora.lms.mobile",
+    "accessibilityEvidence": "contains:Users"
+  },
+  {
+    "id": "mobile-admin-profile",
+    "status": "captured",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "role": "admin",
+    "route": "Profile",
+    "routes": [
+      "Profile",
+      "Notifications",
+      "CompleteProfile"
+    ],
+    "title": "Administrator profile and notifications",
+    "caption": "Administrator profile, completion, and notification routes keep account status and operational notices together.",
+    "captureMode": "live_emulator",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T16:19:33.308Z",
+    "captureFile": "08-VISUALS/mobile/mobile-admin-profile.png",
+    "annotatedFile": "08-VISUALS/annotations/mobile/mobile-admin-profile.png",
+    "annotations": [
+      {
+        "number": 1,
+        "label": "Administrator account"
+      }
+    ],
+    "platform": "Android",
+    "emulator": "sdk_gphone64_x86_64",
+    "androidVersion": "15",
+    "viewport": "1080x2400",
+    "densityDpi": 420,
+    "appVersion": "0.1.56",
+    "appBuild": 57,
+    "packageName": "com.nexora.lms.mobile",
+    "accessibilityEvidence": "contains:Profile"
+  },
+  {
+    "id": "mobile-admin-system",
+    "status": "captured",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "role": "admin",
+    "route": "AdminDiagnostics",
+    "routes": [
+      "AdminDiagnostics",
+      "AdminAudit",
+      "AdminSettings",
+      "AdminTools",
+      "AdminSettingsAuditRecovery",
+      "AdminSettingsMaintenance",
+      "AdminSettingsResetSchoolData"
+    ],
+    "title": "Administrator safety and system tools",
+    "caption": "Diagnostics, audit, recovery, maintenance, and reset routes require explicit intent and protect school records.",
+    "captureMode": "live_emulator",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T16:19:02.596Z",
+    "captureFile": "08-VISUALS/mobile/mobile-admin-system.png",
+    "annotatedFile": "08-VISUALS/annotations/mobile/mobile-admin-system.png",
+    "annotations": [
+      {
+        "number": 1,
+        "label": "System safety tools"
+      }
+    ],
+    "platform": "Android",
+    "emulator": "sdk_gphone64_x86_64",
+    "androidVersion": "15",
+    "viewport": "1080x2400",
+    "densityDpi": 420,
+    "appVersion": "0.1.56",
+    "appBuild": 57,
+    "packageName": "com.nexora.lms.mobile",
+    "accessibilityEvidence": "contains:Settings"
+  },
+  {
+    "id": "mobile-auth-entry",
+    "status": "captured",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "role": "public",
+    "route": "Login",
+    "routes": [
+      "Login",
+      "VerifyEmail",
+      "ForgotPassword",
+      "ResetPassword",
+      "SetInitialPassword"
+    ],
+    "title": "Mobile sign-in and account recovery",
+    "caption": "The public mobile entry point groups secure sign-in, verification, first-password setup, and account recovery.",
+    "captureMode": "live_emulator",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T14:43:41.186Z",
+    "captureFile": "08-VISUALS/mobile/mobile-auth-entry.png",
+    "annotatedFile": "08-VISUALS/annotations/mobile/mobile-auth-entry.png",
+    "annotations": [
+      {
+        "number": 1,
+        "label": "Sign-in workspace"
+      }
+    ],
+    "platform": "Android",
+    "emulator": "sdk_gphone64_x86_64",
+    "androidVersion": "15",
+    "viewport": "1080x2400",
+    "densityDpi": 420,
+    "appVersion": "0.1.56",
+    "appBuild": 57,
+    "packageName": "com.nexora.lms.mobile",
+    "accessibilityEvidence": "contains:Welcome to Nexora"
+  },
+  {
+    "id": "mobile-component-confirmation",
+    "status": "captured",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "role": "shared",
+    "route": "ComponentGallery:confirmation",
+    "routes": [
+      "ComponentGallery:confirmation"
+    ],
+    "title": "Confirmation state",
+    "caption": "The current confirmation modal names the consequence and separates the cancel and confirm actions clearly.",
+    "captureMode": "component_state",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T14:43:16.459Z",
+    "captureFile": "08-VISUALS/mobile/mobile-component-confirmation.png",
+    "annotatedFile": "08-VISUALS/annotations/mobile/mobile-component-confirmation.png",
+    "annotations": [
+      {
+        "number": 1,
+        "label": "Consequence and explicit choice"
+      }
+    ],
+    "platform": "Android",
+    "emulator": "sdk_gphone64_x86_64",
+    "androidVersion": "15",
+    "viewport": "1080x2400",
+    "densityDpi": 420,
+    "appVersion": "0.1.56",
+    "appBuild": 57,
+    "packageName": "com.nexora.lms.mobile",
+    "accessibilityEvidence": "source-image"
+  },
+  {
+    "id": "mobile-component-empty",
+    "status": "captured",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "role": "shared",
+    "route": "ComponentGallery:empty",
+    "routes": [
+      "ComponentGallery:empty"
+    ],
+    "title": "Empty state",
+    "caption": "The current mobile empty-state component explains why a list is empty and gives a useful next action.",
+    "captureMode": "component_state",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T14:43:15.924Z",
+    "captureFile": "08-VISUALS/mobile/mobile-component-empty.png",
+    "annotatedFile": "08-VISUALS/annotations/mobile/mobile-component-empty.png",
+    "annotations": [
+      {
+        "number": 1,
+        "label": "Empty-state explanation"
+      }
+    ],
+    "platform": "Android",
+    "emulator": "sdk_gphone64_x86_64",
+    "androidVersion": "15",
+    "viewport": "1080x2400",
+    "densityDpi": 420,
+    "appVersion": "0.1.56",
+    "appBuild": 57,
+    "packageName": "com.nexora.lms.mobile",
+    "accessibilityEvidence": "source-image"
+  },
+  {
+    "id": "mobile-component-error",
+    "status": "captured",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "role": "shared",
+    "route": "ComponentGallery:error",
+    "routes": [
+      "ComponentGallery:error"
+    ],
+    "title": "Error state",
+    "caption": "The current error banner states what failed and directs the user toward a safe retry instead of a dead end.",
+    "captureMode": "component_state",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T14:43:16.113Z",
+    "captureFile": "08-VISUALS/mobile/mobile-component-error.png",
+    "annotatedFile": "08-VISUALS/annotations/mobile/mobile-component-error.png",
+    "annotations": [
+      {
+        "number": 1,
+        "label": "Plain-language error"
+      }
+    ],
+    "platform": "Android",
+    "emulator": "sdk_gphone64_x86_64",
+    "androidVersion": "15",
+    "viewport": "1080x2400",
+    "densityDpi": 420,
+    "appVersion": "0.1.56",
+    "appBuild": 57,
+    "packageName": "com.nexora.lms.mobile",
+    "accessibilityEvidence": "source-image"
+  },
+  {
+    "id": "mobile-component-loading",
+    "status": "captured",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "role": "shared",
+    "route": "ComponentGallery:loading",
+    "routes": [
+      "ComponentGallery:loading"
+    ],
+    "title": "Loading state",
+    "caption": "The current mobile loading components show stable placeholders while the requested data is still being prepared.",
+    "captureMode": "component_state",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T14:43:15.757Z",
+    "captureFile": "08-VISUALS/mobile/mobile-component-loading.png",
+    "annotatedFile": "08-VISUALS/annotations/mobile/mobile-component-loading.png",
+    "annotations": [
+      {
+        "number": 1,
+        "label": "Loading placeholders"
+      }
+    ],
+    "platform": "Android",
+    "emulator": "sdk_gphone64_x86_64",
+    "androidVersion": "15",
+    "viewport": "1080x2400",
+    "densityDpi": 420,
+    "appVersion": "0.1.56",
+    "appBuild": 57,
+    "packageName": "com.nexora.lms.mobile",
+    "accessibilityEvidence": "source-image"
+  },
+  {
+    "id": "mobile-component-offline",
+    "status": "captured",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "role": "shared",
+    "route": "ComponentGallery:offline",
+    "routes": [
+      "ComponentGallery:offline"
+    ],
+    "title": "Offline state",
+    "caption": "The current offline notice explains that the visible data is a snapshot and that editing requires reconnection.",
+    "captureMode": "component_state",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T14:43:16.634Z",
+    "captureFile": "08-VISUALS/mobile/mobile-component-offline.png",
+    "annotatedFile": "08-VISUALS/annotations/mobile/mobile-component-offline.png",
+    "annotations": [
+      {
+        "number": 1,
+        "label": "Offline boundary"
+      }
+    ],
+    "platform": "Android",
+    "emulator": "sdk_gphone64_x86_64",
+    "androidVersion": "15",
+    "viewport": "1080x2400",
+    "densityDpi": 420,
+    "appVersion": "0.1.56",
+    "appBuild": 57,
+    "packageName": "com.nexora.lms.mobile",
+    "accessibilityEvidence": "source-image"
+  },
+  {
+    "id": "mobile-component-success",
+    "status": "captured",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "role": "shared",
+    "route": "ComponentGallery:success",
+    "routes": [
+      "ComponentGallery:success"
+    ],
+    "title": "Success state",
+    "caption": "The current success banner confirms that the operation finished and makes the resulting state explicit.",
+    "captureMode": "component_state",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T14:43:16.283Z",
+    "captureFile": "08-VISUALS/mobile/mobile-component-success.png",
+    "annotatedFile": "08-VISUALS/annotations/mobile/mobile-component-success.png",
+    "annotations": [
+      {
+        "number": 1,
+        "label": "Completion feedback"
+      }
+    ],
+    "platform": "Android",
+    "emulator": "sdk_gphone64_x86_64",
+    "androidVersion": "15",
+    "viewport": "1080x2400",
+    "densityDpi": 420,
+    "appVersion": "0.1.56",
+    "appBuild": 57,
+    "packageName": "com.nexora.lms.mobile",
+    "accessibilityEvidence": "source-image"
+  },
+  {
+    "id": "mobile-student-assessments",
+    "status": "captured",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "role": "student",
+    "route": "Assessments",
+    "routes": [
+      "Assessments",
+      "AssessmentDetail",
+      "AssessmentTake",
+      "AssessmentResults",
+      "AssessmentHistory"
+    ],
+    "title": "Learner assessments",
+    "caption": "Assessment routes cover the work list, instructions, answer flow, returned results, and attempt history.",
+    "captureMode": "live_emulator",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T14:46:32.410Z",
+    "captureFile": "08-VISUALS/mobile/mobile-student-assessments.png",
+    "annotatedFile": "08-VISUALS/annotations/mobile/mobile-student-assessments.png",
+    "annotations": [
+      {
+        "number": 1,
+        "label": "Assessment workflow"
+      }
+    ],
+    "platform": "Android",
+    "emulator": "sdk_gphone64_x86_64",
+    "androidVersion": "15",
+    "viewport": "1080x2400",
+    "densityDpi": 420,
+    "appVersion": "0.1.56",
+    "appBuild": 57,
+    "packageName": "com.nexora.lms.mobile",
+    "accessibilityEvidence": "contains:Assessments"
+  },
+  {
+    "id": "mobile-student-classroom",
+    "status": "captured",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "role": "student",
+    "route": "Classes",
+    "routes": [
+      "Classes",
+      "ClassWorkspace",
+      "ClassDetail",
+      "ModuleDetail",
+      "Courses",
+      "Lessons",
+      "LessonDetail"
+    ],
+    "title": "Learner classes and lessons",
+    "caption": "Class, module, course, and lesson routes use the same classroom workspace and evidence-backed learning content.",
+    "captureMode": "live_emulator",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T14:46:25.934Z",
+    "captureFile": "08-VISUALS/mobile/mobile-student-classroom.png",
+    "annotatedFile": "08-VISUALS/annotations/mobile/mobile-student-classroom.png",
+    "annotations": [
+      {
+        "number": 1,
+        "label": "Class learning workspace"
+      }
+    ],
+    "platform": "Android",
+    "emulator": "sdk_gphone64_x86_64",
+    "androidVersion": "15",
+    "viewport": "1080x2400",
+    "densityDpi": 420,
+    "appVersion": "0.1.56",
+    "appBuild": 57,
+    "packageName": "com.nexora.lms.mobile",
+    "accessibilityEvidence": "contains:Classes"
+  },
+  {
+    "id": "mobile-student-home",
+    "status": "captured",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "role": "student",
+    "route": "Dashboard",
+    "routes": [
+      "Dashboard"
+    ],
+    "title": "Learner home",
+    "caption": "The learner home page summarizes the next useful actions without requiring the learner to understand the whole system.",
+    "captureMode": "live_emulator",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T14:45:55.609Z",
+    "captureFile": "08-VISUALS/mobile/mobile-student-home.png",
+    "annotatedFile": "08-VISUALS/annotations/mobile/mobile-student-home.png",
+    "annotations": [
+      {
+        "number": 1,
+        "label": "What to do next"
+      }
+    ],
+    "platform": "Android",
+    "emulator": "sdk_gphone64_x86_64",
+    "androidVersion": "15",
+    "viewport": "1080x2400",
+    "densityDpi": 420,
+    "appVersion": "0.1.56",
+    "appBuild": 57,
+    "packageName": "com.nexora.lms.mobile",
+    "accessibilityEvidence": "contains:Good"
+  },
+  {
+    "id": "mobile-student-ja",
+    "status": "captured",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "role": "student",
+    "route": "JA",
+    "routes": [
+      "JA",
+      "LXP",
+      "Chatbot",
+      "AiTutor",
+      "StudentGuidedAssessment",
+      "StudentGeneratedLesson",
+      "StudentJaReviewAssessment"
+    ],
+    "title": "Learner JA support hub",
+    "caption": "JA, guided checks, generated support lessons, and review routes remain assistive and do not replace official grades.",
+    "captureMode": "live_emulator",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T14:47:26.356Z",
+    "captureFile": "08-VISUALS/mobile/mobile-student-ja.png",
+    "annotatedFile": "08-VISUALS/annotations/mobile/mobile-student-ja.png",
+    "annotations": [
+      {
+        "number": 1,
+        "label": "Assistive learning support"
+      }
+    ],
+    "platform": "Android",
+    "emulator": "sdk_gphone64_x86_64",
+    "androidVersion": "15",
+    "viewport": "1080x2400",
+    "densityDpi": 420,
+    "appVersion": "0.1.56",
+    "appBuild": 57,
+    "packageName": "com.nexora.lms.mobile",
+    "accessibilityEvidence": "contains:JA"
+  },
+  {
+    "id": "mobile-student-organize",
+    "status": "captured",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "role": "student",
+    "route": "StudentCalendar",
+    "routes": [
+      "StudentCalendar",
+      "Calendar",
+      "Announcements",
+      "StudentEvaluations"
+    ],
+    "title": "Learner schedule and announcements",
+    "caption": "Calendar, announcements, and evaluation routes help learners organize school activity and respond to school requests.",
+    "captureMode": "live_emulator",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T14:46:38.890Z",
+    "captureFile": "08-VISUALS/mobile/mobile-student-organize.png",
+    "annotatedFile": "08-VISUALS/annotations/mobile/mobile-student-organize.png",
+    "annotations": [
+      {
+        "number": 1,
+        "label": "Schedule and notices"
+      }
+    ],
+    "platform": "Android",
+    "emulator": "sdk_gphone64_x86_64",
+    "androidVersion": "15",
+    "viewport": "1080x2400",
+    "densityDpi": 420,
+    "appVersion": "0.1.56",
+    "appBuild": 57,
+    "packageName": "com.nexora.lms.mobile",
+    "accessibilityEvidence": "contains:Calendar"
+  },
+  {
+    "id": "mobile-student-progress",
+    "status": "captured",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "role": "student",
+    "route": "Performance",
+    "routes": [
+      "Performance",
+      "Transcript",
+      "Profile",
+      "Notifications",
+      "CompleteProfile"
+    ],
+    "title": "Learner progress and account",
+    "caption": "Progress, transcript, notification, and profile routes explain current evidence and account information in one family of screens.",
+    "captureMode": "live_emulator",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T14:47:44.592Z",
+    "captureFile": "08-VISUALS/mobile/mobile-student-progress.png",
+    "annotatedFile": "08-VISUALS/annotations/mobile/mobile-student-progress.png",
+    "annotations": [
+      {
+        "number": 1,
+        "label": "Progress and account tools"
+      }
+    ],
+    "platform": "Android",
+    "emulator": "sdk_gphone64_x86_64",
+    "androidVersion": "15",
+    "viewport": "1080x2400",
+    "densityDpi": 420,
+    "appVersion": "0.1.56",
+    "appBuild": 57,
+    "packageName": "com.nexora.lms.mobile",
+    "accessibilityEvidence": "contains:Profile"
+  },
+  {
+    "id": "mobile-teacher-assessments",
+    "status": "captured",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "role": "teacher",
+    "route": "Assessments",
+    "routes": [
+      "Assessments",
+      "TeacherAssessmentDetail",
+      "TeacherAssessmentEditor",
+      "TeacherAssessmentReview",
+      "TeacherAssessmentAttemptResult",
+      "TeacherCreateAssessment"
+    ],
+    "title": "Teacher assessment workflow",
+    "caption": "Teachers create, review, edit, release, inspect, and grade assessments through this connected route family.",
+    "captureMode": "live_emulator",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T16:14:52.957Z",
+    "captureFile": "08-VISUALS/mobile/mobile-teacher-assessments.png",
+    "annotatedFile": "08-VISUALS/annotations/mobile/mobile-teacher-assessments.png",
+    "annotations": [
+      {
+        "number": 1,
+        "label": "Assessment authoring and review"
+      }
+    ],
+    "platform": "Android",
+    "emulator": "sdk_gphone64_x86_64",
+    "androidVersion": "15",
+    "viewport": "1080x2400",
+    "densityDpi": 420,
+    "appVersion": "0.1.56",
+    "appBuild": 57,
+    "packageName": "com.nexora.lms.mobile",
+    "accessibilityEvidence": "contains:Assessments"
+  },
+  {
+    "id": "mobile-teacher-classroom",
+    "status": "captured",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "role": "teacher",
+    "route": "Classes",
+    "routes": [
+      "Classes",
+      "Sections",
+      "TeacherClassDetail",
+      "TeacherModuleDetail",
+      "TeacherModuleFileDetail",
+      "TeacherLessonDetail",
+      "TeacherLessonEditor",
+      "TeacherCreateModule",
+      "TeacherClassAddStudents",
+      "TeacherClassStudentOverview",
+      "TeacherSectionDetail",
+      "TeacherSectionAddStudents",
+      "TeacherSectionStudentProfile"
+    ],
+    "title": "Teacher classroom workspace",
+    "caption": "Class, section, module, lesson, file, roster, and learner-detail routes share the teacher classroom workspace.",
+    "captureMode": "live_emulator",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T16:14:23.424Z",
+    "captureFile": "08-VISUALS/mobile/mobile-teacher-classroom.png",
+    "annotatedFile": "08-VISUALS/annotations/mobile/mobile-teacher-classroom.png",
+    "annotations": [
+      {
+        "number": 1,
+        "label": "Teaching workspace"
+      }
+    ],
+    "platform": "Android",
+    "emulator": "sdk_gphone64_x86_64",
+    "androidVersion": "15",
+    "viewport": "1080x2400",
+    "densityDpi": 420,
+    "appVersion": "0.1.56",
+    "appBuild": 57,
+    "packageName": "com.nexora.lms.mobile",
+    "accessibilityEvidence": "contains:Classes"
+  },
+  {
+    "id": "mobile-teacher-content",
+    "status": "captured",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "role": "teacher",
+    "route": "TeacherCalendar",
+    "routes": [
+      "TeacherCalendar",
+      "TeacherLessons",
+      "TeacherLibrary",
+      "TeacherAnnouncements",
+      "TeacherExtractionDetail",
+      "TeacherAiDraft"
+    ],
+    "title": "Teacher content and communication",
+    "caption": "Calendar, lessons, library, announcements, extraction review, and AI draft routes support content preparation and delivery.",
+    "captureMode": "live_emulator",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T16:15:09.421Z",
+    "captureFile": "08-VISUALS/mobile/mobile-teacher-content.png",
+    "annotatedFile": "08-VISUALS/annotations/mobile/mobile-teacher-content.png",
+    "annotations": [
+      {
+        "number": 1,
+        "label": "Content preparation tools"
+      }
+    ],
+    "platform": "Android",
+    "emulator": "sdk_gphone64_x86_64",
+    "androidVersion": "15",
+    "viewport": "1080x2400",
+    "densityDpi": 420,
+    "appVersion": "0.1.56",
+    "appBuild": 57,
+    "packageName": "com.nexora.lms.mobile",
+    "accessibilityEvidence": "contains:Library"
+  },
+  {
+    "id": "mobile-teacher-home",
+    "status": "captured",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "role": "teacher",
+    "route": "Home",
+    "routes": [
+      "Home"
+    ],
+    "title": "Teacher home",
+    "caption": "The teacher home page prioritizes classes, submissions, notices, and the next instructional actions.",
+    "captureMode": "live_emulator",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T16:14:28.858Z",
+    "captureFile": "08-VISUALS/mobile/mobile-teacher-home.png",
+    "annotatedFile": "08-VISUALS/annotations/mobile/mobile-teacher-home.png",
+    "annotations": [
+      {
+        "number": 1,
+        "label": "Teacher action summary"
+      }
+    ],
+    "platform": "Android",
+    "emulator": "sdk_gphone64_x86_64",
+    "androidVersion": "15",
+    "viewport": "1080x2400",
+    "densityDpi": 420,
+    "appVersion": "0.1.56",
+    "appBuild": 57,
+    "packageName": "com.nexora.lms.mobile",
+    "accessibilityEvidence": "contains:Teacher"
+  },
+  {
+    "id": "mobile-teacher-profile",
+    "status": "captured",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "role": "teacher",
+    "route": "Profile",
+    "routes": [
+      "Profile",
+      "Notifications",
+      "CompleteProfile",
+      "TeacherMore"
+    ],
+    "title": "Teacher profile and notifications",
+    "caption": "Teacher profile, completion, notifications, and overflow destinations keep account and supporting tools together.",
+    "captureMode": "live_emulator",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T16:15:36.494Z",
+    "captureFile": "08-VISUALS/mobile/mobile-teacher-profile.png",
+    "annotatedFile": "08-VISUALS/annotations/mobile/mobile-teacher-profile.png",
+    "annotations": [
+      {
+        "number": 1,
+        "label": "Account and supporting tools"
+      }
+    ],
+    "platform": "Android",
+    "emulator": "sdk_gphone64_x86_64",
+    "androidVersion": "15",
+    "viewport": "1080x2400",
+    "densityDpi": 420,
+    "appVersion": "0.1.56",
+    "appBuild": 57,
+    "packageName": "com.nexora.lms.mobile",
+    "accessibilityEvidence": "contains:Profile"
+  },
+  {
+    "id": "mobile-teacher-records",
+    "status": "captured",
+    "classification": "SYNTHETIC_DOCUMENTATION_ONLY",
+    "role": "teacher",
+    "route": "TeacherClassRecord",
+    "routes": [
+      "TeacherClassRecord",
+      "TeacherReports",
+      "TeacherInterventions",
+      "TeacherInterventionDetail",
+      "TeacherPerformance",
+      "TeacherEvaluations"
+    ],
+    "title": "Teacher records and intervention",
+    "caption": "Class records, reports, performance, evaluations, and intervention routes preserve academic evidence and follow-up decisions.",
+    "captureMode": "live_emulator",
+    "sourceCommit": "211483f07b901299b48ae42eda318c7448f1cbfd",
+    "capturedAt": "2026-10-01T16:15:29.035Z",
+    "captureFile": "08-VISUALS/mobile/mobile-teacher-records.png",
+    "annotatedFile": "08-VISUALS/annotations/mobile/mobile-teacher-records.png",
+    "annotations": [
+      {
+        "number": 1,
+        "label": "Academic evidence workspace"
+      }
+    ],
+    "platform": "Android",
+    "emulator": "sdk_gphone64_x86_64",
+    "androidVersion": "15",
+    "viewport": "1080x2400",
+    "densityDpi": 420,
+    "appVersion": "0.1.56",
+    "appBuild": 57,
+    "packageName": "com.nexora.lms.mobile",
+    "accessibilityEvidence": "contains:Class Record"
+  }
+]

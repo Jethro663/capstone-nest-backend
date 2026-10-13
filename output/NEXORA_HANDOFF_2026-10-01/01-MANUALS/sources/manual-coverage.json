@@ -1,0 +1,16 @@
+{
+  "webPages": 114,
+  "webEvidence": 114,
+  "mobileOwners": 25,
+  "mobileEvidence": 25,
+  "backendModules": 43,
+  "backendHandlers": 485,
+  "aiHandlers": 63,
+  "databaseTables": 116,
+  "databaseEnums": 55,
+  "migrations": 37,
+  "queues": 9,
+  "environmentKeys": 98,
+  "missingWebEvidence": [],
+  "missingMobileEvidence": []
+}

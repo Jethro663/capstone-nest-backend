@@ -1,0 +1,7 @@
+Nexora LMS Complete Handoff
+Package: NEXORA_HANDOFF_2026-10-01
+Build date: 2026-10-01
+Application commit: 211483f07b901299b48ae42eda318c7448f1cbfd
+Documentation tooling checkout: 1953e0acb45c0f9f41c3f791b8fae8091738eaf7
+Android version: 0.1.56
+Android build: 57

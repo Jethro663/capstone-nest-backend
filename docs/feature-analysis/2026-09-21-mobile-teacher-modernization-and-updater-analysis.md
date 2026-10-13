@@ -4,6 +4,25 @@
 **Scope:** Planning and evidence only; no production mobile, backend, schema, release, or data changes were made.  
 **Prototype:** `/home/jethro/.codex/visualizations/2026/09/21/01a0c425-9c46-7d21-b436-ec2ffe985ce5/nexora-mobile-teacher-redesign.html`
 
+## 2026-09-22 post-implementation recheck
+
+This report was written before the redesign was implemented. At current `developement` HEAD `3678c799`, the navy/red design-system completion has been released as Android `0.1.48` / build `49`; this section supersedes the pre-implementation wording below when describing **current** source. The live release manifest advertises build `49`, and the checked-in APK SHA-256 matches its advertised `ade9439ceeefc61ea8b633b917a3a5393b4c2c88d6feb2fb7648a5d77fdd297d`. Local `apksigner verify --print-certs` reports the Nexora production certificate digest `46cbcee985a7e0ecfda5a8fddfbdd679d9f0312ee07d96a593817302eb7c0a39`. This verifies the artifact and manifest inspected here, not an installation on the reporter's phone.
+
+| Requested surface | Current source finding | Confidence / residual boundary |
+|---|---|---|
+| Teacher Home, notifications, app bar, button palette | `TeacherHomeScreen` has a next-up focus panel; `NotificationsInboxScreen` has compact emoji counts and `MobileFilterSheet`; `TeacherScreen` delegates to shared `MobileAppBar`; active palette/action owners are `mobileBrand`, `MobileAction`, and role adapters. | Confirmed source; visual acceptance on the reporter's device unverified. |
+| Modules and lesson preview | Module rows use quiet `MobileOverflowAction`; lesson preview offers Mobile/Web modes, a secure WebView, and nested scrolling, with no Compare mode. | Confirmed source; actual web-preview loading and gesture behavior require an authenticated device session. |
+| Assessment list/detail/review | Assessment search and ten-item client pagination exist; detail has Overview/Submissions/Analytics with shared filter-sheet adapters and interactive question analysis; review has a sticky score panel and focused learner/expected-answer panels. | Confirmed source; client pagination still fetches every class's assessments, so server-scale pagination remains unimplemented. Score correctness and WebView behavior require real-data/device acceptance. |
+| Update failure for build 46 or earlier | Historical build-46 Gradle config signs the release with `signingConfigs.debug`, while current build 49 uses the Nexora release signer. Android requires matching signing certificates for an in-place update. | Confirmed signer incompatibility. Whether this is the reporter's exact failure remains unverified until installed build number and Android installer message are known. |
+
+**Important migration edge:** the current `UpdateProvider` explains the one-time reinstall and opens an HTTPS APK download for installed builds `<=46`, but that code runs only after a newer app is installed. Historical build-46 code has no `legacy`/`migration` branch and reports a generic installer block. Thus the shipped guidance does **not** repair the experience inside an already-installed build-46 app. For an affected device, the safe manual sequence remains: finish/sync work while online, download the current school APK to persistent browser storage, verify the download is complete, uninstall the old app (local-only app data is lost), install the saved APK, and sign in again. Do not uninstall before confirming the download and server sync. Builds 47+ have a different signer lineage and must be diagnosed from their actual error rather than assuming this migration cause.
+
+The current provider still performs an active-app policy poll every 60 seconds (`UpdateProvider.tsx:722-724`). That can affect update-prompt timing, but it does not explain a certificate-rejected installation; changing the polling cadence is a separate UX decision.
+
+The existing HTML prototype was statically inspected. Browser rendering/interaction verification was unavailable in this recheck because the browser URL policy rejected opening the local file; no alternate browser route was attempted. Production app code, configuration, release artifacts, data, and git history were not changed during this recheck.
+
+Focused recheck: the mobile design-system audit passed; the teacher Home/notification, assessment-detail, and module-detail layout suites passed (6 tests); and the updater provider suite passed (22 tests). A first updater test command referenced `.test.ts` instead of the actual `.test.tsx` file and failed with `ENOENT`; rerunning the correct path passed. The prototype's inline JavaScript passed `node --check`. These static/Jest checks do not substitute for a real-device lesson WebView, grading, or upgrade test.
+
 ## 1. Executive decision
 
 Adopt a **“navy frame, red intent”** visual system across the mobile app:
